@@ -127,6 +127,9 @@ export default function DetalleOT() {
           {!esTecnico && (
             <button onClick={exportarExcel} className="btn-secondary text-xs">📊 Exportar Excel</button>
           )}
+          <button onClick={() => navigate(`/informes/${ot._id}`)} className="btn-secondary text-xs">
+            📋 Informe
+          </button>
           {puedeEditar && !anulada && (
             <button onClick={() => navigate("/ots/editar", { state: { ot } })} className="btn-primary text-xs">Editar</button>
           )}
