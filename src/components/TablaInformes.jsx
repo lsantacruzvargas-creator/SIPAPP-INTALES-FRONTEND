@@ -91,8 +91,11 @@ export default function TablaInformes() {
                 <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase">Informe</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase">OT</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase">Empresa / Cliente</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase">Descripción</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase">Estado OT</th>
                 <th className="text-center px-4 py-3 font-semibold text-gray-500 text-xs uppercase">Reportes</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase">Fotos</th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-500 text-xs uppercase">Docs</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase">Último reporte</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -102,6 +105,11 @@ export default function TablaInformes() {
                 const ultimoReporte = inf.reportes?.length
                   ? inf.reportes[inf.reportes.length - 1]
                   : null;
+                const todasFotos = (inf.reportes ?? [])
+                  .flatMap(r => r.documentos?.filter(d => d.esFoto) ?? []);
+                const tieneDocs = (inf.reportes ?? [])
+                  .some(r => r.documentos?.some(d => !d.esFoto));
+                const descripcionOT = inf.ot?.items?.[0]?.descripcion ?? "—";
                 return (
                   <tr key={inf._id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-bold text-indigo-700 font-mono text-xs">
@@ -110,10 +118,13 @@ export default function TablaInformes() {
                     <td className="px-4 py-3">
                       <span className="font-semibold text-blue-700">{inf.ot?.codigo}</span>
                     </td>
-                    <td className="px-4 py-3 text-gray-700 max-w-[200px]">
+                    <td className="px-4 py-3 text-gray-700 max-w-[160px]">
                       <p className="truncate">
                         {inf.ot?.empresa?.razonSocial || inf.ot?.clienteNombre || "—"}
                       </p>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 max-w-[180px]">
+                      <p className="truncate text-xs" title={descripcionOT}>{descripcionOT}</p>
                     </td>
                     <td className="px-4 py-3">
                       {inf.ot?.estado ? (
@@ -126,6 +137,30 @@ export default function TablaInformes() {
                       <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">
                         {inf.reportes?.length ?? 0}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {todasFotos.length === 0 ? (
+                        <span className="text-gray-300 text-xs">—</span>
+                      ) : (
+                        <div className="flex gap-1 items-center">
+                          {todasFotos.slice(0, 3).map(f => (
+                            <img
+                              key={f._id}
+                              src={f.url}
+                              alt={f.nombre}
+                              className="w-8 h-8 rounded object-cover border border-gray-200"
+                            />
+                          ))}
+                          {todasFotos.length > 3 && (
+                            <span className="text-xs text-gray-400">+{todasFotos.length - 3}</span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {tieneDocs
+                        ? <span className="text-xs font-semibold text-green-600">Sí</span>
+                        : <span className="text-xs text-gray-300">No</span>}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {ultimoReporte ? fmtFecha(ultimoReporte.fecha) : "Sin reportes"}
