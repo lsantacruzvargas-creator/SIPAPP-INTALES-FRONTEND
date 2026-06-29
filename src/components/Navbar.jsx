@@ -41,6 +41,9 @@ export default function Navbar() {
             <button onClick={() => ir("/ots")} className={`px-3 py-4 text-sm font-medium transition-colors ${active("/ots")}`}>
               OTs
             </button>
+            <button onClick={() => ir("/informes")} className={`px-3 py-4 text-sm font-medium transition-colors ${active("/informes")}`}>
+              Informes
+            </button>
             {!esTecnico && (<>
               <button onClick={() => ir("/clientes")} className={`px-3 py-4 text-sm font-medium transition-colors ${active("/clientes")}`}>
                 Clientes
@@ -87,6 +90,7 @@ export default function Navbar() {
             <button onClick={() => ir("/dashboard")} className="block w-full text-left py-2 text-sm text-gray-600 hover:text-blue-600">Dashboard</button>
           )}
           <button onClick={() => ir("/ots")} className="block w-full text-left py-2 text-sm text-gray-600 hover:text-blue-600">OTs</button>
+          <button onClick={() => ir("/informes")} className="block w-full text-left py-2 text-sm text-gray-600 hover:text-blue-600">Informes</button>
           {!esTecnico && (<>
             <button onClick={() => ir("/clientes")} className="block w-full text-left py-2 text-sm text-gray-600 hover:text-blue-600">Clientes</button>
             <button onClick={() => ir("/cotizaciones")} className="block w-full text-left py-2 text-sm text-gray-600 hover:text-blue-600">Cotizaciones</button>

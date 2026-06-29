@@ -6,6 +6,7 @@ import TablaOTs from "./components/TablaOTs.jsx";
 import FormOT from "./components/FormOT.jsx";
 import DetalleOT from "./components/DetalleOT.jsx";
 import DetalleInforme from "./components/DetalleInforme.jsx";
+import TablaInformes from "./components/TablaInformes.jsx";
 import TablaClientes from "./components/TablaClientes.jsx";
 import GestionUsuarios from "./components/GestionUsuarios.jsx";
 import TablaCotizaciones from "./components/TablaCotizaciones.jsx";
@@ -65,6 +66,12 @@ export default function App() {
         <Route path="/ots/:id" element={
           <Protegida>
             <Layout><DetalleOT /></Layout>
+          </Protegida>
+        } />
+
+        <Route path="/informes" element={
+          <Protegida>
+            <Layout><TablaInformes /></Layout>
           </Protegida>
         } />
 
