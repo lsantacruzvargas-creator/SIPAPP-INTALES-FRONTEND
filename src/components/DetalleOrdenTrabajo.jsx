@@ -4,16 +4,12 @@ import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { formatearFecha } from "../utils/fecha";
 import ModalOrdenCompra from "./ModalOrdenCompra";
 import SelectorEmpresas from "./SelectorEmpresas";
-import ModalSeleccionarTipoInforme from "./ModalSeleccionarTipoInforme";
-import FormInformeTecnico from "./FormInformeTecnico";
-import VistaInformeTecnico from "./VistaInformeTecnico";
 import ModalNuevaSubOT from "./ModalNuevaSubOT";
 import ModalRequerimiento from "./ModalRequerimiento";
 import TablaServiciosExternos from "./TablaServiciosExternos";
 import TablaScroll from "./TablaScroll";
 import ModalGenerarGRE from "./ModalGenerarGRE";
 import ConfirmacionAccion from "./ConfirmacionAccion";
-import { exportarInformeTecnicoExcel, exportarInformesTecnicosExcelCombinado } from "../utils/informeTecnicoExcel";
 import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgePago, badgeOT, badgeGeneral, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
@@ -72,9 +68,8 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   });
   const navigate = useNavigate();
   const rolActual = getUsuario()?.rol;
-  // Supervisor edita los campos de la OT y los Informes Técnicos, pero no
-  // puede anularla. Igual que técnico, supervisor no ve el resto de la
-  // cadena (Cotización/OC/Factura).
+  // Supervisor edita los campos de la OT, pero no puede anularla. Igual que
+  // técnico, supervisor no ve el resto de la cadena (Cotización/OC/Factura).
   const puedeEditarCampos = ["admin", "jefatura", "supervisor", "planner", "coordinadora"].includes(rolActual);
   // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
   // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
@@ -101,18 +96,6 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   // Estrictamente el rol "tecnico" (NO tecnico_prueba/tecnico_intervencion,
   // que solo editan su propia tarjeta de estado/progreso más arriba).
   const puedeEditarEncargados = puedeEditarCampos || rolActual === "tecnico";
-  // Aprueba/desaprueba Informes Técnicos — mismo set que crea/edita más
-  // abajo, MENOS los roles técnico (ver ROLES_APRUEBAN_INFORME en el
-  // backend, informesTecnicos.js).
-  const puedeAprobarInforme = ["admin", "jefatura", "planner", "coordinadora"].includes(rolActual);
-  // Crea/edita un informe NO aprobado — Admin/Jefatura/Planner/Coordinadora
-  // más los 3 roles técnico (quienes de hecho lo llenan en campo). Asistente
-  // y Supervisor quedaron afuera (corrección explícita del usuario — antes
-  // sí podían) — mismo set que ROLES_CREAN_EDITAN_INFORME en el backend.
-  const puedeEditarInformeNoAprobado = puedeAprobarInforme || esTecnico;
-  // Un informe ya aprobado no lo edita nadie — hay que desaprobarlo primero
-  // (checkbox de arriba) para poder corregirlo.
-  const puedeEditarInformeAprobado = false;
   // Mismo set de roles que ya tiene acceso a /facturacion-electronica/guias —
   // técnico (y cualquier otro rol sin acceso a esa ruta) no ve este card.
   const puedeGenerarGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
@@ -122,7 +105,6 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const [cot, setCot] = useState(ot.cotizacion || null);
   const [oc, setOc] = useState(null);
   const [factura, setFactura] = useState(null);
-  const [informes, setInformes] = useState([]);
   const [subOTs, setSubOTs] = useState([]);
   const [greMap, setGreMap] = useState({});
   const [requerimientos, setRequerimientos] = useState([]);
@@ -133,12 +115,6 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const [crearOCOpen, setCrearOCOpen] = useState(false);
   const [crearSubOTOpen, setCrearSubOTOpen] = useState(false);
   const [generarGREOpen, setGenerarGREOpen] = useState(false);
-  const [seleccionarTipoOpen, setSeleccionarTipoOpen] = useState(false);
-  const [tipoElegido, setTipoElegido] = useState(null);
-  const [verInforme, setVerInforme] = useState(null);
-  const [editandoInforme, setEditandoInforme] = useState(null);
-  const [informesSeleccionados, setInformesSeleccionados] = useState([]);
-  const [descargando, setDescargando] = useState(false);
 
   const cargarRelaciones = () => {
     Promise.all([
@@ -167,12 +143,8 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     });
 
     // Este componente ahora solo se monta para la OT padre/normal (una
-    // sub-OT usa DetalleSubOT.jsx) — informes y requerimientos siempre se
-    // traen agregados (propios + de todas las sub-OTs).
-    fetchAuth(`/informes-tecnicos?ordenTrabajoPadre=${ot._id}`)
-      .then(r => r.ok && r.json())
-      .then(infs => setInformes(infs || []));
-
+    // sub-OT usa DetalleSubOT.jsx) — requerimientos siempre se traen
+    // agregados (propios + de todas las sub-OTs).
     fetchAuth(`/ordenes-trabajo?ordenPadre=${ot._id}`)
       .then(r => r.ok && r.json())
       .then(subs => {
@@ -414,47 +386,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     });
   };
 
-  const toggleSeleccionInforme = (id) => {
-    setInformesSeleccionados(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  };
-
-  const toggleAprobarInforme = async (informeId, actual) => {
-    const res = await fetchAuth(`/informes-tecnicos/${informeId}/aprobar`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ aprobado: !actual }),
-    });
-    if (res.ok) cargarRelaciones();
-  };
-
-  // Reutiliza tal cual la exportación ya existente por informe (utils/informeTecnicoExcel.js) —
-  // secuencial (no Promise.all) para no disparar N descargas simultáneas del navegador de golpe.
-  const descargarSeleccionados = async () => {
-    setDescargando(true);
-    for (const id of informesSeleccionados) {
-      const inf = informes.find(i => i._id === id);
-      if (inf) await exportarInformeTecnicoExcel(inf, inf.ordenTrabajo);
-    }
-    setDescargando(false);
-  };
-
-  // Mismos informes seleccionados, pero en un solo libro (una hoja por
-  // informe) en vez de N archivos sueltos — pedido explícito del usuario
-  // para OTs padre con varias sub-OTs/informes.
-  const descargarSeleccionadosComoLibro = async () => {
-    setDescargando(true);
-    const items = informesSeleccionados
-      .map(id => informes.find(i => i._id === id))
-      .filter(Boolean)
-      .map(inf => ({ informe: inf, ot: inf.ordenTrabajo }));
-    if (items.length) await exportarInformesTecnicosExcelCombinado(items, ot.numeroOT || ot.codigo);
-    setDescargando(false);
-  };
-
   const ie = ot.ingresoEquipo;
-  const ultimo = informes[0];
   // El estado del padre pasa a ser calculado (backend, recalcularEstadoPadre) apenas tiene al
   // menos una sub-OT "sana" — las marcadas `irreparable` quedan excluidas del cálculo.
   const hayHijasSanas = subOTs.some(s => !s.irreparable);
@@ -462,7 +394,6 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const pasos = [
     { tipo: "cotizacion", activo: !!cot, codigo: cot?.codigo },
     { tipo: "ot", activo: true, codigo: ot.codigo },
-    { tipo: "informe", activo: informes.length > 0, codigo: informes.length > 1 ? `${informes.length} informes` : informes[0]?.codigo },
     { tipo: "oc", activo: !!oc, codigo: oc?.codigo },
     { tipo: "factura", activo: !!factura, codigo: factura?.codigo },
   ];
@@ -813,51 +744,20 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                 <p className="text-xs text-gray-400">Sin sub-órdenes</p>
               ) : (
                 <div className="space-y-2">
-                  {subOTs.map(s => {
-                    const informesSub = informes.filter(inf => (inf.ordenTrabajo?._id || inf.ordenTrabajo) === s._id);
-                    const totalInf = informesSub.length;
-                    const aprobadosInf = informesSub.filter(inf => inf.aprobado).length;
-                    return (
-                      <TarjetaRelacion key={s._id} tipo="ot" codigo={s.codigo} numero={s.numeroOT}
-                        onClick={() => onNavegar?.({ tipo: "ot", data: s })}>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {s.estado && <Chip className={badgeOT(s.estado)}>{s.estado}</Chip>}
-                          {s.irreparable && <Chip className="bg-red-100 text-red-700">Irreparable</Chip>}
-                          {totalInf === 0 ? (
-                            <Chip className="bg-red-100 text-red-700">Sin informe</Chip>
-                          ) : aprobadosInf === totalInf ? (
-                            <Chip className="bg-teal-100 text-teal-700">Informe aprobado</Chip>
-                          ) : (
-                            <Chip className="bg-amber-100 text-amber-700">{aprobadosInf}/{totalInf} informe(s) aprobado(s)</Chip>
-                          )}
-                          {greMap[s._id] && <Chip className="bg-purple-100 text-purple-700">GRE {greMap[s._id]}</Chip>}
-                        </div>
-                        <p className="text-sm text-gray-700 line-clamp-1">{s.titulo}</p>
-                      </TarjetaRelacion>
-                    );
-                  })}
+                  {subOTs.map(s => (
+                    <TarjetaRelacion key={s._id} tipo="ot" codigo={s.codigo} numero={s.numeroOT}
+                      onClick={() => onNavegar?.({ tipo: "ot", data: s })}>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {s.estado && <Chip className={badgeOT(s.estado)}>{s.estado}</Chip>}
+                        {s.irreparable && <Chip className="bg-red-100 text-red-700">Irreparable</Chip>}
+                        {greMap[s._id] && <Chip className="bg-purple-100 text-purple-700">GRE {greMap[s._id]}</Chip>}
+                      </div>
+                      <p className="text-sm text-gray-700 line-clamp-1">{s.titulo}</p>
+                    </TarjetaRelacion>
+                  ))}
                 </div>
               )}
             </div>
-
-            <TarjetaRelacion
-              tipo="informe"
-              codigo={ultimo?.codigo}
-              numero={informes.length > 1 ? `${informes.length} informes` : undefined}
-              vacio={informes.length === 0}
-              onClick={!subOTs.length && ultimo ? () => setVerInforme(ultimo) : undefined}
-              onCrear={!subOTs.length && !ot.anulado && puedeEditarInformeNoAprobado ? () => setSeleccionarTipoOpen(true) : undefined}
-              crearLabel="informe">
-              {subOTs.length > 0 ? (
-                <p className="text-xs text-gray-400">Ver informes por sub-OT (tabla abajo o en cada sub-OT)</p>
-              ) : (
-                ultimo?.fechaHoraGuardado && (
-                  <p className="text-xs text-gray-500">
-                    Último: {formatearFecha(ultimo.fechaHoraGuardado)}
-                  </p>
-                )
-              )}
-            </TarjetaRelacion>
 
             {puedeGenerarGRE && (
               <TarjetaRelacion tipo="gre" vacio
@@ -883,94 +783,6 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
             )}
           </section>
         </div>
-
-        {informes.length > 0 && (
-          <div className="max-w-6xl mx-auto px-8 pb-8">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-5 rounded-full bg-teal-500" />
-                  <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                    Informes Técnicos ({informes.length})
-                  </h2>
-                </div>
-                <div className="flex items-center gap-2">
-                {!subOTs.length && !ot.anulado && puedeEditarInformeNoAprobado && (
-                  <button type="button" onClick={() => setSeleccionarTipoOpen(true)}
-                    className="text-sm border border-teal-600 text-teal-700 px-4 py-2 rounded-lg hover:bg-teal-50 transition font-medium">
-                    + Nuevo informe
-                  </button>
-                )}
-                <button type="button" disabled={informesSeleccionados.length === 0 || descargando}
-                  onClick={descargarSeleccionados}
-                  className="text-sm bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition font-medium">
-                  {descargando ? "Descargando…" : `Descargar seleccionados (${informesSeleccionados.length})`}
-                </button>
-                {informesSeleccionados.length > 1 && (
-                  <button type="button" disabled={descargando}
-                    onClick={descargarSeleccionadosComoLibro}
-                    title="Descarga los informes seleccionados como un solo archivo .xlsx, una hoja por informe"
-                    className="text-sm border border-teal-600 text-teal-700 px-4 py-2 rounded-lg hover:bg-teal-50 disabled:opacity-50 transition font-medium">
-                    {descargando ? "Descargando…" : "Descargar en un libro"}
-                  </button>
-                )}
-                </div>
-              </div>
-              <TablaScroll className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-xs uppercase tracking-wide text-gray-400 border-b border-gray-100">
-                    <tr>
-                      <th className="text-left py-2 pr-3 w-8"></th>
-                      <th className="text-left py-2 pr-3">Código</th>
-                      <th className="text-left py-2 pr-3">Tipo</th>
-                      <th className="text-left py-2 pr-3">OT origen</th>
-                      <th className="text-left py-2 pr-3">Fecha</th>
-                      <th className="text-left py-2 pr-3">Aprobación</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {informes.map(inf => {
-                      const otOrigenId = inf.ordenTrabajo?._id || inf.ordenTrabajo;
-                      const esPrincipal = otOrigenId === ot._id;
-                      const subOrigen = subOTs.find(s => s._id === otOrigenId);
-                      return (
-                        <tr key={inf._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setVerInforme(inf)}>
-                          <td className="py-2 pr-3" onClick={(e) => e.stopPropagation()}>
-                            <input type="checkbox" checked={informesSeleccionados.includes(inf._id)}
-                              onChange={() => toggleSeleccionInforme(inf._id)} />
-                          </td>
-                          <td className="py-2 pr-3 font-mono text-xs text-gray-700">{inf.codigo}</td>
-                          <td className="py-2 pr-3 text-gray-600">{inf.tipo}</td>
-                          <td className="py-2 pr-3 text-gray-600">
-                            {esPrincipal ? "Principal" : (subOrigen?.numeroOT || inf.ordenTrabajo?.numeroOT || "—")}
-                          </td>
-                          <td className="py-2 pr-3 text-gray-500">
-                            {inf.fechaHoraGuardado ? formatearFecha(inf.fechaHoraGuardado) : "—"}
-                          </td>
-                          <td className="py-2 pr-3" onClick={(e) => e.stopPropagation()}>
-                            {puedeAprobarInforme ? (
-                              <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                                <input type="checkbox" checked={!!inf.aprobado}
-                                  onChange={() => toggleAprobarInforme(inf._id, inf.aprobado)} />
-                                <span className={inf.aprobado ? "text-teal-600 font-medium" : "text-gray-400"}>
-                                  {inf.aprobado ? "Aprobado" : "Pendiente"}
-                                </span>
-                              </label>
-                            ) : (
-                              <Chip className={inf.aprobado ? "bg-teal-100 text-teal-700" : "bg-gray-100 text-gray-500"}>
-                                {inf.aprobado ? "Aprobado" : "Pendiente"}
-                              </Chip>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </TablaScroll>
-            </div>
-          </div>
-        )}
 
         <div className="max-w-6xl mx-auto px-8 pb-8">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
@@ -1087,45 +899,6 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
           cotizacion={cot}
           onClose={() => setCrearOCOpen(false)}
           onCreada={() => { setCrearOCOpen(false); cargarRelaciones(); }}
-        />
-      )}
-
-      {seleccionarTipoOpen && (
-        <ModalSeleccionarTipoInforme
-          onSeleccionar={(tipo) => { setSeleccionarTipoOpen(false); setTipoElegido(tipo); }}
-          onClose={() => setSeleccionarTipoOpen(false)}
-        />
-      )}
-
-      {tipoElegido && (
-        <FormInformeTecnico
-          ordenTrabajo={ot}
-          tipo={tipoElegido}
-          onClose={() => setTipoElegido(null)}
-          onGuardado={(informe) => { setTipoElegido(null); cargarRelaciones(); setVerInforme(informe); }}
-        />
-      )}
-
-      {verInforme && (
-        <VistaInformeTecnico
-          informe={verInforme}
-          ordenTrabajo={ot}
-          onClose={() => setVerInforme(null)}
-          onModificar={
-            (verInforme.aprobado ? puedeEditarInformeAprobado : puedeEditarInformeNoAprobado) && !verInforme.anulado
-              ? () => { setEditandoInforme(verInforme); setVerInforme(null); }
-              : undefined
-          }
-        />
-      )}
-
-      {editandoInforme && (
-        <FormInformeTecnico
-          ordenTrabajo={ot}
-          tipo={editandoInforme.tipo}
-          informeExistente={editandoInforme}
-          onClose={() => setEditandoInforme(null)}
-          onGuardado={(informe) => { setEditandoInforme(null); cargarRelaciones(); setVerInforme(informe); }}
         />
       )}
 

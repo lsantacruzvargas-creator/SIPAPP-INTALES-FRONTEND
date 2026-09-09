@@ -1,9 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { formatearFecha } from "../utils/fecha";
-import ModalSeleccionarTipoInforme from "./ModalSeleccionarTipoInforme";
-import FormInformeTecnico from "./FormInformeTecnico";
-import VistaInformeTecnico from "./VistaInformeTecnico";
 import ModalRequerimiento from "./ModalRequerimiento";
 import TablaServiciosExternos from "./TablaServiciosExternos";
 import TablaScroll from "./TablaScroll";
@@ -60,19 +57,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
   const puedeAnular = ["admin", "jefatura"].includes(rolActual);
   const esAdmin = rolActual === "admin";
-  // Aprueba/desaprueba Informes Técnicos — mismo set que crea/edita más
-  // abajo, MENOS los roles técnico (ver ROLES_APRUEBAN_INFORME en el
-  // backend, informesTecnicos.js).
-  const puedeAprobarInforme = ["admin", "jefatura", "planner", "coordinadora"].includes(rolActual);
   const esTecnico = ["tecnico", "tecnico_prueba", "tecnico_intervencion"].includes(rolActual);
-  // Crea/edita un informe NO aprobado — Admin/Jefatura/Planner/Coordinadora
-  // más los 3 roles técnico (quienes de hecho lo llenan en campo). Asistente
-  // y Supervisor quedaron afuera (corrección explícita del usuario — antes
-  // sí podían) — mismo set que ROLES_CREAN_EDITAN_INFORME en el backend.
-  const puedeEditarInformeNoAprobado = puedeAprobarInforme || esTecnico;
-  // Un informe ya aprobado no lo edita nadie — hay que desaprobarlo primero
-  // (checkbox de arriba) para poder corregirlo.
-  const puedeEditarInformeAprobado = false;
   // Tabla de Servicios Externos: la ven todos los roles menos técnico.
   const puedeVerServicios = !esTecnico;
   const cadenaCerrada = bloqueadoPorCadenaCerrada(ot.estadoCadena, rolActual);
@@ -90,21 +75,13 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   const puedeEditarEncargados = puedeEditarCampos || rolActual === "tecnico";
   const [usuarios, setUsuarios] = useState([]);
   const [tecnicos, setTecnicos] = useState([]);
-  const [informes, setInformes] = useState([]);
   const [requerimientos, setRequerimientos] = useState([]);
   const [crearRequerimientoOpen, setCrearRequerimientoOpen] = useState(false);
   const [servicios, setServicios] = useState([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
-  const [seleccionarTipoOpen, setSeleccionarTipoOpen] = useState(false);
-  const [tipoElegido, setTipoElegido] = useState(null);
-  const [verInforme, setVerInforme] = useState(null);
-  const [editandoInforme, setEditandoInforme] = useState(null);
 
   const cargarRelaciones = () => {
-    fetchAuth(`/informes-tecnicos?ordenTrabajo=${ot._id}`)
-      .then(r => r.ok && r.json())
-      .then(infs => setInformes(infs || []));
     fetchAuth(`/requerimientos?ordenTrabajo=${ot._id}`)
       .then(r => r.ok && r.json())
       .then(reqs => setRequerimientos(reqs || []));
@@ -229,15 +206,6 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
     } else {
       setError("Error al cerrar/abrir la cadena.");
     }
-  };
-
-  const toggleAprobarInforme = async (informeId, actual) => {
-    const res = await fetchAuth(`/informes-tecnicos/${informeId}/aprobar`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ aprobado: !actual }),
-    });
-    if (res.ok) cargarRelaciones();
   };
 
   const padre = ot.ordenPadre;
@@ -477,60 +445,6 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
 
             {error && <p className="text-xs text-red-500">{error}</p>}
           </fieldset>
-
-          {/* Relaciones — todos los informes de ESTA sub-OT, cada uno como su
-              propia tarjeta clickeable (antes solo se mostraba el más
-              reciente y el resto quedaba inaccesible tras un "+N
-              anterior(es)" puramente informativo — bug corregido). */}
-          <section className="space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-5 rounded-full bg-teal-500" />
-              <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                Informes Técnicos {informes.length > 0 && `(${informes.length})`}
-              </h2>
-            </div>
-
-            {informes.length > 0 ? (
-              <div className="space-y-2">
-                {informes.map(inf => (
-                  <div key={inf._id} className="bg-white border border-gray-100 rounded-2xl shadow-sm p-4 hover:border-teal-200 transition space-y-2">
-                    <button type="button" onClick={() => setVerInforme(inf)} className="w-full text-left">
-                      <p className="font-mono text-xs text-teal-600">{inf.codigo}</p>
-                      <p className="text-sm text-gray-700 mt-0.5">{inf.tipo}</p>
-                      {inf.fechaHoraGuardado && (
-                        <p className="text-xs text-gray-400 mt-1">
-                          {formatearFecha(inf.fechaHoraGuardado)}
-                        </p>
-                      )}
-                    </button>
-                    {puedeAprobarInforme ? (
-                      <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none pt-2 border-t border-gray-50">
-                        <input type="checkbox" checked={!!inf.aprobado}
-                          onChange={() => toggleAprobarInforme(inf._id, inf.aprobado)} />
-                        <span className={inf.aprobado ? "text-teal-600 font-medium" : "text-gray-400"}>
-                          {inf.aprobado ? "Aprobado" : "Pendiente de aprobación"}
-                        </span>
-                      </label>
-                    ) : (
-                      <p className={`text-xs pt-2 border-t border-gray-50 ${inf.aprobado ? "text-teal-600 font-medium" : "text-gray-400"}`}>
-                        {inf.aprobado ? "Aprobado" : "Pendiente de aprobación"}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-4 text-center">
-                <p className="text-xs text-gray-400 mb-2">Sin informes</p>
-              </div>
-            )}
-            {!ot.anulado && puedeEditarInformeNoAprobado && (
-              <button type="button" onClick={() => setSeleccionarTipoOpen(true)}
-                className="text-xs text-blue-600 hover:text-blue-800 underline">
-                + Crear informe
-              </button>
-            )}
-          </section>
         </div>
 
         {/* Requerimientos de Material — propios de esta sub-OT */}
@@ -608,45 +522,6 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
           ot={ot}
           onClose={() => setCrearRequerimientoOpen(false)}
           onCreado={() => { setCrearRequerimientoOpen(false); cargarRelaciones(); }}
-        />
-      )}
-
-      {seleccionarTipoOpen && (
-        <ModalSeleccionarTipoInforme
-          onSeleccionar={(tipo) => { setSeleccionarTipoOpen(false); setTipoElegido(tipo); }}
-          onClose={() => setSeleccionarTipoOpen(false)}
-        />
-      )}
-
-      {tipoElegido && (
-        <FormInformeTecnico
-          ordenTrabajo={ot}
-          tipo={tipoElegido}
-          onClose={() => setTipoElegido(null)}
-          onGuardado={(informe) => { setTipoElegido(null); cargarRelaciones(); setVerInforme(informe); }}
-        />
-      )}
-
-      {verInforme && (
-        <VistaInformeTecnico
-          informe={verInforme}
-          ordenTrabajo={ot}
-          onClose={() => setVerInforme(null)}
-          onModificar={
-            (verInforme.aprobado ? puedeEditarInformeAprobado : puedeEditarInformeNoAprobado) && !verInforme.anulado
-              ? () => { setEditandoInforme(verInforme); setVerInforme(null); }
-              : undefined
-          }
-        />
-      )}
-
-      {editandoInforme && (
-        <FormInformeTecnico
-          ordenTrabajo={ot}
-          tipo={editandoInforme.tipo}
-          informeExistente={editandoInforme}
-          onClose={() => setEditandoInforme(null)}
-          onGuardado={(informe) => { setEditandoInforme(null); cargarRelaciones(); setVerInforme(informe); }}
         />
       )}
     </div>
