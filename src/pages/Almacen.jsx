@@ -1,0 +1,1803 @@
+import { useState, useEffect, useCallback } from "react";
+import { fetchAuth, getUsuario } from "../utils/fetchAuth";
+import { formatearFecha, fechaHoyLima } from "../utils/fecha";
+import ModalImportarExcel, { COLS_MATERIALES } from "../components/ModalImportarExcel";
+import BuscadorMaterialInline from "../components/BuscadorMaterialInline";
+import TablaScroll from "../components/TablaScroll";
+import ConfirmacionAccion from "../components/ConfirmacionAccion";
+import * as XLSX from "xlsx";
+
+const INP =
+  "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white";
+
+const UNIDADES = ["und", "kg", "g", "L", "mL", "m", "cm", "m²", "caja", "rollo", "par", "juego", "bolsa"];
+
+function useDebounce(value, delay = 350) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
+// ─── Sección Ubicaciones ────────────────────────────────────────────────────
+
+function SeccionUbicaciones() {
+  const [lista, setLista] = useState([]);
+  const [form, setForm] = useState({ nombre: "", descripcion: "" });
+  const [editando, setEditando] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+
+  const cargar = useCallback(async () => {
+    const r = await fetchAuth("/ubicaciones");
+    if (r.ok) setLista(await r.json());
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const iniciarEdicion = (u) => {
+    setEditando(u._id);
+    setForm({ nombre: u.nombre, descripcion: u.descripcion });
+  };
+
+  const cancelar = () => {
+    setEditando(null);
+    setForm({ nombre: "", descripcion: "" });
+  };
+
+  const guardar = async () => {
+    if (!form.nombre.trim()) return;
+    setGuardando(true);
+    const metodo = editando ? "PUT" : "POST";
+    const url = editando ? `/ubicaciones/${editando}` : "/ubicaciones";
+    const r = await fetchAuth(url, {
+      method: metodo,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    if (r.ok) {
+      await cargar();
+      cancelar();
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Formulario */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
+          {editando ? "Editar ubicación" : "Nueva ubicación"}
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Nombre *</label>
+            <input name="nombre" value={form.nombre} onChange={handleChange}
+              className={`w-full ${INP}`} placeholder="Ej: Estante A, Bodega principal" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Descripción</label>
+            <input name="descripcion" value={form.descripcion} onChange={handleChange}
+              className={`w-full ${INP}`} placeholder="Opcional" />
+          </div>
+        </div>
+        <div className="flex gap-2 mt-4">
+          {editando && (
+            <button onClick={cancelar}
+              className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
+              Cancelar
+            </button>
+          )}
+          <button onClick={guardar} disabled={guardando || !form.nombre.trim()}
+            className="text-sm bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition font-medium">
+            {guardando ? "Guardando…" : editando ? "Actualizar" : "Crear ubicación"}
+          </button>
+        </div>
+      </div>
+
+      {/* Tabla */}
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Código</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Nombre</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Descripción</th>
+              <th className="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {lista.length === 0 && (
+              <tr><td colSpan={4} className="text-center py-10 text-gray-300 text-sm">Sin ubicaciones registradas</td></tr>
+            )}
+            {lista.map((u) => (
+              <tr key={u._id} className="hover:bg-gray-50/50 transition">
+                <td className="px-5 py-3 font-mono text-xs text-gray-500">{u.codigo}</td>
+                <td className="px-5 py-3 font-medium text-gray-800">{u.nombre}</td>
+                <td className="px-5 py-3 text-gray-500 hidden md:table-cell">{u.descripcion || "—"}</td>
+                <td className="px-5 py-3 text-right">
+                  <button onClick={() => iniciarEdicion(u)}
+                    className="text-xs text-blue-500 hover:text-blue-700 transition">Editar</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sección Materiales ─────────────────────────────────────────────────────
+
+const FORM_MATERIAL_VACIO = {
+  tipoComponente: "", categoria: "", codigo: "", nombre: "", descripcion: "",
+  unidad: "und", stockMinimo: 0, ubicacion: "", tipoMaterial: "",
+};
+
+const LIMIT_MATERIALES = 50;
+
+function SeccionMateriales() {
+  // Tabla en pantalla: paginada + búsqueda server-side (con ~9000 SKUs,
+  // traer y filtrar la colección completa en el cliente era el cuello de
+  // botella — ver GET /materiales?page=&q= en materiales.js). El buscador y
+  // "Mostrar inactivos" siguen escribiendo en las mismas etiquetas de
+  // siempre; lo que cambia es que ahora disparan una consulta al backend en
+  // vez de un .filter() local.
+  const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [cargandoLista, setCargandoLista] = useState(true);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const [ubicaciones, setUbicaciones] = useState([]);
+  const [tiposComponente, setTiposComponente] = useState([]);
+  const [categoriasComponente, setCategoriasComponente] = useState([]);
+  const [form, setForm] = useState(FORM_MATERIAL_VACIO);
+  const [editando, setEditando] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+  const [mostrarInactivos, setMostrarInactivos] = useState(false);
+  const [error, setError] = useState("");
+  const [importarOpen, setImportarOpen] = useState(false);
+  const busquedaDebounced = useDebounce(busqueda);
+
+  const cargarLookups = useCallback(async () => {
+    const [ru, rt, rc] = await Promise.all([
+      fetchAuth("/ubicaciones"),
+      fetchAuth("/tipos-componente"),
+      fetchAuth("/categorias-componente"),
+    ]);
+    if (ru.ok) setUbicaciones(await ru.json());
+    if (rt.ok) setTiposComponente(await rt.json());
+    if (rc.ok) setCategoriasComponente(await rc.json());
+  }, []);
+
+  const cargarPagina = useCallback(async (pagina, reemplazar) => {
+    const params = new URLSearchParams({ page: String(pagina), limit: String(LIMIT_MATERIALES) });
+    if (mostrarInactivos) params.set("todas", "true");
+    if (busquedaDebounced.trim()) params.set("q", busquedaDebounced.trim());
+    const r = await fetchAuth(`/materiales?${params}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    setTotal(data.total);
+    setItems((prev) => (reemplazar ? data.items : [...prev, ...data.items]));
+    setPage(pagina);
+  }, [mostrarInactivos, busquedaDebounced]);
+
+  useEffect(() => { cargarLookups(); }, [cargarLookups]);
+
+  // Cambió la búsqueda (debounced) o "Mostrar inactivos" — reinicia desde la
+  // página 1 y reemplaza la lista acumulada.
+  useEffect(() => {
+    setCargandoLista(true);
+    cargarPagina(1, true).finally(() => setCargandoLista(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busquedaDebounced, mostrarInactivos]);
+
+  const cargarMas = async () => {
+    setCargandoMas(true);
+    await cargarPagina(page + 1, false);
+    setCargandoMas(false);
+  };
+
+  // Tras crear/editar/activar-desactivar: el material tocado puede haber
+  // cambiado de posición (orden alfabético) o de visibilidad (si dejó de
+  // coincidir con "Mostrar inactivos"), así que se recarga desde la página 1
+  // en vez de intentar parchear `items` a mano.
+  const recargar = () => cargarPagina(1, true);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    // Cambiar el Tipo Componente invalida la Categoría elegida (es hija del
+    // tipo anterior) — se resetea para no dejar una combinación inconsistente.
+    if (name === "tipoComponente") {
+      setForm({ ...form, tipoComponente: value, categoria: "" });
+    } else {
+      setForm({ ...form, [name]: value });
+    }
+  };
+
+  const categoriasDelTipo = categoriasComponente.filter(
+    (c) => (c.tipoComponente?._id || c.tipoComponente) === form.tipoComponente
+  );
+
+  const cambiarActivo = async (m, activo) => {
+    const r = await fetchAuth(`/materiales/${m._id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activo }),
+    });
+    if (r.ok) await recargar();
+  };
+
+  const iniciarEdicion = (m) => {
+    setEditando(m._id);
+    setForm({
+      tipoComponente: m.tipoComponente?._id || "",
+      categoria: m.categoria?._id || "",
+      codigo: m.codigo || "",
+      nombre: m.nombre || "",
+      descripcion: m.descripcion || "",
+      unidad: m.unidad || "und",
+      stockMinimo: m.stockMinimo ?? 0,
+      ubicacion: m.ubicacion?._id || "",
+      tipoMaterial: m.tipoMaterial || "",
+    });
+    setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const cancelar = () => {
+    setEditando(null);
+    setForm(FORM_MATERIAL_VACIO);
+    setError("");
+  };
+
+  const guardar = async () => {
+    if (!form.nombre.trim()) return;
+    if (!form.codigo.trim()) { setError("El código es obligatorio."); return; }
+    if (!form.descripcion.trim()) { setError("La descripción es obligatoria."); return; }
+    if (!form.tipoMaterial) { setError("Selecciona si es Repuesto o Consumible."); return; }
+    setError("");
+    setGuardando(true);
+    const metodo = editando ? "PUT" : "POST";
+    const url = editando ? `/materiales/${editando}` : "/materiales";
+    const r = await fetchAuth(url, {
+      method: metodo,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    if (r.ok) {
+      await recargar();
+      cancelar();
+    } else {
+      const d = await r.json().catch(() => ({}));
+      setError(d.mensaje || "Error al guardar el material.");
+    }
+    setGuardando(false);
+  };
+
+  // Mismas columnas de la tabla — una fila por material.
+  const filaMaterial = (m) => ({
+    "SKU":            m.sku || "—",
+    "Código":         m.codigo || "—",
+    "Título":         m.nombre || "—",
+    "Descripción":    m.descripcion || "—",
+    "Tipo Componente": m.tipoComponente?.nombre || "—",
+    "Categoría":      m.categoria?.nombre || "—",
+    "Unidad":         m.unidad || "—",
+    "Stock":          m.stock ?? 0,
+    "Stock mínimo":   m.stockMinimo ?? 0,
+    "Ubicación":      m.ubicacion?.nombre || "—",
+    "Centro de costo": m.tipoMaterial || "—",
+    "Activo":         m.activo ? "Sí" : "No",
+  });
+
+  // Exporta TODO lo que coincide con los filtros actuales, no solo lo que
+  // está paginado en pantalla — a diferencia de la tabla, esto sí pide la
+  // colección completa (sin `page`), igual que el export siempre funcionó,
+  // pero solo al hacer clic (no en cada carga de la página).
+  const exportarExcel = async () => {
+    setExportando(true);
+    const params = new URLSearchParams();
+    if (mostrarInactivos) params.set("todas", "true");
+    if (busquedaDebounced.trim()) params.set("q", busquedaDebounced.trim());
+    const r = await fetchAuth(`/materiales?${params}`);
+    if (r.ok) {
+      const todos = await r.json();
+      const ws = XLSX.utils.json_to_sheet(todos.map(filaMaterial));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Materiales (SKU)");
+      XLSX.writeFile(wb, "materiales-sku.xlsx");
+    }
+    setExportando(false);
+  };
+
+  const badgeStock = (m) => {
+    if (m.stock <= 0) return "bg-red-100 text-red-700";
+    if (m.stock <= m.stockMinimo) return "bg-amber-100 text-amber-700";
+    return "bg-green-100 text-green-700";
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Formulario de creación/edición — el SKU (código auto-generado, ej.
+          MAT-0001) nunca se edita, solo los datos descriptivos del material. */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            {editando ? "Editar material (SKU)" : "Nuevo material (SKU)"}
+          </p>
+          {getUsuario()?.rol === "admin" && (
+            <button type="button" onClick={() => setImportarOpen(true)}
+              className="text-xs border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition font-medium">
+              ↑ Importar inventario (Excel)
+            </button>
+          )}
+        </div>
+        {/* Orden del formulario: Tipo Componente → Categoría → Código → Título/Descripción */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Tipo Componente</label>
+            <select name="tipoComponente" value={form.tipoComponente} onChange={handleChange} className={`w-full ${INP}`}>
+              <option value="">Sin clasificar</option>
+              {tiposComponente.map((t) => <option key={t._id} value={t._id}>{t.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Categoría</label>
+            <select name="categoria" value={form.categoria} onChange={handleChange} disabled={!form.tipoComponente} className={`w-full ${INP}`}>
+              <option value="">{form.tipoComponente ? "Sin clasificar" : "Elige un Tipo Componente primero"}</option>
+              {categoriasDelTipo.map((c) => <option key={c._id} value={c._id}>{c.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Código *</label>
+            <input name="codigo" value={form.codigo} onChange={handleChange}
+              className={`w-full ${INP}`} />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Título *</label>
+            <input name="nombre" value={form.nombre} onChange={handleChange}
+              className={`w-full ${INP}`} placeholder="Ej: Válvula de expansión 3/8" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Descripción *</label>
+            <input name="descripcion" value={form.descripcion} onChange={handleChange}
+              className={`w-full ${INP}`} />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Unidad de medida</label>
+            <select name="unidad" value={form.unidad} onChange={handleChange} className={`w-full ${INP}`}>
+              {UNIDADES.map((u) => <option key={u}>{u}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Stock mínimo</label>
+            <input type="number" name="stockMinimo" value={form.stockMinimo} onChange={handleChange}
+              min={0} className={`w-full ${INP}`} />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Ubicación</label>
+            <select name="ubicacion" value={form.ubicacion} onChange={handleChange} className={`w-full ${INP}`}>
+              <option value="">Sin ubicación</option>
+              {ubicaciones.map((u) => <option key={u._id} value={u._id}>{u.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Centro de costo *</label>
+            <select name="tipoMaterial" value={form.tipoMaterial} onChange={handleChange} className={`w-full ${INP}`}>
+              <option value="">Seleccionar…</option>
+              <option value="repuesto">Repuesto</option>
+              <option value="consumible">Consumible</option>
+            </select>
+          </div>
+        </div>
+        {error && <p className="text-xs text-red-500 mt-3">{error}</p>}
+        <div className="flex gap-2 mt-4">
+          {editando && (
+            <button onClick={cancelar}
+              className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
+              Cancelar
+            </button>
+          )}
+          <button onClick={guardar} disabled={guardando || !form.nombre.trim() || !form.codigo.trim() || !form.descripcion.trim() || !form.tipoMaterial}
+            className="text-sm bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition font-medium">
+            {guardando ? "Guardando…" : editando ? "Actualizar" : "Crear material"}
+          </button>
+        </div>
+      </div>
+
+      {/* Buscador */}
+      <div className="flex items-center gap-4">
+        <input
+          value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
+          className={`flex-1 ${INP}`} placeholder="Buscar por SKU, título o descripción…" />
+        <label className="flex items-center gap-1.5 text-xs text-gray-500 whitespace-nowrap">
+          <input type="checkbox" checked={mostrarInactivos} onChange={(e) => setMostrarInactivos(e.target.checked)} />
+          Mostrar inactivos
+        </label>
+        <button onClick={exportarExcel} disabled={exportando}
+          className="text-sm border border-gray-300 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition whitespace-nowrap">
+          {exportando ? "Exportando…" : "Exportar Excel"}
+        </button>
+      </div>
+
+      {/* Tabla — ancha al 80vw (se sale del contenedor max-w-6xl de la página) */}
+      <div className="relative left-1/2 -ml-[40vw] w-[80vw] max-w-[80vw] bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <TablaScroll className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">SKU</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Código</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Título</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Descripción</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Tipo Componente</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Categoría</th>
+              <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Stock</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Ubicación</th>
+              <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Activo</th>
+              <th className="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {!cargandoLista && items.length === 0 && (
+              <tr><td colSpan={10} className="text-center py-10 text-gray-300 text-sm">Sin materiales</td></tr>
+            )}
+            {items.map((m) => (
+              <tr key={m._id} className={`hover:bg-gray-50/50 transition ${!m.activo ? "opacity-50" : ""}`}>
+                <td className="px-5 py-3 font-mono text-xs text-gray-500">{m.sku}</td>
+                <td className="px-5 py-3 font-mono text-xs text-gray-500">{m.codigo || <span className="text-gray-300">—</span>}</td>
+                <td className="px-5 py-3 font-medium text-gray-800">{m.nombre}</td>
+                <td className="px-5 py-3 text-gray-500">{m.descripcion || <span className="text-gray-300">—</span>}</td>
+                <td className="px-5 py-3 text-gray-500">{m.tipoComponente?.nombre || <span className="text-gray-300">—</span>}</td>
+                <td className="px-5 py-3 text-gray-500">{m.categoria?.nombre || <span className="text-gray-300">—</span>}</td>
+                <td className="px-5 py-3 text-center">
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badgeStock(m)}`}>
+                      {m.stock} {m.unidad}
+                    </span>
+                    {m.stock <= m.stockMinimo && (
+                      <span className="text-xs text-amber-600 font-medium">
+                        ⚠ mín: {m.stockMinimo}
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-5 py-3 text-gray-500">{m.ubicacion?.nombre || "—"}</td>
+                <td className="px-5 py-3 text-center">
+                  <input type="checkbox" checked={m.activo}
+                    onChange={(e) => cambiarActivo(m, e.target.checked)} />
+                </td>
+                <td className="px-5 py-3 text-right">
+                  <button onClick={() => iniciarEdicion(m)}
+                    className="text-xs text-blue-500 hover:text-blue-700 transition">Editar</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        </TablaScroll>
+
+        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 text-sm text-gray-400">
+          <span>{cargandoLista ? "Cargando…" : `Mostrando ${items.length} de ${total} resultados`}</span>
+          {!cargandoLista && items.length < total && (
+            <button
+              onClick={cargarMas}
+              disabled={cargandoMas}
+              className="border border-gray-300 text-gray-600 px-4 py-1.5 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 transition"
+            >
+              {cargandoMas ? "Cargando…" : "Cargar más"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {importarOpen && (
+        <ModalImportarExcel
+          tipo="Materiales"
+          columnas={COLS_MATERIALES}
+          endpoint="/materiales/importar"
+          color="blue"
+          nombreColeccion="todos los Materiales (SKU) y sus movimientos de almacén"
+          instrucciones={
+            <>1. Descarga la plantilla, rellena tus datos y súbela. El <strong>SKU</strong> lo
+            genera el sistema automáticamente — no va en el Excel. <strong>Tipo Componente</strong>,{" "}
+            <strong>Categoría</strong> y <strong>Ubicación</strong> se crean solos si no existen todavía.</>
+          }
+          onClose={() => setImportarOpen(false)}
+          onImportado={() => { cargarLookups(); recargar(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Sección Categorías de Material ─────────────────────────────────────────
+
+const TIPOS_CAMPO = [
+  { id: "texto", label: "Texto" },
+  { id: "numero", label: "Número" },
+  { id: "select", label: "Lista de opciones" },
+];
+
+const slug = (s) => s.trim().toLowerCase()
+  .normalize("NFD").replace(/[̀-ͯ]/g, "")
+  .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+
+const CAMPO_VACIO = { nombre: "", clave: "", tipo: "texto", opciones: "", requerido: false };
+
+function SeccionCategorias() {
+  const [lista, setLista] = useState([]);
+  const [nombre, setNombre] = useState("");
+  const [campos, setCampos] = useState([]);
+  const [editando, setEditando] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState(null);
+  const [eliminando, setEliminando] = useState(false);
+
+  const cargar = useCallback(async () => {
+    const r = await fetchAuth("/categorias-material");
+    if (r.ok) setLista(await r.json());
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const cancelar = () => { setEditando(null); setNombre(""); setCampos([]); setError(""); };
+
+  const iniciarEdicion = (c) => {
+    setEditando(c._id);
+    setNombre(c.nombre);
+    setCampos(c.campos.map((cp) => ({ ...cp, opciones: (cp.opciones || []).join(", ") })));
+  };
+
+  const agregarCampo = () => setCampos((prev) => [...prev, { ...CAMPO_VACIO }]);
+  const quitarCampo = (i) => setCampos((prev) => prev.filter((_, idx) => idx !== i));
+  const cambiarCampo = (i, patch) => setCampos((prev) => prev.map((c, idx) => idx === i
+    ? { ...c, ...patch, ...(patch.nombre !== undefined && !c.clave ? { clave: slug(patch.nombre) } : {}) }
+    : c));
+
+  const guardar = async () => {
+    if (!nombre.trim()) { setError("El nombre de la categoría es obligatorio."); return; }
+    for (const c of campos) {
+      if (!c.nombre.trim() || !c.clave.trim()) { setError("Todos los campos necesitan nombre."); return; }
+    }
+    setGuardando(true);
+    setError("");
+    const body = {
+      nombre: nombre.trim(),
+      campos: campos.map((c) => ({
+        nombre: c.nombre.trim(),
+        clave: c.clave.trim(),
+        tipo: c.tipo,
+        requerido: !!c.requerido,
+        opciones: c.tipo === "select" ? c.opciones.split(",").map((s) => s.trim()).filter(Boolean) : [],
+      })),
+    };
+    const metodo = editando ? "PUT" : "POST";
+    const url = editando ? `/categorias-material/${editando}` : "/categorias-material";
+    const r = await fetchAuth(url, { method: metodo, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (r.ok) {
+      await cargar();
+      cancelar();
+    } else {
+      const d = await r.json();
+      setError(d.mensaje || "Error al guardar la categoría");
+    }
+    setGuardando(false);
+  };
+
+  const eliminar = async () => {
+    setEliminando(true);
+    const r = await fetchAuth(`/categorias-material/${confirmandoEliminar._id}`, { method: "DELETE" });
+    setEliminando(false);
+    setConfirmandoEliminar(null);
+    if (r.ok) await cargar();
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
+          {editando ? "Editar categoría" : "Nueva categoría de material"}
+        </p>
+        {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg mb-4">{error}</p>}
+
+        <div className="mb-4">
+          <label className="text-xs text-gray-500 block mb-1">Nombre *</label>
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)}
+            className={`w-full max-w-sm ${INP}`} placeholder="Ej: Repuestos eléctricos" />
+        </div>
+
+        <div className="space-y-3">
+          <p className="text-xs text-gray-500">Campos del formulario de solicitud de compra</p>
+          {campos.map((c, i) => (
+            <div key={i} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_2fr_auto_auto] gap-2 items-center bg-gray-50 rounded-lg p-2">
+              <input value={c.nombre} onChange={(e) => cambiarCampo(i, { nombre: e.target.value })}
+                className={INP} placeholder="Nombre del campo" />
+              <select value={c.tipo} onChange={(e) => cambiarCampo(i, { tipo: e.target.value })} className={INP}>
+                {TIPOS_CAMPO.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+              {c.tipo === "select" ? (
+                <input value={c.opciones} onChange={(e) => cambiarCampo(i, { opciones: e.target.value })}
+                  className={INP} placeholder="Opciones separadas por coma" />
+              ) : <span />}
+              <label className="flex items-center gap-1.5 text-xs text-gray-500 whitespace-nowrap">
+                <input type="checkbox" checked={c.requerido} onChange={(e) => cambiarCampo(i, { requerido: e.target.checked })} />
+                Requerido
+              </label>
+              <button onClick={() => quitarCampo(i)} className="text-gray-300 hover:text-red-500 transition">✕</button>
+            </div>
+          ))}
+          <button onClick={agregarCampo}
+            className="text-xs border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition font-medium">
+            + Agregar campo
+          </button>
+        </div>
+
+        <div className="flex gap-2 mt-5">
+          {editando && (
+            <button onClick={cancelar}
+              className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
+              Cancelar
+            </button>
+          )}
+          <button onClick={guardar} disabled={guardando || !nombre.trim()}
+            className="text-sm bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition font-medium">
+            {guardando ? "Guardando…" : editando ? "Actualizar" : "Crear categoría"}
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Nombre</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Campos</th>
+              <th className="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {lista.length === 0 && (
+              <tr><td colSpan={3} className="text-center py-10 text-gray-300 text-sm">Sin categorías registradas</td></tr>
+            )}
+            {lista.map((c) => (
+              <tr key={c._id} className="hover:bg-gray-50/50 transition">
+                <td className="px-5 py-3 font-medium text-gray-800">{c.nombre}</td>
+                <td className="px-5 py-3 text-gray-500 text-xs">
+                  {c.campos.length === 0 ? "—" : c.campos.map((cp) => cp.nombre).join(", ")}
+                </td>
+                <td className="px-5 py-3 text-right space-x-3">
+                  <button onClick={() => iniciarEdicion(c)} className="text-xs text-blue-500 hover:text-blue-700 transition">Editar</button>
+                  <button onClick={() => setConfirmandoEliminar(c)} className="text-xs text-gray-400 hover:text-red-500 transition">Desactivar</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {confirmandoEliminar && (
+        <ConfirmacionAccion
+          mensaje={`¿Desactivar la categoría "${confirmandoEliminar.nombre}"?`}
+          onCancelar={() => setConfirmandoEliminar(null)}
+          onConfirmar={eliminar}
+          procesando={eliminando}
+          textoConfirmar="Desactivar"
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Sección Tipo Componente / Categoría ────────────────────────────────────
+// Jerarquía de clasificación de Materiales (distinta de "Categorías de
+// compra" — esa es un catálogo aparte para formularios de solicitud). Un
+// Tipo Componente agrupa varias Categorías hijas; una Categoría no existe
+// sin su Tipo Componente padre.
+
+function SeccionComponentes() {
+  const [tipos, setTipos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [tipoSel, setTipoSel] = useState(null);
+
+  const [nombreTipo, setNombreTipo] = useState("");
+  const [editandoTipo, setEditandoTipo] = useState(null);
+  const [guardandoTipo, setGuardandoTipo] = useState(false);
+  const [errorTipo, setErrorTipo] = useState("");
+
+  const [nombreCat, setNombreCat] = useState("");
+  const [editandoCat, setEditandoCat] = useState(null);
+  const [guardandoCat, setGuardandoCat] = useState(false);
+  const [errorCat, setErrorCat] = useState("");
+
+  const [confirmandoTipo, setConfirmandoTipo] = useState(null);
+  const [eliminandoTipo, setEliminandoTipo] = useState(false);
+  const [confirmandoCat, setConfirmandoCat] = useState(null);
+  const [eliminandoCat, setEliminandoCat] = useState(false);
+
+  const cargar = useCallback(async () => {
+    const [rt, rc] = await Promise.all([
+      fetchAuth("/tipos-componente"),
+      fetchAuth("/categorias-componente"),
+    ]);
+    if (rt.ok) setTipos(await rt.json());
+    if (rc.ok) setCategorias(await rc.json());
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const cancelarTipo = () => { setEditandoTipo(null); setNombreTipo(""); setErrorTipo(""); };
+  const iniciarEdicionTipo = (t) => { setEditandoTipo(t._id); setNombreTipo(t.nombre); setErrorTipo(""); };
+
+  const guardarTipo = async () => {
+    if (!nombreTipo.trim()) { setErrorTipo("El nombre es obligatorio."); return; }
+    setGuardandoTipo(true);
+    setErrorTipo("");
+    const metodo = editandoTipo ? "PUT" : "POST";
+    const url = editandoTipo ? `/tipos-componente/${editandoTipo}` : "/tipos-componente";
+    const r = await fetchAuth(url, { method: metodo, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nombre: nombreTipo.trim() }) });
+    if (r.ok) { await cargar(); cancelarTipo(); }
+    else { const d = await r.json().catch(() => ({})); setErrorTipo(d.mensaje || "Error al guardar el Tipo Componente."); }
+    setGuardandoTipo(false);
+  };
+
+  const eliminarTipo = async () => {
+    const t = confirmandoTipo;
+    setEliminandoTipo(true);
+    const r = await fetchAuth(`/tipos-componente/${t._id}`, { method: "DELETE" });
+    setEliminandoTipo(false);
+    setConfirmandoTipo(null);
+    if (r.ok) { await cargar(); if (tipoSel === t._id) setTipoSel(null); }
+  };
+
+  const categoriasDelTipo = categorias.filter((c) => (c.tipoComponente?._id || c.tipoComponente) === tipoSel);
+
+  const cancelarCat = () => { setEditandoCat(null); setNombreCat(""); setErrorCat(""); };
+  const iniciarEdicionCat = (c) => { setEditandoCat(c._id); setNombreCat(c.nombre); setErrorCat(""); };
+
+  const guardarCat = async () => {
+    if (!nombreCat.trim()) { setErrorCat("El nombre es obligatorio."); return; }
+    setGuardandoCat(true);
+    setErrorCat("");
+    const metodo = editandoCat ? "PUT" : "POST";
+    const url = editandoCat ? `/categorias-componente/${editandoCat}` : "/categorias-componente";
+    const body = editandoCat ? { nombre: nombreCat.trim() } : { nombre: nombreCat.trim(), tipoComponente: tipoSel };
+    const r = await fetchAuth(url, { method: metodo, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (r.ok) { await cargar(); cancelarCat(); }
+    else { const d = await r.json().catch(() => ({})); setErrorCat(d.mensaje || "Error al guardar la Categoría."); }
+    setGuardandoCat(false);
+  };
+
+  const eliminarCat = async () => {
+    setEliminandoCat(true);
+    const r = await fetchAuth(`/categorias-componente/${confirmandoCat._id}`, { method: "DELETE" });
+    setEliminandoCat(false);
+    setConfirmandoCat(null);
+    if (r.ok) await cargar();
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Tipos Componente */}
+      <div className="space-y-6">
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
+            {editandoTipo ? "Editar Tipo Componente" : "Nuevo Tipo Componente"}
+          </p>
+          {errorTipo && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg mb-3">{errorTipo}</p>}
+          <input value={nombreTipo} onChange={(e) => setNombreTipo(e.target.value)}
+            className={`w-full ${INP}`} placeholder="Ej: Semiconductores" />
+          <div className="flex gap-2 mt-4">
+            {editandoTipo && (
+              <button onClick={cancelarTipo} className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            )}
+            <button onClick={guardarTipo} disabled={guardandoTipo || !nombreTipo.trim()}
+              className="text-sm bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition font-medium">
+              {guardandoTipo ? "Guardando…" : editandoTipo ? "Actualizar" : "Crear"}
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Tipo Componente</th>
+                <th className="px-5 py-3"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {tipos.length === 0 && (
+                <tr><td colSpan={2} className="text-center py-10 text-gray-300 text-sm">Sin tipos registrados</td></tr>
+              )}
+              {tipos.map((t) => (
+                <tr key={t._id}
+                  onClick={() => setTipoSel(t._id)}
+                  className={`cursor-pointer transition ${tipoSel === t._id ? "bg-blue-50" : "hover:bg-gray-50/50"}`}>
+                  <td className="px-5 py-3 font-medium text-gray-800">{t.nombre}</td>
+                  <td className="px-5 py-3 text-right space-x-3" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => iniciarEdicionTipo(t)} className="text-xs text-blue-500 hover:text-blue-700 transition">Editar</button>
+                    <button onClick={() => setConfirmandoTipo(t)} className="text-xs text-gray-400 hover:text-red-500 transition">Desactivar</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Categorías del Tipo Componente elegido */}
+      <div className="space-y-6">
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
+            {tipoSel
+              ? `${editandoCat ? "Editar" : "Nueva"} categoría de "${tipos.find((t) => t._id === tipoSel)?.nombre}"`
+              : "Elige un Tipo Componente a la izquierda"}
+          </p>
+          {tipoSel && (
+            <>
+              {errorCat && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg mb-3">{errorCat}</p>}
+              <input value={nombreCat} onChange={(e) => setNombreCat(e.target.value)}
+                className={`w-full ${INP}`} placeholder="Ej: Compresores" />
+              <div className="flex gap-2 mt-4">
+                {editandoCat && (
+                  <button onClick={cancelarCat} className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+                )}
+                <button onClick={guardarCat} disabled={guardandoCat || !nombreCat.trim()}
+                  className="text-sm bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition font-medium">
+                  {guardandoCat ? "Guardando…" : editandoCat ? "Actualizar" : "Crear"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {tipoSel && (
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Categoría</th>
+                  <th className="px-5 py-3"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {categoriasDelTipo.length === 0 && (
+                  <tr><td colSpan={2} className="text-center py-10 text-gray-300 text-sm">Sin categorías registradas</td></tr>
+                )}
+                {categoriasDelTipo.map((c) => (
+                  <tr key={c._id} className="hover:bg-gray-50/50 transition">
+                    <td className="px-5 py-3 font-medium text-gray-800">{c.nombre}</td>
+                    <td className="px-5 py-3 text-right space-x-3">
+                      <button onClick={() => iniciarEdicionCat(c)} className="text-xs text-blue-500 hover:text-blue-700 transition">Editar</button>
+                      <button onClick={() => setConfirmandoCat(c)} className="text-xs text-gray-400 hover:text-red-500 transition">Desactivar</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {confirmandoTipo && (
+        <ConfirmacionAccion
+          mensaje={`¿Desactivar el Tipo Componente "${confirmandoTipo.nombre}"? También sus categorías hijas dejarán de aparecer para elegir.`}
+          onCancelar={() => setConfirmandoTipo(null)}
+          onConfirmar={eliminarTipo}
+          procesando={eliminandoTipo}
+          textoConfirmar="Desactivar"
+        />
+      )}
+      {confirmandoCat && (
+        <ConfirmacionAccion
+          mensaje={`¿Desactivar la categoría "${confirmandoCat.nombre}"?`}
+          onCancelar={() => setConfirmandoCat(null)}
+          onConfirmar={eliminarCat}
+          procesando={eliminandoCat}
+          textoConfirmar="Desactivar"
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Modal Ingreso ──────────────────────────────────────────────────────────
+
+// Una fila de material del "Ingreso en masa" — mismos 3 campos que el
+// ingreso individual (material/cantidad/precioUnitario), el resto de datos
+// (lote, proveedor, guía, OC, notas) vive una sola vez en `form` y se copia
+// a cada fila recién al guardar (ver guardarMasa).
+const filaIngresoVacia = () => ({ _key: Date.now() + Math.random(), material: "", busqueda: "", cantidad: "", precioUnitario: "" });
+
+function ModalIngreso({ materialInicial, onClose, onGuardado }) {
+  const [form, setForm] = useState({
+    material: materialInicial?._id || "",
+    cantidad: "",
+    precioUnitario: "",
+    lote: "",
+    guiaProveedor: "",
+    ordenCompra: "",
+    proveedor: "",
+    notas: "",
+    // Solo para mostrarla en el input (deshabilitado, siempre "hoy") — no se
+    // manda al guardar, ver guardar() más abajo.
+    fecha: fechaHoyLima(),
+  });
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+  const [rqPendiente, setRqPendiente] = useState(null);
+  const [busquedaMaterial, setBusquedaMaterial] = useState(materialInicial ? `${materialInicial.sku} — ${materialInicial.nombre}` : "");
+  // El material elegido (para el texto de confirmación al guardar) — ya no
+  // se busca en un array local de ~9000 materiales, viene directo de lo que
+  // devolvió la búsqueda server-side (ver BuscadorMaterialInline).
+  const [materialSel, setMaterialSel] = useState(materialInicial || null);
+  // Ingreso en masa: N SKUs distintos, cada uno con su propia cantidad y
+  // precio, pero compartiendo lote/proveedor/guía/OC/notas de `form` — cada
+  // fila se guarda como un movimiento de ingreso independiente (mismo
+  // endpoint que el ingreso individual, uno por fila, en secuencia).
+  const [modoMasa, setModoMasa] = useState(false);
+  const [filasMasa, setFilasMasa] = useState([filaIngresoVacia()]);
+  const [confirmando, setConfirmando] = useState(false);
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const cambiarFilaMasa = (key, patch) =>
+    setFilasMasa((prev) => prev.map((f) => (f._key === key ? { ...f, ...patch } : f)));
+  const agregarFilaMasa = () => setFilasMasa((prev) => [...prev, filaIngresoVacia()]);
+  const quitarFilaMasa = (key) => setFilasMasa((prev) => prev.filter((f) => f._key !== key));
+  const elegirMaterialFilaMasa = (key, m) =>
+    cambiarFilaMasa(key, { material: m._id, busqueda: `${m.sku} — ${m.nombre}` });
+  const buscarFilaMasa = (key, texto) => {
+    const fila = filasMasa.find((f) => f._key === key);
+    cambiarFilaMasa(key, { busqueda: texto, ...(fila?.material ? { material: "" } : {}) });
+  };
+
+  const seleccionarMaterial = (m) => {
+    setForm((prev) => ({ ...prev, material: m._id }));
+    setMaterialSel(m);
+    setBusquedaMaterial(`${m.sku} — ${m.nombre}`);
+  };
+
+  const cambiarBusqueda = (texto) => {
+    setBusquedaMaterial(texto);
+    if (form.material) { setForm((prev) => ({ ...prev, material: "" })); setMaterialSel(null); }
+  };
+
+  // Si este material tiene una solicitud de compra vinculada y pendiente, se
+  // avisa acá — pero el ingreso por sí solo NO la resuelve: el almacenero
+  // todavía debe "Atender" el ítem desde Requerimientos (crea el egreso real
+  // hacia la OT que lo pidió) una vez que este stock esté disponible.
+  useEffect(() => {
+    if (!form.material) { setRqPendiente(null); return; }
+    fetchAuth("/requerimientos").then((r) => r.ok ? r.json() : []).then((lista) => {
+      for (const req of lista) {
+        const item = req.items.find((it) =>
+          it.esSolicitudCompra && it.estado === "pendiente" &&
+          (it.materialAsociado?._id || it.materialAsociado) === form.material);
+        if (item) { setRqPendiente({ requerimientoId: req._id, itemId: item._id, codigo: req.codigo, categoria: item.categoriaNombre }); return; }
+      }
+      setRqPendiente(null);
+    });
+  }, [form.material]);
+
+  const intentarGuardar = () => {
+    if (!form.material || !form.cantidad || !form.precioUnitario) {
+      setError("Material, cantidad y precio son obligatorios.");
+      return;
+    }
+    setError("");
+    setConfirmando(true);
+  };
+
+  const guardar = async () => {
+    setConfirmando(false);
+    setGuardando(true);
+    // `fecha` NO se manda — el input está deshabilitado (siempre "hoy"), así
+    // que se deja que el backend use su propio `Date.now` (instante real,
+    // sin el bug de mandar un "YYYY-MM-DD" suelto que Mongoose interpreta
+    // como medianoche UTC — eso sí puede caer en el día anterior en hora Lima).
+    const r = await fetchAuth("/movimientos-almacen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        material: form.material, cantidad: form.cantidad, precioUnitario: form.precioUnitario,
+        lote: form.lote, guiaProveedor: form.guiaProveedor, ordenCompra: form.ordenCompra,
+        proveedor: form.proveedor, notas: form.notas, tipo: "ingreso",
+      }),
+    });
+    if (r.ok) {
+      const movimiento = await r.json();
+      onGuardado(movimiento);
+    } else {
+      const d = await r.json();
+      setError(d.mensaje || "Error al guardar");
+    }
+    setGuardando(false);
+  };
+
+  // Un POST /movimientos-almacen por fila, en secuencia (no Promise.all) —
+  // mismo criterio que otros guardados en lote de este proyecto (ver
+  // descargarSeleccionados en DetalleOrdenTrabajo.jsx): evita disparar N
+  // requests de golpe y, sobre todo, evita una condición de carrera real en
+  // el `codigo` auto-generado del movimiento (su pre-save hook busca "el
+  // último código" antes de guardar — en paralelo, dos filas podrían leer el
+  // mismo "último" y terminar con el mismo código).
+  const filasCompletasMasa = filasMasa.filter((f) => f.material && f.cantidad && f.precioUnitario);
+
+  const intentarGuardarMasa = () => {
+    if (filasCompletasMasa.length === 0) {
+      setError("Agrega al menos un SKU con material, cantidad y precio.");
+      return;
+    }
+    if (filasCompletasMasa.length !== filasMasa.length) {
+      setError("Hay filas sin completar (material, cantidad o precio) — complétalas o quítalas antes de guardar.");
+      return;
+    }
+    setError("");
+    setConfirmando(true);
+  };
+
+  const guardarMasa = async () => {
+    setConfirmando(false);
+    setGuardando(true);
+    setError("");
+    const filasCompletas = filasCompletasMasa;
+    for (const f of filasCompletas) {
+      const r = await fetchAuth("/movimientos-almacen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          material: f.material, cantidad: f.cantidad, precioUnitario: f.precioUnitario,
+          lote: form.lote, guiaProveedor: form.guiaProveedor, ordenCompra: form.ordenCompra,
+          proveedor: form.proveedor, notas: form.notas, tipo: "ingreso",
+        }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        setError(`"${f.busqueda}": ${d.mensaje || "Error al guardar"}`);
+        setGuardando(false);
+        return;
+      }
+    }
+    setGuardando(false);
+    onGuardado();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className={`bg-white rounded-2xl shadow-2xl w-full flex flex-col max-h-[85vh] ${modoMasa ? "max-w-2xl" : "max-w-lg"}`}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <h3 className="font-semibold text-gray-800">Nuevo ingreso</h3>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => setModoMasa((m) => !m)}
+              className="text-xs text-blue-600 hover:text-blue-800 underline">
+              {modoMasa ? "Ingreso individual" : "Ingreso en masa"}
+            </button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-4 overflow-y-auto flex-1">
+          {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+
+          {modoMasa ? (
+            <div className="space-y-2">
+              <label className="text-xs text-gray-500 block mb-1">SKUs a ingresar *</label>
+              <div className="space-y-2">
+                {filasMasa.map((f, i) => (
+                  <div key={f._key} className="flex gap-2 items-start">
+                    <div className="flex-1 min-w-0">
+                      <BuscadorMaterialInline
+                        value={f.busqueda}
+                        onChange={(texto) => buscarFilaMasa(f._key, texto)}
+                        onSelect={(m) => elegirMaterialFilaMasa(f._key, m)}
+                        placeholder={`SKU ${i + 1}…`}
+                      />
+                    </div>
+                    <input type="number" value={f.cantidad}
+                      onChange={(e) => cambiarFilaMasa(f._key, { cantidad: e.target.value })}
+                      min={0.01} step="any" placeholder="Cant." className={`w-24 shrink-0 ${INP}`} />
+                    <input type="number" value={f.precioUnitario}
+                      onChange={(e) => cambiarFilaMasa(f._key, { precioUnitario: e.target.value })}
+                      min={0} step="0.01" placeholder="P. unit." className={`w-24 shrink-0 ${INP}`} />
+                    <button type="button" onClick={() => quitarFilaMasa(f._key)}
+                      disabled={filasMasa.length === 1}
+                      className="shrink-0 text-gray-300 hover:text-red-500 disabled:opacity-30 disabled:hover:text-gray-300 transition mt-2.5">
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={agregarFilaMasa}
+                className="text-xs text-blue-600 hover:text-blue-800 underline">
+                + Agregar SKU
+              </button>
+              <p className="text-xs text-gray-400">
+                Lote, proveedor, guía, orden de compra y notas de abajo se copian a cada SKU como un ingreso independiente.
+              </p>
+            </div>
+          ) : (
+            <div className="md:col-span-2">
+              <label className="text-xs text-gray-500 block mb-1">Material *</label>
+              <BuscadorMaterialInline
+                value={busquedaMaterial}
+                onChange={cambiarBusqueda}
+                onSelect={seleccionarMaterial}
+              />
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {!modoMasa && (
+              <>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Cantidad *</label>
+                  <input type="number" name="cantidad" value={form.cantidad} onChange={handleChange}
+                    min={0.01} step="any" className={`w-full ${INP}`} placeholder="0" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Precio unitario (S/) *</label>
+                  <input type="number" name="precioUnitario" value={form.precioUnitario} onChange={handleChange}
+                    min={0} step="0.01" className={`w-full ${INP}`} placeholder="0.00" />
+                </div>
+              </>
+            )}
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Lote / Identificador</label>
+              <input name="lote" value={form.lote} onChange={handleChange}
+                className={`w-full ${INP}`} placeholder="Auto si se deja vacío" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Fecha</label>
+              <input type="date" name="fecha" value={form.fecha} disabled
+                className={`w-full ${INP} bg-gray-50 text-gray-500 cursor-not-allowed`} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Proveedor</label>
+              <input name="proveedor" value={form.proveedor} onChange={handleChange}
+                className={`w-full ${INP}`} placeholder="Nombre del proveedor" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Guía del proveedor</label>
+              <input name="guiaProveedor" value={form.guiaProveedor} onChange={handleChange}
+                className={`w-full ${INP}`} placeholder="N° de guía" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Orden de compra</label>
+              <input name="ordenCompra" value={form.ordenCompra} onChange={handleChange}
+                className={`w-full ${INP}`} placeholder="N° de OC" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-xs text-gray-500 block mb-1">Notas</label>
+              <input name="notas" value={form.notas} onChange={handleChange}
+                className={`w-full ${INP}`} placeholder="Opcional" />
+            </div>
+          </div>
+
+          {rqPendiente && (
+            <div className="bg-blue-50 rounded-xl px-4 py-3 text-sm">
+              <span className="text-blue-700">
+                Este material abastece la solicitud de compra <strong>{rqPendiente.codigo}</strong> ({rqPendiente.categoria}) — despáchala desde Requerimientos ("Atender") una vez guardado este ingreso.
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 justify-end px-6 py-4 border-t border-gray-100 shrink-0">
+          <button onClick={onClose}
+            className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
+            Cancelar
+          </button>
+          <button onClick={modoMasa ? intentarGuardarMasa : intentarGuardar} disabled={guardando}
+            className="text-sm bg-emerald-600 text-white px-5 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition font-medium">
+            {guardando ? "Guardando…" : modoMasa ? `Registrar ${filasMasa.length} ingreso${filasMasa.length !== 1 ? "s" : ""}` : "Registrar ingreso"}
+          </button>
+        </div>
+      </div>
+
+      {confirmando && (
+        <ConfirmacionAccion
+          mensaje={modoMasa
+            ? `¿Confirmas el ingreso de ${filasCompletasMasa.length} SKU(s)?`
+            : `¿Confirmas el ingreso de ${form.cantidad} ${materialSel?.unidad || ""} de "${materialSel?.nombre || "este material"}"?`}
+          onCancelar={() => setConfirmando(false)}
+          onConfirmar={modoMasa ? guardarMasa : guardar}
+          procesando={guardando}
+          textoConfirmar="Confirmar ingreso"
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Modal Egreso Manual ────────────────────────────────────────────────────
+
+function ModalEgreso({ onClose, onGuardado }) {
+  const [form, setForm] = useState({
+    material: "",
+    cantidad: "",
+    loteOrigen: "",
+    notas: "",
+    // Solo para mostrarla en el input (deshabilitado, siempre "hoy") — no se
+    // manda al guardar, ver guardar() más abajo.
+    fecha: fechaHoyLima(),
+  });
+  const [lotes, setLotes] = useState([]);
+  const [precioAuto, setPrecioAuto] = useState(0);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+  const [busquedaMaterial, setBusquedaMaterial] = useState("");
+  // Igual que en ModalIngreso: ya no se busca en un array local de ~9000
+  // materiales, la búsqueda es server-side (ver BuscadorMaterialInline).
+  const [materialSel, setMaterialSel] = useState(null);
+  const [confirmando, setConfirmando] = useState(false);
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  useEffect(() => {
+    if (!form.material) { setLotes([]); return; }
+    fetchAuth(`/movimientos-almacen/lotes/${form.material}`)
+      .then((r) => r.ok ? r.json() : [])
+      .then(setLotes);
+  }, [form.material]);
+
+  const seleccionarMaterial = (m) => {
+    setForm((prev) => ({ ...prev, material: m._id }));
+    setMaterialSel(m);
+    setBusquedaMaterial(`${m.sku} — ${m.nombre}`);
+  };
+
+  const cambiarBusqueda = (texto) => {
+    setBusquedaMaterial(texto);
+    // Cualquier edición del texto invalida la selección anterior — hay que
+    // volver a elegir un material de la lista para que `form.material` se
+    // llene de nuevo.
+    if (form.material) { setForm((prev) => ({ ...prev, material: "" })); setMaterialSel(null); }
+  };
+
+  const seleccionarLote = (lote) => {
+    setForm((prev) => ({ ...prev, loteOrigen: lote.lote }));
+    setPrecioAuto(lote.precioUnitario);
+  };
+
+  const intentarGuardar = () => {
+    if (!form.material || !form.cantidad) {
+      setError("Material y cantidad son obligatorios.");
+      return;
+    }
+    setError("");
+    setConfirmando(true);
+  };
+
+  const guardar = async () => {
+    setConfirmando(false);
+    setGuardando(true);
+    // `fecha` NO se manda — el input está deshabilitado (siempre "hoy"), así
+    // que se deja que el backend use su propio `Date.now` (instante real,
+    // sin el bug de mandar un "YYYY-MM-DD" suelto que Mongoose interpreta
+    // como medianoche UTC — eso sí puede caer en el día anterior en hora Lima).
+    const r = await fetchAuth("/movimientos-almacen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        material: form.material, cantidad: form.cantidad, loteOrigen: form.loteOrigen, notas: form.notas,
+        tipo: "egreso", precioUnitario: precioAuto,
+      }),
+    });
+    if (r.ok) {
+      onGuardado(await r.json());
+    } else {
+      const d = await r.json();
+      setError(d.mensaje || "Error al guardar");
+    }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-800">Nuevo egreso</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className="text-xs text-gray-500 block mb-1">Material *</label>
+              <BuscadorMaterialInline
+                value={busquedaMaterial}
+                onChange={cambiarBusqueda}
+                onSelect={seleccionarMaterial}
+                mostrarStock
+              />
+            </div>
+
+            {lotes.length > 0 && (
+              <div className="md:col-span-2">
+                <label className="text-xs text-gray-500 block mb-2">Seleccionar lote *</label>
+                <div className="space-y-2">
+                  {lotes.map((l) => (
+                    <button key={l.lote} type="button" onClick={() => seleccionarLote(l)}
+                      className={`w-full text-left px-4 py-3 rounded-xl border text-sm transition ${
+                        form.loteOrigen === l.lote
+                          ? "border-blue-400 bg-blue-50"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}>
+                      <div className="flex justify-between items-center">
+                        <span className="font-mono font-semibold text-gray-700">{l.lote}</span>
+                        <span className="font-semibold text-gray-800">S/ {Number(l.precioUnitario).toFixed(2)}</span>
+                      </div>
+                      <div className="flex gap-4 mt-1 text-xs text-gray-400">
+                        {l.proveedor && <span>{l.proveedor}</span>}
+                        <span>Disponible: <strong>{l.cantidadDisponible}</strong></span>
+                        <span>{formatearFecha(l.fecha)}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {form.loteOrigen && (
+              <div className="md:col-span-2 bg-blue-50 rounded-xl px-4 py-3 text-sm">
+                <span className="text-blue-700">Precio unitario del lote: </span>
+                <span className="font-semibold text-blue-800">S/ {Number(precioAuto).toFixed(2)}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Cantidad *</label>
+              <input type="number" name="cantidad" value={form.cantidad} onChange={handleChange}
+                min={0.01} step="any" className={`w-full ${INP}`} placeholder="0" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Fecha</label>
+              <input type="date" name="fecha" value={form.fecha} disabled
+                className={`w-full ${INP} bg-gray-50 text-gray-500 cursor-not-allowed`} />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-xs text-gray-500 block mb-1">Notas</label>
+              <input name="notas" value={form.notas} onChange={handleChange}
+                className={`w-full ${INP}`} placeholder="Opcional" />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-2 justify-end px-6 py-4 border-t border-gray-100">
+          <button onClick={onClose}
+            className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
+            Cancelar
+          </button>
+          <button onClick={intentarGuardar} disabled={guardando}
+            className="text-sm bg-rose-600 text-white px-5 py-2 rounded-lg hover:bg-rose-700 disabled:opacity-50 transition font-medium">
+            {guardando ? "Guardando…" : "Registrar egreso"}
+          </button>
+        </div>
+      </div>
+
+      {confirmando && (
+        <ConfirmacionAccion
+          mensaje={`¿Confirmas el egreso de ${form.cantidad} ${materialSel?.unidad || ""} de "${materialSel?.nombre || "este material"}"?`}
+          onCancelar={() => setConfirmando(false)}
+          onConfirmar={guardar}
+          procesando={guardando}
+          textoConfirmar="Confirmar egreso"
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Sección Movimientos ────────────────────────────────────────────────────
+
+const LIMIT_MOVIMIENTOS = 50;
+
+function SeccionMovimientos() {
+  const [movimientos, setMovimientos] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  const [filtroTipo, setFiltroTipo] = useState("");
+  const [filtroMaterial, setFiltroMaterial] = useState("");
+  const [filtroDesde, setFiltroDesde] = useState("");
+  const [filtroHasta, setFiltroHasta] = useState("");
+  // Texto del buscador + nombre a mostrar del material elegido para filtrar
+  // — ya no se trae la lista completa de ~9000 materiales solo para armar un
+  // <select> (ver BuscadorMaterialInline, búsqueda server-side).
+  const [busquedaFiltro, setBusquedaFiltro] = useState("");
+  const [modalIngreso, setModalIngreso] = useState(false);
+  const [modalEgreso, setModalEgreso] = useState(false);
+  const [exportando, setExportando] = useState(false);
+
+  const paramsFiltro = useCallback(() => {
+    const params = new URLSearchParams();
+    if (filtroTipo) params.set("tipo", filtroTipo);
+    if (filtroMaterial) params.set("material", filtroMaterial);
+    if (filtroDesde) params.set("desde", filtroDesde);
+    if (filtroHasta) params.set("hasta", filtroHasta);
+    return params;
+  }, [filtroTipo, filtroMaterial, filtroDesde, filtroHasta]);
+
+  const cargarPagina = useCallback(async (paginaAPedir, reemplazar) => {
+    const params = paramsFiltro();
+    params.set("page", String(paginaAPedir));
+    params.set("limit", String(LIMIT_MOVIMIENTOS));
+    const r = await fetchAuth(`/movimientos-almacen?${params}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    setTotal(data.total);
+    setMovimientos((prev) => (reemplazar ? data.items : [...prev, ...data.items]));
+    setPage(paginaAPedir);
+  }, [paramsFiltro]);
+
+  // Cambió algún filtro — reinicia desde la página 1 y reemplaza la lista
+  // acumulada, en vez de seguir agregando sobre resultados viejos.
+  useEffect(() => { cargarPagina(1, true); }, [cargarPagina]);
+
+  const cargarMas = async () => {
+    setCargandoMas(true);
+    await cargarPagina(page + 1, false);
+    setCargandoMas(false);
+  };
+
+  const elegirFiltroMaterial = (m) => {
+    setFiltroMaterial(m._id);
+    setBusquedaFiltro(`${m.sku} — ${m.nombre}`);
+  };
+
+  const limpiarFiltroMaterial = () => {
+    setFiltroMaterial("");
+    setBusquedaFiltro("");
+  };
+
+  const onGuardado = async () => {
+    setModalIngreso(false);
+    setModalEgreso(false);
+    await cargarPagina(1, true);
+  };
+
+  const fmt = (n) => Number(n || 0).toFixed(2);
+  const fmtFecha = (d) => d ? formatearFecha(d, { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—";
+
+  // Mismas columnas de la tabla — una fila por movimiento.
+  const filaMovimiento = (mv) => ({
+    "Código":            mv.codigo || "—",
+    "Tipo":              mv.tipo === "ingreso" ? "Ingreso" : "Egreso",
+    "Material":          mv.material?.nombre || "—",
+    "SKU":               mv.material?.sku || "—",
+    "Cantidad":          mv.cantidad,
+    "Precio Unitario":   Number(mv.precioUnitario || 0),
+    "Total":             Number((mv.cantidad || 0) * (mv.precioUnitario || 0)),
+    "Lote / Origen":     mv.tipo === "ingreso" ? (mv.lote || "—") : (mv.loteOrigen || "—"),
+    "Detalle":           mv.tipo === "ingreso"
+      ? [mv.proveedor, mv.guiaProveedor ? `G: ${mv.guiaProveedor}` : "", mv.ordenCompra ? `OC: ${mv.ordenCompra}` : ""].filter(Boolean).join(" ") || "—"
+      : (mv.notas || "—"),
+    "OT":                mv.ordenTrabajo?.codigo || "—",
+    "RQ":                mv.requerimiento?.codigo || "—",
+    "Cant. Requerida":   mv.cantidadRequerida ?? "—",
+    "Cant. Atendida":    mv.requerimiento ? mv.cantidad : "—",
+    "Fecha":             fmtFecha(mv.fecha),
+  });
+
+  // Exporta TODO lo que coincide con los filtros actuales, no solo lo que
+  // está paginado en pantalla — igual criterio que Almacén/Materiales
+  // (fetch aparte sin `page`, ver GET /movimientos-almacen).
+  const exportarExcel = async () => {
+    setExportando(true);
+    const r = await fetchAuth(`/movimientos-almacen?${paramsFiltro()}`);
+    if (r.ok) {
+      const todos = await r.json();
+      const ws = XLSX.utils.json_to_sheet(todos.map(filaMovimiento));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Movimientos");
+      XLSX.writeFile(wb, "movimientos-almacen.xlsx");
+    }
+    setExportando(false);
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Acciones y filtros */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <button onClick={() => setModalIngreso(true)}
+          className="text-sm bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition font-medium">
+          + Ingreso
+        </button>
+        <button onClick={() => setModalEgreso(true)}
+          className="text-sm bg-rose-600 text-white px-4 py-2 rounded-lg hover:bg-rose-700 transition font-medium">
+          − Egreso
+        </button>
+
+        <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className={INP}>
+          <option value="">Todos</option>
+          <option value="ingreso">Ingresos</option>
+          <option value="egreso">Egresos</option>
+        </select>
+
+        <div className="flex items-center gap-1.5 min-w-[240px]">
+          <BuscadorMaterialInline
+            value={busquedaFiltro}
+            onChange={(texto) => { setBusquedaFiltro(texto); if (filtroMaterial) setFiltroMaterial(""); }}
+            onSelect={elegirFiltroMaterial}
+            placeholder="Filtrar por material…"
+            className="flex-1"
+          />
+          {filtroMaterial && (
+            <button type="button" onClick={limpiarFiltroMaterial}
+              className="text-gray-400 hover:text-gray-700 text-lg leading-none px-1" title="Quitar filtro">✕</button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <input type="date" value={filtroDesde} onChange={(e) => setFiltroDesde(e.target.value)}
+            className={INP} title="Desde" />
+          <span className="text-gray-400 text-xs">a</span>
+          <input type="date" value={filtroHasta} onChange={(e) => setFiltroHasta(e.target.value)}
+            className={INP} title="Hasta" />
+          {(filtroDesde || filtroHasta) && (
+            <button type="button" onClick={() => { setFiltroDesde(""); setFiltroHasta(""); }}
+              className="text-gray-400 hover:text-gray-700 text-lg leading-none px-1" title="Quitar rango de fecha">✕</button>
+          )}
+        </div>
+
+        <button onClick={exportarExcel} disabled={exportando}
+          className="text-sm border border-gray-300 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition ml-auto">
+          {exportando ? "Exportando…" : "Exportar Excel"}
+        </button>
+      </div>
+
+      {/* Tabla — ancha al 90vw (se sale del contenedor max-w-6xl de la página) */}
+      <div className="relative left-1/2 -ml-[45vw] w-[90vw] max-w-[90vw] bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <TablaScroll className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Código</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Tipo</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Material</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Cant.</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Precio U.</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Total</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Lote / Origen</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Detalle</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">OT</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">RQ</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Cant. Req.</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Cant. Atendida</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Fecha</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {movimientos.length === 0 && (
+                <tr><td colSpan={13} className="text-center py-10 text-gray-300 text-sm">Sin movimientos</td></tr>
+              )}
+              {movimientos.map((mv) => (
+                <tr key={mv._id} className="hover:bg-gray-50/50 transition">
+                  <td className="px-4 py-3 font-mono text-xs text-gray-400">{mv.codigo}</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      mv.tipo === "ingreso" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                    }`}>
+                      {mv.tipo === "ingreso" ? "Ingreso" : "Egreso"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-800">{mv.material?.nombre || "—"}</p>
+                    <p className="text-xs text-gray-400 font-mono">{mv.material?.sku}</p>
+                  </td>
+                  <td className="px-4 py-3 text-right text-gray-700 font-mono">
+                    {mv.cantidad} {mv.material?.unidad}
+                  </td>
+                  <td className="px-4 py-3 text-right text-gray-700 font-mono">S/ {fmt(mv.precioUnitario)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-gray-800 font-mono">
+                    S/ {fmt(mv.cantidad * mv.precioUnitario)}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-500 font-mono hidden lg:table-cell">
+                    {mv.tipo === "ingreso" ? mv.lote : mv.loteOrigen || "—"}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-500 hidden lg:table-cell">
+                    {mv.tipo === "ingreso" ? (
+                      <span>{mv.proveedor || ""}  {mv.guiaProveedor ? `G: ${mv.guiaProveedor}` : ""} {mv.ordenCompra ? `OC: ${mv.ordenCompra}` : ""}</span>
+                    ) : (
+                      mv.notas || "—"
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-xs font-mono text-blue-600">{mv.ordenTrabajo?.codigo || "—"}</td>
+                  <td className="px-4 py-3 text-xs font-mono text-orange-600">{mv.requerimiento?.codigo || "—"}</td>
+                  <td className="px-4 py-3 text-right text-xs text-gray-500 font-mono">{mv.cantidadRequerida ?? "—"}</td>
+                  <td className="px-4 py-3 text-right text-xs text-gray-700 font-mono">{mv.requerimiento ? mv.cantidad : "—"}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500">{fmtFecha(mv.fecha)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TablaScroll>
+
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm text-gray-400">
+          <span>Mostrando {movimientos.length} de {total} resultados</span>
+          {movimientos.length < total && (
+            <button
+              onClick={cargarMas}
+              disabled={cargandoMas}
+              className="border border-gray-300 text-gray-600 px-4 py-1.5 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 transition"
+            >
+              {cargandoMas ? "Cargando…" : "Mostrar más"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {modalIngreso && (
+        <ModalIngreso onClose={() => setModalIngreso(false)} onGuardado={onGuardado} />
+      )}
+      {modalEgreso && (
+        <ModalEgreso onClose={() => setModalEgreso(false)} onGuardado={onGuardado} />
+      )}
+    </div>
+  );
+}
+
+// ─── Sección Alerta de Stock ────────────────────────────────────────────────
+// Materiales activos cuyo stock (calculado por agregación de movimientos, ver
+// GET /materiales) ya cayó al mínimo o por debajo — mismo criterio que el
+// badge ámbar/rojo de la tabla de Materiales, pero como bandeja aparte para
+// que el almacenero vea de un vistazo qué reponer.
+
+function SeccionAlertaStock() {
+  const [lista, setLista] = useState([]);
+  const [materialIngreso, setMaterialIngreso] = useState(null);
+
+  // El filtro por stock bajo ahora lo hace el backend (?bajoStock=true) —
+  // sigue necesitando calcular el stock de todos los materiales para saber
+  // quién está en alerta, pero el payload que viaja por la red se reduce al
+  // puñado que realmente está en alerta (~350 de ~9000) en vez de la
+  // colección completa (ver GET /materiales en materiales.js).
+  const cargar = useCallback(async () => {
+    const r = await fetchAuth("/materiales?bajoStock=true");
+    if (r.ok) setLista(await r.json());
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const enAlerta = [...lista]
+    .sort((a, b) => (a.stock <= 0 ? -1 : 0) - (b.stock <= 0 ? -1 : 0) || b.sku.localeCompare(a.sku));
+
+  const badgeStock = (m) => (m.stock <= 0 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700");
+
+  const filaAlerta = (m) => ({
+    "SKU": m.sku,
+    "Título": m.nombre,
+    "Categoría": m.categoria?.nombre || "—",
+    "Stock actual": m.stock,
+    "Stock mínimo": m.stockMinimo,
+    "Unidad": m.unidad,
+    "Ubicación": m.ubicacion?.nombre || "—",
+  });
+
+  const exportarExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(enAlerta.map(filaAlerta));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Alerta de Stock");
+    XLSX.writeFile(wb, "alerta-stock.xlsx");
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Materiales por debajo del stock mínimo
+            </p>
+            <span className="text-xs text-gray-400">{enAlerta.length} SKU{enAlerta.length !== 1 ? "s" : ""}</span>
+          </div>
+          <button onClick={exportarExcel}
+            className="text-xs border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition font-medium">
+            ↓ Exportar Excel
+          </button>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">SKU</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Título</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Categoría</th>
+              <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Stock actual</th>
+              <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Stock mínimo</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Ubicación</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {enAlerta.length === 0 && (
+              <tr><td colSpan={6} className="text-center py-10 text-gray-300 text-sm">Sin alertas — todo el stock está por encima de su mínimo</td></tr>
+            )}
+            {enAlerta.map((m) => (
+              <tr key={m._id} onClick={() => setMaterialIngreso(m)}
+                title="Clic para generar un ingreso de este material"
+                className="hover:bg-gray-50/50 transition cursor-pointer">
+                <td className="px-5 py-3 font-mono text-xs text-gray-500">{m.sku}</td>
+                <td className="px-5 py-3 font-medium text-gray-800">{m.nombre}</td>
+                <td className="px-5 py-3 text-gray-500">{m.categoria?.nombre || <span className="text-gray-300">—</span>}</td>
+                <td className="px-5 py-3 text-center">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badgeStock(m)}`}>
+                    {m.stock} {m.unidad}
+                  </span>
+                </td>
+                <td className="px-5 py-3 text-center text-gray-600">{m.stockMinimo} {m.unidad}</td>
+                <td className="px-5 py-3 text-gray-500">{m.ubicacion?.nombre || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {materialIngreso && (
+        <ModalIngreso
+          materialInicial={materialIngreso}
+          onClose={() => setMaterialIngreso(null)}
+          onGuardado={() => { setMaterialIngreso(null); cargar(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Página principal ────────────────────────────────────────────────────────
+
+const TABS = [
+  { id: "ubicaciones", label: "Ubicaciones" },
+  { id: "materiales", label: "Materiales (SKU)" },
+  { id: "movimientos", label: "Movimientos" },
+  { id: "componentes", label: "Tipos de Componente" },
+  { id: "categorias", label: "Categorías de compra" },
+  { id: "alertas", label: "Alerta de Stock" },
+];
+
+export default function Almacen() {
+  const [tab, setTab] = useState("materiales");
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      <div>
+        <h1 className="text-xl font-bold text-gray-800">Almacén</h1>
+        <p className="text-sm text-gray-400 mt-0.5">Gestión de ubicaciones, materiales e inventario</p>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 gap-1">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-5 py-2.5 text-sm font-medium transition border-b-2 -mb-px ${
+              tab === t.id
+                ? "border-blue-600 text-blue-700"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "ubicaciones" && <SeccionUbicaciones />}
+      {tab === "materiales" && <SeccionMateriales />}
+      {tab === "movimientos" && <SeccionMovimientos />}
+      {tab === "componentes" && <SeccionComponentes />}
+      {tab === "categorias" && <SeccionCategorias />}
+      {tab === "alertas" && <SeccionAlertaStock />}
+    </div>
+  );
+}
