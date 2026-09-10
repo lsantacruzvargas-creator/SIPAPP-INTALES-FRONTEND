@@ -190,7 +190,7 @@ export default function Sidebar() {
       <div className="md:hidden sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm h-14 flex items-center justify-between px-4">
         <div className="flex items-center gap-2.5 cursor-pointer"
           onClick={() => ir(esTecnico || esPlanner ? "/ordenes-trabajo" : esAlmacenero ? "/almacen" : esJefatura ? "/aprobaciones" : esFacturacion ? "/facturas" : "/dashboard")}>
-          <img src={`${import.meta.env.BASE_URL}assets/logos/logo_huaquian.jpg`} alt="Huaquian"
+          <img src={`${import.meta.env.BASE_URL}assets/logos/logo_huaquian.jpg`} alt="Intales"
             className="w-8 h-8 rounded-lg object-contain shrink-0" />
           <span className="font-bold text-gray-800 text-base tracking-tight">Intales</span>
         </div>
@@ -227,7 +227,7 @@ export default function Sidebar() {
             colapsado ? "px-4 md:px-0 md:justify-center" : "px-4"
           }`}
         >
-          <img src={`${import.meta.env.BASE_URL}assets/logos/logo_huaquian.jpg`} alt="Huaquian"
+          <img src={`${import.meta.env.BASE_URL}assets/logos/logo_huaquian.jpg`} alt="Intales"
             className="w-9 h-9 rounded-xl object-contain shrink-0" />
           <span className={`font-bold text-gray-800 text-base tracking-tight ${colapsado ? "md:hidden" : ""}`}>Intales</span>
         </div>

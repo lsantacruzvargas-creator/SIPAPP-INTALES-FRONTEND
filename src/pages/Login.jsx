@@ -39,7 +39,7 @@ export default function Login() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="card w-full max-w-sm">
         <div className="flex items-center justify-center gap-3 mb-6">
-          <img src={`${import.meta.env.BASE_URL}assets/logos/logo_huaquian.jpg`} alt="Huaquian"
+          <img src={`${import.meta.env.BASE_URL}assets/logos/logo_huaquian.jpg`} alt="Intales"
             className="w-9 h-9 rounded-xl object-contain" />
           <div>
             <p className="font-bold text-gray-800">
