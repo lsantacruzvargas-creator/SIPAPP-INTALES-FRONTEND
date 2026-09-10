@@ -45,7 +45,7 @@ export default function Login() {
             <p className="font-bold text-gray-800">
               SIP App <span className="text-xs font-normal text-gray-400">v{APP_VERSION}</span>
             </p>
-            <p className="text-xs text-gray-400">Huaquian</p>
+            <p className="text-xs text-gray-400">Intales</p>
           </div>
         </div>
 

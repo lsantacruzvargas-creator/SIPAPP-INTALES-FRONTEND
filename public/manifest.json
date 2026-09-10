@@ -1,7 +1,7 @@
 {
-  "name": "SIPApp Huaquian",
+  "name": "SIPApp Intales",
   "short_name": "SIPApp",
-  "description": "ERP Huaquian — cotizaciones, órdenes de trabajo, órdenes de compra, facturación y almacén.",
+  "description": "ERP Intales — cotizaciones, órdenes de trabajo, órdenes de compra, facturación y almacén.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

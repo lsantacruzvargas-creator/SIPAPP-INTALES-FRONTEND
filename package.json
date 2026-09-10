@@ -1,10 +1,10 @@
 {
   "main": "electron/main.cjs",
-  "description": "ERP SIP App Huaquian",
-  "author": "Huaquian",
+  "description": "ERP SIP App Intales",
+  "author": "Intales",
   "build": {
-    "appId": "com.huaquian.sipapp",
-    "productName": "SIPAPP Huaquian",
+    "appId": "com.intales.sipapp",
+    "productName": "SIPAPP Intales",
     "directories": {
       "output": "dist-electron"
     },
@@ -19,11 +19,11 @@
     "publish": {
       "provider": "github",
       "owner": "lsantacruzvargas-creator",
-      "repo": "SIPAPP-HUAQUIAN-FRONTEND",
+      "repo": "SIPAPP-INTALES-FRONTEND",
       "releaseType": "release"
     }
   },
-  "name": "sipapp-huaquian",
+  "name": "sipapp-intales",
   "private": true,
   "version": "1.2.0",
   "type": "module",
