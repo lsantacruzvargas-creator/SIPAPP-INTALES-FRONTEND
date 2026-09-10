@@ -95,7 +95,7 @@ export const exportarCotizacionPdf = async (cotizacion) => {
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text("HUAQUIAN", M + 4, y + 9);
+    doc.text("INTALES", M + 4, y + 9);
     y += 14 + 6;
   }
 
