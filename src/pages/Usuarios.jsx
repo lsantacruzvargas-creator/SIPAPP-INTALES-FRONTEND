@@ -34,6 +34,13 @@ function ModalUsuario({ usuario, onClose, onGuardado }) {
     password: "",
     rol:      usuario?.rol      ?? "tecnico",
     activo:   usuario?.activo   ?? true,
+    // Datos de firma para el PDF de Cotización (Atentamente, nombre/cargo/
+    // correo/teléfono de quien la generó) e iniciales para su código
+    // (NNNNN-YYYY-INT/iniciales).
+    cargo:     usuario?.cargo     ?? "",
+    correo:    usuario?.correo    ?? "",
+    telefono:  usuario?.telefono  ?? "",
+    iniciales: usuario?.iniciales ?? "",
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError]   = useState("");
@@ -116,6 +123,26 @@ function ModalUsuario({ usuario, onClose, onGuardado }) {
                 </label>
               </div>
             )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Cargo</label>
+              <input name="cargo" value={form.cargo} onChange={handleChange} className={INP} placeholder="Ej. Asistente Comercial" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Iniciales</label>
+              <input name="iniciales" value={form.iniciales} onChange={handleChange} className={INP} placeholder="Ej. JEV" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Correo</label>
+              <input type="email" name="correo" value={form.correo} onChange={handleChange} className={INP} placeholder="nombre@intales.com.pe" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Teléfono</label>
+              <input name="telefono" value={form.telefono} onChange={handleChange} className={INP} placeholder="+51 999 999 999" />
+            </div>
           </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
