@@ -25,6 +25,7 @@ export const itemVacioVenta = () => ({
   fechaEntrega: "",
   precio: 0,
   moneda: "PEN",
+  imagenes: [],
 });
 
 export const itemVacioServicio = () => ({
@@ -52,6 +53,7 @@ export const itemDesdeDb = (item) => ({
     : "",
   precio: item.precio,
   moneda: item.moneda || "PEN",
+  imagenes: item.imagenes || [],
   otGenerada: item.otGenerada || null,
   // Formato Gloria (ver GRUPOS_GLORIA abajo) — un ítem del flujo genérico no
   // trae `grupo`, así que estos quedan undefined y no afectan nada.

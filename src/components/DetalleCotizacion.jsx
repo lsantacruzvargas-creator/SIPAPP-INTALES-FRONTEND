@@ -417,6 +417,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
         };
         if (i.fechaEntrega) it.fechaEntrega = i.fechaEntrega;
         if (i.subItems?.length > 0) it.subItems = i.subItems.map(s => s.texto).filter(Boolean);
+        if (i.imagenes?.length > 0) it.imagenes = i.imagenes;
         if (i.grupo) { it.grupo = i.grupo; it.personas = i.personas; it.horas = i.horas; it.tarifaHora = i.tarifaHora; }
         return it;
       }),

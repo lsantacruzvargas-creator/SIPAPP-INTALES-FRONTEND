@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from "react";
-import { fetchAuth, getUsuario } from "../utils/fetchAuth";
+import { fetchAuth, uploadAuth, getUsuario } from "../utils/fetchAuth";
 import { formatearFecha } from "../utils/fecha";
 import { exportarCotizacionPdf } from "../utils/cotizacionPdf";
 import {
@@ -11,6 +11,7 @@ import {
 } from "../utils/cotizacionItems";
 import CeldasNumericas from "../components/CeldasNumericas";
 import TablaScroll from "../components/TablaScroll";
+import ImagenProtegida from "../components/ImagenProtegida";
 
 const hoy = () => new Date().toISOString().split("T")[0];
 
@@ -71,6 +72,22 @@ export default function Cotizaciones() {
 
   const handleItem = (key, campo, valor) =>
     setItems(items.map((i) => (i._key === key ? { ...i, [campo]: valor } : i)));
+
+  // Una sola imagen por ítem (mismo criterio que TablaItemsCotizacion.jsx) —
+  // solo aplica a ítems de tipo "venta", ver rama del `tipo === "venta"` en
+  // la tabla más abajo.
+  const subirImagenItem = async (key, files) => {
+    const archivo = files?.[0];
+    if (!archivo) return;
+    const fd = new FormData();
+    fd.append("imagen", archivo);
+    const res = await uploadAuth("/cotizaciones/subir-imagen", fd);
+    if (!res.ok) return;
+    const { url } = await res.json();
+    handleItem(key, "imagenes", [url]);
+  };
+
+  const eliminarImagenItem = (key) => handleItem(key, "imagenes", []);
 
   const agregarItem = () =>
     setItems([...items, tipo === "venta" ? itemVacioVenta() : itemVacioServicio()]);
@@ -136,6 +153,7 @@ export default function Cotizaciones() {
           if (i.fechaEntrega) item.fechaEntrega = i.fechaEntrega;
           if (tipo === "servicio" && i.subItems?.length > 0)
             item.subItems = i.subItems.map((s) => s.texto).filter(Boolean);
+          if (tipo === "venta" && i.imagenes?.length > 0) item.imagenes = i.imagenes;
           return item;
         }),
         subtotal: subtotalGeneral,
@@ -403,6 +421,26 @@ export default function Cotizaciones() {
                             onChange={(e) => handleItem(item._key, "descripcion", e.target.value)}
                             required disabled={ro}
                             className={`w-full ${ro ? "bg-transparent border-transparent text-sm px-2 py-1" : INP}`} />
+                          <div className="mt-1.5">
+                            {item.imagenes?.[0] ? (
+                              <div className="relative inline-block">
+                                <ImagenProtegida src={item.imagenes[0]} alt=""
+                                  className="w-16 h-16 object-cover rounded border border-gray-200" />
+                                {!ro && (
+                                  <button type="button" onClick={() => eliminarImagenItem(item._key)}
+                                    className="absolute -top-2 -right-2 bg-white border border-gray-200 text-red-400 hover:text-red-600 rounded-full w-5 h-5 text-xs leading-none">
+                                    ✕
+                                  </button>
+                                )}
+                              </div>
+                            ) : !ro ? (
+                              <label className="text-xs text-gray-400 hover:text-gray-700 transition cursor-pointer">
+                                + agregar imagen
+                                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                                  onChange={(e) => { subirImagenItem(item._key, e.target.files); e.target.value = ""; }} />
+                              </label>
+                            ) : null}
+                          </div>
                         </td>
                         <CeldasNumericas item={item} ro={ro} onUpdate={handleItem} />
                         <td className="px-3 py-2 text-right font-medium text-gray-700">

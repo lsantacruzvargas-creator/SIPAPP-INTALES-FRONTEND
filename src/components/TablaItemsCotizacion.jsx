@@ -2,6 +2,8 @@ import { useState } from "react";
 import SelectorCatalogoServicios from "./SelectorCatalogoServicios";
 import ConfirmacionAccion from "./ConfirmacionAccion";
 import TablaScroll from "./TablaScroll";
+import ImagenProtegida from "./ImagenProtegida";
+import { uploadAuth } from "../utils/fetchAuth";
 import {
   calcSubtotal, itemVacioServicio, UNIDADES,
   descripcionInvalida, cantidadInvalida, precioInvalido, itemInvalido,
@@ -36,6 +38,22 @@ export default function TablaItemsCotizacion({
     onItemsChange(items.map(i => (i._key === key ? { ...i, [campo]: valor } : i)));
 
   const eliminarItem = (key) => onItemsChange(items.filter(i => i._key !== key));
+
+  // Una sola imagen por ítem (confirmado con el usuario) — solo aplica a
+  // ítems de cotización "venta" (ver JSX abajo). El backend solo recibe un
+  // multipart `imagen`; la URL resultante vive en `item.imagenes[0]`.
+  const subirImagenItem = async (key, files) => {
+    const archivo = files?.[0];
+    if (!archivo) return;
+    const fd = new FormData();
+    fd.append("imagen", archivo);
+    const res = await uploadAuth("/cotizaciones/subir-imagen", fd);
+    if (!res.ok) return;
+    const { url } = await res.json();
+    handleItem(key, "imagenes", [url]);
+  };
+
+  const eliminarImagenItem = (key) => handleItem(key, "imagenes", []);
 
   const agregarSubItem = (key) =>
     onItemsChange(items.map(i =>
@@ -236,6 +254,28 @@ export default function TablaItemsCotizacion({
                             + elegir del catálogo
                           </button>
                         )}
+                      </div>
+                    )}
+                    {tipo === "venta" && (
+                      <div className="mt-1.5">
+                        {item.imagenes?.[0] ? (
+                          <div className="relative inline-block">
+                            <ImagenProtegida src={item.imagenes[0]} alt=""
+                              className="w-16 h-16 object-cover rounded border border-gray-200" />
+                            {editable && (
+                              <button type="button" onClick={() => eliminarImagenItem(item._key)}
+                                className="absolute -top-2 -right-2 bg-white border border-gray-200 text-red-400 hover:text-red-600 rounded-full w-5 h-5 text-xs leading-none">
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                        ) : editable ? (
+                          <label className="text-xs text-gray-400 hover:text-sky-600 transition cursor-pointer">
+                            + agregar imagen
+                            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                              onChange={(e) => { subirImagenItem(item._key, e.target.files); e.target.value = ""; }} />
+                          </label>
+                        ) : null}
                       </div>
                     )}
                   </td>
