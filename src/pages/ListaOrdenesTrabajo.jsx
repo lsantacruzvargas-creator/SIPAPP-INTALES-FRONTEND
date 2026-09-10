@@ -5,18 +5,16 @@ import DetalleDocumento from "../components/DetalleDocumento";
 import ModalNuevaOT from "../components/ModalNuevaOT";
 import ModalImportarExcel, { COLS_OT } from "../components/ModalImportarExcel";
 import TablaScroll from "../components/TablaScroll";
-import { DotChip, badgeOT, dotOT, badgeInformes, dotInformes, badgeGeneral, dotGeneral } from "../components/detalleShared";
+import { DotChip, badgeOT, dotOT, badgeGeneral, dotGeneral } from "../components/detalleShared";
 import * as XLSX from "xlsx";
 
-const FILTROS_VACIO = { empresa: "", planta: "", busqueda: "", estadoInformes: "", fechaDesde: "", fechaHasta: "" };
+const FILTROS_VACIO = { empresa: "", planta: "", busqueda: "", fechaDesde: "", fechaHasta: "" };
 
 const SORTS = [
   { valor: "fecha",             label: "Más reciente" },
   { valor: "numeroOT",          label: "N° OT" },
   { valor: "numeroCotizacion",  label: "N° Cotización" },
 ];
-
-const ESTADOS_INFORMES = ["pendiente", "en progreso", "en espera de aprobación", "aprobado"];
 
 // Comparador descendente: numérico si ambos parsean como número, si no
 // localeCompare; los valores vacíos van al final.
@@ -95,7 +93,6 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                 <th className={`${TH} text-left`}>Técnico de prueba</th>
                 <th className={`${TH} text-center`}>Intervención</th>
                 <th className={`${TH} text-left`}>Técnico de intervención</th>
-                <th className={`${TH} text-center`}>Estado Informes</th>
                 <th className={`${TH} text-center`}>Días desde recibido</th>
                 <th className={`${TH} text-center`}>Fecha de Ingreso</th>
               </tr>
@@ -103,7 +100,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
             <tbody className="divide-y divide-gray-100">
               {ordenes.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
+                  <td colSpan={12} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
                 </tr>
               ) : (
                 ordenes.flatMap((o) => [
@@ -143,9 +140,6 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                       <DotChip chip={badgeOT(intervencionLabel(o))} dot={dotOT(intervencionLabel(o))}>{intervencionLabel(o)}</DotChip>
                     </td>
                     <td className="px-4 py-3.5 text-gray-600">{o.encargado2 || <span className="text-gray-300">—</span>}</td>
-                    <td className="px-4 py-3.5 text-center">
-                      <DotChip chip={badgeInformes(o.estadoInformes)} dot={dotInformes(o.estadoInformes)}>{o.estadoInformes}</DotChip>
-                    </td>
                     <td className="px-4 py-3.5 text-center text-gray-600 whitespace-nowrap">
                       {diasDesdeRecibido(o.fechaRecibida) ?? <span className="text-gray-300">—</span>}
                     </td>
@@ -192,9 +186,6 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                         <DotChip chip={badgeOT(intervencionLabel(s))} dot={dotOT(intervencionLabel(s))}>{intervencionLabel(s)}</DotChip>
                       </td>
                       <td className="px-4 py-3 text-gray-600">{s.encargado2 || <span className="text-gray-300">—</span>}</td>
-                      <td className="px-4 py-3 text-center">
-                        <DotChip chip={badgeInformes(s.estadoInformes)} dot={dotInformes(s.estadoInformes)}>{s.estadoInformes}</DotChip>
-                      </td>
                       <td className="px-4 py-3 text-center text-gray-600 whitespace-nowrap">
                         {diasDesdeRecibido(s.fechaRecibida ?? o.fechaRecibida) ?? <span className="text-gray-300">—</span>}
                       </td>
@@ -316,7 +307,6 @@ export default function ListaOrdenesTrabajo() {
     return (
       (!filtros.empresa || o.empresa?._id === filtros.empresa) &&
       (!filtros.planta || o.planta === filtros.planta) &&
-      (!filtros.estadoInformes || o.estadoInformes === filtros.estadoInformes) &&
       dentroDeRangoFecha(o.fechaRecibida, filtros.fechaDesde, filtros.fechaHasta) &&
       (!q ||
         o.titulo?.toLowerCase().includes(q) ||
@@ -420,10 +410,7 @@ export default function ListaOrdenesTrabajo() {
   // Vista simplificada del planner: un solo set de 4 grupos en vez del split
   // Prueba/Intervención — agrupa directo por `estadoGeneral` (calculado y
   // persistido en el backend, ver estadoGeneralOT.js), sin distinguir de qué
-  // track viene. Antes se recalculaba acá con otro criterio (track listo +
-  // informesAprobados) que no coincidía con el valor que el backend guardaba
-  // — una misma OT podía verse "en progreso" en el badge y "completada" en
-  // esta tabla. Un solo cálculo, una sola fuente de verdad.
+  // track viene. Un solo cálculo, una sola fuente de verdad.
   const asignadasPlanner = abiertas.filter((o) => o.encargado?.trim() || o.encargado2?.trim());
   const plannerEntregadas  = asignadasPlanner.filter((o) => o.estadoGeneral === "entregada");
   const plannerCompletadas = asignadasPlanner.filter((o) => o.estadoGeneral === "completada");
@@ -466,7 +453,6 @@ export default function ListaOrdenesTrabajo() {
     "Técnico de prueba":        o.encargado || "—",
     "Intervención":             o.estado || "—",
     "Técnico de intervención":  o.encargado2 || "—",
-    "Estado Informes":          o.estadoInformes || "—",
     "Días desde recibido":      diasDesdeRecibido(o.fechaRecibida) ?? "—",
     "Fecha de Ingreso":         o.fechaRecibida ? formatearFecha(o.fechaRecibida) : "—",
   });
@@ -525,7 +511,7 @@ export default function ListaOrdenesTrabajo() {
         </div>
       </div>
 
-      {/* Filtros — orden: Ordenar, Estado, Empresa (+ Planta), búsqueda, Estado informes */}
+      {/* Filtros — orden: Ordenar, Estado, Empresa (+ Planta), búsqueda */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
 
         <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={SELECT}>
@@ -581,13 +567,6 @@ export default function ListaOrdenesTrabajo() {
           placeholder="Buscar por N° OT, cotización, OC, factura, título, empresa o RUC…"
           className={`${SELECT} flex-1 min-w-52`}
         />
-
-        <select name="estadoInformes" value={filtros.estadoInformes} onChange={handleFiltro} className={SELECT}>
-          <option value="">Todo estado de informes</option>
-          {ESTADOS_INFORMES.map((e) => (
-            <option key={e} value={e} className="capitalize">{e}</option>
-          ))}
-        </select>
 
         <div className="flex items-center gap-1.5">
           <input type="date" name="fechaDesde" value={filtros.fechaDesde} onChange={handleFiltro}

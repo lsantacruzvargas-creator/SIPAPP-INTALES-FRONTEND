@@ -249,9 +249,6 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
             <div className="text-right">
               <p className="text-[10px] text-white/60 uppercase tracking-widest leading-none">Estado</p>
               <Chip className="mt-0.5 bg-white/20 text-white">{ot.estado}</Chip>
-              {ot.informesAprobados && (
-                <Chip className="mt-1 bg-teal-400/30 text-white block">Informes aprobados</Chip>
-              )}
               {ot.irreparable && <Chip className="mt-1 bg-red-500/40 text-white block">Irreparable</Chip>}
             </div>
             {!ot.anulado && !cadenaCerrada && puedeAnular && <BotonAnular onAnular={anular} />}

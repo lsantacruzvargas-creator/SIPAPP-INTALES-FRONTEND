@@ -426,9 +426,6 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
               <Chip className={`mt-0.5 ${badgeGeneral(ot.estadoGeneral)}`}>{ot.estadoGeneral}</Chip>
               <p className="text-[10px] text-white/60 uppercase tracking-widest leading-none mt-1.5">Estado</p>
               <Chip className="mt-0.5 bg-white/20 text-white">{ot.estado}</Chip>
-              {ot.informesAprobados && (
-                <Chip className="mt-1 bg-teal-400/30 text-white block">Informes aprobados</Chip>
-              )}
             </div>
             {!ot.anulado && !cadenaCerrada && puedeAnular && <BotonAnular onAnular={anular} />}
             {esAdmin && ot.anulado && <BotonDesanular onDesanular={desanular} />}

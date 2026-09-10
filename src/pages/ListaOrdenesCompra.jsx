@@ -4,7 +4,7 @@ import { formatearFecha } from "../utils/fecha";
 import DetalleDocumento from "../components/DetalleDocumento";
 import ModalCrearOrdenCompra   from "../components/ModalCrearOrdenCompra";
 import ModalImportarExcel, { COLS_OC, COLS_CADENA } from "../components/ModalImportarExcel";
-import { DotChip, badgeOT, dotOT, badgeInformes, dotInformes } from "../components/detalleShared";
+import { DotChip, badgeOT, dotOT } from "../components/detalleShared";
 import TablaScroll from "../components/TablaScroll";
 import * as XLSX from "xlsx";
 
@@ -62,7 +62,7 @@ function TablaOC({
   mostrarFactura = true, mostrarTitulo = true, mostrarDocumento = true, mostrarHesActa = false,
   puedeVerPrecios = true, vacioMsg,
 }) {
-  const totalColumnas = 9
+  const totalColumnas = 8
     + (puedeVerPrecios ? 2 : 0)
     + (mostrarFactura ? 1 : 0) + (mostrarTitulo ? 1 : 0)
     + (mostrarHesActa ? 2 : 0) + (mostrarDocumento ? 1 : 0);
@@ -89,7 +89,6 @@ function TablaOC({
               {puedeVerPrecios && <th className={`${TH} text-right`}>Total (US$)</th>}
               <th className={`${TH} text-center`}>Estado Cotización</th>
               <th className={`${TH} text-center`}>Estado OT</th>
-              <th className={`${TH} text-center`}>Estado Informes</th>
               <th className={`${TH} text-center`}>GRE</th>
               {mostrarHesActa && <th className={`${TH} text-center`}>HES</th>}
               {mostrarHesActa && <th className={`${TH} text-center`}>Acta de Conformidad</th>}
@@ -162,13 +161,6 @@ function TablaOC({
                     )}
                   </td>
                   <td className="px-4 py-3.5 text-center">
-                    {otPadre ? (
-                      <DotChip chip={badgeInformes(otPadre.estadoInformes)} dot={dotInformes(otPadre.estadoInformes)}>{otPadre.estadoInformes}</DotChip>
-                    ) : (
-                      <span className="text-gray-300 text-xs">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5 text-center">
                     {otPadre && greMap[otPadre._id] ? (
                       <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 whitespace-nowrap">
                         GRE {greMap[otPadre._id]}
@@ -225,9 +217,6 @@ function TablaOC({
                   <td className="px-4 py-3" />
                   <td className="px-4 py-3 text-center">
                     <DotChip chip={badgeOT(s.estado)} dot={dotOT(s.estado)}>{s.estado}</DotChip>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <DotChip chip={badgeInformes(s.estadoInformes)} dot={dotInformes(s.estadoInformes)}>{s.estadoInformes}</DotChip>
                   </td>
                   <td className="px-4 py-3 text-center">
                     {greMap[s._id] ? (
@@ -427,7 +416,6 @@ export default function ListaOrdenesCompra() {
       "Enviado":            o.cotizacion?.enviado ? "Enviada" : "No enviada",
       "Informe enviado":    o.cotizacion?.informeEnviado ? "Enviado" : "No enviado",
       "Estado":             grupoOT?.parent?.estado || "Sin OT",
-      "Estado Informes":    grupoOT?.parent?.estadoInformes || "—",
       "GRE":                (grupoOT?.parent && greMap[grupoOT.parent._id]) || "Sin GRE",
     };
   };

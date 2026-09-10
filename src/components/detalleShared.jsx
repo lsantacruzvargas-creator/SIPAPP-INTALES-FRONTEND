@@ -224,22 +224,6 @@ export const dotOT = (e) => {
   return "bg-gray-300";
 };
 
-// Estado agregado de Informes Técnicos de una OT (ver
-// Backend/src/utils/recalcularInformesAprobados.js) — independiente del
-// estado de la OT (`badgeOT`/`dotOT`).
-export const badgeInformes = (e) => {
-  if (e === "aprobado")                return "bg-teal-100 text-teal-700";
-  if (e === "en espera de aprobación") return "bg-amber-100 text-amber-700";
-  if (e === "en progreso")             return "bg-blue-100 text-blue-700";
-  return "bg-gray-100 text-gray-500"; // pendiente
-};
-export const dotInformes = (e) => {
-  if (e === "aprobado")                return "bg-teal-500";
-  if (e === "en espera de aprobación") return "bg-amber-500";
-  if (e === "en progreso")             return "bg-blue-500";
-  return "bg-gray-300"; // pendiente
-};
-
 // Estado general de la OT (ver Backend/src/utils/estadoGeneralOT.js) —
 // combina asignación de técnicos, progreso y aprobación de Informe.
 export const badgeGeneral = (e) => {
