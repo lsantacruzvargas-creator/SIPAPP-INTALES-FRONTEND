@@ -39,8 +39,8 @@ export default function TablaItemsCotizacion({
 
   const eliminarItem = (key) => onItemsChange(items.filter(i => i._key !== key));
 
-  // Una sola imagen por ítem (confirmado con el usuario) — solo aplica a
-  // ítems de cotización "venta" (ver JSX abajo). El backend solo recibe un
+  // Una sola imagen por ítem (confirmado con el usuario) — aplica sin
+  // importar el tipo, formato único de Intales. El backend solo recibe un
   // multipart `imagen`; la URL resultante vive en `item.imagenes[0]`.
   const subirImagenItem = async (key, files) => {
     const archivo = files?.[0];
@@ -122,7 +122,7 @@ export default function TablaItemsCotizacion({
 
   const agregarItemManual = () => onItemsChange([...items, itemVacioServicio()]);
 
-  const colsIzquierda = (puedeEditar ? 5 : 4) + (seleccionables ? 1 : 0);
+  const colsIzquierda = (puedeEditar ? 5 : 4) + (seleccionables ? 1 : 0) + 2; // +2: Código, Días entrega
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -167,9 +167,11 @@ export default function TablaItemsCotizacion({
             <tr>
               {seleccionables && <th className="px-3 py-3 w-12 text-center">OT</th>}
               <th className="px-3 py-3 text-center w-12">Item</th>
+              <th className="px-3 py-3 text-left w-28">Código</th>
               <th className="px-3 py-3 text-left">Descripción *</th>
               <th className="px-3 py-3 text-center w-20">Unidad</th>
               <th className="px-3 py-3 text-center w-24">Cantidad *</th>
+              <th className="px-3 py-3 text-center w-24">Días entrega</th>
               {puedeVerPrecios && <th className="px-3 py-3 text-right w-32">Precio unitario *</th>}
               {puedeVerPrecios && <th className="px-3 py-3 text-right w-32">Precio total</th>}
               {puedeEditar && <th className="px-3 py-3 w-10"><span className="sr-only">Quitar</span></th>}
@@ -178,7 +180,7 @@ export default function TablaItemsCotizacion({
           <tbody className="divide-y divide-gray-100">
             {items.length === 0 ? (
               <tr>
-                <td colSpan={(puedeEditar ? 7 : 6) + (seleccionables ? 1 : 0) - (puedeVerPrecios ? 0 : 2)} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={(puedeEditar ? 7 : 6) + (seleccionables ? 1 : 0) - (puedeVerPrecios ? 0 : 2) + 2} className="px-4 py-8 text-center text-gray-400">
                   Sin ítems agregados{puedeAgregar
                     ? (tipo === "servicio"
                       ? " — usa “+ Agregar ítem manual” para escribir uno o “+ Agregar ítem de plantilla” para elegir del catálogo de servicios."
@@ -213,6 +215,12 @@ export default function TablaItemsCotizacion({
                     </td>
                   )}
                   <td className="px-3 py-3 text-center text-gray-400">{idx + 1}</td>
+                  <td className="px-3 py-3">
+                    <input value={item.codigo || ""} disabled={!editable}
+                      onChange={(e) => handleItem(item._key, "codigo", e.target.value)}
+                      placeholder="—"
+                      className={`w-full ${editable ? INP : "bg-transparent border-transparent text-sm px-2 py-1"}`} />
+                  </td>
                   <td className="px-3 py-3">
                     {editable ? (
                       <input value={item.descripcion}
@@ -256,28 +264,26 @@ export default function TablaItemsCotizacion({
                         )}
                       </div>
                     )}
-                    {tipo === "venta" && (
-                      <div className="mt-1.5">
-                        {item.imagenes?.[0] ? (
-                          <div className="relative inline-block">
-                            <ImagenProtegida src={item.imagenes[0]} alt=""
-                              className="w-16 h-16 object-cover rounded border border-gray-200" />
-                            {editable && (
-                              <button type="button" onClick={() => eliminarImagenItem(item._key)}
-                                className="absolute -top-2 -right-2 bg-white border border-gray-200 text-red-400 hover:text-red-600 rounded-full w-5 h-5 text-xs leading-none">
-                                ✕
-                              </button>
-                            )}
-                          </div>
-                        ) : editable ? (
-                          <label className="text-xs text-gray-400 hover:text-sky-600 transition cursor-pointer">
-                            + agregar imagen
-                            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
-                              onChange={(e) => { subirImagenItem(item._key, e.target.files); e.target.value = ""; }} />
-                          </label>
-                        ) : null}
-                      </div>
-                    )}
+                    <div className="mt-1.5">
+                      {item.imagenes?.[0] ? (
+                        <div className="relative inline-block">
+                          <ImagenProtegida src={item.imagenes[0]} alt=""
+                            className="w-16 h-16 object-cover rounded border border-gray-200" />
+                          {editable && (
+                            <button type="button" onClick={() => eliminarImagenItem(item._key)}
+                              className="absolute -top-2 -right-2 bg-white border border-gray-200 text-red-400 hover:text-red-600 rounded-full w-5 h-5 text-xs leading-none">
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      ) : editable ? (
+                        <label className="text-xs text-gray-400 hover:text-sky-600 transition cursor-pointer">
+                          + agregar imagen
+                          <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                            onChange={(e) => { subirImagenItem(item._key, e.target.files); e.target.value = ""; }} />
+                        </label>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="px-3 py-3">
                     <select value={item.unidad || "und"} disabled={!editable}
@@ -290,6 +296,12 @@ export default function TablaItemsCotizacion({
                     <input type="number" min="0" step="1" value={item.cantidad} disabled={!editable}
                       onChange={(e) => handleItem(item._key, "cantidad", parseFloat(e.target.value) || 0)}
                       className={`w-full text-center ${editable ? INP : "bg-transparent border-transparent text-sm px-2 py-1"} ${intentoGuardar && cantidadInvalida(item) ? "border-red-400 ring-1 ring-red-300" : ""}`} />
+                  </td>
+                  <td className="px-3 py-3">
+                    <input type="number" min="0" step="1" value={item.diasEntrega ?? ""} disabled={!editable}
+                      onChange={(e) => handleItem(item._key, "diasEntrega", e.target.value === "" ? "" : parseFloat(e.target.value) || 0)}
+                      placeholder="Días"
+                      className={`w-full text-center ${editable ? INP : "bg-transparent border-transparent text-sm px-2 py-1"}`} />
                   </td>
                   {puedeVerPrecios && (
                     <td className="px-3 py-3">
