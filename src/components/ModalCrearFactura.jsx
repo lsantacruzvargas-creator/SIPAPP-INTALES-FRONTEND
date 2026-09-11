@@ -10,8 +10,8 @@ const INP_DIS = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 
 // RAZON_SOCIAL_EMISOR de Backend/.env. Serie terminada en "2", igual que
 // EmitirComprobante.jsx, para evitar conflictos de correlativo con series
 // de prueba/históricas.
-const RUC_EMISOR = "20601565235";
-const NOMBRE_EMISOR = "HUAQUIAN";
+const RUC_EMISOR = "20607650811";
+const NOMBRE_EMISOR = "INTALES";
 const SERIE_FACTURA = "F002";
 
 function calcular(subtotal, descuentoPct) {

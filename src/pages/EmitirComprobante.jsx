@@ -27,8 +27,8 @@ const REFERENCIA_VACIA = { id: "", serie: "", tipoDoc: "" };
 // Las credenciales SUNAT las resuelve el hub central por RUC (no hay registro
 // de credenciales en el ERP). Deben coincidir con RUC_EMISOR/RAZON_SOCIAL_EMISOR
 // de Backend/.env.
-const RUC_EMISOR = "20601565235";
-const NOMBRE_EMISOR = "HUAQUIAN";
+const RUC_EMISOR = "20607650811";
+const NOMBRE_EMISOR = "INTALES";
 
 // Serie fija por tipo de comprobante — todas terminan en "2" para evitar
 // futuros conflictos de correlativo con series de prueba/históricas.

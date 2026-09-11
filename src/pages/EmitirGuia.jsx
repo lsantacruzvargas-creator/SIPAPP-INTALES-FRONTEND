@@ -3,7 +3,6 @@ import { useLocation } from "react-router-dom";
 import { fetchAuth } from "../utils/fetchAuth";
 import TablaScroll from "../components/TablaScroll";
 import SelectorDireccionGuardada from "../components/SelectorDireccionGuardada";
-import { HUAQUIAN } from "../utils/cotizacionPdf";
 import {
   TIPO_GUIA,
   MODALIDAD_TRASLADO,
@@ -46,8 +45,15 @@ const UNIDADES_TRANSPORTE = [
 // terminada en "2" igual que las series de CPE (ver EmitirComprobante.jsx)
 // para evitar futuros conflictos de correlativo. Motivo de traslado por
 // defecto: "01" (Venta) — catálogo 20 SUNAT.
-const RUC_EMISOR = "20601565235";
-const NOMBRE_EMISOR = "HUAQUIAN";
+const RUC_EMISOR = "20607650811";
+const NOMBRE_EMISOR = "INTALES";
+// Domicilio fiscal real de Intales — consultado una vez contra SUNAT/
+// apiperu.dev por su RUC durante el brainstorming de la Task de cotización
+// (2026-09-10), ver docs/superpowers/specs/2026-09-10-cotizacion-intales-design.md.
+const INTALES_DOMICILIO = {
+  direccion: "CAL. LAS FRAGUAS NRO. 190 URB. NARANJAL INDUSTRIAL, LIMA - LIMA - INDEPENDENCIA",
+  ubigeo: "150112",
+};
 const SERIE_POR_TIPO_GUIA = { REMITENTE: "T002", TRANSPORTISTA: "V002" };
 
 // Motivo de traslado (catálogo 20) para el que aplican Proveedor/Comprador — confirmado contra la
@@ -184,14 +190,15 @@ export default function EmitirGuia() {
   };
 
   // Cuando el emisor traslada su propia mercadería (tipoGuia=REMITENTE), el punto de partida es
-  // su propio domicilio — HUAQUIAN es la única empresa emisora de este ERP (RUC_EMISOR fijo, ver
-  // arriba), así que su dirección/ubigeo están hardcodeados (mismo dato que ya usan las
-  // cotizaciones, ver utils/cotizacionPdf.js) en vez de consultarlos a SUNAT en cada carga de la
-  // página — antes esto pegaba a /sunat/ruc/:ruc (2 consultas reales a apiperu.dev) por el propio
-  // RUC del emisor, que nunca cambia, y encima se disparaba 2 veces en dev por StrictMode.
+  // su propio domicilio — INTALES es la única empresa emisora de este ERP (RUC_EMISOR fijo, ver
+  // arriba), así que su dirección/ubigeo están hardcodeados (consultados una vez contra SUNAT/
+  // apiperu.dev por su RUC real, ver INTALES_DOMICILIO abajo) en vez de consultarlos en cada
+  // carga de la página — antes esto pegaba a /sunat/ruc/:ruc (2 consultas reales a apiperu.dev)
+  // por el propio RUC del emisor, que nunca cambia, y encima se disparaba 2 veces en dev por
+  // StrictMode.
   useEffect(() => {
     if (tipoGuia !== "REMITENTE") return;
-    setPuntoPartida({ ubigeo: HUAQUIAN.ubigeo, direccion: HUAQUIAN.direccion });
+    setPuntoPartida({ ubigeo: INTALES_DOMICILIO.ubigeo, direccion: INTALES_DOMICILIO.direccion });
   }, [tipoGuia]);
 
   const abrirSelectorDireccion = async (destino = "destinatario") => {

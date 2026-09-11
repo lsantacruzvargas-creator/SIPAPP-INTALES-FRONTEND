@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatearFecha } from "./fecha";
+import { fetchAuth, fetchUpload } from "./fetchAuth";
 
 // Se cargan desde /public (no un import de módulo) para que, si el archivo
 // todavía no fue subido, solo falle la carga de esa imagen puntual en vez
@@ -14,113 +15,118 @@ function cargarImagen(url) {
   });
 }
 
-// Paleta y datos fijos de Huaquian, tomados de Plantilla-cotizacion.xlsx
-// (raíz del proyecto) — no varían por cotización, así que van hardcodeados
-// acá igual que ya hacía el header anterior con los datos de la empresa.
-const NAVY = [0, 0, 40];       // #000028 — barras de sección y banner
-const AZUL = [0, 74, 173];     // #004AAD — badge "COTIZACIÓN N°"
-const AZUL_CLARO = [173, 193, 229]; // #ADC1E5 — fila "VALOR DE LA OFERTA"
-const GRIS_CLARO = [232, 232, 232]; // #E8E8E8 — encabezados de tabla
+// Igual que cargarImagen(), pero para archivos protegidos por authMiddleware
+// (/uploads/cotizaciones/...) — no se puede poner la URL directo en <img src>
+// (no manda el header Authorization), así que se trae con fetchUpload()
+// (mismo mecanismo que ImagenProtegida.jsx) y se arma una Object URL de blob.
+function cargarImagenProtegida(url) {
+  if (!url) return Promise.resolve(null);
+  return fetchUpload(url)
+    .then((r) => (r.ok ? r.blob() : null))
+    .then((blob) => {
+      if (!blob) return null;
+      const objectUrl = URL.createObjectURL(blob);
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => { resolve(img); URL.revokeObjectURL(objectUrl); };
+        img.onerror = () => { resolve(null); URL.revokeObjectURL(objectUrl); };
+        img.src = objectUrl;
+      });
+    })
+    .catch(() => null);
+}
 
-export const HUAQUIAN = {
-  razonSocial: "HUAQUIAN S.A.C.",
-  ruc: "20601565235",
-  direccion: "MZ.A LT1. ASOCIACIÓN VILLA TALAVERA CAMPOY, SAN JUAN DE LURIGANCHO - LIMA.",
-  // Código INEI del domicilio fiscal (San Juan de Lurigancho, Lima, Lima) —
-  // usado como "Punto de partida" fijo en EmitirGuia.jsx, para no consultar
-  // SUNAT por el RUC propio (fijo, siempre el mismo) en cada carga de la página.
-  ubigeo: "150132",
-  representante: "JOSE LIDER MATEO MUCHA",
-  telefono: "966 -757 - 528.",
-  correo: "ventas@huaquian.com",
-};
+// Paleta del formato de Intales, tomada de formato-cotizacion-INTALES.xlsx
+// (raíz de SIPAPP-INTALES) — ver docs/superpowers/specs/2026-09-10-cotizacion-intales-design.md.
+const NAVY = [0, 0, 40];
+const AZUL = [0, 74, 173];
+const GRIS_CLARO = [232, 232, 232];
 
+// Cuentas bancarias reales de Intales (mismo Excel).
 const BANCOS = {
-  bcpCuentaSoles: "191-2364174-0-44",
-  bcpCciSoles: "002-19100236417404456",
-  bcpCuentaDolares: "191-2559651-1-69",
-  bcpCciDolares: "002-191002255965116958",
-  bnCuentaDetraccion: "00-062-084456",
+  bcpCuentaDolares: "191-9134985-1-83",
+  bcpCciDolares: "002-191-009134985183-51",
+  bcpCuentaSoles: "191-9291696-0-12",
+  bcpCciSoles: "002-191-009291696012-50",
+  bnCuentaDetraccion: "00-057-103825",
 };
 
-const GARANTIA_TEXTO = "En condiciones normales de uso";
-const POLIZA_TEXTO = "- Responsabilidad / Seguro complementario de trabajo de riesgo";
+// Alto reservado (en líneas de texto en blanco) para la miniatura de un ítem
+// con imagen — ver receta de "reservar espacio con líneas en blanco" del
+// skill pdf-cotizacion-recetas: autoTable calcula el alto de fila a partir
+// del texto de la celda, así que una imagen necesita líneas vacías extra
+// para que la fila quede lo bastante alta antes de dibujarla encima.
+const LINEAS_RESERVA_IMAGEN = 8;
 
 export const exportarCotizacionPdf = async (cotizacion) => {
   const doc = new jsPDF();
   const empresa = cotizacion.empresa;
-  const M = 12; // margen
+  const items = cotizacion.items || [];
+  const M = 12;
   const PAGE_W = doc.internal.pageSize.getWidth();
   const PAGE_H = doc.internal.pageSize.getHeight();
   const CONTENT_W = PAGE_W - M * 2;
 
-  const [icono, headerBanner, marcasFooter, bcpLogo, bnLogo] = await Promise.all([
-    cargarImagen("/assets/logos/huaquian_icon.png"),
-    cargarImagen("/assets/logos/huaquian_header.png"),
-    cargarImagen("/assets/logos/marcas_footer.png"),
-    cargarImagen("/assets/logos/bcp_logo.png"),
-    cargarImagen("/assets/logos/banco_nacion_logo.png"),
+  // Emisor (ruc/razonSocial) — ya no viene hardcodeado, se lee de .env vía
+  // el backend (ver Backend/src/routes/cotizaciones.js GET /emisor).
+  const emisorRes = await fetchAuth("/cotizaciones/emisor");
+  const emisor = emisorRes.ok ? await emisorRes.json() : { ruc: "", razonSocial: "" };
+
+  const [logoIntales, logoLexacaucho, logoMajuflex, logoRodilex, logoBcp, ...imagenesItems] = await Promise.all([
+    cargarImagen("/assets/logos/intales_logo.png"),
+    cargarImagen("/assets/logos/lexacaucho_logo.jpeg"),
+    cargarImagen("/assets/logos/majuflex_logo.png"),
+    cargarImagen("/assets/logos/rodilex_logo.png"),
+    cargarImagen("/assets/logos/bcp_logo_intales.png"),
+    ...items.map((item) => cargarImagenProtegida(item.imagenes?.[0])),
   ]);
 
-  // ─── Marca de agua: ícono + marcas representadas, en TODAS las hojas ───
-  // Se dibuja primero en cada página (antes que cualquier otro texto/imagen)
-  // para que quede detrás — en PDF cada trazo nuevo se pinta encima del
-  // anterior. Se repite en cada página nueva (autoTable vía `didDrawPage`
-  // más abajo, y manualmente después de cada `doc.addPage()` propio).
-  const dibujarMarcaDeAgua = () => {
-    doc.saveGraphicsState();
-    doc.setGState(new doc.GState({ opacity: 0.06 }));
-    if (icono) {
-      const wSize = 100;
-      doc.addImage(icono, "PNG", 96 - (PAGE_W - wSize) / 2, (PAGE_H - wSize) / 2 - 35, wSize + 40, wSize + 40);
-    }
-    if (marcasFooter) {
-      const w = CONTENT_W * 0.85;
-      const h = w * (marcasFooter.naturalHeight / marcasFooter.naturalWidth);
-      doc.addImage(marcasFooter, "PNG", (PAGE_W - w) / 2, (PAGE_H - h) / 2 + 110, w, h);
-    }
-    doc.restoreGraphicsState();
-  };
-  dibujarMarcaDeAgua();
-
-  // ─── Banner de encabezado (navy, ancho completo) ───
-  let y = 6;
-  if (headerBanner) {
-    const h = CONTENT_W * (headerBanner.naturalHeight / headerBanner.naturalWidth);
-    doc.addImage(headerBanner, "PNG", M, y, CONTENT_W, h);
-    y += h + 6;
+  // ─── Encabezado: 4 logos + badge "COTIZACIÓN N°" ───
+  let y = M;
+  const logoH = 16;
+  if (logoIntales) {
+    const w = logoH * (logoIntales.naturalWidth / logoIntales.naturalHeight);
+    doc.addImage(logoIntales, "PNG", M, y, w, logoH);
   } else {
-    doc.setFillColor(...NAVY);
-    doc.rect(M, y, CONTENT_W, 14, "F");
-    doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text("INTALES", M + 4, y + 9);
-    y += 14 + 6;
+    doc.text("INTALES", M, y + logoH / 2);
   }
+  // Las 3 marcas hermanas van más chicas, alineadas a la derecha del
+  // encabezado — siempre juntas, sin lógica condicional (decisión del
+  // usuario, ver spec).
+  const marcasHermanas = [logoLexacaucho, logoMajuflex, logoRodilex].filter(Boolean);
+  if (marcasHermanas.length > 0) {
+    const hMarca = 9, espacioMarca = 4;
+    const anchos = marcasHermanas.map((m) => hMarca * (m.naturalWidth / m.naturalHeight));
+    const anchoTotal = anchos.reduce((a, b) => a + b, 0) + espacioMarca * (marcasHermanas.length - 1);
+    let mx = PAGE_W - M - anchoTotal;
+    marcasHermanas.forEach((m, i) => {
+      doc.addImage(m, "PNG", mx, y, anchos[i], hMarca);
+      mx += anchos[i] + espacioMarca;
+    });
+  }
+  y += logoH + 4;
 
-  // ─── Badge "COTIZACIÓN N°" (arriba a la derecha) ───
-  const badgeH = 8, badgeW1 = 40, badgeW2 = 28;
-  const badgeX = PAGE_W - M - badgeW1 - badgeW2;
+  // Código completo del PDF: correlativo-año-INT/iniciales — se arma acá,
+  // nunca se persiste (decisión del usuario, 2026-09-11, ver
+  // Cotizacion.numeroCotizacion/pre-save en el backend).
+  const anioDoc = cotizacion.fecha ? new Date(cotizacion.fecha).getFullYear() : new Date().getFullYear();
+  const inicialesAsesor = cotizacion.creadoPor?.iniciales || "";
+  const codigoCompleto = `${cotizacion.numeroCotizacion || cotizacion.codigo || "—"}-${anioDoc}-INT/${inicialesAsesor}`;
+
   doc.setFillColor(...AZUL);
-  doc.rect(badgeX, y, badgeW1, badgeH, "F");
+  const badgeW = 70, badgeH = 8;
+  const badgeX = PAGE_W - M - badgeW;
+  doc.rect(badgeX, y, badgeW, badgeH, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.text("COTIZACIÓN N°", badgeX + badgeW1 / 2, y + badgeH / 2 + 1.2, { align: "center" });
-  doc.setDrawColor(0);
-  doc.rect(badgeX + badgeW1, y, badgeW2, badgeH);
-  doc.setTextColor(...AZUL);
-  doc.setFontSize(11);
-  doc.text(String(cotizacion.numeroCotizacion || cotizacion.codigo || "—"), badgeX + badgeW1 + badgeW2 / 2, y + badgeH / 2 + 1.5, { align: "center" });
+  doc.setFontSize(10);
+  doc.text(`COTIZACIÓN N° ${codigoCompleto}`, badgeX + badgeW / 2, y + badgeH / 2 + 1.3, { align: "center" });
   doc.setTextColor(0, 0, 0);
-
-  const yBadgeBottom = y + badgeH;
   y += badgeH + 6;
 
-  // ─── Datos de Huaquian (izquierda) + caja de datos comerciales (derecha) ───
-  const colIzqW = 110, colDerX = M + colIzqW + 4, colDerW = CONTENT_W - colIzqW - 4;
-  let yIzq = y;
+  // ─── Datos del cliente ───
   const labelValor = (x, yy, label, valor, maxW) => {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
@@ -135,39 +141,32 @@ export const exportarCotizacionPdf = async (cotizacion) => {
     doc.text(valor || "—", x + labelW, yy);
     return 1;
   };
-  yIzq += labelValor(M, yIzq, "RAZÓN SOCIAL: ", HUAQUIAN.razonSocial) * 4.2;
-  yIzq += labelValor(M, yIzq, "RUC: ", HUAQUIAN.ruc) * 4.2;
-  yIzq += labelValor(M, yIzq, "DIRECCIÓN: ", HUAQUIAN.direccion, colIzqW) * 4.2;
-  yIzq += labelValor(M, yIzq, "REPRESENTANTE DE LA EMPRESA: ", HUAQUIAN.representante, colIzqW) * 4.2;
-  yIzq += labelValor(M, yIzq, "TELÉFONO: ", HUAQUIAN.telefono) * 4.2;
-  yIzq += labelValor(M, yIzq, "CORREO: ", HUAQUIAN.correo) * 4.2;
 
+  // Dirección del cliente sale de la planta seleccionada (no de la empresa
+  // en general) — ver spec, sección "PDF". `plantas` puede no venir populado
+  // en todas las respuestas; se degrada a "—" si no se encuentra.
+  const plantaSel = empresa?.plantas?.find((p) => p.nombre === cotizacion.planta);
+  const direccionCliente = plantaSel?.direccion || "";
+
+  const colIzqW = CONTENT_W * 0.62;
+  let yIzq = y;
+  yIzq += labelValor(M, yIzq, "SEÑORES: ", empresa?.razonSocial, colIzqW) * 4.2;
+  yIzq += labelValor(M, yIzq, "RUC: ", empresa?.ruc, colIzqW) * 4.2;
+  yIzq += labelValor(M, yIzq, "DIRECCIÓN: ", direccionCliente, colIzqW) * 4.2;
+  yIzq += labelValor(M, yIzq, "ATENCIÓN: ", cotizacion.atencion, colIzqW) * 4.2;
+  yIzq += labelValor(M, yIzq, "RQ: ", cotizacion.rq, colIzqW) * 4.2;
+
+  const colDerX = M + colIzqW + 4, colDerW = CONTENT_W - colIzqW - 4;
   const fechaStr = cotizacion.fecha ? formatearFecha(cotizacion.fecha) : "—";
-  const filasDer = [
-    ["FECHA:", fechaStr],
-    ["TIEMPO DE ENTREGA DEL SERVICIO:", cotizacion.plazoEntrega],
-    ["VALIDEZ DE LA OFERTA:", cotizacion.validezOferta],
-    ["ASESOR COMERCIAL:", cotizacion.asesorComercial],
-    ["N° CELULAR:", cotizacion.numeroCelular],
-  ];
-  const filaDerH = 5.6;
-  const cajaDerH = filasDer.length * filaDerH;
-  doc.setDrawColor(0);
-  doc.rect(colDerX, y - 4, colDerW, cajaDerH);
-  let yDer = y;
-  doc.setFontSize(7.5);
-  filasDer.forEach(([label, valor]) => {
-    doc.setFont("helvetica", "bold");
-    doc.text(label, colDerX + colDerW - 2, yDer, { align: "right" });
-    yDer += 3.2;
-    doc.setFont("helvetica", "normal");
-    doc.text(valor || "—", colDerX + colDerW - 2, yDer, { align: "right" });
-    yDer += filaDerH - 3.2;
-  });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.text("FECHA:", colDerX + colDerW, y, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.text(fechaStr, colDerX + colDerW, y + 4.2, { align: "right" });
 
-  y = Math.max(yIzq, yDer, yBadgeBottom + cajaDerH) + 4;
+  y = yIzq + 4;
 
-  // ─── Barra de sección navy, ancho completo ───
+  // ─── Barra de sección navy, ancho completo (reutilizable) ───
   const barraSeccion = (titulo, yy, h = 6) => {
     doc.setFillColor(...NAVY);
     doc.rect(M, yy, CONTENT_W, h, "F");
@@ -179,64 +178,37 @@ export const exportarCotizacionPdf = async (cotizacion) => {
     return yy + h + 4;
   };
 
-  // ─── DATOS DEL CLIENTE ───
-  y = barraSeccion("DATOS DEL CLIENTE", y);
-  const clienteColW = (CONTENT_W - 4) / 2;
-  doc.setFontSize(8.5);
-  let yClIzq = y, yClDer = y;
-  yClIzq += labelValor(M, yClIzq, "RAZÓN SOCIAL: ", empresa?.razonSocial, clienteColW) * 4.2;
-  yClIzq += labelValor(M, yClIzq, "ÁREA: ", cotizacion.area, clienteColW) * 4.2;
-  yClIzq += labelValor(M, yClIzq, "OM / AVISO: ", cotizacion.omAviso, clienteColW) * 4.2;
-  yClIzq += labelValor(M, yClIzq, "N° DE GUIA: ", cotizacion.numeroGuia, clienteColW) * 4.2;
-  const xClDer = M + clienteColW + 4;
-  yClDer += labelValor(xClDer, yClDer, "JEFE / SUPERVISOR SOLICITANTE: ", cotizacion.jefeSupervisorSolicitante, clienteColW) * 4.2;
-  yClDer += labelValor(xClDer, yClDer, "COMPRADOR RESPONSABLE: ", cotizacion.compradorResponsable, clienteColW) * 4.2;
-  yClDer += labelValor(xClDer, yClDer, "N° DE SOLICITUD DE PEDIDO: ", cotizacion.numeroSolicitudPedido, clienteColW) * 4.2;
-  yClDer += labelValor(xClDer, yClDer, "N° DE PETICIÓN DE OFERTA: ", cotizacion.numeroPeticionOferta, clienteColW) * 4.2;
-  y = Math.max(yClIzq, yClDer) + 4;
-
-  // ─── DETALLES DEL SERVICIO ───
-  y = barraSeccion("DETALLES DEL SERVICIO", y);
-  doc.setFillColor(...GRIS_CLARO);
-  doc.rect(M, y, CONTENT_W, 6, "F");
-  doc.setDrawColor(0);
-  doc.rect(M, y, CONTENT_W, 6);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
-  doc.text(cotizacion.titulo || "—", PAGE_W / 2, y + 4, { align: "center" });
-  y += 6;
-
-  // Moneda de TODA la cotización (no la de cada ítem) — determina el
-  // símbolo de Valor de la Oferta / IGV / Valor Total al pie de la tabla.
   const simboloDoc = cotizacion.moneda === "USD" ? "US$" : "S/";
 
-  // Un ítem = una fila; sus sub-ítems (si tiene) van DENTRO de la misma
-  // celda de Descripción, como líneas en bullet debajo del texto padre (no
-  // como filas propias) — mismo patrón que el proyecto Alcoinsac
-  // (Frontend/src/utils/cotizacionPdf.js): autoTable no soporta estilos
-  // mixtos dentro de una celda, así que la celda completa se dibuja primero
-  // en peso normal (padre + bullets con "\n"), y en `didDrawCell` se tapa
-  // con un rectángulo blanco solo la franja del texto padre para
-  // redibujarla en negrita encima — ver receta #1/#2 del skill
-  // pdf-cotizacion-recetas (el alto de línea real sale de lo que autoTable
-  // ya calculó para esa celda, `doc.getLineHeight()` no coincide).
+  // ─── Tabla de ítems ───
+  // Cada fila = un ítem. Descripción trae, dentro de la misma celda: el
+  // texto padre (se redibuja en negrita en didDrawCell, ver receta #1/#2),
+  // los sub-ítems en viñeta, la línea "Tiempo de entrega: X días hábiles" y
+  // — si el ítem tiene imagen — líneas en blanco reservando espacio para
+  // dibujarla encima después.
   autoTable(doc, {
     startY: y,
-    head: [["ITEM", "DESCRIPCIÓN", "UNID.", "CANT.", "PRECIO UNITARIO", "PRECIO TOTAL"]],
-    body: cotizacion.items.map((item, i) => {
+    head: [["CÓDIGO", "CANT.", "U.M", "DESCRIPCIÓN", "PRECIO UNITARIO", "PRECIO TOTAL"]],
+    body: items.map((item) => {
       const precioNum = Number(item.precio) || 0;
       const subtotalNum = Number(item.subtotal) || 0;
-      const esInformativo = precioNum === 0;
-      let desc = item.descripcion;
+      let desc = item.descripcion || "";
       if (item.subItems?.length > 0) {
         desc += "\n" + item.subItems.map((s) => `   • ${s}`).join("\n");
       }
+      const diasEntrega = item.diasEntrega;
+      if (diasEntrega !== "" && diasEntrega != null) {
+        desc += `\nTiempo de entrega: ${diasEntrega} días hábiles`;
+      }
+      if (item.imagenes?.[0]) {
+        desc += "\n".repeat(LINEAS_RESERVA_IMAGEN);
+      }
       return [
-        esInformativo ? "" : i + 1,
+        item.codigo || "",
+        item.cantidad,
+        item.unidad || "und",
         desc,
-        esInformativo ? "" : (item.unidad || "und"),
-        esInformativo ? "" : item.cantidad,
-        esInformativo ? "" : precioNum.toFixed(2),
+        precioNum === 0 ? "" : precioNum.toFixed(2),
         subtotalNum === 0 ? "" : subtotalNum.toFixed(2),
       ];
     }),
@@ -245,21 +217,20 @@ export const exportarCotizacionPdf = async (cotizacion) => {
     styles: { fontSize: 8, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.1 },
     headStyles: { fontSize: 8, fontStyle: "bold", textColor: [0, 0, 0], fillColor: GRIS_CLARO, lineColor: [0, 0, 0], lineWidth: 0.1, halign: "center" },
     columnStyles: {
-      0: { cellWidth: 10, halign: "center" },
+      0: { cellWidth: 20, halign: "center" },
+      1: { cellWidth: 14, halign: "center" },
       2: { cellWidth: 12, halign: "center" },
-      3: { cellWidth: 12, halign: "center" },
-      4: { cellWidth: 18, halign: "right" },
-      5: { cellWidth: 18, halign: "right" },
+      4: { cellWidth: 24, halign: "right" },
+      5: { cellWidth: 24, halign: "right" },
     },
-    didDrawPage: dibujarMarcaDeAgua,
     didDrawCell: (data) => {
-      if (data.section !== "body" || data.column.index !== 1) return;
-      const item = cotizacion.items[data.row.index];
+      if (data.section !== "body" || data.column.index !== 3) return;
+      const item = items[data.row.index];
       if (!item) return;
       const { cell } = data;
       doc.setFontSize(cell.styles.fontSize);
       const maxWidth = cell.width - cell.padding("left") - cell.padding("right");
-      const lineasPadre = doc.splitTextToSize(item.descripcion, maxWidth);
+      const lineasPadre = doc.splitTextToSize(item.descripcion || "", maxWidth);
 
       const totalLineas = Array.isArray(cell.text) && cell.text.length > 0 ? cell.text.length : lineasPadre.length;
       const padTop = cell.padding("top");
@@ -276,112 +247,108 @@ export const exportarCotizacionPdf = async (cotizacion) => {
       doc.setFont("helvetica", "bold");
       lineasPadre.forEach((linea) => { doc.text(linea, x, ly); ly += lineHeight; });
       doc.setFont("helvetica", "normal");
+
+      // Imagen del ítem, si existe — dibujada en el espacio reservado con
+      // las líneas en blanco al final de la celda (ver LINEAS_RESERVA_IMAGEN).
+      const img = imagenesItems[data.row.index];
+      if (img) {
+        const maxImgH = lineHeight * (LINEAS_RESERVA_IMAGEN - 1);
+        const maxImgW = maxWidth * 0.5;
+        const escala = Math.min(maxImgW / img.naturalWidth, maxImgH / img.naturalHeight, 1);
+        const imgW = img.naturalWidth * escala;
+        const imgH = img.naturalHeight * escala;
+        const imgY = cell.y + cell.height - padBottom - imgH - 1;
+        doc.addImage(img, "PNG", x, imgY, imgW, imgH);
+      }
     },
   });
   y = doc.lastAutoTable.finalY + 4;
 
-  // ─── Totales (VALOR DE LA OFERTA / I.G.V. / VALOR TOTAL) ───
-  if (y + 24 > PAGE_H - 15) { doc.addPage(); dibujarMarcaDeAgua(); y = 15; }
+  if (y + 60 > PAGE_H - 15) { doc.addPage(); y = 15; }
+
+  // ─── Pie: Moneda / Forma de pago / Tiempo de entrega (izquierda) + Subtotal/IGV/Total (derecha) ───
   const totW = 80, totX = PAGE_W - M - totW, filaTotH = 7;
-  // El descuento global (sobre la suma de subtotales, antes del IGV) solo
-  // se muestra si se aplicó — ver mismo cálculo en DetalleCotizacion.jsx.
-  const descuentoPct = Number(cotizacion.descuentoPorcentaje) || 0;
-  // Se deriva del subtotal en vez de depender de un campo `descuento` aparte
-  // — no todos los que llaman a esta función lo mandan (ej. la cotización
-  // recién guardada del backend solo trae `descuentoPorcentaje`).
-  const descuentoMonto = (Number(cotizacion.subtotal) || 0) * (descuentoPct / 100);
+  const yPieInicio = y;
+  const anchoIzqPie = CONTENT_W - totW - 6;
+  doc.setFontSize(8.5);
+  let yPie = y;
+  yPie += labelValor(M, yPie, "MONEDA: ", cotizacion.moneda === "USD" ? "DÓLARES AMERICANOS" : "SOLES", anchoIzqPie) * 4.2;
+  yPie += labelValor(M, yPie, "FORMA DE PAGO: ", cotizacion.condicionPago, anchoIzqPie) * 4.2;
+  // Texto fijo — no es un campo editable, ver spec (decisión del usuario).
+  yPie += labelValor(M, yPie, "TIEMPO DE ENTREGA: ", "DÍAS HÁBILES", anchoIzqPie) * 4.2;
+
   const totales = [
-    ["VALOR DE LA OFERTA", `${simboloDoc} ${Number(cotizacion.subtotal).toFixed(2)}`, AZUL_CLARO, false],
-    ...(descuentoPct > 0 ? [
-      [`DESCUENTO (${descuentoPct}%)`, `- ${simboloDoc} ${descuentoMonto.toFixed(2)}`, [255, 255, 255], false],
-    ] : []),
-    ["I.G.V. (18%)", `${simboloDoc} ${Number(cotizacion.igv).toFixed(2)}`, [255, 255, 255], false],
-    ["VALOR TOTAL DE LA OFERTA", `${simboloDoc} ${Number(cotizacion.total).toFixed(2)}`, [255, 255, 255], true],
+    ["SUB TOTAL", `${simboloDoc} ${Number(cotizacion.subtotal || 0).toFixed(2)}`, false],
+    ["I.G.V (18%)", `${simboloDoc} ${Number(cotizacion.igv || 0).toFixed(2)}`, false],
+    ["TOTAL", `${simboloDoc} ${Number(cotizacion.total || 0).toFixed(2)}`, true],
   ];
-  totales.forEach(([label, valor, bg, negrita]) => {
-    doc.setFillColor(...bg);
-    doc.rect(totX, y, totW, filaTotH, "F");
+  let yTot = yPieInicio;
+  totales.forEach(([label, valor, negrita]) => {
     doc.setDrawColor(0);
-    doc.rect(totX, y, totW, filaTotH);
+    doc.rect(totX, yTot, totW, filaTotH);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(negrita ? 9 : 8);
-    doc.text(label, totX + 3, y + filaTotH / 2 + 1.2);
-    doc.text(valor, totX + totW - 3, y + filaTotH / 2 + 1.2, { align: "right" });
-    y += filaTotH;
+    doc.text(label, totX + 3, yTot + filaTotH / 2 + 1.2);
+    doc.text(valor, totX + totW - 3, yTot + filaTotH / 2 + 1.2, { align: "right" });
+    yTot += filaTotH;
   });
-  y += 6;
 
-  // ─── TERMINOS Y CONDICIONES ───
-  if (y + 40 > PAGE_H - 15) { doc.addPage(); dibujarMarcaDeAgua(); y = 15; }
-  const yTerminosBarra = y;
-  y = barraSeccion("TERMINOS Y CONDICIONES", y);
-  const yTerminosInicio = y;
+  y = Math.max(yPie, yTot) + 4;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.text("** VALIDEZ DE LA OFERTA 15 DÍAS", M, y); y += 4;
+  doc.text("** CONSULTAR CONDICIONES DE TRANSPORTE", M, y); y += 8;
+
+  if (y + 40 > PAGE_H - 15) { doc.addPage(); y = 15; }
+
+  // ─── Cierre: generar OC a nombre de + firma dinámica del creador ───
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("EN CASO DE SER FAVORECIDOS, GENERAR LA OC A NOMBRE DE:", PAGE_W / 2, y, { align: "center" }); y += 5;
+  doc.setFontSize(11);
+  doc.text(`${emisor.razonSocial || "—"} / RUC ${emisor.ruc || "—"}`, PAGE_W / 2, y, { align: "center" }); y += 8;
+
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setFont("helvetica", "bold");
-  doc.text("FORMAS DE PAGO: ", M + 2, y);
-  doc.setFont("helvetica", "normal");
-  doc.text(cotizacion.condicionPago || "—", M + 2 + doc.getTextWidth("FORMAS DE PAGO: "), y);
-  y += 4.5;
-  doc.text("* PRECIOS INCLUYEN IGV", M + 2, y); y += 4.5;
-  doc.setFont("helvetica", "bold");
-  doc.text("GARANTÍA: ", M + 2, y);
-  doc.setFont("helvetica", "normal");
-  doc.text(GARANTIA_TEXTO, M + 2 + doc.getTextWidth("GARANTÍA: "), y); y += 4.5;
-  doc.setFont("helvetica", "bold");
-  doc.text("TIEMPO DE GARANTIA: ", M + 2, y);
-  doc.setFont("helvetica", "normal");
-  doc.text(cotizacion.tiempoGarantia || "—", M + 2 + doc.getTextWidth("TIEMPO DE GARANTIA: "), y); y += 4.5;
-  doc.setFont("helvetica", "bold");
-  doc.text("POLIZAS DE GARANTÍA: ", M + 2, y); y += 4.5;
-  doc.setFont("helvetica", "normal");
-  doc.text(POLIZA_TEXTO, M + 2, y); y += 4;
-  doc.setDrawColor(0);
-  doc.rect(M, yTerminosBarra, CONTENT_W, (y - yTerminosInicio) + 6 + (yTerminosInicio - yTerminosBarra));
+  doc.text("Atentamente,", PAGE_W / 2, y, { align: "center" }); y += 4.2;
+  const creador = cotizacion.creadoPor;
+  if (creador?.nombre) {
+    doc.setFont("helvetica", "bold");
+    doc.text(creador.nombre, PAGE_W / 2, y, { align: "center" }); y += 4.2;
+    doc.setFont("helvetica", "normal");
+    if (creador.cargo) { doc.text(creador.cargo, PAGE_W / 2, y, { align: "center" }); y += 4.2; }
+    const contacto = [creador.correo, creador.telefono].filter(Boolean).join(" · ");
+    if (contacto) { doc.text(contacto, PAGE_W / 2, y, { align: "center" }); y += 4.2; }
+  }
   y += 6;
 
-  // ─── METODO DE PAGO ───
-  if (y + 34 > PAGE_H - 15) { doc.addPage(); dibujarMarcaDeAgua(); y = 15; }
-  const yPagoBarra = y;
-  y = barraSeccion("METODO DE PAGO", y);
-  const yPagoInicio = y;
-  const logoAltoBanco = 6;
-  if (bcpLogo) {
-    const w = logoAltoBanco * (bcpLogo.naturalWidth / bcpLogo.naturalHeight);
-    doc.addImage(bcpLogo, "PNG", M + 2, y, w, logoAltoBanco);
+  if (y + 34 > PAGE_H - 15) { doc.addPage(); y = 15; }
+
+  // ─── Cuentas bancarias ───
+  const logoAltoBanco = 8;
+  if (logoBcp) {
+    const w = logoAltoBanco * (logoBcp.naturalWidth / logoBcp.naturalHeight);
+    doc.addImage(logoBcp, "PNG", PAGE_W / 2 - w / 2, y, w, logoAltoBanco);
   }
   y += logoAltoBanco + 3;
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  const lineaPago = (label, valor) => {
-    doc.setFont("helvetica", "bold");
-    doc.text(label, M + 2, y);
-    doc.setFont("helvetica", "normal");
-    doc.text(valor, M + 2 + doc.getTextWidth(label), y);
+  const lineaCentrada = (texto, negrita = false) => {
+    doc.setFont("helvetica", negrita ? "bold" : "normal");
+    doc.text(texto, PAGE_W / 2, y, { align: "center" });
     y += 4;
   };
-  lineaPago("* N° DE CUENTA EN SOLES: ", BANCOS.bcpCuentaSoles);
-  lineaPago(" N° DE CCI EN SOLES: ", BANCOS.bcpCciSoles);
-  lineaPago("* N° DE CUENTA EN DOLARES: ", BANCOS.bcpCuentaDolares);
-  lineaPago(" N° DE CCI EN DOLARES: ", BANCOS.bcpCciDolares);
-  y += 1;
-  if (bnLogo) {
-    const w = logoAltoBanco * (bnLogo.naturalWidth / bnLogo.naturalHeight);
-    doc.addImage(bnLogo, "PNG", M + 2, y, w, logoAltoBanco);
-  }
-  y += logoAltoBanco + 3;
-  lineaPago("* N° DE CUENTA DETRACCIÓN: ", BANCOS.bnCuentaDetraccion);
-  doc.setDrawColor(0);
-  doc.rect(M, yPagoBarra, CONTENT_W, (y - yPagoInicio) + 2 + (yPagoInicio - yPagoBarra));
-  y += 4;
+  lineaCentrada("CUENTA CORRIENTE BCP DÓLARES", true);
+  lineaCentrada(`CÓDIGO DE CUENTA: ${BANCOS.bcpCuentaDolares}`);
+  lineaCentrada(`CCI: ${BANCOS.bcpCciDolares}`);
+  y += 2;
+  lineaCentrada("CUENTA CORRIENTE BCP SOLES", true);
+  lineaCentrada(`CÓDIGO DE CUENTA: ${BANCOS.bcpCuentaSoles}`);
+  lineaCentrada(`CCI: ${BANCOS.bcpCciSoles}`);
+  y += 2;
+  lineaCentrada("CUENTA DE DETRACCIÓN BANCO DE LA NACIÓN S/.", true);
+  lineaCentrada(BANCOS.bnCuentaDetraccion);
 
-  // ─── Pie de página: grid de marcas representadas ───
-  if (marcasFooter) {
-    const h = CONTENT_W * (marcasFooter.naturalHeight / marcasFooter.naturalWidth) * 0.5;
-    const w = h * (marcasFooter.naturalWidth / marcasFooter.naturalHeight);
-    if (y + h > PAGE_H - 6) { doc.addPage(); dibujarMarcaDeAgua(); y = 15; }
-    doc.addImage(marcasFooter, "PNG", (PAGE_W - w) / 2, y, w, h);
-        // doc.addImage(marcasFooter, "PNG", 15, y, 180, 70);
-
-  }
-
-  doc.save(`Cotización N° ${cotizacion.numeroCotizacion || cotizacion.codigo}.pdf`);
+  doc.save(`Cotización N° ${codigoCompleto}.pdf`);
 };
