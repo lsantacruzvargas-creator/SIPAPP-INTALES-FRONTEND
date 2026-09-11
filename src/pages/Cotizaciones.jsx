@@ -19,7 +19,7 @@ export default function Cotizaciones() {
   const [empresas, setEmpresas] = useState([]);
   const [tipo, setTipo] = useState("venta");
   const [moneda, setMoneda] = useState("PEN");
-  const [form, setForm] = useState({ empresa: "", condicionPago: "", fecha: hoy(), titulo: "" });
+  const [form, setForm] = useState({ empresa: "", condicionPago: "", fecha: hoy(), titulo: "", rq: "" });
   const [items, setItems] = useState([itemVacioVenta()]);
   const [guardado, setGuardado] = useState(null);
   const [confirmando, setConfirmando] = useState(false);
@@ -74,8 +74,7 @@ export default function Cotizaciones() {
     setItems(items.map((i) => (i._key === key ? { ...i, [campo]: valor } : i)));
 
   // Una sola imagen por ítem (mismo criterio que TablaItemsCotizacion.jsx) —
-  // solo aplica a ítems de tipo "venta", ver rama del `tipo === "venta"` en
-  // la tabla más abajo.
+  // aplica sin importar el tipo, formato único de Intales.
   const subirImagenItem = async (key, files) => {
     const archivo = files?.[0];
     if (!archivo) return;
@@ -115,14 +114,11 @@ export default function Cotizaciones() {
         : i
     ));
 
+  // Formato único de Intales: SUB TOTAL -> IGV (18%) -> TOTAL, sin
+  // descuento global — mismo criterio en DetalleCotizacion.jsx.
   const subtotalGeneral = parseFloat(items.reduce((acc, i) => acc + calcSubtotal(i), 0).toFixed(2));
-  // Descuento global sobre la suma de subtotales (no por ítem) — se aplica
-  // antes del IGV, ver mismo criterio en DetalleCotizacion.jsx.
-  const descuentoPorcentaje = Math.min(100, Math.max(0, Number(form.descuentoPorcentaje) || 0));
-  const descuentoGeneral = parseFloat((subtotalGeneral * (descuentoPorcentaje / 100)).toFixed(2));
-  const subtotalConDescuento = parseFloat((subtotalGeneral - descuentoGeneral).toFixed(2));
-  const igv = parseFloat((subtotalConDescuento * 0.18).toFixed(2));
-  const total = parseFloat((subtotalConDescuento + igv).toFixed(2));
+  const igv = parseFloat((subtotalGeneral * 0.18).toFixed(2));
+  const total = parseFloat((subtotalGeneral + igv).toFixed(2));
 
   const validar = () => {
     if (!form.titulo.trim()) return "El título del trabajo es requerido.";
@@ -145,19 +141,19 @@ export default function Cotizaciones() {
         items: items.map((i) => {
           const item = {
             descripcion: i.descripcion,
+            codigo: i.codigo || "",
             cantidad: i.cantidad,
             precio: i.precio,
             moneda: i.moneda,
             subtotal: calcSubtotal(i),
           };
-          if (i.fechaEntrega) item.fechaEntrega = i.fechaEntrega;
+          if (i.diasEntrega !== "" && i.diasEntrega != null) item.diasEntrega = i.diasEntrega;
           if (tipo === "servicio" && i.subItems?.length > 0)
             item.subItems = i.subItems.map((s) => s.texto).filter(Boolean);
-          if (tipo === "venta" && i.imagenes?.length > 0) item.imagenes = i.imagenes;
+          if (i.imagenes?.length > 0) item.imagenes = i.imagenes;
           return item;
         }),
         subtotal: subtotalGeneral,
-        descuentoPorcentaje,
         igv,
         total,
       };
@@ -182,7 +178,7 @@ export default function Cotizaciones() {
   const nueva = () => {
     setTipo("venta");
     setMoneda("PEN");
-    setForm({ empresa: "", condicionPago: "", fecha: hoy(), titulo: "" });
+    setForm({ empresa: "", condicionPago: "", fecha: hoy(), titulo: "", rq: "" });
     setItems([itemVacioVenta()]);
     setGuardado(null);
     setError("");
@@ -389,6 +385,12 @@ export default function Cotizaciones() {
                 required disabled={ro}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:bg-gray-50 disabled:text-gray-500" />
             </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">RQ</label>
+              <input name="rq" value={form.rq} onChange={handleChange} disabled={ro}
+                placeholder="Ej. Proyección 2026"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:bg-gray-50 disabled:text-gray-500" />
+            </div>
           </div>
         </div>
 
@@ -403,10 +405,9 @@ export default function Cotizaciones() {
                     {tipo === "servicio" ? "Título / Descripciones" : "Descripción"}
                   </th>
                   <th className="px-3 py-3 text-left">Cantidad</th>
-                  <th className="px-3 py-3 text-left">F. entrega</th>
+                  <th className="px-3 py-3 text-left">Días entrega</th>
                   <th className="px-3 py-3 text-left">Precio</th>
                   <th className="px-3 py-3 text-center">Moneda</th>
-                  {/* <th className="px-3 py-3 text-center">Desc.%</th> */}
                   <th className="px-3 py-3 text-right">Subtotal</th>
                   {!ro && <th className="px-3 py-3 w-8"></th>}
                 </tr>
@@ -417,6 +418,12 @@ export default function Cotizaciones() {
                       <tr key={item._key} className="hover:bg-gray-50/50">
                         <td className="px-3 py-2 text-center text-gray-400">{idx + 1}</td>
                         <td className="px-3 py-2">
+                          {(!ro || item.codigo) && (
+                            <input value={item.codigo || ""}
+                              onChange={(e) => handleItem(item._key, "codigo", e.target.value)}
+                              disabled={ro} placeholder="Código"
+                              className={`w-full mb-1 text-xs ${ro ? "bg-transparent border-transparent px-2 py-0.5" : INP}`} />
+                          )}
                           <input value={item.descripcion}
                             onChange={(e) => handleItem(item._key, "descripcion", e.target.value)}
                             required disabled={ro}
@@ -458,10 +465,36 @@ export default function Cotizaciones() {
                         <tr className="hover:bg-gray-50/50">
                           <td className="px-3 py-2 text-center text-gray-400 align-top pt-3">{idx + 1}</td>
                           <td className="px-3 py-2">
+                            {(!ro || item.codigo) && (
+                              <input value={item.codigo || ""}
+                                onChange={(e) => handleItem(item._key, "codigo", e.target.value)}
+                                disabled={ro} placeholder="Código"
+                                className={`w-full mb-1 text-xs ${ro ? "bg-transparent border-transparent px-2 py-0.5" : INP}`} />
+                            )}
                             <input value={item.descripcion}
                               onChange={(e) => handleItem(item._key, "descripcion", e.target.value)}
                               required disabled={ro} placeholder="Título del servicio"
                               className={`w-full font-medium ${ro ? "bg-transparent border-transparent text-sm px-2 py-1" : INP}`} />
+                            <div className="mt-1.5">
+                              {item.imagenes?.[0] ? (
+                                <div className="relative inline-block">
+                                  <ImagenProtegida src={item.imagenes[0]} alt=""
+                                    className="w-16 h-16 object-cover rounded border border-gray-200" />
+                                  {!ro && (
+                                    <button type="button" onClick={() => eliminarImagenItem(item._key)}
+                                      className="absolute -top-2 -right-2 bg-white border border-gray-200 text-red-400 hover:text-red-600 rounded-full w-5 h-5 text-xs leading-none">
+                                      ✕
+                                    </button>
+                                  )}
+                                </div>
+                              ) : !ro ? (
+                                <label className="text-xs text-gray-400 hover:text-gray-700 transition cursor-pointer">
+                                  + agregar imagen
+                                  <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                                    onChange={(e) => { subirImagenItem(item._key, e.target.files); e.target.value = ""; }} />
+                                </label>
+                              ) : null}
+                            </div>
                           </td>
                           <CeldasNumericas item={item} ro={ro} onUpdate={handleItem} />
                           <td className="px-3 py-2 text-right font-medium text-gray-700 align-top pt-3">
@@ -513,18 +546,6 @@ export default function Cotizaciones() {
                 <tr>
                   <td colSpan={7} className="px-4 py-2 text-right text-xs text-gray-500">Subtotal</td>
                   <td className="px-3 py-2 text-right font-medium">{moneda === "USD" ? "US$" : "S/"} {subtotalGeneral.toFixed(2)}</td>
-                  {!ro && <td />}
-                </tr>
-                <tr>
-                  <td colSpan={7} className="px-4 py-2 text-right text-xs text-gray-500">Descuento global (%)</td>
-                  <td className="px-3 py-2 text-right font-medium">
-                    {ro ? (
-                      <>{descuentoPorcentaje > 0 ? `${descuentoPorcentaje}% (−${descuentoGeneral.toFixed(2)})` : "—"}</>
-                    ) : (
-                      <input type="number" name="descuentoPorcentaje" value={form.descuentoPorcentaje || ""} onChange={handleChange}
-                        step="0.01" min="0" max="100" placeholder="0" className={`w-20 text-right ${INP}`} />
-                    )}
-                  </td>
                   {!ro && <td />}
                 </tr>
                 <tr>

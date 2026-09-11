@@ -114,7 +114,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                     </td>
                     <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
-                        {o.cotizacion?.numeroCotizacion || <span className="text-gray-300 font-sans">—</span>}
+                        {o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || <span className="text-gray-300 font-sans">—</span>}
                         {o.anulado && (
                           <span title={o.motivoAnulacion} className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 uppercase">
                             Anulada
@@ -160,12 +160,12 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                         {cotizacionReasignada(s, o) ? (
                           <span
                             className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase tracking-wide"
-                            title={`Reasignada — la OT padre (${o.numeroOT}) pertenece a la cotización ${o.cotizacion?.numeroCotizacion || "—"}`}
+                            title={`Reasignada — la OT padre (${o.numeroOT}) pertenece a la cotización ${o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || "—"}`}
                           >
-                            {s.cotizacion?.numeroCotizacion || "—"} ⇄
+                            {s.cotizacion?.numeroCotizacion || s.cotizacion?.codigo || "—"} ⇄
                           </span>
                         ) : (
-                          <span className="text-gray-400">{s.cotizacion?.numeroCotizacion || "—"}</span>
+                          <span className="text-gray-400">{s.cotizacion?.numeroCotizacion || s.cotizacion?.codigo || "—"}</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -312,6 +312,7 @@ export default function ListaOrdenesTrabajo() {
         o.titulo?.toLowerCase().includes(q) ||
         o.numeroOT?.toLowerCase().includes(q) ||
         o.cotizacion?.numeroCotizacion?.toLowerCase().includes(q) ||
+        o.cotizacion?.codigo?.toLowerCase().includes(q) ||
         ocPorNumDoc.get(o.numeroDocumento)?.toLowerCase().includes(q) ||
         facturaPorNumDoc.get(o.numeroDocumento)?.toLowerCase().includes(q) ||
         o.empresa?.razonSocial?.toLowerCase().includes(q) ||
@@ -322,7 +323,7 @@ export default function ListaOrdenesTrabajo() {
 
   filtradas.sort((a, b) => {
     if (sortBy === "numeroOT") return compararTexto(a.numeroOT, b.numeroOT);
-    if (sortBy === "numeroCotizacion") return compararTexto(a.cotizacion?.numeroCotizacion, b.cotizacion?.numeroCotizacion);
+    if (sortBy === "numeroCotizacion") return compararTexto(a.cotizacion?.numeroCotizacion || a.cotizacion?.codigo, b.cotizacion?.numeroCotizacion || b.cotizacion?.codigo);
     // Descendente: más días esperando primero — sin fechaRecibida (null) va
     // al final, igual que un valor "menor" a cualquier día real (>= 0).
     if (sortBy === "diasRecibido") return (diasDesdeRecibido(b.fechaRecibida) ?? -1) - (diasDesdeRecibido(a.fechaRecibida) ?? -1);
@@ -444,7 +445,7 @@ export default function ListaOrdenesTrabajo() {
   const filaOT = (o) => ({
     "N° OT":          o.numeroOT || "—",
     "Sub-OTs":        o.subOTs?.map((s) => s.numeroOT).join(", ") || "—",
-    "N° Cotización":  o.cotizacion?.numeroCotizacion || "—",
+    "N° Cotización":  o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || "—",
     "Servicio":       o.estadoGeneral || "—",
     "Empresa":        o.empresa?.razonSocial || "—",
     "Contacto":       o.personaContacto || o.contactoNombre || "—",

@@ -133,7 +133,7 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, t
                           Sin cotización
                         </span>
                       ) : (
-                        c.numeroCotizacion || <span className="text-gray-300 font-sans">—</span>
+                        c.numeroCotizacion || c.codigo || <span className="text-gray-300 font-sans">—</span>
                       )}
                       {c.anulado && (
                         <span title={c.motivoAnulacion} className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 uppercase">
@@ -360,6 +360,7 @@ export default function ListaCotizaciones() {
       (!q ||
         c.titulo?.toLowerCase().includes(q) ||
         c.numeroCotizacion?.toLowerCase().includes(q) ||
+        c.codigo?.toLowerCase().includes(q) ||
         numerosOT(otsPorCot.get(c._id))?.toLowerCase().includes(q) ||
         (ocPorCot.get(c._id)?.numeroOrden || ocPorNumDoc.get(c.numeroDocumento)?.numeroOrden)?.toLowerCase().includes(q) ||
         facturaPorNumDoc.get(c.numeroDocumento)?.toLowerCase().includes(q) ||
@@ -373,7 +374,7 @@ export default function ListaCotizaciones() {
     return ots?.map((o) => o.numeroOT).find(Boolean) || "";
   };
   filtradas.sort((a, b) => {
-    if (sortBy === "numeroCotizacion") return compararTexto(a.numeroCotizacion, b.numeroCotizacion);
+    if (sortBy === "numeroCotizacion") return compararTexto(a.numeroCotizacion || a.codigo, b.numeroCotizacion || b.codigo);
     if (sortBy === "fecha") return new Date(b.createdAt) - new Date(a.createdAt);
     return compararTexto(primerNumeroOT(a), primerNumeroOT(b));
   });
@@ -402,7 +403,7 @@ export default function ListaCotizaciones() {
     const { pen, usd } = totalesDuales(c, tipoCambio);
     return {
       "N° OT":                  numerosOT(otsPorCot.get(c._id)) || "—",
-      "N° Cotización":          c._esOT ? "Sin cotización" : (c.numeroCotizacion || "—"),
+      "N° Cotización":          c._esOT ? "Sin cotización" : (c.numeroCotizacion || c.codigo || "—"),
       "Fecha recibida":         c.fechaRecibida ? formatearFecha(c.fechaRecibida) : "—",
       "Empresa":                c.empresa?.razonSocial || "—",
       "Contacto":               c.personaContacto || c.contactoNombre || "—",

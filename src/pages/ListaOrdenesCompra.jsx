@@ -110,7 +110,7 @@ function TablaOC({
                 <tr key={o._id}
                   className={`hover:bg-gray-50 cursor-pointer transition-colors ${o.anulado ? "opacity-50" : ""}`}
                   onClick={() => onSelect(o)}>
-                  <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{o.cotizacion?.numeroCotizacion || <span className="text-gray-300">—</span>}</td>
+                  <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || <span className="text-gray-300">—</span>}</td>
                   <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{otPadre?.numeroOT || <span className="text-gray-300 font-sans">Sin OT</span>}</td>
                   <td className="px-4 py-3.5 font-semibold text-gray-800 max-w-[220px]">
                     <div className="flex items-center gap-1.5 flex-wrap break-words">
@@ -366,6 +366,7 @@ export default function ListaOrdenesCompra() {
       || factura?.numeroFactura?.toLowerCase().includes(txt)
       || numerosOT.some((n) => n?.toLowerCase().includes(txt))
       || o.cotizacion?.numeroCotizacion?.toLowerCase().includes(txt)
+      || o.cotizacion?.codigo?.toLowerCase().includes(txt)
       || o.empresa?.razonSocial?.toLowerCase().includes(txt)
       || o.empresa?.ruc?.includes(txt);
     const estadoActual = grupoOT?.parent?.estado;
@@ -377,7 +378,7 @@ export default function ListaOrdenesCompra() {
 
   filtradas.sort((a, b) => {
     if (sortBy === "numeroOT") return compararTexto(otGroupMap[a.numeroDocumento]?.parent?.numeroOT, otGroupMap[b.numeroDocumento]?.parent?.numeroOT);
-    if (sortBy === "numeroCotizacion") return compararTexto(a.cotizacion?.numeroCotizacion, b.cotizacion?.numeroCotizacion);
+    if (sortBy === "numeroCotizacion") return compararTexto(a.cotizacion?.numeroCotizacion || a.cotizacion?.codigo, b.cotizacion?.numeroCotizacion || b.cotizacion?.codigo);
     return new Date(b.fecha) - new Date(a.fecha);
   });
 
@@ -400,7 +401,7 @@ export default function ListaOrdenesCompra() {
     const factura = factByOCMap[o._id] || factMap[cotId];
     const { pen, usd } = totalesDuales(o.monto, tipoCambio);
     return {
-      "Cotización":         o.cotizacion?.numeroCotizacion || "—",
+      "Cotización":         o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || "—",
       "N° Orden de Compra": o.numeroOrden || "—",
       "Fecha de creación":  o.createdAt ? formatearFecha(o.createdAt) : "—",
       "N° OT":              grupoOT?.parent?.numeroOT || "—",

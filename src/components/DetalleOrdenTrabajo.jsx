@@ -331,13 +331,10 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
 
   const crearCotizacion = async () => {
     setCreandoCotizacion(true);
-    const numRes = await fetchAuth("/cotizaciones/siguiente-numero-cotizacion");
-    const { siguiente } = numRes.ok ? await numRes.json() : { siguiente: "" };
 
     const body = {
       numeroDocumento: ot.numeroDocumento,
       titulo: ot.titulo,
-      numeroCotizacion: siguiente,
       tipo: "venta",
       moneda: "PEN",
       planta: ot.planta,

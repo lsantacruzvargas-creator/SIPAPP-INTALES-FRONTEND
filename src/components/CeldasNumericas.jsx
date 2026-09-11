@@ -14,11 +14,12 @@ export default function CeldasNumericas({ item, ro, onUpdate }) {
       </td>
       <td className="px-3 py-2">
         <input
-          type="date"
-          value={item.fechaEntrega}
-          onChange={(e) => onUpdate(item._key, "fechaEntrega", e.target.value)}
+          type="number" min="0" step="1"
+          value={item.diasEntrega}
+          onChange={(e) => onUpdate(item._key, "diasEntrega", e.target.value === "" ? "" : parseFloat(e.target.value) || 0)}
+          placeholder="Días"
           disabled={ro}
-          className={ro ? INP_RO : INP}
+          className={`w-20 ${ro ? INP_RO : INP}`}
         />
       </td>
       <td className="px-3 py-2">

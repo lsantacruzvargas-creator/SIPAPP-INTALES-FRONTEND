@@ -298,7 +298,7 @@ export default function ListaFacturas() {
       // La Factura no siempre trae su propia cotizacion/OT pobladas (p.ej.
       // creada por la cadena vía OC) — se resuelven por numeroDocumento
       // compartido, igual que en DetalleFactura.jsx.
-      const cotPorNumDoc = new Map(cots.filter(c => c.numeroDocumento != null).map(c => [c.numeroDocumento, c.numeroCotizacion]));
+      const cotPorNumDoc = new Map(cots.filter(c => c.numeroDocumento != null).map(c => [c.numeroDocumento, c.numeroCotizacion || c.codigo]));
       const otPorNumDoc  = new Map(ots.filter(o => o.numeroDocumento != null).map(o => [o.numeroDocumento, o.numeroOT]));
       const enriquecidas = facts.map(f => ({
         ...f,

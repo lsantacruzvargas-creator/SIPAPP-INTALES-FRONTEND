@@ -2,20 +2,13 @@ import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { formatearFecha } from "../utils/fecha";
 import { exportarCotizacionPdf } from "../utils/cotizacionPdf";
-import { exportarCotizacionGloriaPdf } from "../utils/cotizacionGloriaPdf";
-import { exportarCotizacionAlicorpPdf } from "../utils/cotizacionAlicorpPdf";
-import {
-  calcSubtotalGloria, calcularGloria, calcSubtotal, calcularAlicorp,
-  itemDesdeDb, itemInvalido, RUC_GLORIA, esFormatoAlicorp,
-} from "../utils/cotizacionItems";
+import { calcSubtotal, itemDesdeDb, itemInvalido } from "../utils/cotizacionItems";
 import ModalCrearOT from "./ModalCrearOT";
 import ModalOrdenCompra from "./ModalOrdenCompra";
 import BuscadorOrdenTrabajo from "./BuscadorOrdenTrabajo";
 import SelectorEmpresas from "./SelectorEmpresas";
 import ConfirmacionAccion from "./ConfirmacionAccion";
 import TablaItemsCotizacion from "./TablaItemsCotizacion";
-import TablaItemsCotizacionGloria from "./TablaItemsCotizacionGloria";
-import TablaItemsCotizacionAlicorp from "./TablaItemsCotizacionAlicorp";
 import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgePago, badgeOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
@@ -23,53 +16,32 @@ import {
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 w-full transition";
 
-// El descuento global es sobre la SUMA de subtotales (no por ítem, ver
-// items[].descuento) y se aplica antes del IGV — `subtotal` sigue siendo el
-// bruto para mostrarlo tal cual, IGV/total ya salen sobre la base descontada.
-function calcular(sub, descuentoPct = 0) {
+// Formato único de Intales: SUB TOTAL -> IGV (18%) -> TOTAL, sin descuento
+// global (la plantilla real no tiene esa fila — ver
+// docs/superpowers/specs/2026-09-10-cotizacion-intales-design.md).
+function calcular(sub) {
   const s = Math.round(Number(sub) * 100) / 100 || 0;
-  const pct = Math.min(100, Math.max(0, Number(descuentoPct) || 0));
-  const descuento = Math.round(s * (pct / 100) * 100) / 100;
-  const subtotalConDescuento = Math.round((s - descuento) * 100) / 100;
-  const igv = Math.round(subtotalConDescuento * 0.18 * 100) / 100;
+  const igv = Math.round(s * 0.18 * 100) / 100;
   return {
     subtotal: s,
-    descuentoPorcentaje: pct,
-    descuento,
-    subtotalConDescuento,
     igv,
-    total: Math.round((subtotalConDescuento + igv) * 100) / 100,
+    total: Math.round((s + igv) * 100) / 100,
   };
 }
 
 export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuardada, onNavegar }) {
   const [cot, setCot] = useState(inicial);
   const subtotalInicial = inicial.subtotal ?? 0;
-  // `inicial.empresa.ruc` ya viene poblado (ver GET/PUT /cotizaciones,
-  // populate("empresa", "razonSocial alias ruc")) — se puede resolver acá
-  // mismo, antes de que `empresas` (la lista completa) termine de cargar.
-  const esAlicorpInicial = esFormatoAlicorp(inicial.empresa?.ruc);
   const [form, setForm] = useState({
     subtotal: subtotalInicial > 0 ? String(subtotalInicial) : "",
-    descuentoPorcentaje: inicial.descuentoPorcentaje ? String(inicial.descuentoPorcentaje) : "",
-    gastosGeneralesPorcentaje: inicial.gastosGeneralesPorcentaje != null ? String(inicial.gastosGeneralesPorcentaje) : (esAlicorpInicial ? "10" : "2"),
-    utilidadPorcentaje: inicial.utilidadPorcentaje != null ? String(inicial.utilidadPorcentaje) : (esAlicorpInicial ? "5" : "10"),
-    textoBreveServicio: inicial.textoBreveServicio || "",
     empresa: inicial.empresa?._id || "",
     tipo: inicial.tipo || "venta",
     moneda: inicial.moneda || "PEN",
-    // Mismo fix que ModalNuevaCotizacion.jsx: estos 3 valores por defecto
-    // van directo al estado, no solo mostrados con `|| "default"` en el
-    // input — si no, quedaban vacíos al guardar aunque en pantalla se
-    // vieran llenos, y el PDF (sin ese fallback) imprimía "—".
     condicionPago: inicial.condicionPago || "Factura 30 días",
-    plazoEntrega: inicial.plazoEntrega || "2 días hábiles",
     lugarEntrega: inicial.lugarEntrega || "",
-    validezOferta: inicial.validezOferta || "",
     fecha: inicial.fecha ? new Date(inicial.fecha).toISOString().split("T")[0] : "",
     fechaRecibida: inicial.fechaRecibida ? new Date(inicial.fechaRecibida).toISOString().split("T")[0] : "",
-    titulo: inicial.titulo || "",
-    numeroCotizacion: inicial.numeroCotizacion || "",
+    rq: inicial.rq || "",
     atencion: inicial.atencion || "",
     encargado: inicial.encargado || "",
     planta: inicial.planta || "",
@@ -78,16 +50,6 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     numeroGuiaRemision: inicial.numeroGuiaRemision || "",
     codigoSap: inicial.codigoSap || "",
     fechaSalida: inicial.fechaSalida ? new Date(inicial.fechaSalida).toISOString().split("T")[0] : "",
-    asesorComercial: inicial.asesorComercial || "",
-    numeroCelular: inicial.numeroCelular || "",
-    numeroSolicitudPedido: inicial.numeroSolicitudPedido || "",
-    numeroPeticionOferta: inicial.numeroPeticionOferta || "",
-    tiempoGarantia: inicial.tiempoGarantia || "6 meses",
-    area: inicial.area || "",
-    omAviso: inicial.omAviso || "",
-    numeroGuia: inicial.numeroGuia || "",
-    jefeSupervisorSolicitante: inicial.jefeSupervisorSolicitante || "",
-    compradorResponsable: inicial.compradorResponsable || "",
   });
   const [items, setItems] = useState(() => (inicial.items || []).map(itemDesdeDb));
   const [intentoGuardar, setIntentoGuardar] = useState(false);
@@ -197,8 +159,6 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const plantaSel = plantasEmpresa.find(p => p.nombre === form.planta);
   const contactosPlanta = plantaSel?.contactos ?? [];
   const contactoSel = contactosPlanta.find(c => c.nombre === form.personaContacto);
-  const esGloria = empresaSel?.ruc === RUC_GLORIA;
-  const esAlicorp = esFormatoAlicorp(empresaSel?.ruc);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -292,63 +252,37 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     }
   };
 
-  // calcSubtotalGloria degrada a calcSubtotal (cantidad×precio) para
-  // cualquier ítem sin `grupo` — sirve igual para el flujo genérico y para
-  // los 4 grupos de Gloria que no son "mano_obra".
-  const subtotalItems = parseFloat(items.reduce((acc, i) => acc + calcSubtotalGloria(i), 0).toFixed(2));
+  const subtotalItems = parseFloat(items.reduce((acc, i) => acc + calcSubtotal(i), 0).toFixed(2));
   const usarTotalesDeItems = items.length > 0;
-  const totalesMostrados = esGloria
-    ? calcularGloria(usarTotalesDeItems ? subtotalItems : form.subtotal, form.gastosGeneralesPorcentaje, form.utilidadPorcentaje)
-    : esAlicorp
-    ? calcularAlicorp(usarTotalesDeItems ? subtotalItems : form.subtotal, form.gastosGeneralesPorcentaje, form.utilidadPorcentaje)
-    : calcular(usarTotalesDeItems ? subtotalItems : form.subtotal, form.descuentoPorcentaje);
+  const totalesMostrados = calcular(usarTotalesDeItems ? subtotalItems : form.subtotal);
 
   // Arma el objeto para el PDF con lo que hay en pantalla ahora mismo, sin
   // depender de que se haya guardado antes (Guardar cambios cierra el modal).
   const datosParaPdf = () => ({
     ...cot,
     empresa: empresaSel || cot.empresa,
+    creadoPor: cot.creadoPor,
     tipo: form.tipo,
-    numeroCotizacion: form.numeroCotizacion,
+    rq: form.rq,
     atencion: form.atencion,
     fecha: form.fecha,
-    titulo: form.titulo,
     condicionPago: form.condicionPago,
-    plazoEntrega: form.plazoEntrega,
-    lugarEntrega: form.lugarEntrega,
-    validezOferta: form.validezOferta,
     moneda: form.moneda,
     subtotal: totalesMostrados.subtotal,
-    descuentoPorcentaje: totalesMostrados.descuentoPorcentaje,
-    descuento: totalesMostrados.descuento,
     igv: totalesMostrados.igv,
     total: totalesMostrados.total,
-    asesorComercial: form.asesorComercial,
-    numeroCelular: form.numeroCelular,
     personaContacto: form.personaContacto,
-    numeroSolicitudPedido: form.numeroSolicitudPedido,
-    numeroPeticionOferta: form.numeroPeticionOferta,
-    tiempoGarantia: form.tiempoGarantia,
-    area: form.area,
-    omAviso: form.omAviso,
-    numeroGuia: form.numeroGuia,
-    jefeSupervisorSolicitante: form.jefeSupervisorSolicitante,
-    compradorResponsable: form.compradorResponsable,
-    textoBreveServicio: form.textoBreveServicio,
-    gastosGeneralesPorcentaje: form.gastosGeneralesPorcentaje,
-    utilidadPorcentaje: form.utilidadPorcentaje,
     items: items.map(i => ({
       descripcion: i.descripcion,
+      codigo: i.codigo,
       unidad: i.unidad || "und",
       cantidad: i.cantidad,
+      diasEntrega: i.diasEntrega,
       precio: i.precio,
       moneda: i.moneda,
-      subtotal: calcSubtotalGloria(i),
+      subtotal: calcSubtotal(i),
       subItems: (i.subItems || []).map(s => s.texto).filter(Boolean),
-      grupo: i.grupo,
-      personas: i.personas,
-      horas: i.horas,
-      tarifaHora: i.tarifaHora,
+      imagenes: i.imagenes || [],
     })),
   });
 
@@ -360,65 +294,42 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   // índice, pero debe seguir generando las OT en el mismo modal abierto.
   const guardarCotizacion = async () => {
     setIntentoGuardar(true);
-    // Formato Gloria: 3 de los 5 grupos no son obligatorios (ver
-    // TablaItemsCotizacionGloria.jsx) y "mano_obra" no usa cantidad/precio,
-    // así que la validación genérica de ítems no aplica — solo se exige que
-    // ningún ítem quede sin descripción.
-    const itemsInvalidos = esGloria ? items.some(i => !i.descripcion?.trim()) : items.some(itemInvalido);
+    const itemsInvalidos = items.some(itemInvalido);
     if (itemsInvalidos) {
-      setError(esGloria
-        ? "Hay ítems sin descripción. Complétala antes de guardar."
-        : "Hay ítems con campos obligatorios sin completar (descripción, cantidad o precio). Corrígelos antes de guardar — resaltados en rojo.");
+      setError("Hay ítems con campos obligatorios sin completar (descripción, cantidad o precio). Corrígelos antes de guardar — resaltados en rojo.");
       return null;
     }
     setError("");
     const payload = {
       tipo: form.tipo,
       condicionPago: form.condicionPago,
-      titulo: form.titulo || "por definir",
-      numeroCotizacion: form.numeroCotizacion,
+      rq: form.rq,
       atencion: form.atencion,
       encargado: form.encargado,
       planta: form.planta,
       personaContacto: form.personaContacto,
-      plazoEntrega: form.plazoEntrega,
       lugarEntrega: form.lugarEntrega,
-      validezOferta: form.validezOferta,
       moneda: form.moneda,
       subtotal: totalesMostrados.subtotal,
-      descuentoPorcentaje: totalesMostrados.descuentoPorcentaje,
       igv: totalesMostrados.igv,
       total: totalesMostrados.total,
       numeroGuiaEmision: form.numeroGuiaEmision,
       numeroGuiaRemision: form.numeroGuiaRemision,
       codigoSap: form.codigoSap,
       fechaSalida: form.fechaSalida || null,
-      asesorComercial: form.asesorComercial,
-      numeroCelular: form.numeroCelular,
-      numeroSolicitudPedido: form.numeroSolicitudPedido,
-      numeroPeticionOferta: form.numeroPeticionOferta,
-      tiempoGarantia: form.tiempoGarantia,
-      area: form.area,
-      omAviso: form.omAviso,
-      numeroGuia: form.numeroGuia,
-      jefeSupervisorSolicitante: form.jefeSupervisorSolicitante,
-      compradorResponsable: form.compradorResponsable,
-      textoBreveServicio: form.textoBreveServicio,
-      gastosGeneralesPorcentaje: form.gastosGeneralesPorcentaje,
-      utilidadPorcentaje: form.utilidadPorcentaje,
       items: items.map(i => {
         const it = {
           descripcion: i.descripcion,
+          codigo: i.codigo || "",
           unidad: i.unidad || "und",
           cantidad: i.cantidad,
           precio: i.precio,
           moneda: i.moneda,
-          subtotal: calcSubtotalGloria(i),
+          subtotal: calcSubtotal(i),
         };
-        if (i.fechaEntrega) it.fechaEntrega = i.fechaEntrega;
+        if (i.diasEntrega !== "" && i.diasEntrega != null) it.diasEntrega = i.diasEntrega;
         if (i.subItems?.length > 0) it.subItems = i.subItems.map(s => s.texto).filter(Boolean);
         if (i.imagenes?.length > 0) it.imagenes = i.imagenes;
-        if (i.grupo) { it.grupo = i.grupo; it.personas = i.personas; it.horas = i.horas; it.tarifaHora = i.tarifaHora; }
         return it;
       }),
     };
@@ -561,7 +472,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
             <div>
               <p className="text-lg font-bold text-white uppercase tracking-widest leading-none">Cotización</p>
               <h1 className="text-lg font-bold font-mono leading-tight">
-                {form.numeroCotizacion || cot.codigo}
+                {cot.codigo}
               </h1>
               <p className="text-xs font-normal text-white/60 leading-tight">
                 {cot.codigo}{cot.numeroDocumento != null && ` · Doc. N° ${cot.numeroDocumento}`}
@@ -580,7 +491,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               <Chip className="mt-0.5 bg-white/20 text-white">{cot.tipo}</Chip>
             </div>
             {!["asistente", "coordinadora", "planner"].includes(rolActual) && (
-              <button onClick={() => (esGloria ? exportarCotizacionGloriaPdf : esAlicorp ? exportarCotizacionAlicorpPdf : exportarCotizacionPdf)(datosParaPdf())}
+              <button onClick={() => exportarCotizacionPdf(datosParaPdf())}
                 className="bg-white/15 text-white text-sm px-4 py-2 rounded-lg hover:bg-white/25 transition font-medium shrink-0">
                 Exportar PDF
               </button>
@@ -708,53 +619,8 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                 siendo un hijo directo de este space-y-6). */}
             <fieldset disabled={cot.anulado || cot.enviado || cadenaCerrada || !puedeEditar} className="contents">
 
- {/* Card 2: Detalle de cotización */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-5 rounded-full bg-blue-500" />
-                  <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Detalle de cotización</h2>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">N° Cotización</label>
-                    <input name="numeroCotizacion" value={form.numeroCotizacion} onChange={handleChange}
-                      placeholder="—" className={INP} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">Fecha</label>
-                    <input type="date" name="fecha" value={form.fecha} onChange={handleChange} className={INP} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">Tiempo de entrega de servicio</label>
-                    <input name="plazoEntrega" value={form.plazoEntrega} onChange={handleChange}
-                      placeholder="Ej. 2 días de recibida su O/C." className={INP} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">Validez de la oferta</label>
-                    <input name="validezOferta" value={form.validezOferta || "15 días"} onChange={handleChange}
-                      placeholder="Ej. 15 días" className={INP} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">Asesor comercial</label>
-                    <input name="asesorComercial" value={form.asesorComercial || "Jose Mateo"} onChange={handleChange}
-                      placeholder="Nombre del asesor" className={INP} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">N° Celular</label>
-                    <input name="numeroCelular" value={form.numeroCelular || "+51 966 757 528"} onChange={handleChange}
-                      placeholder="—" className={INP} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 1: Datos del cliente */}
+              {/* Datos del cliente + cotización — formato único de Intales,
+                  ver docs/superpowers/specs/2026-09-10-cotizacion-intales-design.md */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 mb-3">
                 <div className="flex items-center gap-2">
                   <span className="w-1.5 h-5 rounded-full bg-sky-500" />
@@ -829,100 +695,21 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">Área</label>
-                    <input name="area" value={form.area} onChange={handleChange}
-                      placeholder="—" className={INP} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">OM / Aviso</label>
-                    <input name="omAviso" value={form.omAviso} onChange={handleChange}
-                      placeholder="—" className={INP} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">N° de guía</label>
-                    <input name="numeroGuia" value={form.numeroGuia} onChange={handleChange}
-                      placeholder="—" className={INP} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">Jefe / Supervisor solicitante</label>
-                    <input name="jefeSupervisorSolicitante" value={form.jefeSupervisorSolicitante} onChange={handleChange}
-                      placeholder="—" className={INP} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">Comprador responsable</label>
-                    <input name="compradorResponsable" value={form.compradorResponsable} onChange={handleChange}
-                      placeholder="—" className={INP} />
-                  </div>
-                  <div hidden>
-                    <label className="text-xs text-gray-500 block mb-1">Encargado</label>
-                    <input name="encargado" value={form.encargado} onChange={handleChange}
-                      placeholder="Nombre del encargado" className={INP} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">N° de solicitud de pedido</label>
-                    <input name="numeroSolicitudPedido" value={form.numeroSolicitudPedido} onChange={handleChange}
-                      placeholder="—" className={INP} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">N° de petición de oferta</label>
-                    <input name="numeroPeticionOferta" value={form.numeroPeticionOferta} onChange={handleChange}
-                      placeholder="—" className={INP} />
-                  </div>
-                </div>
-              </div>
-
-             
-
-              {/* Card 3: Términos y condiciones */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-5 rounded-full bg-amber-500" />
-                  <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Términos y condiciones</h2>
-                </div>
-
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Tiempo de garantía</label>
-                  <input name="tiempoGarantia" value={form.tiempoGarantia} onChange={handleChange}
-                    placeholder="Ej. 12 meses" className={INP} />
-                </div>
-              </div>
-
-              {/* Otros datos — no forman parte de las 3 cards pedidas; se
-                  mantienen acá para no perder campos que ya se estaban usando. */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-5 rounded-full bg-gray-400" />
-                  <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Otros datos</h2>
-                </div>
-
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Título cotización</label>
-                  <input name="titulo" value={form.titulo} onChange={handleChange}
-                    placeholder="Título de la cotización" className={INP} />
-                </div>
-
-                {esAlicorp && (
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">Texto breve del servicio</label>
-                    <input name="textoBreveServicio" value={form.textoBreveServicio} onChange={handleChange}
-                      placeholder="Ej. SERV. REP MANTTO ARRANC SIEMENS" className={INP} />
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
                     <label className="text-xs text-gray-500 block mb-1">Atención</label>
                     <input name="atencion" value={form.atencion} onChange={handleChange}
-                      placeholder="Ej. Área de Compras" className={INP} />
+                      placeholder="Ej. Ing. Jorge Torres" className={INP} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">RQ</label>
+                    <input name="rq" value={form.rq} onChange={handleChange}
+                      placeholder="Ej. Proyección 2026" className={INP} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Fecha</label>
+                    <input type="date" name="fecha" value={form.fecha} onChange={handleChange} className={INP} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Tipo</label>
@@ -935,7 +722,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">Moneda de la cotización</label>
+                    <label className="text-xs text-gray-500 block mb-1">Moneda</label>
                     <select name="moneda" value={form.moneda} onChange={handleChange} className={INP}>
                       <option value="PEN">Soles (S/)</option>
                       <option value="USD">Dólares (US$)</option>
@@ -947,11 +734,20 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                       placeholder="Factura 30 días" className={INP} />
                   </div>
                 </div>
+                <p className="text-xs text-gray-400">
+                  Tiempo de entrega: <span className="font-medium">Días hábiles</span> — se define por ítem, en la tabla de abajo.
+                </p>
 
                 <div hidden>
                   <label className="text-xs text-gray-500 block mb-1">Lugar de entrega</label>
                   <input name="lugarEntrega" value={form.lugarEntrega} onChange={handleChange}
                     placeholder="Ej. Planta Chilca" className={INP} />
+                </div>
+
+                <div hidden>
+                  <label className="text-xs text-gray-500 block mb-1">Encargado</label>
+                  <input name="encargado" value={form.encargado} onChange={handleChange}
+                    placeholder="Nombre del encargado" className={INP} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -1003,112 +799,16 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                         step="0.01" min="0" placeholder="0.00" className={`${INP} text-lg font-semibold`} />
                     )}
                   </div>
-                  {esGloria ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-xs text-gray-500 block mb-1">Gastos generales (%)</label>
-                          <input type="number" name="gastosGeneralesPorcentaje" value={form.gastosGeneralesPorcentaje} onChange={handleChange}
-                            step="0.01" min="0" max="100" className={INP} />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 block mb-1">Utilidad (%)</label>
-                          <input type="number" name="utilidadPorcentaje" value={form.utilidadPorcentaje} onChange={handleChange}
-                            step="0.01" min="0" max="100" className={INP} />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="text-center">
-                          <p className="text-xs text-gray-400">Gastos generales</p>
-                          <p className="font-semibold text-gray-700">{totalesMostrados.gastosGenerales.toFixed(2)}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-gray-400">Utilidad</p>
-                          <p className="font-semibold text-gray-700">{totalesMostrados.utilidad.toFixed(2)}</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="text-center">
-                          <p className="text-xs text-gray-400">Total (antes de IGV)</p>
-                          <p className="font-semibold text-gray-700">{totalesMostrados.totalPreIgv.toFixed(2)}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-gray-400">IGV 18%</p>
-                          <p className="font-semibold text-gray-700">{totalesMostrados.igv.toFixed(2)}</p>
-                        </div>
-                      </div>
-                      <div className="text-center border-t border-gray-100 pt-3">
-                        <p className="text-xs text-gray-400">Valor total de la oferta</p>
-                        <p className="font-bold text-gray-900 text-lg">{totalesMostrados.total.toFixed(2)}</p>
-                      </div>
-                    </>
-                  ) : esAlicorp ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-xs text-gray-500 block mb-1">Gastos administrativos (%)</label>
-                          <input type="number" name="gastosGeneralesPorcentaje" value={form.gastosGeneralesPorcentaje} onChange={handleChange}
-                            step="0.01" min="0" max="100" className={INP} />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 block mb-1">Utilidad (%)</label>
-                          <input type="number" name="utilidadPorcentaje" value={form.utilidadPorcentaje} onChange={handleChange}
-                            step="0.01" min="0" max="100" className={INP} />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="text-center">
-                          <p className="text-xs text-gray-400">Gastos administrativos</p>
-                          <p className="font-semibold text-gray-700">{totalesMostrados.gastosAdmin.toFixed(2)}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-gray-400">Utilidad</p>
-                          <p className="font-semibold text-gray-700">{totalesMostrados.utilidad.toFixed(2)}</p>
-                        </div>
-                      </div>
-                      {/* El PDF de Alicorp se corta acá (Total sin IGV) — IGV y
-                          Valor total de la oferta se siguen mostrando en pantalla
-                          (y guardando en cotizacion.total) para uso interno, pero
-                          no se imprimen; confirmado explícitamente por el usuario. */}
-                      <div className="text-center">
-                        <p className="text-xs text-gray-400">Total (sin IGV)</p>
-                        <p className="font-semibold text-gray-700">{totalesMostrados.totalSinIgv.toFixed(2)}</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="text-center">
-                          <p className="text-xs text-gray-400">IGV 18%</p>
-                          <p className="font-semibold text-gray-700">{totalesMostrados.igv.toFixed(2)}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-gray-400">Valor total de la oferta</p>
-                          <p className="font-semibold text-gray-700">{totalesMostrados.total.toFixed(2)}</p>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <label className="text-xs text-gray-500 block mb-1">Descuento global (%)</label>
-                        <input type="number" name="descuentoPorcentaje" value={form.descuentoPorcentaje} onChange={handleChange}
-                          step="0.01" min="0" max="100" placeholder="0" className={INP} />
-                        {totalesMostrados.descuento > 0 && (
-                          <p className="text-xs text-gray-400 mt-1">
-                            −{totalesMostrados.descuento.toFixed(2)} · Subtotal con descuento: {totalesMostrados.subtotalConDescuento.toFixed(2)}
-                          </p>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="text-center">
-                          <p className="text-xs text-gray-400">IGV 18%</p>
-                          <p className="font-semibold text-gray-700">{totalesMostrados.igv.toFixed(2)}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-gray-400">Total</p>
-                          <p className="font-semibold text-gray-700">{totalesMostrados.total.toFixed(2)}</p>
-                        </div>
-                      </div>
-                    </>
-                  )}
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="text-center">
+                      <p className="text-xs text-gray-400">IGV 18%</p>
+                      <p className="font-semibold text-gray-700">{totalesMostrados.igv.toFixed(2)}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-gray-400">Total</p>
+                      <p className="font-semibold text-gray-700">{totalesMostrados.total.toFixed(2)}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
               )}
@@ -1124,7 +824,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Relaciones</h2>
             </div>
 
-            <TarjetaRelacion tipo="cotizacion" codigo={cot.codigo} numero={cot.numeroCotizacion} actual>
+            <TarjetaRelacion tipo="cotizacion" codigo={cot.codigo} actual>
               <p className="text-sm text-gray-600 line-clamp-2">{cot.titulo}</p>
             </TarjetaRelacion>
 
@@ -1219,55 +919,23 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
 
         {/* Ítems — ancho completo, debajo de Datos + Relaciones */}
         <div className="max-w-6xl mx-auto px-8 pb-8">
-          {esGloria ? (
-            <TablaItemsCotizacionGloria
-              items={items}
-              onItemsChange={setItems}
-              puedeEditar={puedeEditar}
-              disabled={cot.anulado || cot.enviado}
-              puedeVerPrecios={puedeVerPrecios}
-              seleccionables={puedeGenerarOT && !cot.anulado}
-              seleccionados={seleccionados}
-              onToggleSeleccion={toggleSeleccion}
-              onGenerarOT={generarOTSeleccionados}
-              generando={generandoOT}
-              onVerOT={(o) => onNavegar?.({ tipo: "ot", data: ots.find(x => x._id === o._id) || o })}
-              onQuitarOT={quitarOT}
-            />
-          ) : esAlicorp ? (
-            <TablaItemsCotizacionAlicorp
-              items={items}
-              onItemsChange={setItems}
-              puedeEditar={puedeEditar}
-              disabled={cot.anulado || cot.enviado}
-              puedeVerPrecios={puedeVerPrecios}
-              seleccionables={puedeGenerarOT && !cot.anulado}
-              seleccionados={seleccionados}
-              onToggleSeleccion={toggleSeleccion}
-              onGenerarOT={generarOTSeleccionados}
-              generando={generandoOT}
-              onVerOT={(o) => onNavegar?.({ tipo: "ot", data: ots.find(x => x._id === o._id) || o })}
-              onQuitarOT={quitarOT}
-            />
-          ) : (
-            <TablaItemsCotizacion
-              items={items}
-              onItemsChange={setItems}
-              tipo={form.tipo}
-              puedeEditar={puedeEditar}
-              disabled={cot.anulado || cot.enviado}
-              intentoGuardar={intentoGuardar}
-              totalesMostrados={totalesMostrados}
-              seleccionables={form.tipo === "servicio" && puedeGenerarOT && !cot.anulado}
-              seleccionados={seleccionados}
-              onToggleSeleccion={toggleSeleccion}
-              onGenerarOT={generarOTSeleccionados}
-              generando={generandoOT}
-              onVerOT={(o) => onNavegar?.({ tipo: "ot", data: ots.find(x => x._id === o._id) || o })}
-              onQuitarOT={quitarOT}
-              puedeVerPrecios={puedeVerPrecios}
-            />
-          )}
+          <TablaItemsCotizacion
+            items={items}
+            onItemsChange={setItems}
+            tipo={form.tipo}
+            puedeEditar={puedeEditar}
+            disabled={cot.anulado || cot.enviado}
+            intentoGuardar={intentoGuardar}
+            totalesMostrados={totalesMostrados}
+            seleccionables={form.tipo === "servicio" && puedeGenerarOT && !cot.anulado}
+            seleccionados={seleccionados}
+            onToggleSeleccion={toggleSeleccion}
+            onGenerarOT={generarOTSeleccionados}
+            generando={generandoOT}
+            onVerOT={(o) => onNavegar?.({ tipo: "ot", data: ots.find(x => x._id === o._id) || o })}
+            onQuitarOT={quitarOT}
+            puedeVerPrecios={puedeVerPrecios}
+          />
         </div>
       </div>
 

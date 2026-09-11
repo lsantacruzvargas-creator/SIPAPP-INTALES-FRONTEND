@@ -20,9 +20,10 @@ export const INP_RO = "bg-transparent border-transparent text-sm px-2 py-1";
 export const itemVacioVenta = () => ({
   _key: Date.now() + Math.random(),
   descripcion: "",
+  codigo: "",
   unidad: "und",
   cantidad: 1,
-  fechaEntrega: "",
+  diasEntrega: "",
   precio: 0,
   moneda: "PEN",
   imagenes: [],
@@ -32,11 +33,13 @@ export const itemVacioServicio = () => ({
   _key: Date.now() + Math.random(),
   descripcion: "",
   subItems: [],
+  codigo: "",
   unidad: "und",
   cantidad: 1,
-  fechaEntrega: "",
+  diasEntrega: "",
   precio: 0,
   moneda: "PEN",
+  imagenes: [],
 });
 
 export const itemDesdeDb = (item) => ({
@@ -46,21 +49,14 @@ export const itemDesdeDb = (item) => ({
     _subKey: Date.now() + Math.random(),
     texto,
   })),
+  codigo: item.codigo || "",
   unidad: item.unidad || "und",
   cantidad: item.cantidad,
-  fechaEntrega: item.fechaEntrega
-    ? new Date(item.fechaEntrega).toISOString().split("T")[0]
-    : "",
+  diasEntrega: item.diasEntrega ?? "",
   precio: item.precio,
   moneda: item.moneda || "PEN",
   imagenes: item.imagenes || [],
   otGenerada: item.otGenerada || null,
-  // Formato Gloria (ver GRUPOS_GLORIA abajo) — un ítem del flujo genérico no
-  // trae `grupo`, así que estos quedan undefined y no afectan nada.
-  grupo: item.grupo,
-  personas: item.personas,
-  horas: item.horas,
-  tarifaHora: item.tarifaHora,
 });
 
 // Validación de ítems requeridos por el modelo (Backend/src/models/Cotizacion.js:

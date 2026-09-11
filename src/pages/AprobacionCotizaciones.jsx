@@ -50,7 +50,7 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, otGroupMap, mostrarOT
                       onClick={() => onSelect(c)}>
                       <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
-                          {c.numeroCotizacion || <span className="text-gray-300 font-sans">—</span>}
+                          {c.numeroCotizacion || c.codigo || <span className="text-gray-300 font-sans">—</span>}
                           {c.anulado && (
                             <span title={c.motivoAnulacion} className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 uppercase">
                               Anulada
@@ -170,6 +170,7 @@ export default function AprobacionCotizaciones() {
       .filter(Boolean).join(" ").toLowerCase();
     return (
       c.numeroCotizacion?.toLowerCase().includes(q) ||
+      c.codigo?.toLowerCase().includes(q) ||
       c.titulo?.toLowerCase().includes(q) ||
       numerosOT.includes(q)
     );
