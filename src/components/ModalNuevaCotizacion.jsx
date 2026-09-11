@@ -410,8 +410,10 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
           </section>
         </div>
 
-        {/* Ítems — ancho completo, debajo de Datos + Relaciones */}
-        <div className="max-w-6xl mx-auto px-8 pb-8">
+        {/* Ítems — ancho ampliado (80vw, pedido del usuario) para que la
+            tabla respire más que el resto del modal, debajo de Datos +
+            Relaciones */}
+        <div className="w-[80vw] max-w-none mx-auto px-8 pb-8">
           <TablaItemsCotizacion
             items={items}
             onItemsChange={setItems}
