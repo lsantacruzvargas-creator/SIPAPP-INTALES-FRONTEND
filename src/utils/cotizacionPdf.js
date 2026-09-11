@@ -18,22 +18,47 @@ function cargarImagen(url) {
 // Igual que cargarImagen(), pero para archivos protegidos por authMiddleware
 // (/uploads/cotizaciones/...) — no se puede poner la URL directo en <img src>
 // (no manda el header Authorization), así que se trae con fetchUpload()
-// (mismo mecanismo que ImagenProtegida.jsx) y se arma una Object URL de blob.
+// (mismo mecanismo que ImagenProtegida.jsx). A diferencia de ImagenProtegida
+// (que solo necesita la imagen VISIBLE una vez, con una Object URL de blob
+// que revoca al desmontar), acá el `<img>` resultante se lo pasamos después
+// a jsPDF `doc.addImage()`, que vuelve a leer `img.src` recién al DIBUJAR la
+// celda (dentro de `didDrawCell`, más tarde que la carga) — si para entonces
+// la Object URL ya fue revocada, jsPDF falla con
+// "GET blob:...net::ERR_FILE_NOT_FOUND" (bug real, confirmado 2026-09-11).
+// Por eso acá se usa un data URI (FileReader) en vez de una Object URL: no
+// depende de ninguna URL viva, jsPDF puede leerlo en cualquier momento.
 function cargarImagenProtegida(url) {
   if (!url) return Promise.resolve(null);
   return fetchUpload(url)
     .then((r) => (r.ok ? r.blob() : null))
     .then((blob) => {
       if (!blob) return null;
-      const objectUrl = URL.createObjectURL(blob);
       return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => { resolve(img); URL.revokeObjectURL(objectUrl); };
-        img.onerror = () => { resolve(null); URL.revokeObjectURL(objectUrl); };
-        img.src = objectUrl;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = reader.result;
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
       });
     })
     .catch(() => null);
+}
+
+// jsPDF necesita que el formato pasado a addImage() coincida con el
+// contenido real (JPEG vs PNG vs WEBP) — pasar "PNG" fijo para todo rompía
+// silenciosamente con lexacaucho_logo.jpeg y con cualquier imagen de ítem
+// subida como JPEG/WEBP (bug real, confirmado 2026-09-11, mismo síntoma que
+// el de la Object URL revocada). Se detecta del propio `src` (funciona
+// tanto para rutas de archivo en /public como para data URIs).
+function formatoImagen(img) {
+  const src = img?.src || "";
+  if (/\.jpe?g(\?|$)/i.test(src) || /^data:image\/jpe?g/i.test(src)) return "JPEG";
+  if (/\.webp(\?|$)/i.test(src) || /^data:image\/webp/i.test(src)) return "WEBP";
+  return "PNG";
 }
 
 // Paleta del formato de Intales, tomada de formato-cotizacion-INTALES.xlsx
@@ -86,7 +111,7 @@ export const exportarCotizacionPdf = async (cotizacion) => {
   const logoH = 16;
   if (logoIntales) {
     const w = logoH * (logoIntales.naturalWidth / logoIntales.naturalHeight);
-    doc.addImage(logoIntales, "PNG", M, y, w, logoH);
+    doc.addImage(logoIntales, formatoImagen(logoIntales), M, y, w, logoH);
   } else {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
@@ -102,7 +127,7 @@ export const exportarCotizacionPdf = async (cotizacion) => {
     const anchoTotal = anchos.reduce((a, b) => a + b, 0) + espacioMarca * (marcasHermanas.length - 1);
     let mx = PAGE_W - M - anchoTotal;
     marcasHermanas.forEach((m, i) => {
-      doc.addImage(m, "PNG", mx, y, anchos[i], hMarca);
+      doc.addImage(m, formatoImagen(m), mx, y, anchos[i], hMarca);
       mx += anchos[i] + espacioMarca;
     });
   }
@@ -119,10 +144,12 @@ export const exportarCotizacionPdf = async (cotizacion) => {
   const badgeW = 70, badgeH = 8;
   const badgeX = PAGE_W - M - badgeW;
   doc.rect(badgeX, y, badgeW, badgeH, "F");
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.text(`COTIZACIÓN N° ${codigoCompleto}`, badgeX + badgeW / 2, y + badgeH / 2 + 1.3, { align: "center" });
+  // doc.text(`COTIZACIÓN N° ${codigoCompleto}`, badgeX + badgeW / 2, y + badgeH / 2 + 1.3, { align: "center" });
+  doc.text(`COTIZACIÓN N° ${codigoCompleto}`, 105, y + badgeH / 2 + 1.3, { align: "center" });
+
   doc.setTextColor(0, 0, 0);
   y += badgeH + 6;
 
@@ -150,19 +177,21 @@ export const exportarCotizacionPdf = async (cotizacion) => {
 
   const colIzqW = CONTENT_W * 0.62;
   let yIzq = y;
-  yIzq += labelValor(M, yIzq, "SEÑORES: ", empresa?.razonSocial, colIzqW) * 4.2;
-  yIzq += labelValor(M, yIzq, "RUC: ", empresa?.ruc, colIzqW) * 4.2;
-  yIzq += labelValor(M, yIzq, "DIRECCIÓN: ", direccionCliente, colIzqW) * 4.2;
-  yIzq += labelValor(M, yIzq, "ATENCIÓN: ", cotizacion.atencion, colIzqW) * 4.2;
-  yIzq += labelValor(M, yIzq, "RQ: ", cotizacion.rq, colIzqW) * 4.2;
+  yIzq += labelValor(M, yIzq, "SEÑORES:    ", empresa?.razonSocial, colIzqW) * 4.2;
+  yIzq += labelValor(M, yIzq, "RUC:              ", empresa?.ruc, colIzqW) * 4.2;
+  yIzq += labelValor(M, yIzq, "DIRECCIÓN:  ", direccionCliente, colIzqW) * 4.2;
+  yIzq += labelValor(M, yIzq, "ATENCIÓN:    ", cotizacion.atencion, colIzqW) * 4.2;
+  yIzq += labelValor(M, yIzq, "RQ:                 ", cotizacion.rq, colIzqW) * 4.2;
 
-  const colDerX = M + colIzqW + 4, colDerW = CONTENT_W - colIzqW - 4;
+  // const colDerX = M + colIzqW + 4, colDerW = CONTENT_W - colIzqW - 4;
+  const colDerX = M + colIzqW + 4 - 15, colDerW = CONTENT_W - colIzqW - 4;
+
   const fechaStr = cotizacion.fecha ? formatearFecha(cotizacion.fecha) : "—";
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.5);
   doc.text("FECHA:", colDerX + colDerW, y, { align: "right" });
   doc.setFont("helvetica", "normal");
-  doc.text(fechaStr, colDerX + colDerW, y + 4.2, { align: "right" });
+  doc.text(fechaStr, doc.getTextWidth("FECHA__") + colDerX + colDerW, y, { align: "right" });
 
   y = yIzq + 4;
 
@@ -188,7 +217,7 @@ export const exportarCotizacionPdf = async (cotizacion) => {
   // dibujarla encima después.
   autoTable(doc, {
     startY: y,
-    head: [["CÓDIGO", "CANT.", "U.M", "DESCRIPCIÓN", "PRECIO UNITARIO", "PRECIO TOTAL"]],
+    head: [["COD", "CANT.", "U.M", "DESCRIPCIÓN", "PRECIO UNITARIO", "PRECIO TOTAL"]],
     body: items.map((item) => {
       const precioNum = Number(item.precio) || 0;
       const subtotalNum = Number(item.subtotal) || 0;
@@ -214,14 +243,14 @@ export const exportarCotizacionPdf = async (cotizacion) => {
     }),
     theme: "grid",
     margin: { left: M, right: M },
-    styles: { fontSize: 8, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.1 },
-    headStyles: { fontSize: 8, fontStyle: "bold", textColor: [0, 0, 0], fillColor: GRIS_CLARO, lineColor: [0, 0, 0], lineWidth: 0.1, halign: "center" },
+    styles: { fontSize: 7, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.1 },
+    headStyles: { fontSize: 7, fontStyle: "bold", textColor: [0, 0, 0], fillColor: GRIS_CLARO, lineColor: [0, 0, 0], lineWidth: 0.1, halign: "center" },
     columnStyles: {
-      0: { cellWidth: 20, halign: "center" },
-      1: { cellWidth: 14, halign: "center" },
-      2: { cellWidth: 12, halign: "center" },
-      4: { cellWidth: 24, halign: "right" },
-      5: { cellWidth: 24, halign: "right" },
+      0: { cellWidth: 14, halign: "center" },
+      1: { cellWidth: 11, halign: "center" },
+      2: { cellWidth: 10, halign: "center" },
+      4: { cellWidth: 18, halign: "right" },
+      5: { cellWidth: 18, halign: "right" },
     },
     didDrawCell: (data) => {
       if (data.section !== "body" || data.column.index !== 3) return;
@@ -258,7 +287,7 @@ export const exportarCotizacionPdf = async (cotizacion) => {
         const imgW = img.naturalWidth * escala;
         const imgH = img.naturalHeight * escala;
         const imgY = cell.y + cell.height - padBottom - imgH - 1;
-        doc.addImage(img, "PNG", x, imgY, imgW, imgH);
+        doc.addImage(img, formatoImagen(img), x, imgY, imgW, imgH);
       }
     },
   });
@@ -296,30 +325,49 @@ export const exportarCotizacionPdf = async (cotizacion) => {
   y = Math.max(yPie, yTot) + 4;
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
+  doc.setFontSize(6);
   doc.text("** VALIDEZ DE LA OFERTA 15 DÍAS", M, y); y += 4;
   doc.text("** CONSULTAR CONDICIONES DE TRANSPORTE", M, y); y += 8;
 
   if (y + 40 > PAGE_H - 15) { doc.addPage(); y = 15; }
 
   // ─── Cierre: generar OC a nombre de + firma dinámica del creador ───
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.text("EN CASO DE SER FAVORECIDOS, GENERAR LA OC A NOMBRE DE:", PAGE_W / 2, y, { align: "center" }); y += 5;
-  doc.setFontSize(11);
-  doc.text(`${emisor.razonSocial || "—"} / RUC ${emisor.ruc || "—"}`, PAGE_W / 2, y, { align: "center" }); y += 8;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.text("EN CASO DE SER FAVORECIDOS", PAGE_W / 4, y, { align: "center" });
+  y += 5;
+  doc.text(" GENERAR LA OC A NOMBRE DE:", PAGE_W / 4, y, { align: "center" });
+  y += 5;
 
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.text(`${emisor.razonSocial || "—"}`, PAGE_W / 4, y, { align: "center" });
+  y += 5;
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.text(`RUC ${emisor.ruc || "—"}`, PAGE_W / 4, y, { align: "center" })
+
+  y += 8;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.text("Atentamente,", PAGE_W / 2, y, { align: "center" }); y += 4.2;
+  doc.text("Atentamente,", PAGE_W / 4, y, { align: "center" });
+  y += 4.2;
   const creador = cotizacion.creadoPor;
   if (creador?.nombre) {
     doc.setFont("helvetica", "bold");
-    doc.text(creador.nombre, PAGE_W / 2, y, { align: "center" }); y += 4.2;
+    doc.text(creador.nombre, PAGE_W / 4, y, { align: "center" });
+    y += 4.2;
     doc.setFont("helvetica", "normal");
-    if (creador.cargo) { doc.text(creador.cargo, PAGE_W / 2, y, { align: "center" }); y += 4.2; }
-    const contacto = [creador.correo, creador.telefono].filter(Boolean).join(" · ");
-    if (contacto) { doc.text(contacto, PAGE_W / 2, y, { align: "center" }); y += 4.2; }
+    if (creador.cargo) { doc.text(creador.cargo, PAGE_W / 4, y, { align: "center" }); y += 4.2; }
+    // const contacto = [creador.correo, creador.telefono].filter(Boolean).join(" · ");
+    // if (contacto) { doc.text(contacto, PAGE_W / 2, y, { align: "center" }); y += 4.2; }
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.text(creador.correo, PAGE_W / 4, y, { align: "center" });
+    y += 4.2
+    doc.setFontSize(8.5);
+    doc.text(creador.telefono, PAGE_W / 4, y, { align: "center" });
+
   }
   y += 6;
 
@@ -329,7 +377,7 @@ export const exportarCotizacionPdf = async (cotizacion) => {
   const logoAltoBanco = 8;
   if (logoBcp) {
     const w = logoAltoBanco * (logoBcp.naturalWidth / logoBcp.naturalHeight);
-    doc.addImage(logoBcp, "PNG", PAGE_W / 2 - w / 2, y, w, logoAltoBanco);
+    doc.addImage(logoBcp, formatoImagen(logoBcp), PAGE_W / 2 - w / 2, y, w, logoAltoBanco);
   }
   y += logoAltoBanco + 3;
   doc.setFont("helvetica", "bold");

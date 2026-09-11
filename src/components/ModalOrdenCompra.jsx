@@ -111,7 +111,9 @@ export default function ModalOrdenCompra({ cotizacion, onClose, onCreada }) {
 
           {!esAsistente && (
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Monto (S/)</label>
+              <label className="text-xs text-gray-500 block mb-1">
+                Monto ({cotizacion.moneda === "USD" ? "US$" : "S/"})
+              </label>
               <input
                 type="number"
                 value={Number(monto/1.18).toFixed(2)}
