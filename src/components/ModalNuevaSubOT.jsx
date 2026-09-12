@@ -3,7 +3,6 @@ import { fetchAuth } from "../utils/fetchAuth";
 import { INP } from "../utils/cotizacionItems";
 
 const ESTADOS = ["pendiente", "en progreso", "completado", "entregado"];
-const CATEGORIAS_SERVICIO = ["SOPORTE", "DEVOLUCION", "DIAGNOSTICO", "GARANTIA", "MANTENIMIENTO", "REPARACION", "PRESTAMO", "SUMINISTRO", "MANTENIMIENTO EN PLANTA"];
 
 const colorEstado = (e, activo) => {
   if (!activo) return "bg-gray-100 text-gray-500 hover:bg-gray-200";
@@ -16,20 +15,11 @@ const colorEstado = (e, activo) => {
 export default function ModalNuevaSubOT({ padre, onClose, onCreada }) {
   const [form, setForm] = useState({
     titulo: "", descripcion: "",
-    // MIC/Línea, Backup y Entregado por se heredan del padre por defecto —
-    // el técnico puede sobrescribirlos antes de crear si esta sub-OT difiere.
-    micLinea: padre.micLinea || "", backup: padre.backup || "", categorizacionTaller: "",
-    personalAsignado: "", estado: "pendiente", observaciones: "", entregadoPor: padre.entregadoPor || "",
+    personalAsignado: "", estado: "pendiente", observaciones: "",
     fechaEntrega: "", numeroGuiaRemision: "",
-    // Encargado Prueba / Encargado Intervención heredan del padre por
-    // defecto — cada sub-OT puede tener su propio par de técnicos si la
-    // sub-tarea lo requiere.
-    encargado: padre.encargado || "", encargado2: padre.encargado2 || "",
-    // Datos del equipo — heredan del padre por defecto, igual que MIC/Línea
-    // y Backup (misma lógica de default en el backend, POST /:id/sub-ot).
-    equipoMarca: padre.equipoMarca || "", equipoModelo: padre.equipoModelo || "",
-    equipoCodigo: padre.equipoCodigo || "", equipoTag: padre.equipoTag || "",
-    equipoPotencia: padre.equipoPotencia || "", equipoSerie: padre.equipoSerie || "",
+    // Encargado de Progreso hereda del padre por defecto — cada sub-OT
+    // puede tener su propio técnico si la sub-tarea lo requiere.
+    encargado: padre.encargado || "",
   });
   const [usuarios, setUsuarios] = useState([]);
   const [tecnicos, setTecnicos] = useState([]);
@@ -38,9 +28,9 @@ export default function ModalNuevaSubOT({ padre, onClose, onCreada }) {
 
   useEffect(() => {
     fetchAuth("/personal/lista").then((r) => r.ok && r.json().then(setUsuarios));
-    // Encargado Prueba / Encargado Intervención se eligen entre los
-    // usuarios con login y rol "tecnico" (distinto de "Personal asignado",
-    // que sigue siendo del catálogo de Personal) — ver Fase 13.
+    // Encargado de Progreso se elige entre los usuarios con login y alguno
+    // de los 3 roles de técnico (distinto de "Personal asignado", que sigue
+    // siendo del catálogo de Personal) — ver Fase 13.
     fetchAuth("/usuarios/lista").then((r) => r.ok && r.json()).then((u) => setTecnicos((u || []).filter((x) => ["tecnico", "tecnico_prueba", "tecnico_intervencion"].includes(x.rol))));
   }, []);
 
@@ -48,7 +38,6 @@ export default function ModalNuevaSubOT({ padre, onClose, onCreada }) {
 
   const guardar = async () => {
     if (!form.titulo.trim()) return setError("El título es obligatorio.");
-    if (!form.categorizacionTaller) return setError("La categorización de servicio es obligatoria.");
     setError(""); setGuardando(true);
 
     const body = { ...form };
@@ -97,75 +86,17 @@ export default function ModalNuevaSubOT({ padre, onClose, onCreada }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-gray-500 block mb-1">MIC/Línea</label>
-              <input name="micLinea" value={form.micLinea} onChange={handleChange} className={`w-full ${INP}`} />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Backup</label>
-              <input name="backup" value={form.backup} onChange={handleChange} className={`w-full ${INP}`} />
-            </div>
-          </div>
-
-          <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Datos del equipo</p>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Equipo/Marca</label>
-                <input name="equipoMarca" value={form.equipoMarca} onChange={handleChange} className={`w-full ${INP}`} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Modelo</label>
-                <input name="equipoModelo" value={form.equipoModelo} onChange={handleChange} className={`w-full ${INP}`} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Código</label>
-                <input name="equipoCodigo" value={form.equipoCodigo} onChange={handleChange} className={`w-full ${INP}`} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Tag</label>
-                <input name="equipoTag" value={form.equipoTag} onChange={handleChange} className={`w-full ${INP}`} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Potencia</label>
-                <input name="equipoPotencia" value={form.equipoPotencia} onChange={handleChange} className={`w-full ${INP}`} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">S/N</label>
-                <input name="equipoSerie" value={form.equipoSerie} onChange={handleChange} className={`w-full ${INP}`} />
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Categorización de servicio *</label>
-              <select name="categorizacionTaller" value={form.categorizacionTaller} onChange={handleChange} className={`w-full ${INP}`}>
-                <option value="">Seleccionar categoría…</option>
-                {CATEGORIAS_SERVICIO.map((c) => <option key={c} value={c}>{c}</option>)}
+              <label className="text-xs text-gray-500 block mb-1">Encargado de Progreso</label>
+              <select name="encargado" value={form.encargado} onChange={handleChange} className={`w-full ${INP}`}>
+                <option value="">Sin asignar</option>
+                {tecnicos.map((t) => <option key={t._id} value={t.nombre}>{t.nombre}</option>)}
               </select>
             </div>
-            <div hidden>
+            <div>
               <label className="text-xs text-gray-500 block mb-1">Personal asignado</label>
               <select name="personalAsignado" value={form.personalAsignado} onChange={handleChange} className={`w-full ${INP}`}>
                 <option value="">Sin asignar</option>
                 {usuarios.map((u) => <option key={u._id} value={u._id}>{u.nombre}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Encargado Prueba</label>
-              <select name="encargado" value={form.encargado} onChange={handleChange} className={`w-full ${INP}`}>
-                <option value="">Sin asignar</option>
-                {tecnicos.filter((t) => t.rol === "tecnico_prueba").map((t) => <option key={t._id} value={t.nombre}>{t.nombre}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Encargado Intervención</label>
-              <select name="encargado2" value={form.encargado2} onChange={handleChange} className={`w-full ${INP}`}>
-                <option value="">Sin asignar</option>
-                {tecnicos.filter((t) => t.rol === "tecnico_intervencion").map((t) => <option key={t._id} value={t.nombre}>{t.nombre}</option>)}
               </select>
             </div>
           </div>
@@ -182,15 +113,9 @@ export default function ModalNuevaSubOT({ padre, onClose, onCreada }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Entregado por</label>
-              <input name="entregadoPor" value={form.entregadoPor} onChange={handleChange} className={`w-full ${INP}`} />
-            </div>
-            <div hidden>
-              <label className="text-xs text-gray-500 block mb-1">Fecha de entrega</label>
-              <input type="date" name="fechaEntrega" value={form.fechaEntrega} onChange={handleChange} className={`w-full ${INP}`} />
-            </div>
+          <div hidden>
+            <label className="text-xs text-gray-500 block mb-1">Fecha de entrega</label>
+            <input type="date" name="fechaEntrega" value={form.fechaEntrega} onChange={handleChange} className={`w-full ${INP}`} />
           </div>
 
           <div hidden>

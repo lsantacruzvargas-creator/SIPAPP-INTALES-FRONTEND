@@ -6,8 +6,6 @@ import TablaServiciosExternos from "./TablaServiciosExternos";
 import TablaScroll from "./TablaScroll";
 import { Chip, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada } from "./detalleShared";
 
-const CATEGORIAS_SERVICIO = ["SOPORTE", "DEVOLUCION", "DIAGNOSTICO", "GARANTIA", "MANTENIMIENTO", "REPARACION", "PRESTAMO", "SUMINISTRO", "MANTENIMIENTO EN PLANTA"];
-
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 w-full transition";
 
 const ESTADOS = ["pendiente", "en progreso", "completado", "entregado"];
@@ -31,25 +29,13 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   const [form, setForm] = useState({
     titulo:               inicial.titulo               || "",
     descripcion:           inicial.descripcion           || "",
-    micLinea:               inicial.micLinea               || "",
-    backup:                 inicial.backup                 || "",
-    categorizacionTaller:  inicial.categorizacionTaller  || "",
     personalAsignado:      inicial.personalAsignado?._id || inicial.personalAsignado || "",
     estado:                 inicial.estado                 || "pendiente",
-    entregadoPor:           inicial.entregadoPor           || "",
     fechaEntrega: inicial.fechaEntrega
       ? new Date(inicial.fechaEntrega).toISOString().split("T")[0] : "",
     numeroGuiaRemision:    inicial.numeroGuiaRemision    || "",
     observaciones:          inicial.observaciones          || "",
     irreparable:            inicial.irreparable            || false,
-    encargado:              inicial.encargado              || "",
-    encargado2:             inicial.encargado2             || "",
-    equipoMarca:            inicial.equipoMarca            || "",
-    equipoModelo:           inicial.equipoModelo           || "",
-    equipoCodigo:           inicial.equipoCodigo           || "",
-    equipoTag:              inicial.equipoTag               || "",
-    equipoPotencia:         inicial.equipoPotencia         || "",
-    equipoSerie:            inicial.equipoSerie             || "",
   });
   const rolActual = getUsuario()?.rol;
   const puedeEditarCampos = ["admin", "jefatura", "supervisor", "planner", "coordinadora"].includes(rolActual);
@@ -61,17 +47,16 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   // Tabla de Servicios Externos: la ven todos los roles menos técnico.
   const puedeVerServicios = !esTecnico;
   const cadenaCerrada = bloqueadoPorCadenaCerrada(ot.estadoCadena, rolActual);
-  // Estado (Encargado Intervención) y Progreso (Encargado Prueba) — mismo
-  // criterio que DetalleOrdenTrabajo.jsx: cards independientes del fieldset,
-  // editables por el técnico cuyo nombre coincide con encargado/encargado2.
+  // Progreso (Encargado de Progreso) — mismo criterio que
+  // DetalleOrdenTrabajo.jsx: card independiente del fieldset, editable por
+  // el técnico cuyo nombre coincide con `encargado`.
   const nombreActual = getUsuario()?.nombre;
   const coincideNombre = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
-  const puedeEditarEstado = puedeEditarCampos || (esTecnico && coincideNombre(ot.encargado2, nombreActual));
-  const puedeEditarEstadoPrueba = puedeEditarCampos || (esTecnico && coincideNombre(ot.encargado, nombreActual));
-  // Reasignar QUIÉN es Encargado Prueba/Intervención — a diferencia de arriba,
-  // no exige ya ser el encargado (reasignar a otra persona es el propósito).
+  const puedeEditarEstado = puedeEditarCampos || (esTecnico && coincideNombre(ot.encargado, nombreActual));
+  // Reasignar QUIÉN es Encargado de Progreso — a diferencia de arriba, no
+  // exige ya ser el encargado (reasignar a otra persona es el propósito).
   // Estrictamente el rol "tecnico" (NO tecnico_prueba/tecnico_intervencion,
-  // que solo editan su propia tarjeta de estado/progreso más arriba).
+  // que solo editan su propia tarjeta de progreso más arriba).
   const puedeEditarEncargados = puedeEditarCampos || rolActual === "tecnico";
   const [usuarios, setUsuarios] = useState([]);
   const [tecnicos, setTecnicos] = useState([]);
@@ -94,9 +79,8 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
 
   useEffect(() => {
     fetchAuth("/personal/lista?todos=true").then(r => r.ok && r.json().then(u => setUsuarios(u || [])));
-    // Encargado Prueba / Encargado Intervención se eligen entre los
-    // usuarios con login y rol "tecnico" (distinto de "Personal asignado")
-    // — ver Fase 13.
+    // Encargado de Progreso se elige entre los usuarios con login y alguno
+    // de los 3 roles de técnico (distinto de "Personal asignado") — ver Fase 13.
     fetchAuth("/usuarios/lista").then(r => r.ok && r.json()).then(u => setTecnicos((u || []).filter(x => ["tecnico", "tecnico_prueba", "tecnico_intervencion"].includes(x.rol))));
     cargarRelaciones();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,15 +127,6 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
       setOt(actualizada);
       setForm((f) => ({ ...f, estado: actualizada.estado }));
     }
-  };
-
-  const cambiarEstadoPrueba = async (nuevo) => {
-    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}/estado-prueba`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ estadoPrueba: nuevo }),
-    });
-    if (res.ok) setOt(await res.json());
   };
 
   const cambiarEncargado = async (campo, nombre) => {
@@ -276,37 +251,16 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto px-8 pt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Progreso (Encargado Prueba) y Estado (Encargado Intervención) —
-              cards independientes del fieldset principal. */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Progreso — Encargado Prueba</p>
+        <div className="max-w-6xl mx-auto px-8 pt-8">
+          {/* Progreso (Encargado de Progreso) — card independiente del
+              fieldset principal. */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2 md:max-w-sm">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Progreso — Encargado de Progreso</p>
             <select value={ot.encargado || ""} disabled={!puedeEditarEncargados}
               onChange={(e) => cambiarEncargado("encargado", e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500">
               <option value="">Sin asignar</option>
-              {tecnicos.filter(t => t.rol === "tecnico_prueba").map(t => (
-                <option key={t._id} value={t.nombre}>{t.nombre}</option>
-              ))}
-            </select>
-            <div className="flex gap-2">
-              {ESTADOS.map(e => (
-                <button key={e} type="button" disabled={!puedeEditarEstadoPrueba}
-                  onClick={() => cambiarEstadoPrueba(e)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium capitalize transition disabled:opacity-60 disabled:cursor-not-allowed ${colorEstado(e, ot.estadoPrueba === e)}`}>
-                  {e}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado — Encargado Intervención</p>
-            <select value={ot.encargado2 || ""} disabled={!puedeEditarEncargados}
-              onChange={(e) => cambiarEncargado("encargado2", e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500">
-              <option value="">Sin asignar</option>
-              {tecnicos.filter(t => t.rol === "tecnico_intervencion").map(t => (
+              {tecnicos.map(t => (
                 <option key={t._id} value={t.nombre}>{t.nombre}</option>
               ))}
             </select>
@@ -352,75 +306,19 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
                 rows={2} className={`${INP} resize-none`} />
             </div>
 
-            <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Datos del equipo</p>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Equipo/Marca</label>
-                  <input name="equipoMarca" value={form.equipoMarca} onChange={handleChange} className={INP} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Modelo</label>
-                  <input name="equipoModelo" value={form.equipoModelo} onChange={handleChange} className={INP} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Código</label>
-                  <input name="equipoCodigo" value={form.equipoCodigo} onChange={handleChange} className={INP} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Tag</label>
-                  <input name="equipoTag" value={form.equipoTag} onChange={handleChange} className={INP} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Potencia</label>
-                  <input name="equipoPotencia" value={form.equipoPotencia} onChange={handleChange} className={INP} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">S/N</label>
-                  <input name="equipoSerie" value={form.equipoSerie} onChange={handleChange} className={INP} />
-                </div>
-              </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Personal asignado</label>
+              <select name="personalAsignado" value={form.personalAsignado} onChange={handleChange} className={INP}>
+                <option value="">Sin asignar</option>
+                {usuarios.map(u => (
+                  <option key={u._id} value={u._id}>{u.nombre}{!u.activo ? " (inactivo)" : ""}</option>
+                ))}
+              </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">MIC/Línea</label>
-                <input name="micLinea" value={form.micLinea} onChange={handleChange} className={INP} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Backup</label>
-                <input name="backup" value={form.backup} onChange={handleChange} className={INP} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Categorización de servicio</label>
-                <select name="categorizacionTaller" value={form.categorizacionTaller} onChange={handleChange} className={INP}>
-                  <option value="">Sin categorizar</option>
-                  {CATEGORIAS_SERVICIO.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Personal asignado</label>
-                <select name="personalAsignado" value={form.personalAsignado} onChange={handleChange} className={INP}>
-                  <option value="">Sin asignar</option>
-                  {usuarios.map(u => (
-                    <option key={u._id} value={u._id}>{u.nombre}{!u.activo ? " (inactivo)" : ""}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Entregado por</label>
-                <input name="entregadoPor" value={form.entregadoPor} onChange={handleChange} className={INP} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Fecha de entrega</label>
-                <input type="date" name="fechaEntrega" value={form.fechaEntrega} onChange={handleChange} className={INP} />
-              </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Fecha de entrega</label>
+              <input type="date" name="fechaEntrega" value={form.fechaEntrega} onChange={handleChange} className={INP} />
             </div>
 
             <div>

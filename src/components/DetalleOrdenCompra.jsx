@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { formatearFecha } from "../utils/fecha";
-import ModalCrearFactura from "./ModalCrearFactura";
+import { estadoComprobanteClase } from "../utils/catalogosSunat";
+import ModalDetalleGuia from "./ModalDetalleGuia";
 import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgePago, badgeOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
 } from "./detalleShared";
+
+const codigoDeGuia = (g) => `${g.serie}-${String(g.correlativo).padStart(4, "0")}`;
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full transition";
 
@@ -41,11 +45,14 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   const [empresas, setEmpresas]   = useState([]);
   const [ot, setOt]               = useState(null);
   const [informes, setInformes]   = useState([]);
+  const [gres, setGres]           = useState([]);
+  const [guiaDetalle, setGuiaDetalle] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState("");
   const [cargandoFactura, setCargandoFactura] = useState(false);
   const [cargandoCot, setCargandoCot] = useState(false);
-  const [crearFacturaOpen, setCrearFacturaOpen] = useState(false);
+  const [cargandoCrearFactura, setCargandoCrearFactura] = useState(false);
+  const navigate = useNavigate();
   const [ordenActual, setOrdenActual] = useState(orden);
   const [guardandoConfirmacion, setGuardandoConfirmacion] = useState("");
   const rolActual = getUsuario()?.rol;
@@ -66,6 +73,8 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   // puedeCrear en routes/facturas.js; Admin sumado a pedido explícito del
   // usuario, 2026-09-04, revierte la exclusión de la Fase 15).
   const puedeCrearFacturaRol = ["admin", "facturacion", "jefatura"].includes(rolActual);
+  // Mismo set de roles que ve el card de GRE en DetalleOrdenTrabajo.jsx.
+  const puedeGenerarGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
   const exigeHes  = !!ordenActual.empresa?.requiereHes;
   const exigeActa = !!ordenActual.empresa?.requiereActaConformidad;
 
@@ -112,6 +121,42 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
     onNavegar?.({ tipo: "cotizacion", data: full });
   };
 
+  // Emitir Factura desde una OC: lleva a la página completa de Emitir CPE
+  // (en vez del pequeño ModalCrearFactura) con emisor/receptor/ítems y
+  // precios precargados desde la Cotización vinculada — la OC no tiene
+  // ítems propios (ver OrdenCompra.js), solo un monto global.
+  const crearFacturaDesdeOC = async () => {
+    if (cargandoCrearFactura) return;
+    setCargandoCrearFactura(true);
+    let cotizacionCompleta = null;
+    if (cot) {
+      const res = await fetchAuth("/cotizaciones");
+      const lista = res.ok ? await res.json() : [];
+      cotizacionCompleta = lista.find(c => c._id === cot._id) || null;
+    }
+    setCargandoCrearFactura(false);
+    navigate("/facturacion-electronica/emitir", {
+      state: { prellenarDesdeOC: { oc: orden, cotizacion: cotizacionCompleta } },
+    });
+  };
+
+  // Misma navegación que DetalleOrdenTrabajo.jsx (la OC no tiene sub-OTs, así
+  // que siempre va directo a la página de emisión con un solo ítem prellenado).
+  const crearGREDesdeOC = () => {
+    if (!ot) return;
+    navigate("/facturacion-electronica/guias/emitir", {
+      state: {
+        prellenarGRE: {
+          items: [{ descripcion: ot.titulo, cantidad: 1, unidad: "NIU" }],
+          destinatario: ot.empresa
+            ? { schemeID: "6", numDoc: ot.empresa.ruc || "", nombre: ot.empresa.razonSocial || "" }
+            : undefined,
+          ordenesTrabajo: [ot._id],
+        },
+      },
+    });
+  };
+
   const cargarOTeInformes = () => {
     const cotId = orden.cotizacion?._id || orden.cotizacion;
     fetchAuth("/ordenes-trabajo").then(r => r.ok && r.json()).then(ots => {
@@ -122,6 +167,11 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
         fetchAuth(`/informes?ordenTrabajo=${found._id}`)
           .then(r => r.ok && r.json())
           .then(infs => setInformes(infs || []));
+        if (puedeGenerarGRE) {
+          fetchAuth(`/guias?ordenesTrabajo=${found._id}&estado=ACEPTADO&limit=1000`)
+            .then(r => r.ok && r.json())
+            .then(data => setGres(data?.ok ? data.data : []));
+        }
       }
     });
   };
@@ -239,7 +289,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
                 {puedeVerPrecios && (
                   <>
                     <p className="text-[10px] text-white/60 uppercase tracking-widest leading-none">Total a pagar</p>
-                    <p className="text-lg font-bold leading-tight">{money(calc.totalAPagar)}</p>
+                    <p className="text-lg font-bold leading-tight">{money(calc.totalAPagar, cot?.moneda)}</p>
                   </>
                 )}
                 {factura?.estadoPago && (
@@ -427,7 +477,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
                 </div>
                 <div className="flex items-center justify-between pt-3 border-t border-gray-200">
                   <span className="text-sm font-medium text-gray-600">Total a pagar</span>
-                  <span className="text-lg font-bold text-blue-700">{money(calc.totalAPagar)}</span>
+                  <span className="text-lg font-bold text-blue-700">{money(calc.totalAPagar, cot?.moneda)}</span>
                 </div>
               </div>
             )}
@@ -445,7 +495,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
             <TarjetaRelacion tipo="cotizacion" codigo={cot?.codigo} numero={cot?.numeroCotizacion} vacio={!cot}
               onClick={cot ? abrirCotizacion : undefined} cargando={cargandoCot}>
               <p className="text-sm text-gray-700 line-clamp-2">{cot?.titulo}</p>
-              {puedeVerPrecios && cot?.total > 0 && <p className="text-xs text-gray-500">{money(cot.total)}</p>}
+              {puedeVerPrecios && cot?.total > 0 && <p className="text-xs text-gray-500">{money(cot.total, cot.moneda)}</p>}
             </TarjetaRelacion>
 
             <TarjetaRelacion tipo="ot" codigo={ot?.codigo} numero={ot?.numeroOT} vacio={!ot}
@@ -455,6 +505,36 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
                 <p className="text-xs text-gray-500">Técnico: {ot.personalEncargado.nombre}</p>
               )}
             </TarjetaRelacion>
+
+            {puedeGenerarGRE && ot && (gres.length === 0 ? (
+              <TarjetaRelacion tipo="gre" vacio
+                onCrear={!orden.anulado ? crearGREDesdeOC : undefined} crearLabel="GRE" />
+            ) : (
+              <TarjetaRelacion tipo="gre"
+                codigo={gres.length === 1 ? codigoDeGuia(gres[0]) : `${gres.length} guías`}
+                onClick={gres.length === 1 ? () => setGuiaDetalle(gres[0]) : undefined}>
+                {gres.length === 1 ? (
+                  <Chip className={estadoComprobanteClase(gres[0].estado)}>{gres[0].estado}</Chip>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {gres.map(g => (
+                      <button key={g._id} type="button"
+                        onClick={(e) => { e.stopPropagation(); setGuiaDetalle(g); }}
+                        className="font-mono text-xs text-purple-700 bg-white rounded-lg px-2 py-0.5 shadow-sm hover:underline">
+                        {codigoDeGuia(g)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {!orden.anulado && (
+                  <button type="button"
+                    onClick={(e) => { e.stopPropagation(); crearGREDesdeOC(); }}
+                    className="text-xs text-blue-600 hover:text-blue-800 underline mt-0.5">
+                    + Crear otra GRE
+                  </button>
+                )}
+              </TarjetaRelacion>
+            ))}
 
             <TarjetaRelacion
               tipo="informe"
@@ -473,23 +553,28 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
             <TarjetaRelacion tipo="oc" codigo={orden.codigo} numero={orden.numeroOrden} actual />
 
             <TarjetaRelacion tipo="factura" codigo={factura?.codigo} numero={factura?.numeroFactura} vacio={!factura}
-              onClick={factura ? abrirFactura : undefined} cargando={cargandoFactura}
-              onCrear={!factura && !orden.anulado && puedeCrearFacturaRol ? () => setCrearFacturaOpen(true) : undefined} crearLabel="Factura">
+              onClick={factura ? abrirFactura : undefined} cargando={cargandoFactura || cargandoCrearFactura}
+              onCrear={!factura && !orden.anulado && puedeCrearFacturaRol ? crearFacturaDesdeOC : undefined} crearLabel="Factura">
               {puedeVerPrecios && (factura?.totalAPagar || factura?.total) > 0 && (
-                <p className="text-xs text-gray-500">{money(factura.totalAPagar ?? factura.total)}</p>
+                <p className="text-xs text-gray-500">{money(factura.totalAPagar ?? factura.total, cot?.moneda)}</p>
               )}
               {factura?.estadoPago && <Chip className={badgePago(factura.estadoPago)}>{factura.estadoPago}</Chip>}
+              {factura && !orden.anulado && puedeCrearFacturaRol && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); crearFacturaDesdeOC(); }}
+                  className="text-xs text-blue-600 hover:text-blue-800 underline mt-0.5"
+                >
+                  + Crear otra factura
+                </button>
+              )}
             </TarjetaRelacion>
           </section>
         </div>
       </div>
 
-      {crearFacturaOpen && (
-        <ModalCrearFactura
-          ocInicial={orden}
-          onClose={() => setCrearFacturaOpen(false)}
-          onCreada={(nueva) => { setCrearFacturaOpen(false); onNavegar?.({ tipo: "factura", data: nueva }); }}
-        />
+      {guiaDetalle && (
+        <ModalDetalleGuia guia={guiaDetalle} onClose={() => setGuiaDetalle(null)} />
       )}
     </div>
   );

@@ -1,7 +1,18 @@
 export const UNIDADES = ["und", "kg", "g", "L", "mL", "m", "cm", "m²", "caja", "rollo", "par", "juego", "bolsa"];
 
-export const calcSubtotal = (item) =>
-  parseFloat((item.cantidad * item.precio).toFixed(2));
+// Descuento global (%) de TODA la cotización (ver DetalleCotizacion.jsx
+// `form.descuentoGlobal`) — un solo valor para todos los ítems, ya no hay
+// descuento por ítem. Se aplica sobre el PRECIO UNITARIO de cada ítem
+// (precisión del usuario, 2026-09-11), no sobre el total de la línea.
+// `montoDescuentoItem` = cuánto se descuenta de ESE ítem — ej. 100 × 4% = 4.
+export const montoDescuentoItem = (item, descuentoGlobalPct = 0) =>
+  Math.max(0, (item.precio || 0) * (Number(descuentoGlobalPct) || 0) / 100);
+
+export const precioConDescuento = (item, descuentoGlobalPct = 0) =>
+  Math.max(0, (item.precio || 0) - montoDescuentoItem(item, descuentoGlobalPct));
+
+export const calcSubtotal = (item, descuentoGlobalPct = 0) =>
+  parseFloat((item.cantidad * precioConDescuento(item, descuentoGlobalPct)).toFixed(2));
 
 export const INP =
   "border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400";

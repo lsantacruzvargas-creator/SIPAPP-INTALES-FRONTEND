@@ -32,11 +32,12 @@ const SELECT =
 
 const TH = "px-4 py-3 font-semibold text-gray-500 whitespace-nowrap";
 
-// Si nadie está asignado a ese track, `estadoPrueba`/`estado` se quedan en
-// el default "pendiente" del modelo — visualmente eso confunde con "ya
-// asignado pero sin empezar", así que en la tabla se muestra "No asignado".
-const pruebaLabel = (o) => (o.encargado?.trim() ? o.estadoPrueba : "No asignado");
-const intervencionLabel = (o) => (o.encargado2?.trim() ? o.estado : "No asignado");
+// Si nadie está asignado, `estado` se queda en el default "pendiente" del
+// modelo — visualmente eso confunde con "ya asignado pero sin empezar", así
+// que en la tabla se muestra "No asignado". Hasta 2026-09-11 existían dos
+// columnas/tracks independientes (Prueba/Intervención) — se simplificaron a
+// una sola "Estado de Progreso" (decisión del usuario, ver DetalleOrdenTrabajo.jsx).
+const progresoLabel = (o) => (o.encargado?.trim() ? o.estado : "No asignado");
 
 // Una sub-OT nace con la misma `cotizacion` que su padre, pero /vincular-cotizacion
 // (ver DetalleOrdenTrabajo/DetalleCotizacion) permite "jalarla" luego a otra
@@ -89,10 +90,8 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                 <th className={`${TH} text-left`}>Empresa</th>
                 <th className={`${TH} text-left`}>Contacto</th>
                 <th className={`${TH} text-left`}>Descripción</th>
-                <th className={`${TH} text-center`}>Prueba</th>
-                <th className={`${TH} text-left`}>Técnico de prueba</th>
-                <th className={`${TH} text-center`}>Intervención</th>
-                <th className={`${TH} text-left`}>Técnico de intervención</th>
+                <th className={`${TH} text-center`}>Estado de Progreso</th>
+                <th className={`${TH} text-left`}>Encargado de Progreso</th>
                 <th className={`${TH} text-center`}>Días desde recibido</th>
                 <th className={`${TH} text-center`}>Fecha de Ingreso</th>
               </tr>
@@ -100,7 +99,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
             <tbody className="divide-y divide-gray-100">
               {ordenes.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
                 </tr>
               ) : (
                 ordenes.flatMap((o) => [
@@ -133,13 +132,9 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                     </td>
                     <td className="px-4 py-3.5 text-gray-700">{o.titulo || <span className="text-gray-300">—</span>}</td>
                     <td className="px-4 py-3.5 text-center">
-                      <DotChip chip={badgeOT(pruebaLabel(o))} dot={dotOT(pruebaLabel(o))}>{pruebaLabel(o)}</DotChip>
+                      <DotChip chip={badgeOT(progresoLabel(o))} dot={dotOT(progresoLabel(o))}>{progresoLabel(o)}</DotChip>
                     </td>
                     <td className="px-4 py-3.5 text-gray-600">{o.encargado || <span className="text-gray-300">—</span>}</td>
-                    <td className="px-4 py-3.5 text-center">
-                      <DotChip chip={badgeOT(intervencionLabel(o))} dot={dotOT(intervencionLabel(o))}>{intervencionLabel(o)}</DotChip>
-                    </td>
-                    <td className="px-4 py-3.5 text-gray-600">{o.encargado2 || <span className="text-gray-300">—</span>}</td>
                     <td className="px-4 py-3.5 text-center text-gray-600 whitespace-nowrap">
                       {diasDesdeRecibido(o.fechaRecibida) ?? <span className="text-gray-300">—</span>}
                     </td>
@@ -179,13 +174,9 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                       </td>
                       <td className="px-4 py-3 text-gray-700">{s.titulo || <span className="text-gray-300">—</span>}</td>
                       <td className="px-4 py-3 text-center">
-                        <DotChip chip={badgeOT(pruebaLabel(s))} dot={dotOT(pruebaLabel(s))}>{pruebaLabel(s)}</DotChip>
+                        <DotChip chip={badgeOT(progresoLabel(s))} dot={dotOT(progresoLabel(s))}>{progresoLabel(s)}</DotChip>
                       </td>
                       <td className="px-4 py-3 text-gray-600">{s.encargado || <span className="text-gray-300">—</span>}</td>
-                      <td className="px-4 py-3 text-center">
-                        <DotChip chip={badgeOT(intervencionLabel(s))} dot={dotOT(intervencionLabel(s))}>{intervencionLabel(s)}</DotChip>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">{s.encargado2 || <span className="text-gray-300">—</span>}</td>
                       <td className="px-4 py-3 text-center text-gray-600 whitespace-nowrap">
                         {diasDesdeRecibido(s.fechaRecibida ?? o.fechaRecibida) ?? <span className="text-gray-300">—</span>}
                       </td>
@@ -213,16 +204,12 @@ export default function ListaOrdenesTrabajo() {
   const [seleccionada, setSeleccionada] = useState(null);
   const [crearOTOpen, setCrearOTOpen] = useState(false);
   const [importarOpen, setImportarOpen] = useState(false);
-  // Filtro de grupo: qué bloque de tablas se muestra — Prueba, Intervención,
-  // o ambos. "Cerradas" queda siempre visible, es ortogonal a ambos tracks.
-  const [grupo, setGrupo] = useState("todos");
-  // Solo para la vista simplificada (planner/asistente): qué tabla de las 5
-  // categorías se muestra — el resto de roles no usa este filtro.
+  // Qué tabla de las 5 categorías se muestra (No asignada/En progreso/
+  // Completada/Entregada/Cerrada) — un solo filtro para todos los roles,
+  // desde que se simplificó a un único track "Estado de Progreso"
+  // (decisión del usuario, 2026-09-11 — antes técnico tenía su propio
+  // filtro separado, con las tablas divididas en Prueba/Intervención).
   const [filtroEstadoPlanner, setFiltroEstadoPlanner] = useState("todos");
-  // Mismo filtro pero para técnico (tecnico/tecnico_prueba/tecnico_intervencion)
-  // — sus tablas van por Pendiente/En progreso/Completada/Entregada/Cerrada,
-  // separadas en Prueba e Intervención, pero el filtro aplica igual a ambas.
-  const [filtroEstadoTecnico, setFiltroEstadoTecnico] = useState("todos");
 
   const cargar = () =>
     Promise.all([
@@ -258,25 +245,15 @@ export default function ListaOrdenesTrabajo() {
   const nombreActual = getUsuario()?.nombre;
   const coincideNombre = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
   // "tecnico" (legado) + los 2 roles especializados comparten la misma
-  // estructura de tablas (split Prueba/Intervención) — lo que cambia es el
-  // ALCANCE: estrictamente el rol "tecnico" ve TODAS las OTs (mismo criterio
-  // que planner, a pedido explícito del usuario); tecnico_prueba/
-  // tecnico_intervencion siguen viendo solo las suyas (encargado/encargado2
-  // coincidiendo con su nombre) — ver esTecnicoRestringido más abajo.
+  // vista de tablas (un solo track "Estado de Progreso", ver TablaOTs) — lo
+  // que cambia es el ALCANCE: estrictamente el rol "tecnico" ve TODAS las
+  // OTs (mismo criterio que planner, a pedido explícito del usuario);
+  // tecnico_prueba/tecnico_intervencion siguen viendo solo las suyas
+  // (`encargado` coincidiendo con su nombre) — ver esTecnicoRestringido
+  // más abajo.
   const esTecnicoRol = ["tecnico", "tecnico_prueba", "tecnico_intervencion"].includes(rolActual);
   const esTecnicoRestringido = ["tecnico_prueba", "tecnico_intervencion"].includes(rolActual);
-  // Vista simplificada de 4 grupos (No asignadas/En progreso/Completadas/
-  // Entregadas), sin el split Prueba/Intervención — planner, Administración
-  // ("asistente" es el valor de rol real, ver Sidebar.jsx), Jefatura y
-  // Coordinadora (estas dos últimas solo en la vista de OTs, a pedido
-  // explícito del usuario — el resto de sus permisos no cambia). El rol
-  // "tecnico" (estrictamente, no tecnico_prueba/tecnico_intervencion) y
-  // "admin" también usan esta misma vista — copia exacta del UI de planner,
-  // a pedido del usuario.
-  const esVistaSimplificada = ["planner", "asistente", "jefatura", "coordinadora", "tecnico", "admin"].includes(rolActual);
-  const esTecnicoPrueba = rolActual === "tecnico_prueba";
-  const esTecnicoIntervencion = rolActual === "tecnico_intervencion";
-  const esAsignado = (o) => coincideNombre(o.encargado, nombreActual) || coincideNombre(o.encargado2, nombreActual);
+  const esAsignado = (o) => coincideNombre(o.encargado, nombreActual);
   const conSubOTs = !esTecnicoRestringido
     ? conSubOTsCompleto
     : conSubOTsCompleto
@@ -340,61 +317,6 @@ export default function ListaOrdenesTrabajo() {
   const esCerrada = (o) => o.estadoCadena === "cerrado";
   const abiertas = filtradas.filter((o) => !esCerrada(o));
 
-  // Una OT/sub-OT "califica" para un track (Prueba=encargado,
-  // Intervención=encargado2) si tiene alguien asignado — tecnico_prueba/
-  // tecnico_intervencion además exigen que sea SU nombre (no el de un
-  // compañero asignado al otro track), mismo criterio que `esAsignado`. El
-  // rol "tecnico" (sin restringir) usa el criterio general, igual que el resto.
-  const califica = (doc, campo) =>
-    esTecnicoRestringido ? coincideNombre(doc[campo], nombreActual) : !!doc[campo]?.trim();
-
-  // Agrupa por las 4 tablas de estado de un track. Una OT padre puede tener
-  // sub-OTs en estados distintos (o asignadas a técnicos distintos) — cada
-  // combinación de estado aparece en su propia tabla, repitiendo la fila
-  // padre como contexto pero con solo las sub-OTs de ese estado puntual. Sin
-  // esto, reasignar/avanzar una sub-OT nunca se reflejaba si la OT padre no
-  // tenía ella misma un encargado en ese track (bug reportado: la vista de
-  // técnico solo miraba el encargado del padre, ignorando sus sub-OTs).
-  const agruparPorEstado = (campoEncargado, campoEstado) => {
-    const buckets = { pendiente: [], "en progreso": [], completado: [], entregado: [] };
-    abiertas.forEach((o) => {
-      const porEstado = {};
-      (o.subOTs || []).forEach((s) => {
-        if (!califica(s, campoEncargado) || !buckets[s[campoEstado]]) return;
-        (porEstado[s[campoEstado]] ??= []).push(s);
-      });
-      // Si el padre también califica, se fusiona con las sub-OTs de su
-      // mismo estado (evita una fila duplicada cuando coinciden).
-      if (califica(o, campoEncargado) && buckets[o[campoEstado]]) {
-        buckets[o[campoEstado]].push({ ...o, subOTs: porEstado[o[campoEstado]] || [] });
-        delete porEstado[o[campoEstado]];
-      } else if (esTecnicoRestringido) {
-        // Para tecnico_prueba/tecnico_intervencion, si el padre no le
-        // pertenece (no calificó), la OT padre no debe aparecer como
-        // contexto — cada sub-OT suya se lista como su propia fila, sola,
-        // sin el padre encima.
-        Object.values(porEstado).flat().forEach((s) => buckets[s[campoEstado]].push({ ...s, subOTs: [] }));
-        return;
-      }
-      Object.entries(porEstado).forEach(([estado, subs]) => buckets[estado].push({ ...o, subOTs: subs }));
-    });
-    return buckets;
-  };
-
-  // Intervención (campo `estado`, el de siempre — ver Fase 13: Encargado
-  // Intervención es quien lo controla).
-  const bucketsIntervencion = agruparPorEstado("encargado2", "estado");
-  const pendientes = bucketsIntervencion.pendiente;
-  const enProgreso = bucketsIntervencion["en progreso"];
-  const completadas = bucketsIntervencion.completado;
-  const entregadas = bucketsIntervencion.entregado;
-  // Prueba (campo `estadoPrueba`, propiedad del Encargado Prueba — mismas 4 categorías).
-  const bucketsPrueba = agruparPorEstado("encargado", "estadoPrueba");
-  const pruebaPendientes = bucketsPrueba.pendiente;
-  const pruebaEnProgreso = bucketsPrueba["en progreso"];
-  const pruebaCompletadas = bucketsPrueba.completado;
-  const pruebaEntregadas = bucketsPrueba.entregado;
-
   // "No asignado" (estadoGeneral, ver Backend/src/utils/estadoGeneralOT.js)
   // — mismo criterio de duplicar por sub-OT: la OT padre puede tener técnico
   // asignado mientras una sub-OT suya sigue sin nadie (o al revés).
@@ -408,11 +330,10 @@ export default function ListaOrdenesTrabajo() {
 
   const cerradas = filtradas.filter((o) => esCerrada(o));
 
-  // Vista simplificada del planner: un solo set de 4 grupos en vez del split
-  // Prueba/Intervención — agrupa directo por `estadoGeneral` (calculado y
-  // persistido en el backend, ver estadoGeneralOT.js), sin distinguir de qué
-  // track viene. Un solo cálculo, una sola fuente de verdad.
-  const asignadasPlanner = abiertas.filter((o) => o.encargado?.trim() || o.encargado2?.trim());
+  // Un solo set de 4 grupos, para todos los roles — agrupa directo por
+  // `estadoGeneral` (calculado y persistido en el backend, ver
+  // estadoGeneralOT.js). Un solo cálculo, una sola fuente de verdad.
+  const asignadasPlanner = abiertas.filter((o) => o.encargado?.trim());
   const plannerEntregadas  = asignadasPlanner.filter((o) => o.estadoGeneral === "entregada");
   const plannerCompletadas = asignadasPlanner.filter((o) => o.estadoGeneral === "completada");
   const plannerEnProgreso  = asignadasPlanner.filter((o) => o.estadoGeneral === "pendiente" || o.estadoGeneral === "en progreso");
@@ -433,12 +354,9 @@ export default function ListaOrdenesTrabajo() {
   );
 
   const hayFiltro = Object.values(filtros).some(Boolean);
-  // Con qué categoría se queda la vista simplificada — "todos" o fuera de
-  // esa vista no filtra nada (todas las tablas se muestran igual que antes).
-  const mostrarPlanner = (clave) => !esVistaSimplificada || filtroEstadoPlanner === "todos" || filtroEstadoPlanner === clave;
-  // Igual que `mostrarPlanner` pero para técnico — aplica a las tablas de
-  // ambos tracks (Prueba e Intervención) por igual.
-  const mostrarTecnico = (clave) => !esTecnicoRol || filtroEstadoTecnico === "todos" || filtroEstadoTecnico === clave;
+  // Con qué categoría se queda la vista — "todos" no filtra nada (todas las
+  // tablas se muestran).
+  const mostrarPlanner = (clave) => filtroEstadoPlanner === "todos" || filtroEstadoPlanner === clave;
 
   // Mismas columnas que TablaOTs (ver el nuevo orden ahí) — una hoja por
   // cada tabla visible.
@@ -450,26 +368,19 @@ export default function ListaOrdenesTrabajo() {
     "Empresa":        o.empresa?.razonSocial || "—",
     "Contacto":       o.personaContacto || o.contactoNombre || "—",
     "Descripción":    o.titulo || "—",
-    "Prueba":         o.estadoPrueba || "—",
-    "Técnico de prueba":        o.encargado || "—",
-    "Intervención":             o.estado || "—",
-    "Técnico de intervención":  o.encargado2 || "—",
-    "Días desde recibido":      diasDesdeRecibido(o.fechaRecibida) ?? "—",
-    "Fecha de Ingreso":         o.fechaRecibida ? formatearFecha(o.fechaRecibida) : "—",
+    "Estado de Progreso":    o.estado || "—",
+    "Encargado de Progreso": o.encargado || "—",
+    "Días desde recibido":   diasDesdeRecibido(o.fechaRecibida) ?? "—",
+    "Fecha de Ingreso":      o.fechaRecibida ? formatearFecha(o.fechaRecibida) : "—",
   });
 
   const exportarExcel = () => {
     const wb = XLSX.utils.book_new();
     [
       ["Sin asignar", noAsignadas],
-      ["Prueba - Pendientes", pruebaPendientes],
-      ["Prueba - En progreso", pruebaEnProgreso],
-      ["Prueba - Completadas", pruebaCompletadas],
-      ["Prueba - Entregadas", pruebaEntregadas],
-      ["Intervención - Pendientes", pendientes],
-      ["Intervención - En progreso", enProgreso],
-      ["Intervención - Completadas", completadas],
-      ["Intervención - Entregadas", entregadas],
+      ["En progreso", plannerEnProgreso],
+      ["Completadas", plannerCompletadas],
+      ["Entregadas", plannerEntregadas],
       ["Cerradas", cerradas],
     ].forEach(([nombre, lista]) => {
       const ws = XLSX.utils.json_to_sheet(lista.map(filaOT));
@@ -521,27 +432,14 @@ export default function ListaOrdenesTrabajo() {
           ))}
         </select>
 
-        {esVistaSimplificada && (
-          <select value={filtroEstadoPlanner} onChange={(e) => setFiltroEstadoPlanner(e.target.value)} className={SELECT}>
-            <option value="todos">Todo estado</option>
-            <option value="noAsignada">No asignada</option>
-            <option value="enProgreso">En progreso</option>
-            <option value="completada">Completada</option>
-            <option value="entregada">Entregada</option>
-            <option value="cerrada">Cerrada</option>
-          </select>
-        )}
-
-        {esTecnicoRol && !esVistaSimplificada && (
-          <select value={filtroEstadoTecnico} onChange={(e) => setFiltroEstadoTecnico(e.target.value)} className={SELECT}>
-            <option value="todos">Todo estado</option>
-            <option value="pendiente">Pendiente</option>
-            <option value="enProgreso">En progreso</option>
-            <option value="completada">Completada</option>
-            <option value="entregada">Entregada</option>
-            <option value="cerrada">Cerrada</option>
-          </select>
-        )}
+        <select value={filtroEstadoPlanner} onChange={(e) => setFiltroEstadoPlanner(e.target.value)} className={SELECT}>
+          <option value="todos">Todo estado</option>
+          <option value="noAsignada">No asignada</option>
+          <option value="enProgreso">En progreso</option>
+          <option value="completada">Completada</option>
+          <option value="entregada">Entregada</option>
+          <option value="cerrada">Cerrada</option>
+        </select>
 
         <select name="empresa" value={filtros.empresa} onChange={handleEmpresa} className={SELECT}>
           <option value="">Toda empresa</option>
@@ -602,50 +500,10 @@ export default function ListaOrdenesTrabajo() {
         )}
       </div>
 
-      {!esVistaSimplificada && !esTecnicoPrueba && !esTecnicoIntervencion && (
-        <div className="flex gap-2 mb-5">
-          {[
-            { valor: "todos", label: "Todos los grupos" },
-            { valor: "prueba", label: "Órdenes de prueba" },
-            { valor: "intervencion", label: "Órdenes de intervención" },
-          ].map((g) => (
-            <button
-              key={g.valor}
-              type="button"
-              onClick={() => setGrupo(g.valor)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                grupo === g.valor
-                  ? "bg-gray-900 text-white"
-                  : "border border-gray-300 text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              {g.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Una OT sin ningún técnico asignado (p.ej. recién importada del Excel)
-          no cae en la tabla de Prueba ni en la de Intervención abajo —
-          ambas exigen encargado/encargado2. Sin esta tabla quedaría
-          invisible para admin y roles no-técnico/no-planner. Tecnico_prueba/
-          tecnico_intervencion no la ven (su vista sigue acotada a lo suyo);
-          el rol "tecnico" sí, porque ahora ve todas las OTs igual que planner. */}
-      {!esVistaSimplificada && !esTecnicoRestringido && (
-        <TablaOTs
-          titulo="Órdenes no asignadas"
-          acento="bg-red-500"
-          ordenes={noAsignadas}
-          onSelect={setSeleccionada}
-          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes por asignar"}
-        />
-      )}
-
-      {esVistaSimplificada ? (
-        <>
-          {/* Vista global: todas las OTs juntas (sin separar por asignación
-              ni track), respondiendo al mismo filtro de Estado de arriba —
-              "Todo estado" muestra la unión exacta de las 5 tablas de abajo. */}
+      <>
+          {/* Vista global: todas las OTs juntas (sin separar por asignación),
+              respondiendo al mismo filtro de Estado de arriba — "Todo
+              estado" muestra la unión exacta de las 5 tablas de abajo. */}
           <TablaOTs
             titulo="Todas las Órdenes de Trabajo"
             acento="bg-indigo-500"
@@ -694,99 +552,8 @@ export default function ListaOrdenesTrabajo() {
             />
           )}
         </>
-      ) : !esTecnicoIntervencion && grupo !== "intervencion" && (
-        <>
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 mt-2">Órdenes de Prueba</h3>
 
-          {mostrarTecnico("pendiente") && (
-            <TablaOTs
-              titulo="Órdenes de prueba pendientes"
-              acento="bg-amber-500"
-              ordenes={pruebaPendientes}
-              onSelect={setSeleccionada}
-              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de prueba pendientes"}
-            />
-          )}
-
-          {mostrarTecnico("enProgreso") && (
-            <TablaOTs
-              titulo="Órdenes de prueba en progreso"
-              acento="bg-blue-500"
-              ordenes={pruebaEnProgreso}
-              onSelect={setSeleccionada}
-              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de prueba en progreso"}
-            />
-          )}
-
-          {mostrarTecnico("completada") && (
-            <TablaOTs
-              titulo="Órdenes de prueba completadas"
-              acento="bg-green-500"
-              ordenes={pruebaCompletadas}
-              onSelect={setSeleccionada}
-              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de prueba completadas"}
-            />
-          )}
-
-          {mostrarTecnico("entregada") && (
-            <TablaOTs
-              titulo="Órdenes de prueba entregadas a Intervención"
-              acento="bg-teal-500"
-              ordenes={pruebaEntregadas}
-              onSelect={setSeleccionada}
-              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de prueba entregadas a Intervención"}
-            />
-          )}
-        </>
-      )}
-
-      {!esVistaSimplificada && !esTecnicoPrueba && grupo !== "prueba" && (
-        <>
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 mt-6">Órdenes de Intervención</h3>
-
-          {mostrarTecnico("pendiente") && (
-            <TablaOTs
-              titulo="Órdenes de intervención pendientes"
-              acento="bg-amber-500"
-              ordenes={pendientes}
-              onSelect={setSeleccionada}
-              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de intervención pendientes"}
-            />
-          )}
-
-          {mostrarTecnico("enProgreso") && (
-            <TablaOTs
-              titulo="Órdenes de intervención en progreso"
-              acento="bg-blue-500"
-              ordenes={enProgreso}
-              onSelect={setSeleccionada}
-              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de intervención en progreso"}
-            />
-          )}
-
-          {mostrarTecnico("completada") && (
-            <TablaOTs
-              titulo="Órdenes de intervención completadas"
-              acento="bg-green-500"
-              ordenes={completadas}
-              onSelect={setSeleccionada}
-              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de intervención completadas"}
-            />
-          )}
-
-          {mostrarTecnico("entregada") && (
-            <TablaOTs
-              titulo="Órdenes de intervención entregadas"
-              acento="bg-teal-500"
-              ordenes={entregadas}
-              onSelect={setSeleccionada}
-              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de intervención entregadas"}
-            />
-          )}
-        </>
-      )}
-
-      {mostrarPlanner("cerrada") && mostrarTecnico("cerrada") && (
+      {mostrarPlanner("cerrada") && (
         <TablaOTs
           titulo="Órdenes cerradas"
           acento="bg-gray-500"

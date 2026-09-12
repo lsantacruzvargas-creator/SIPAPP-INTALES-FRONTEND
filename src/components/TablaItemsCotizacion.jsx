@@ -5,7 +5,7 @@ import TablaScroll from "./TablaScroll";
 import ImagenProtegida from "./ImagenProtegida";
 import { uploadAuth } from "../utils/fetchAuth";
 import {
-  calcSubtotal, itemVacioServicio, UNIDADES,
+  calcSubtotal, montoDescuentoItem, itemVacioServicio, UNIDADES,
   descripcionInvalida, cantidadInvalida, precioInvalido, itemInvalido,
 } from "../utils/cotizacionItems";
 
@@ -18,7 +18,7 @@ const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-n
 // (opcionalmente) selección múltiple para "Generar OT".
 export default function TablaItemsCotizacion({
   items, onItemsChange,
-  tipo, puedeEditar, disabled, intentoGuardar, totalesMostrados,
+  tipo, puedeEditar, disabled, intentoGuardar, totalesMostrados, descuentoGlobal = 0,
   seleccionables = false, seleccionados = new Set(), onToggleSeleccion, onGenerarOT, generando = false, onVerOT, onQuitarOT,
   puedeVerPrecios = true,
 }) {
@@ -122,7 +122,14 @@ export default function TablaItemsCotizacion({
 
   const agregarItemManual = () => onItemsChange([...items, itemVacioServicio()]);
 
-  const colsIzquierda = (puedeEditar ? 5 : 4) + (seleccionables ? 1 : 0) + 2; // +2: Código, Días entrega
+  // El tfoot (Subtotal/IGV/Total) solo se renderiza cuando puedeVerPrecios es
+  // true (ver más abajo), así que aquí siempre hay 3 columnas de precio
+  // (Precio unitario, Dsct, Precio total) + las 6 columnas fijas (Item,
+  // Código, Descripción, Unidad, Cantidad, Días entrega) + OT si aplica. La
+  // columna "Quitar" (puedeEditar) NO se suma acá: tiene su propia celda
+  // vacía en cada fila del tfoot, así que colsIzquierda debe quedar fijo
+  // para que la celda de valor caiga siempre bajo "Precio total".
+  const colsIzquierda = 8 + (seleccionables ? 1 : 0);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -169,10 +176,11 @@ export default function TablaItemsCotizacion({
               <th className="px-3 py-3 text-center w-12">Item</th>
               <th className="px-3 py-3 text-left w-28">Código</th>
               <th className="px-3 py-3 text-left">Descripción *</th>
-              <th className="px-3 py-3 text-center w-20">Unidad</th>
+              <th className="px-3 py-3 text-center w-24">Unidad</th>
               <th className="px-3 py-3 text-center w-24">Cantidad *</th>
               <th className="px-3 py-3 text-center w-24">Días entrega</th>
               {puedeVerPrecios && <th className="px-3 py-3 text-right w-32">Precio unitario *</th>}
+              {puedeVerPrecios && <th className="px-3 py-3 text-right w-24">Dsct</th>}
               {puedeVerPrecios && <th className="px-3 py-3 text-right w-32">Precio total</th>}
               {puedeEditar && <th className="px-3 py-3 w-10"><span className="sr-only">Quitar</span></th>}
             </tr>
@@ -180,7 +188,7 @@ export default function TablaItemsCotizacion({
           <tbody className="divide-y divide-gray-100">
             {items.length === 0 ? (
               <tr>
-                <td colSpan={(puedeEditar ? 7 : 6) + (seleccionables ? 1 : 0) - (puedeVerPrecios ? 0 : 2) + 2} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={6 + (seleccionables ? 1 : 0) + (puedeVerPrecios ? 3 : 0) + (puedeEditar ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">
                   Sin ítems agregados{puedeAgregar
                     ? (tipo === "servicio"
                       ? " — usa “+ Agregar ítem manual” para escribir uno o “+ Agregar ítem de plantilla” para elegir del catálogo de servicios."
@@ -295,11 +303,13 @@ export default function TablaItemsCotizacion({
                   <td className="px-3 py-3">
                     <input type="number" min="0" step="1" value={item.cantidad} disabled={!editable}
                       onChange={(e) => handleItem(item._key, "cantidad", parseFloat(e.target.value) || 0)}
+                      onWheel={(e) => e.target.blur()}
                       className={`w-full text-center ${editable ? INP : "bg-transparent border-transparent text-sm px-2 py-1"} ${intentoGuardar && cantidadInvalida(item) ? "border-red-400 ring-1 ring-red-300" : ""}`} />
                   </td>
                   <td className="px-3 py-3">
                     <input type="number" min="0" step="1" value={item.diasEntrega ?? ""} disabled={!editable}
                       onChange={(e) => handleItem(item._key, "diasEntrega", e.target.value === "" ? "" : parseFloat(e.target.value) || 0)}
+                      onWheel={(e) => e.target.blur()}
                       placeholder="Días"
                       className={`w-full text-center ${editable ? INP : "bg-transparent border-transparent text-sm px-2 py-1"}`} />
                   </td>
@@ -307,12 +317,18 @@ export default function TablaItemsCotizacion({
                     <td className="px-3 py-3">
                       <input type="number" min="0" step="0.01" value={item.precio} disabled={!editable}
                         onChange={(e) => handleItem(item._key, "precio", parseFloat(e.target.value) || 0)}
+                        onWheel={(e) => e.target.blur()}
                         className={`w-full text-right ${editable ? INP : "bg-transparent border-transparent text-sm px-2 py-1"} ${intentoGuardar && precioInvalido(item) ? "border-red-400 ring-1 ring-red-300" : ""}`} />
                     </td>
                   )}
                   {puedeVerPrecios && (
                     <td className="px-3 py-3 text-right font-medium text-gray-700 tabular-nums">
-                      {calcSubtotal(item).toFixed(2)}
+                      {montoDescuentoItem(item, descuentoGlobal).toFixed(2)}
+                    </td>
+                  )}
+                  {puedeVerPrecios && (
+                    <td className="px-3 py-3 text-right font-medium text-gray-700 tabular-nums">
+                      {calcSubtotal(item, descuentoGlobal).toFixed(2)}
                     </td>
                   )}
                   {puedeEditar && (

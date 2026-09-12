@@ -61,11 +61,69 @@ function formatoImagen(img) {
   return "PNG";
 }
 
+// bcp_logo_intales.png es técnicamente RGBA (tiene canal alfa), pero el
+// archivo en sí quedó con el fondo "horneado" en alfa=255 (opaco) en vez de
+// transparente — confirmado decodificando los píxeles del archivo, no es un
+// problema de jsPDF. Acá se lo dejamos realmente transparente en tiempo de
+// exportación (canvas + umbral de blanco), sin tocar el asset original.
+// Se devuelve el propio <canvas>: jsPDF lo acepta directo como fuente de
+// addImage() y ya quedó pintado de forma síncrona, sin esperar ningún
+// evento de carga (a diferencia de un nuevo <img src="data:...">).
+function quitarFondoBlanco(img, umbral = 235) {
+  if (!img) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+  const datos = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = datos.data;
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i] >= umbral && px[i + 1] >= umbral && px[i + 2] >= umbral) {
+      px[i + 3] = 0;
+    }
+  }
+  ctx.putImageData(datos, 0, 0);
+  return canvas;
+}
+
 // Paleta del formato de Intales, tomada de formato-cotizacion-INTALES.xlsx
 // (raíz de SIPAPP-INTALES) — ver docs/superpowers/specs/2026-09-10-cotizacion-intales-design.md.
 const NAVY = [0, 0, 40];
 const AZUL = [0, 74, 173];
 const GRIS_CLARO = [232, 232, 232];
+const MOSTAZA = [255, 224, 130];
+
+// Alto de cada logo del PDF, en mm — ajustable individualmente por logo (el
+// ancho siempre se deriva de la proporción real de cada imagen, nunca se
+// estira). "intales" es el logo principal del encabezado; "grupoLexacaucho"
+// es el logo combinado que va pegado a su derecha (reemplaza a las 3 marcas
+// hermanas sueltas de antes — Lexacaucho, Majuflex y Rodilex ahora se
+// representan con este único logo, decisión del usuario 2026-09-11); "bcp"
+// es el logo dentro de la caja de cuentas bancarias del pie.
+const LOGO_ALTO = {
+  intales: 16,
+  grupoLexacaucho: 16,
+  bcp: 9,
+};
+
+// Posición de cada logo, en mm desde la esquina superior izquierda de la
+// hoja. `null` en `x` o `y` deja ese eje en su posición automática de
+// siempre (Intales pegado al margen izquierdo; Grupo Lexacaucho pegado al
+// extremo derecho del logo de Intales; BCP en la esquina de su caja de
+// cuentas bancarias) — poner un número ahí mueve SOLO ese logo, sin correr
+// a los demás.
+const LOGO_POS = {
+  intales: { x: null, y: null },
+  grupoLexacaucho: { x: 130, y: null },
+  bcp: { x: null, y: null },
+};
+
+// Texto descriptivo fijo junto al logo de Grupo Lexacaucho, a la derecha del
+// logo mismo — tal como la plantilla de referencia del usuario; no es un
+// campo editable de la cotización.
+const TEXTO_GRUPO_LEXACAUCHO =
+  "Fabricación, mantenimiento, desarrollo de proyectos y servicios complementarios; en metales y materiales especiales.";
 
 // Cuentas bancarias reales de Intales (mismo Excel).
 const BANCOS = {
@@ -97,41 +155,58 @@ export const exportarCotizacionPdf = async (cotizacion) => {
   const emisorRes = await fetchAuth("/cotizaciones/emisor");
   const emisor = emisorRes.ok ? await emisorRes.json() : { ruc: "", razonSocial: "" };
 
-  const [logoIntales, logoLexacaucho, logoMajuflex, logoRodilex, logoBcp, ...imagenesItems] = await Promise.all([
+  const [logoIntales, logoGrupoLexacaucho, logoBcp, ...imagenesItems] = await Promise.all([
     cargarImagen("/assets/logos/intales_logo.png"),
-    cargarImagen("/assets/logos/lexacaucho_logo.jpeg"),
-    cargarImagen("/assets/logos/majuflex_logo.png"),
-    cargarImagen("/assets/logos/rodilex_logo.png"),
+    cargarImagen("/assets/logos/grupo_lexacaucho.png"),
     cargarImagen("/assets/logos/bcp_logo_intales.png"),
     ...items.map((item) => cargarImagenProtegida(item.imagenes?.[0])),
   ]);
 
-  // ─── Encabezado: 4 logos + badge "COTIZACIÓN N°" ───
+  // ─── Encabezado: logo Intales + logo Grupo Lexacaucho + texto ───
+  // Cada logo usa su propio alto de LOGO_ALTO (mm) y, opcionalmente, su
+  // propia posición fija de LOGO_POS — el ancho siempre se deriva de la
+  // proporción real de la imagen, nunca se estira.
   let y = M;
-  const logoH = 16;
+  const altoIntales = LOGO_ALTO.intales;
+  let anchoIntales = 0;
   if (logoIntales) {
-    const w = logoH * (logoIntales.naturalWidth / logoIntales.naturalHeight);
-    doc.addImage(logoIntales, formatoImagen(logoIntales), M, y, w, logoH);
+    anchoIntales = altoIntales * (logoIntales.naturalWidth / logoIntales.naturalHeight);
+    const xIntales = LOGO_POS.intales.x ?? M;
+    const yIntales = LOGO_POS.intales.y ?? y;
+    doc.addImage(logoIntales, formatoImagen(logoIntales), xIntales, yIntales, anchoIntales, altoIntales);
   } else {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text("INTALES", M, y + logoH / 2);
+    doc.text("INTALES", LOGO_POS.intales.x ?? M, (LOGO_POS.intales.y ?? y) + altoIntales / 2);
   }
-  // Las 3 marcas hermanas van más chicas, alineadas a la derecha del
-  // encabezado — siempre juntas, sin lógica condicional (decisión del
-  // usuario, ver spec).
-  const marcasHermanas = [logoLexacaucho, logoMajuflex, logoRodilex].filter(Boolean);
-  if (marcasHermanas.length > 0) {
-    const hMarca = 9, espacioMarca = 4;
-    const anchos = marcasHermanas.map((m) => hMarca * (m.naturalWidth / m.naturalHeight));
-    const anchoTotal = anchos.reduce((a, b) => a + b, 0) + espacioMarca * (marcasHermanas.length - 1);
-    let mx = PAGE_W - M - anchoTotal;
-    marcasHermanas.forEach((m, i) => {
-      doc.addImage(m, formatoImagen(m), mx, y, anchos[i], hMarca);
-      mx += anchos[i] + espacioMarca;
-    });
+
+  // Logo de Grupo Lexacaucho, pegado al extremo derecho del logo de Intales,
+  // con su texto descriptivo fijo a la derecha (ver captura de referencia
+  // del usuario). A diferencia del logo BCP (que sí necesita quitarFondoBlanco
+  // porque se dibuja sobre la caja mostaza), este va sobre el fondo blanco de
+  // la hoja — aplicarle el mismo tratamiento de umbral de blanco le comía
+  // parte del propio dibujo (texto/triángulo con tonos claros), dejándolo
+  // distorsionado; se dibuja tal cual viene el archivo.
+  let altoMaxEncabezado = altoIntales;
+  if (logoGrupoLexacaucho) {
+    const altoGL = LOGO_ALTO.grupoLexacaucho;
+    const anchoGL = altoGL * (logoGrupoLexacaucho.naturalWidth / logoGrupoLexacaucho.naturalHeight);
+    const espacioGL = 8;
+    const xGL = LOGO_POS.grupoLexacaucho.x ?? (M + anchoIntales + espacioGL);
+    const yGL = LOGO_POS.grupoLexacaucho.y ?? y;
+    doc.addImage(logoGrupoLexacaucho, formatoImagen(logoGrupoLexacaucho), xGL, yGL, anchoGL, altoGL);
+    altoMaxEncabezado = Math.max(altoMaxEncabezado, altoGL);
+
+    const xTexto = xGL + anchoGL + 3;
+    const anchoTexto = 32;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(0, 0, 0);
+    const lineasTexto = doc.splitTextToSize(TEXTO_GRUPO_LEXACAUCHO, anchoTexto);
+    let yTexto = yGL + 3;
+    lineasTexto.forEach((linea) => { doc.text(linea, xTexto, yTexto); yTexto += 3; });
   }
-  y += logoH + 4;
+  y += altoMaxEncabezado + 4;
 
   // Código completo del PDF: correlativo-año-INT/iniciales — se arma acá,
   // nunca se persiste (decisión del usuario, 2026-09-11, ver
@@ -140,18 +215,18 @@ export const exportarCotizacionPdf = async (cotizacion) => {
   const inicialesAsesor = cotizacion.creadoPor?.iniciales || "";
   const codigoCompleto = `${cotizacion.numeroCotizacion || cotizacion.codigo || "—"}-${anioDoc}-INT/${inicialesAsesor}`;
 
-  doc.setFillColor(...AZUL);
-  const badgeW = 70, badgeH = 8;
-  const badgeX = PAGE_W - M - badgeW;
-  doc.rect(badgeX, y, badgeW, badgeH, "F");
+  // Raya delgada de margen a margen en vez del recuadro azul relleno de
+  // antes (corrección del usuario contra el Excel de referencia); el texto
+  // "COTIZACIÓN N°" queda centrado en la hoja, debajo de la raya.
+  doc.setDrawColor(...AZUL);
+  doc.setLineWidth(0.3);
+  doc.line(M, y, PAGE_W - M, y);
+  y += 5;
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  // doc.text(`COTIZACIÓN N° ${codigoCompleto}`, badgeX + badgeW / 2, y + badgeH / 2 + 1.3, { align: "center" });
-  doc.text(`COTIZACIÓN N° ${codigoCompleto}`, 105, y + badgeH / 2 + 1.3, { align: "center" });
-
-  doc.setTextColor(0, 0, 0);
-  y += badgeH + 6;
+  doc.text(`COTIZACIÓN N° ${codigoCompleto}`, 105, y, { align: "center" });
+  y += 8;
 
   // ─── Datos del cliente ───
   const labelValor = (x, yy, label, valor, maxW) => {
@@ -207,7 +282,14 @@ export const exportarCotizacionPdf = async (cotizacion) => {
     return yy + h + 4;
   };
 
-  const simboloDoc = cotizacion.moneda === "USD" ? "US$" : "S/";
+  const simboloDoc = cotizacion.moneda === "USD" ? "$" : "S/";
+
+  // Anchos de columna de la tabla de ítems — se definen una sola vez y se
+  // reutilizan también en la tabla de totales de más abajo, para que ambas
+  // SIEMPRE calcen sin importar qué tan angostas/anchas sean estas columnas
+  // (antes cada tabla tenía sus propios anchos hardcodeados por separado y
+  // se desincronizaban — mismo bug de fondo que el del desfase original).
+  const COL_COD = 11, COL_CANT = 11, COL_UM = 8, COL_PU = 13, COL_DESC = 10, COL_PN = 14, COL_PT = 14;
 
   // ─── Tabla de ítems ───
   // Cada fila = un ítem. Descripción trae, dentro de la misma celda: el
@@ -215,11 +297,21 @@ export const exportarCotizacionPdf = async (cotizacion) => {
   // los sub-ítems en viñeta, la línea "Tiempo de entrega: X días hábiles" y
   // — si el ítem tiene imagen — líneas en blanco reservando espacio para
   // dibujarla encima después.
+  // Descuento global (%) de toda la cotización, aplicado sobre el precio
+  // unitario de CADA ítem (ver montoDescuentoItem/precioConDescuento en
+  // cotizacionItems.js, reescrito acá porque el PDF no importa ese util) —
+  // ya no es un % por ítem, es uno solo para toda la cotización, así que se
+  // muestra directamente en la cabecera de la columna en vez de repetirlo fila
+  // por fila.
+  const descuentoGlobalPct = Number(cotizacion.descuentoGlobal) || 0;
+
   autoTable(doc, {
     startY: y,
-    head: [["COD", "CANT.", "U.M", "DESCRIPCIÓN", "PRECIO UNITARIO", "PRECIO TOTAL"]],
+    head: [["COD", "CANT", "UM", "DESCRIPCIÓN", "PRECIO UNIT", `DSCT ${descuentoGlobalPct}%`, "PRECIO C/DSCT", "PRECIO TOTAL"]],
     body: items.map((item) => {
       const precioNum = Number(item.precio) || 0;
+      const descuentoNum = Math.max(0, precioNum * descuentoGlobalPct / 100);
+      const precioNetoNum = Math.max(0, precioNum - descuentoNum);
       const subtotalNum = Number(item.subtotal) || 0;
       let desc = item.descripcion || "";
       if (item.subItems?.length > 0) {
@@ -238,6 +330,8 @@ export const exportarCotizacionPdf = async (cotizacion) => {
         item.unidad || "und",
         desc,
         precioNum === 0 ? "" : precioNum.toFixed(2),
+        descuentoNum === 0 ? "" : descuentoNum.toFixed(2),
+        precioNetoNum === 0 ? "" : precioNetoNum.toFixed(2),
         subtotalNum === 0 ? "" : subtotalNum.toFixed(2),
       ];
     }),
@@ -246,11 +340,13 @@ export const exportarCotizacionPdf = async (cotizacion) => {
     styles: { fontSize: 7, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.1 },
     headStyles: { fontSize: 7, fontStyle: "bold", textColor: [0, 0, 0], fillColor: GRIS_CLARO, lineColor: [0, 0, 0], lineWidth: 0.1, halign: "center" },
     columnStyles: {
-      0: { cellWidth: 14, halign: "center" },
-      1: { cellWidth: 11, halign: "center" },
-      2: { cellWidth: 10, halign: "center" },
-      4: { cellWidth: 18, halign: "right" },
-      5: { cellWidth: 18, halign: "right" },
+      0: { cellWidth: COL_COD, halign: "center" },
+      1: { cellWidth: COL_CANT, halign: "center" },
+      2: { cellWidth: COL_UM, halign: "center" },
+      4: { cellWidth: COL_PU, halign: "right" },
+      5: { cellWidth: COL_DESC, halign: "right" },
+      6: { cellWidth: COL_PN, halign: "right" },
+      7: { cellWidth: COL_PT, halign: "right" },
     },
     didDrawCell: (data) => {
       if (data.section !== "body" || data.column.index !== 3) return;
@@ -291,47 +387,82 @@ export const exportarCotizacionPdf = async (cotizacion) => {
       }
     },
   });
-  y = doc.lastAutoTable.finalY + 4;
+
+  // ─── Pie: tabla Moneda/Forma de pago/Tiempo de entrega + Subtotal/IGV/Total.
+  // Pegada directamente debajo de la tabla de ítems (sin espacio de por
+  // medio, para que ambas se vean como una sola tabla continua — pedido del
+  // usuario) y con columnas LITERALES (sin colSpan) cuyos anchos se derivan
+  // de las mismas constantes COL_* que la tabla de ítems de arriba, para que
+  // calcen siempre exacto (jspdf-autotable no garantiza que el ancho de una
+  // celda con colSpan sea la suma exacta de los columnStyles de las columnas
+  // que abarca cuando esas columnas nunca aparecen como celda suelta en
+  // ninguna fila de ESTA tabla — bug real, confirmado 2026-09-11). Mapeo de
+  // columnas pedido por el usuario: col0 (etiqueta) = ítems.col0+1+2,
+  // col1 (valor) = ítems.col3, col2 (etiqueta total) = ítems.col4 (PRECIO
+  // UNITARIO), col3 (valor total) = ítems.col5+col6+col7 combinadas
+  // (DESCUENTO + PRECIO + PRECIO TOTAL) para que el borde derecho siga
+  // calzando con el de arriba.
+  const totColLabelW = COL_COD + COL_CANT + COL_UM;
+  const totColDescW = CONTENT_W - totColLabelW - COL_PU - COL_DESC - COL_PN - COL_PT;
+  y = doc.lastAutoTable.finalY;
 
   if (y + 60 > PAGE_H - 15) { doc.addPage(); y = 15; }
 
-  // ─── Pie: Moneda / Forma de pago / Tiempo de entrega (izquierda) + Subtotal/IGV/Total (derecha) ───
-  const totW = 80, totX = PAGE_W - M - totW, filaTotH = 7;
-  const yPieInicio = y;
-  const anchoIzqPie = CONTENT_W - totW - 6;
-  doc.setFontSize(8.5);
-  let yPie = y;
-  yPie += labelValor(M, yPie, "MONEDA: ", cotizacion.moneda === "USD" ? "DÓLARES AMERICANOS" : "SOLES", anchoIzqPie) * 4.2;
-  yPie += labelValor(M, yPie, "FORMA DE PAGO: ", cotizacion.condicionPago, anchoIzqPie) * 4.2;
-  // Texto fijo — no es un campo editable, ver spec (decisión del usuario).
-  yPie += labelValor(M, yPie, "TIEMPO DE ENTREGA: ", "DÍAS HÁBILES", anchoIzqPie) * 4.2;
-
-  const totales = [
-    ["SUB TOTAL", `${simboloDoc} ${Number(cotizacion.subtotal || 0).toFixed(2)}`, false],
-    ["I.G.V (18%)", `${simboloDoc} ${Number(cotizacion.igv || 0).toFixed(2)}`, false],
-    ["TOTAL", `${simboloDoc} ${Number(cotizacion.total || 0).toFixed(2)}`, true],
-  ];
-  let yTot = yPieInicio;
-  totales.forEach(([label, valor, negrita]) => {
-    doc.setDrawColor(0);
-    doc.rect(totX, yTot, totW, filaTotH);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(negrita ? 9 : 8);
-    doc.text(label, totX + 3, yTot + filaTotH / 2 + 1.2);
-    doc.text(valor, totX + totW - 3, yTot + filaTotH / 2 + 1.2, { align: "right" });
-    yTot += filaTotH;
+  autoTable(doc, {
+    startY: y,
+    body: [
+      [
+        { content: "MONEDA", styles: { fontStyle: "bold", halign: "left" } },
+        { content: cotizacion.moneda === "USD" ? "DÓLARES AMERICANOS" : "SOLES" },
+        { content: "SUB TOTAL", styles: { fontStyle: "bold" } },
+        { content: `${simboloDoc} ${Number(cotizacion.subtotal || 0).toFixed(2)}`, styles: { halign: "right" } },
+      ],
+      [
+        { content: "FORMA DE PAGO", styles: { fontStyle: "bold", halign: "left" } },
+        { content: cotizacion.condicionPago || "—" },
+        { content: "I.G.V (18%)", styles: { fontStyle: "bold" } },
+        { content: `${simboloDoc} ${Number(cotizacion.igv || 0).toFixed(2)}`, styles: { halign: "right" } },
+      ],
+      [
+        { content: "TIEMPO DE ENTREGA", styles: { fontStyle: "bold", halign: "left" } },
+        // Texto fijo — no es un campo editable, ver spec (decisión del usuario).
+        { content: "DÍAS HÁBILES" },
+        { content: "TOTAL", styles: { fontStyle: "bold", fontSize: 9 } },
+        { content: `${simboloDoc} ${Number(cotizacion.total || 0).toFixed(2)}`, styles: { fontStyle: "bold", fontSize: 9, halign: "right" } },
+      ],
+    ],
+    theme: "grid",
+    margin: { left: M, right: M },
+    styles: { fontSize: 7, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.1 },
+    columnStyles: {
+      0: { cellWidth: totColLabelW },
+      1: { cellWidth: totColDescW },
+      2: { cellWidth: COL_PU + COL_DESC },
+      3: { cellWidth: COL_PN + COL_PT },
+    },
   });
-
-  y = Math.max(yPie, yTot) + 4;
+  y = doc.lastAutoTable.finalY + 4;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6);
   doc.text("** VALIDEZ DE LA OFERTA 15 DÍAS", M, y); y += 4;
   doc.text("** CONSULTAR CONDICIONES DE TRANSPORTE", M, y); y += 8;
 
-  if (y + 40 > PAGE_H - 15) { doc.addPage(); y = 15; }
+  // Ambos bloques de cierre (firma a la izquierda, caja de cuentas bancarias
+  // a la derecha) arrancan en el mismo `y` — van lado a lado, no apilados
+  // (corrección del usuario contra el Excel de referencia).
+  const cajaX = PAGE_W / 2 + 6;
+  const cajaW = PAGE_W - M - cajaX;
+  const cajaPad = 4;
+  // 8 líneas de texto × 4mm + 2 gaps de 2mm entre los 3 grupos de cuenta +
+  // 3mm de offset antes de la primera línea + padding arriba/abajo (cajaPad
+  // ×2) — debe coincidir exactamente con lo que recorre `lineaCaja()` más
+  // abajo para que la caja no corte el texto.
+  const cajaAltura = cajaPad + 3 + 4 * 8 + 2 * 2 + cajaPad;
+  if (y + Math.max(40, cajaAltura + 8) > PAGE_H - 15) { doc.addPage(); y = 15; }
+  const yBloque = y;
 
-  // ─── Cierre: generar OC a nombre de + firma dinámica del creador ───
+  // ─── Cierre: generar OC a nombre de + firma dinámica del creador (columna izquierda) ───
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.text("EN CASO DE SER FAVORECIDOS", PAGE_W / 4, y, { align: "center" });
@@ -369,34 +500,48 @@ export const exportarCotizacionPdf = async (cotizacion) => {
     doc.text(creador.telefono, PAGE_W / 4, y, { align: "center" });
 
   }
-  y += 6;
 
-  if (y + 34 > PAGE_H - 15) { doc.addPage(); y = 15; }
+  // ─── Cuentas bancarias — caja mostaza con borde azul, a la derecha del
+  // bloque "EN CASO DE SER FAVORECIDOS" (mismo `yBloque` de arranque), en
+  // vez de ir apiladas debajo a lo ancho de toda la hoja.
+  doc.setFillColor(...MOSTAZA);
+  doc.setDrawColor(...AZUL);
+  doc.setLineWidth(0.4);
+  doc.rect(cajaX, yBloque, cajaW, cajaAltura, "FD");
 
-  // ─── Cuentas bancarias ───
-  const logoAltoBanco = 8;
+  // Logo BCP como insignia flotante en la esquina superior derecha de la
+  // caja (no ocupa una fila propia en el flujo de texto — ver captura de
+  // referencia del usuario).
   if (logoBcp) {
-    const w = logoAltoBanco * (logoBcp.naturalWidth / logoBcp.naturalHeight);
-    doc.addImage(logoBcp, formatoImagen(logoBcp), PAGE_W / 2 - w / 2, y, w, logoAltoBanco);
+    const hLogo = LOGO_ALTO.bcp;
+    const wLogo = hLogo * (logoBcp.naturalWidth / logoBcp.naturalHeight);
+    const logoBcpSinFondo = quitarFondoBlanco(logoBcp);
+    const xBcp = LOGO_POS.bcp.x ?? (cajaX + cajaW - wLogo - cajaPad);
+    const yBcp = LOGO_POS.bcp.y ?? (yBloque + cajaPad - 1);
+    doc.addImage(logoBcpSinFondo || logoBcp, "PNG", xBcp, yBcp, wLogo, hLogo);
   }
-  y += logoAltoBanco + 3;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  const lineaCentrada = (texto, negrita = false) => {
+
+  let yCaja = yBloque + cajaPad + 3;
+  const cxCaja = cajaX + cajaW / 2;
+  const lineaCaja = (texto, negrita = false) => {
     doc.setFont("helvetica", negrita ? "bold" : "normal");
-    doc.text(texto, PAGE_W / 2, y, { align: "center" });
-    y += 4;
+    doc.setFontSize(8);
+    doc.setTextColor(0, 0, 0);
+    doc.text(texto, cxCaja, yCaja, { align: "center" });
+    yCaja += 4;
   };
-  lineaCentrada("CUENTA CORRIENTE BCP DÓLARES", true);
-  lineaCentrada(`CÓDIGO DE CUENTA: ${BANCOS.bcpCuentaDolares}`);
-  lineaCentrada(`CCI: ${BANCOS.bcpCciDolares}`);
-  y += 2;
-  lineaCentrada("CUENTA CORRIENTE BCP SOLES", true);
-  lineaCentrada(`CÓDIGO DE CUENTA: ${BANCOS.bcpCuentaSoles}`);
-  lineaCentrada(`CCI: ${BANCOS.bcpCciSoles}`);
-  y += 2;
-  lineaCentrada("CUENTA DE DETRACCIÓN BANCO DE LA NACIÓN S/.", true);
-  lineaCentrada(BANCOS.bnCuentaDetraccion);
+  lineaCaja("CUENTA CORRIENTE BCP DÓLARES", true);
+  lineaCaja(`CÓDIGO DE CUENTA: ${BANCOS.bcpCuentaDolares}`);
+  lineaCaja(`CCI: ${BANCOS.bcpCciDolares}`);
+  yCaja += 2;
+  lineaCaja("CUENTA CORRIENTE BCP SOLES", true);
+  lineaCaja(`CÓDIGO DE CUENTA: ${BANCOS.bcpCuentaSoles}`);
+  lineaCaja(`CCI: ${BANCOS.bcpCciSoles}`);
+  yCaja += 2;
+  lineaCaja("CUENTA DE DETRACCIÓN BANCO DE LA NACIÓN S/.", true);
+  lineaCaja(BANCOS.bnCuentaDetraccion);
+
+  y = Math.max(y, yBloque + cajaAltura) + 6;
 
   doc.save(`Cotización N° ${codigoCompleto}.pdf`);
 };

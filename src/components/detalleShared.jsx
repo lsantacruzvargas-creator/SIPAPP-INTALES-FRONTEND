@@ -90,7 +90,7 @@ export function FlujoNegocio({ pasos }) {
 }
 
 /* ─── Tarjeta de relación ───────────────────────────────────────── */
-export function TarjetaRelacion({ tipo, codigo, numero, children, vacio, actual, onClick, cargando, onCrear, crearLabel }) {
+export function TarjetaRelacion({ tipo, codigo, numero, children, vacio, actual, onClick, cargando, onCrear, crearLabel, crearDeshabilitado }) {
   const t = TEMAS[tipo];
   const Icon = t.icon;
   if (actual) {
@@ -123,7 +123,11 @@ export function TarjetaRelacion({ tipo, codigo, numero, children, vacio, actual,
         </div>
         <div>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.label}</p>
-          {onCrear ? (
+          {crearDeshabilitado ? (
+            <p title="Próximamente" className="text-xs text-gray-300 mt-0.5 cursor-not-allowed select-none">
+              + Crear {crearLabel || t.label}
+            </p>
+          ) : onCrear ? (
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onCrear(); }}

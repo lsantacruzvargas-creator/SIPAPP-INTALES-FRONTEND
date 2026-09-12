@@ -8,7 +8,6 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Empresas from "./pages/Empresas";
 import ListaCotizaciones from "./pages/ListaCotizaciones";
-import Cotizaciones from "./pages/Cotizaciones";
 import ListaOrdenesTrabajo from "./pages/ListaOrdenesTrabajo";
 import ListaFacturas from "./pages/ListaFacturas";
 import Reportes from "./pages/Reportes";
@@ -94,15 +93,6 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/cotizaciones/nueva"
-        element={
-          <ProtectedRoute roles={["admin", "asistente", "jefatura"]}>
-            <Layout><Cotizaciones /></Layout>
-          </ProtectedRoute>
-        }
-      />
-
       <Route
         path="/ordenes-trabajo"
         element={
