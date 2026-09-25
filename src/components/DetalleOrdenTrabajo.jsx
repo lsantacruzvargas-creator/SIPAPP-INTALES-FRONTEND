@@ -7,6 +7,8 @@ import ModalOrdenCompra from "./ModalOrdenCompra";
 import SelectorEmpresas from "./SelectorEmpresas";
 import ModalNuevaSubOT from "./ModalNuevaSubOT";
 import ModalRequerimiento from "./ModalRequerimiento";
+import ModalNotificacionTrabajo from "./ModalNotificacionTrabajo";
+import ModalDetalleNotificacionTrabajo from "./ModalDetalleNotificacionTrabajo";
 import TablaServiciosExternos from "./TablaServiciosExternos";
 import TarjetaArchivosRelacionados from "./TarjetaArchivosRelacionados";
 import TablaScroll from "./TablaScroll";
@@ -32,6 +34,33 @@ const colorEstado = (e, activo) => {
   if (e === "en progreso") return "bg-blue-600 text-white";
   return "bg-amber-500 text-white";
 };
+
+// Descripción de un ítem de requerimiento — para solicitudes de compra sin
+// SKU todavía no hay `material.nombre`, el detalle real vive en
+// `camposCompra` (categoría "Otros" siempre trae `.descripcion`; el resto de
+// categorías traen campos dinámicos definidos por el almacenero — ahí no hay
+// una key fija, así que se cae a `categoriaNombre`).
+const descripcionItem = (it) => it.esSolicitudCompra
+  ? (it.camposCompra?.descripcion || it.categoriaNombre)
+  : (it.material?.nombre || "—");
+
+// Estado de un ítem de requerimiento — una solicitud de compra sigue el
+// pipeline de pago (por_procesar/pendiente_pago/pagado, ver
+// Requerimientos.jsx), independiente del pipeline de despacho de almacén
+// (pendiente/atendido/rechazado) que sí aplica a los ítems de stock.
+const ESTADO_ITEM_COMPRA = {
+  por_procesar:   { clase: "bg-gray-100 text-gray-600",   label: "Por procesar" },
+  pendiente_pago: { clase: "bg-amber-100 text-amber-700", label: "Pendiente de pago" },
+  pagado:         { clase: "bg-green-100 text-green-700", label: "Pagado" },
+};
+const ESTADO_ITEM_STOCK = {
+  pendiente: { clase: "bg-blue-100 text-blue-700",  label: "Pendiente" },
+  atendido:  { clase: "bg-green-100 text-green-700", label: "Atendido" },
+  rechazado: { clase: "bg-red-100 text-red-700",     label: "Rechazado" },
+};
+const estadoItem = (it) => it.esSolicitudCompra
+  ? (ESTADO_ITEM_COMPRA[it.estadoPago || "por_procesar"] || ESTADO_ITEM_COMPRA.por_procesar)
+  : (ESTADO_ITEM_STOCK[it.estado] || { clase: "bg-gray-100 text-gray-500", label: it.estado || "—" });
 
 export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardada, onNavegar }) {
   const [ot, setOt] = useState(inicial);
@@ -70,6 +99,8 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const esVistaLimitada = esTecnico || ["supervisor", "planner"].includes(rolActual);
   // Tabla de Servicios Externos: la ven todos los roles menos técnico.
   const puedeVerServicios = !esTecnico;
+  // Notificar trabajo (HH/HM) — supervisor, +admin como excepción.
+  const puedeNotificarTrabajo = ["supervisor", "admin"].includes(rolActual);
   // Mismo criterio que DetalleCotizacion.jsx/ModalNuevaCotizacion.jsx —
   // Planner puede ver el card de Cotización (ver más abajo) pero nunca su monto.
   const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(rolActual);
@@ -101,6 +132,9 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const [requerimientos, setRequerimientos] = useState([]);
   const [crearRequerimientoOpen, setCrearRequerimientoOpen] = useState(false);
   const [servicios, setServicios] = useState([]);
+  const [notificacionesTrabajo, setNotificacionesTrabajo] = useState([]);
+  const [crearNotificacionOpen, setCrearNotificacionOpen] = useState(false);
+  const [detalleNotificacion, setDetalleNotificacion] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const [crearOCOpen, setCrearOCOpen] = useState(false);
@@ -182,6 +216,9 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
       fetchAuth(`/servicios-externos?ordenTrabajoPadre=${ot._id}`)
         .then(r => r.ok && r.json())
         .then(servs => setServicios(servs || []));
+      fetchAuth(`/notificaciones-trabajo?ordenTrabajoPadre=${ot._id}`)
+        .then(r => r.ok && r.json())
+        .then(nots => setNotificacionesTrabajo(nots || []));
     }
   };
 
@@ -189,10 +226,10 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     fetchAuth("/empresas").then((res) => res.ok && res.json().then(setEmpresas));
 
   useEffect(() => {
-    // Encargado de Progreso se elige entre los usuarios con login y alguno
-    // de los 3 roles de técnico (ver Fase 13 — antes salían de Personal, sin
-    // relación real con quién puede loguearse como técnico).
-    fetchAuth("/usuarios/lista").then(r => r.ok && r.json()).then(u => setUsuarios((u || []).filter(x => ["tecnico", "tecnico_prueba", "tecnico_intervencion"].includes(x.rol))));
+    // Encargado de Progreso se elige entre los usuarios con login y rol
+    // Supervisor (antes eran los 3 roles de técnico — revisión del usuario,
+    // 2026-09-14).
+    fetchAuth("/usuarios/lista").then(r => r.ok && r.json()).then(u => setUsuarios((u || []).filter(x => x.rol === "supervisor")));
     cargarEmpresas();
     cargarRelaciones();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -758,6 +795,40 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                 </TarjetaRelacion>
               </>
             )}
+
+            {puedeVerServicios && (notificacionesTrabajo.length === 0 ? (
+              <TarjetaRelacion tipo="notificacionTrabajo" vacio
+                onCrear={puedeNotificarTrabajo && !ot.anulado ? () => setCrearNotificacionOpen(true) : undefined}
+                crearLabel="notificación de trabajo" />
+            ) : (
+              <TarjetaRelacion tipo="notificacionTrabajo"
+                codigo={notificacionesTrabajo.length === 1 ? notificacionesTrabajo[0].codigo : `${notificacionesTrabajo.length} notificaciones`}
+                onClick={notificacionesTrabajo.length === 1 ? () => setDetalleNotificacion(notificacionesTrabajo[0]) : undefined}>
+                {notificacionesTrabajo.length === 1 ? (
+                  <Chip className={notificacionesTrabajo[0].estado === "abierta" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}>
+                    {notificacionesTrabajo[0].estado === "abierta" ? "Abierta" : "Cerrada"}
+                  </Chip>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {notificacionesTrabajo.map(n => (
+                      <button key={n._id} type="button"
+                        onClick={(e) => { e.stopPropagation(); setDetalleNotificacion(n); }}
+                        className="font-mono text-xs text-orange-700 bg-white rounded-lg px-2 py-0.5 shadow-sm hover:underline">
+                        {n.codigo}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {puedeNotificarTrabajo && !ot.anulado && (
+                  <button type="button"
+                    onClick={(e) => { e.stopPropagation(); setCrearNotificacionOpen(true); }}
+                    className="text-xs text-blue-600 hover:text-blue-800 underline mt-0.5">
+                    + Notificar otro trabajo
+                  </button>
+                )}
+              </TarjetaRelacion>
+            ))}
+
           </section>
         </div>
 
@@ -765,6 +836,8 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
           <TarjetaArchivosRelacionados
             ordenId={ot._id}
             archivos={ot.archivos}
+            archivosVinculados={cot?.archivos || []}
+            vinculadoLabel="la Cotización"
             soloLectura={ot.anulado || cadenaCerrada}
             onCambio={(actualizada) => setOt(actualizada)}
           />
@@ -796,6 +869,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                       <th className="text-left py-2 pr-3">Código</th>
                       <th className="text-left py-2 pr-3">Solicitado por</th>
                       <th className="text-left py-2 pr-3">Ítems</th>
+                      <th className="text-right py-2 pr-3">Cantidad</th>
                       <th className="text-left py-2 pr-3">Sub-OT</th>
                       <th className="text-left py-2 pr-3">Estado</th>
                       <th className="text-left py-2 pr-3">Fecha</th>
@@ -803,7 +877,6 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {requerimientos.map(req => {
-                      const pendientes = req.items.filter(it => it.estado === "pendiente").length;
                       const otOrigenId = req.ordenTrabajo?._id || req.ordenTrabajo;
                       const esPrincipal = otOrigenId === ot._id;
                       const subOrigen = subOTs.find(s => s._id === otOrigenId);
@@ -813,18 +886,26 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                           <td className="py-2 pr-3 text-gray-600">{req.solicitadoPor}</td>
                           <td className="py-2 pr-3 text-gray-600">
                             {req.items.map((it, i) => (
-                              <span key={i} className="block text-xs">
-                                {it.esSolicitudCompra ? `${it.categoriaNombre} (compra)` : it.material?.nombre} — {it.cantidad}
-                              </span>
+                              <span key={i} className="block text-xs">{descripcionItem(it)}</span>
+                            ))}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-gray-600">
+                            {req.items.map((it, i) => (
+                              <span key={i} className="block text-xs">{it.cantidad}</span>
                             ))}
                           </td>
                           <td className="py-2 pr-3 text-gray-600">
                             {esPrincipal ? "Principal" : (subOrigen?.numeroOT || req.ordenTrabajo?.numeroOT || "—")}
                           </td>
                           <td className="py-2 pr-3">
-                            <Chip className={pendientes > 0 ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}>
-                              {pendientes > 0 ? `${pendientes} pendiente(s)` : "Completado"}
-                            </Chip>
+                            {req.items.map((it, i) => {
+                              const { clase, label } = estadoItem(it);
+                              return (
+                                <span key={i} className="block mb-1 last:mb-0">
+                                  <Chip className={clase}>{label}</Chip>
+                                </span>
+                              );
+                            })}
                           </td>
                           <td className="py-2 pr-3 text-gray-500">
                             {req.createdAt ? formatearFecha(req.createdAt) : "—"}
@@ -851,9 +932,35 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
         <ModalRequerimiento
           ot={ot}
           onClose={() => setCrearRequerimientoOpen(false)}
-          onCreado={() => { setCrearRequerimientoOpen(false); cargarRelaciones(); }}
+          onCreado={() => {
+            setCrearRequerimientoOpen(false);
+            cargarRelaciones();
+          }}
         />
       )}
+
+      {crearNotificacionOpen && (
+        <ModalNotificacionTrabajo
+          ot={ot}
+          onClose={() => setCrearNotificacionOpen(false)}
+          onCreado={() => {
+            setCrearNotificacionOpen(false);
+            cargarRelaciones();
+          }}
+        />
+      )}
+
+      {detalleNotificacion && (
+        <ModalDetalleNotificacionTrabajo
+          notificacion={detalleNotificacion}
+          onClose={() => setDetalleNotificacion(null)}
+          onActualizada={(actualizada) => {
+            setDetalleNotificacion(actualizada);
+            cargarRelaciones();
+          }}
+        />
+      )}
+
 
       {crearSubOTOpen && (
         <ModalNuevaSubOT
@@ -907,6 +1014,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
           }}
         />
       )}
+
     </div>
   );
 }

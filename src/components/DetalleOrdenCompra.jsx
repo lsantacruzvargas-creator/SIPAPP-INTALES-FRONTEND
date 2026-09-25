@@ -4,6 +4,7 @@ import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { formatearFecha } from "../utils/fecha";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
 import ModalDetalleGuia from "./ModalDetalleGuia";
+import ModalReporteCosto from "./ModalReporteCosto";
 import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgePago, badgeOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
@@ -47,6 +48,11 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   const [informes, setInformes]   = useState([]);
   const [gres, setGres]           = useState([]);
   const [guiaDetalle, setGuiaDetalle] = useState(null);
+  const [requerimientos, setRequerimientos] = useState([]);
+  const [servicios, setServicios] = useState([]);
+  const [notificacionesTrabajo, setNotificacionesTrabajo] = useState([]);
+  const [tipoCambio, setTipoCambio] = useState(null);
+  const [reporteOpen, setReporteOpen] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState("");
   const [cargandoFactura, setCargandoFactura] = useState(false);
@@ -75,6 +81,11 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   const puedeCrearFacturaRol = ["admin", "facturacion", "jefatura"].includes(rolActual);
   // Mismo set de roles que ve el card de GRE en DetalleOrdenTrabajo.jsx.
   const puedeGenerarGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
+  // Card "Costo de fabricación" (OC vs costo real de la OT) — jefatura y
+  // vendedor, +admin como excepción (mismo criterio que el resto de acciones
+  // restringidas de la app), incluso aunque vendedor no tenga
+  // puedeVerPrecios general (acá compara, no edita el subtotal).
+  const puedeVerReporte = ["jefatura", "vendedor", "admin"].includes(rolActual);
   const exigeHes  = !!ordenActual.empresa?.requiereHes;
   const exigeActa = !!ordenActual.empresa?.requiereActaConformidad;
 
@@ -107,8 +118,8 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   };
 
   // `orden.cotizacion` viene de un populate() acotado (solo trae codigo,
-  // numeroCotizacion, titulo, total, tipo, aprobado, enviado, informeEnviado
-  // — ver Backend/src/routes/ordenesCompra.js) — pasarlo tal cual a
+  // numeroCotizacion, titulo, total, tipo, moneda — ver
+  // Backend/src/routes/ordenesCompra.js) — pasarlo tal cual a
   // DetalleCotizacion dejaba el resto de sus ~25 campos (empresa, planta,
   // items, moneda, etc.) en blanco. Mismo fix que `abrirFactura`.
   const abrirCotizacion = async () => {
@@ -171,6 +182,20 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
           fetchAuth(`/guias?ordenesTrabajo=${found._id}&estado=ACEPTADO&limit=1000`)
             .then(r => r.ok && r.json())
             .then(data => setGres(data?.ok ? data.data : []));
+        }
+        if (puedeVerReporte) {
+          // Agregado (propia OT + todas sus sub-OTs) — mismo patrón
+          // `?ordenTrabajoPadre=` ya usado en DetalleOrdenTrabajo.jsx.
+          fetchAuth(`/requerimientos?ordenTrabajoPadre=${found._id}`)
+            .then(r => r.ok && r.json())
+            .then(reqs => setRequerimientos(reqs || []));
+          fetchAuth(`/servicios-externos?ordenTrabajoPadre=${found._id}`)
+            .then(r => r.ok && r.json())
+            .then(servs => setServicios(servs || []));
+          fetchAuth(`/notificaciones-trabajo?ordenTrabajoPadre=${found._id}`)
+            .then(r => r.ok && r.json())
+            .then(nots => setNotificacionesTrabajo(nots || []));
+          fetchAuth("/tipo-cambio").then(r => r.ok && r.json()).then(d => d && setTipoCambio(d.valor));
         }
       }
     });
@@ -254,6 +279,29 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   const factura = facturaVinculada;
   const ultimo  = informes[informes.length - 1];
 
+  // Costo de fabricación (OC vs costo real de la OT) — HH/HM cuentan apenas
+  // se notifican; materiales/servicios solo cuando llegan a "pagado" (ver
+  // spec 2026-09-22). Cálculo 100% client-side, mismo criterio que
+  // ListaOrdenesCompra.jsx/Dashboard.jsx usan para totales derivados.
+  const costoHH = notificacionesTrabajo.flatMap(n => n.items)
+    .filter(it => it.tipo === "hombre" && !it.anulado)
+    .reduce((s, it) => s + it.costoTotal, 0);
+  const costoHM = notificacionesTrabajo.flatMap(n => n.items)
+    .filter(it => it.tipo === "maquina" && !it.anulado)
+    .reduce((s, it) => s + it.costoTotal, 0);
+  const costoMateriales = requerimientos.flatMap(r => r.items)
+    .filter(it => it.esSolicitudCompra && it.estadoPago === "pagado")
+    .reduce((s, it) => s + (Number(it.montoUnitario) || 0) * (Number(it.cantidad) || 0) + (Number(it.costoTransporte) || 0), 0);
+  const costoServicios = servicios.filter(s => s.estadoPago === "pagado" && !s.anulado)
+    .reduce((s, v) => s + (Number(v.costo) || 0) * (Number(v.cantidad) || 0) + (Number(v.costoTransporte) || 0), 0);
+  const costoFabricacionPEN = costoHH + costoHM + costoMateriales + costoServicios;
+  const costoFabricacion = orden.moneda === "USD" && tipoCambio > 0
+    ? costoFabricacionPEN / tipoCambio
+    : costoFabricacionPEN;
+  const ocSubtotal = Number(orden.subtotal ?? orden.monto) || 0;
+  const margen = ocSubtotal - costoFabricacion;
+  const margenPct = ocSubtotal > 0 ? (margen / ocSubtotal) * 100 : null;
+
   const pasos = [
     { tipo: "cotizacion", activo: !!cot,             codigo: cot?.codigo },
     { tipo: "ot",         activo: !!ot,              codigo: ot?.codigo },
@@ -289,7 +337,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
                 {puedeVerPrecios && (
                   <>
                     <p className="text-[10px] text-white/60 uppercase tracking-widest leading-none">Total a pagar</p>
-                    <p className="text-lg font-bold leading-tight">{money(calc.totalAPagar, cot?.moneda)}</p>
+                    <p className="text-lg font-bold leading-tight">{money(calc.totalAPagar, orden.moneda)}</p>
                   </>
                 )}
                 {factura?.estadoPago && (
@@ -427,7 +475,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
                 placeholder="Descripción del servicio u obra" className={INP} />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4" hidden>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">N° guía de llegada</label>
                 <input name="numeroGuiaEmision" value={form.numeroGuiaEmision} onChange={handleChange}
@@ -440,7 +488,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4" hidden>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Código SAP</label>
                 <input name="codigoSap" value={form.codigoSap} onChange={handleChange}
@@ -458,8 +506,8 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Subtotal sin IGV</label>
                   <input type="number" name="subtotal" value={form.subtotal} onChange={handleChange}
-                    disabled={!puedeVerPrecios}
-                    step="0.01" min="0" placeholder="0.00" className={`${INP} text-lg font-semibold`} />
+                    disabled
+                    step="0.01" min="0" placeholder="0.00" className={`${INP} text-lg font-semibold disabled:bg-gray-50 disabled:text-gray-500`} />
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div className="text-center">
@@ -477,7 +525,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
                 </div>
                 <div className="flex items-center justify-between pt-3 border-t border-gray-200">
                   <span className="text-sm font-medium text-gray-600">Total a pagar</span>
-                  <span className="text-lg font-bold text-blue-700">{money(calc.totalAPagar, cot?.moneda)}</span>
+                  <span className="text-lg font-bold text-blue-700">{money(calc.totalAPagar, orden.moneda)}</span>
                 </div>
               </div>
             )}
@@ -556,7 +604,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
               onClick={factura ? abrirFactura : undefined} cargando={cargandoFactura || cargandoCrearFactura}
               onCrear={!factura && !orden.anulado && puedeCrearFacturaRol ? crearFacturaDesdeOC : undefined} crearLabel="Factura">
               {puedeVerPrecios && (factura?.totalAPagar || factura?.total) > 0 && (
-                <p className="text-xs text-gray-500">{money(factura.totalAPagar ?? factura.total, cot?.moneda)}</p>
+                <p className="text-xs text-gray-500">{money(factura.totalAPagar ?? factura.total, orden.moneda)}</p>
               )}
               {factura?.estadoPago && <Chip className={badgePago(factura.estadoPago)}>{factura.estadoPago}</Chip>}
               {factura && !orden.anulado && puedeCrearFacturaRol && (
@@ -569,12 +617,40 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
                 </button>
               )}
             </TarjetaRelacion>
+
+            {puedeVerReporte && (
+              <div onClick={() => setReporteOpen(true)} role="button"
+                className="border border-gray-100 bg-white rounded-2xl p-5 min-h-[112px] cursor-pointer hover:shadow-md transition">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Costo de fabricación</p>
+                <p className={`text-xl font-extrabold ${margen >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {money(margen, orden.moneda)}
+                </p>
+                <p className="text-xs text-gray-400">
+                  {margenPct != null ? `${margenPct.toFixed(1)}% de margen` : "Sin OT vinculada para comparar"}
+                </p>
+              </div>
+            )}
           </section>
         </div>
       </div>
 
       {guiaDetalle && (
         <ModalDetalleGuia guia={guiaDetalle} onClose={() => setGuiaDetalle(null)} />
+      )}
+
+      {reporteOpen && (
+        <ModalReporteCosto
+          moneda={orden.moneda}
+          ocSubtotal={ocSubtotal}
+          costoHH={costoHH}
+          costoHM={costoHM}
+          costoMateriales={costoMateriales}
+          costoServicios={costoServicios}
+          costoFabricacion={costoFabricacion}
+          margen={margen}
+          margenPct={margenPct}
+          onClose={() => setReporteOpen(false)}
+        />
       )}
     </div>
   );

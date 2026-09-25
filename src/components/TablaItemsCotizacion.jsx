@@ -27,10 +27,8 @@ export default function TablaItemsCotizacion({
   const [confirmandoQuitarOT, setConfirmandoQuitarOT] = useState(null);
 
   // `puedeEditar` es el permiso de rol (admin/asistente); `disabled` es un
-  // bloqueo por estado del documento (anulado o enviado) que aplica incluso
-  // a quien sí tiene el rol. Los campos/acciones de cada fila deben respetar
-  // ambos — antes solo revisaban `puedeEditar`, así que una cotización
-  // "enviada" seguía siendo editable ítem por ítem pese al `disabled`.
+  // bloqueo por estado del documento (anulado) que aplica incluso a quien
+  // sí tiene el rol. Los campos/acciones de cada fila deben respetar ambos.
   const editable = puedeEditar && !disabled;
   const puedeAgregar = editable;
 
@@ -230,9 +228,15 @@ export default function TablaItemsCotizacion({
                       className={`w-full ${editable ? INP : "bg-transparent border-transparent text-sm px-2 py-1"}`} />
                   </td>
                   <td className="px-3 py-3">
+                    {/* La clase `uppercase` de abajo solo transforma la
+                        VISUAL — el valor guardado seguía con el case real
+                        tipeado, y el PDF (sin esa clase CSS) lo mostraba tal
+                        cual, distinto de lo que se veía en pantalla. Forzar
+                        el valor a mayúsculas acá es lo que realmente lo deja
+                        en mayúsculas también en el PDF. */}
                     {editable ? (
                       <input value={item.descripcion}
-                        onChange={(e) => handleItem(item._key, "descripcion", e.target.value)}
+                        onChange={(e) => handleItem(item._key, "descripcion", e.target.value.toUpperCase())}
                         placeholder="Descripción del ítem"
                         className={`w-full font-semibold text-gray-800 text-xs uppercase tracking-wide border border-transparent rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-300 focus:border-sky-300 ${intentoGuardar && descripcionInvalida(item) ? "border-red-400 ring-1 ring-red-300" : ""}`} />
                     ) : (

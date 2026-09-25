@@ -6,7 +6,7 @@ import TablaScroll from "../components/TablaScroll";
 import * as XLSX from "xlsx";
 
 const TH = "px-4 py-3 font-semibold text-gray-500 whitespace-nowrap";
-const VACIO = { facturacion: [], valorizado: { total: 0, materiales: [] }, consumo: [], ocSinHesActa: [], ranking: [], mora: [] };
+const VACIO = { facturacion: [], valorizado: { total: 0, materiales: [] }, costosFabricacion: [], ocSinHesActa: [], ranking: [], mora: [] };
 
 const nombreEmpresa = (e) => e?.razonSocial || "Sin empresa";
 const fecha = (f) => f ? formatearFecha(f) : "—";
@@ -51,12 +51,12 @@ export default function Reportes() {
     Promise.all([
       fetchAuth("/reportes/facturacion-por-empresa").then((r) => r.ok ? r.json() : []),
       fetchAuth("/reportes/valorizado-almacen").then((r) => r.ok ? r.json() : { total: 0, materiales: [] }),
-      fetchAuth("/reportes/consumo-por-ot").then((r) => r.ok ? r.json() : []),
+      fetchAuth("/reportes/costos-fabricacion").then((r) => r.ok ? r.json() : []),
       fetchAuth("/reportes/oc-sin-hes-acta").then((r) => r.ok ? r.json() : []),
       fetchAuth("/reportes/ranking-ot-cliente").then((r) => r.ok ? r.json() : []),
       fetchAuth("/reportes/mora-pago").then((r) => r.ok ? r.json() : []),
-    ]).then(([facturacion, valorizado, consumo, ocSinHesActa, ranking, mora]) => {
-      setData({ facturacion, valorizado, consumo, ocSinHesActa, ranking, mora });
+    ]).then(([facturacion, valorizado, costosFabricacion, ocSinHesActa, ranking, mora]) => {
+      setData({ facturacion, valorizado, costosFabricacion, ocSinHesActa, ranking, mora });
       setCargando(false);
     });
   }, []);
@@ -79,13 +79,18 @@ export default function Reportes() {
       "Stock":      m.stock,
       "Valorizado": m.valorizado,
     });
-    const filaConsumo = (c) => ({
-      "N° OT":            c.numeroOT,
-      "Titulo":           c.titulo,
-      "Empresa":          nombreEmpresa(c.empresa),
-      "Costo Materiales": c.costoMateriales,
-      "Costo Servicios":  c.costoServicios,
-      "Costo Total":      c.costoTotal,
+    const filaCostoFabricacion = (c) => ({
+      "N° OT":              c.numeroOT,
+      "N° Orden de Compra": c.numeroOrdenCompra || "—",
+      "Titulo":             c.titulo,
+      "Empresa":            nombreEmpresa(c.empresa),
+      "OC sin IGV":         c.ocSubtotal ?? "—",
+      "HH":                 c.costoHH,
+      "HM":                 c.costoHM,
+      "Materiales":         c.costoMateriales,
+      "Servicios":          c.costoServicios,
+      "Costo de Fabricacion": c.costoFabricacion,
+      "Margen":             c.margen ?? "—",
     });
     const filaOCsinHesActa = (o) => ({
       "N° Orden":   o.numeroOrden,
@@ -112,7 +117,7 @@ export default function Reportes() {
     [
       ["Facturacion x Empresa", data.facturacion.map(filaFacturacion)],
       ["Valorizado Almacen",    data.valorizado.materiales.map(filaMaterial)],
-      ["Consumo por OT",        data.consumo.map(filaConsumo)],
+      ["Costos de Fabricacion", data.costosFabricacion.map(filaCostoFabricacion)],
       ["OC sin HES-Acta",       data.ocSinHesActa.map(filaOCsinHesActa)],
       ["Ranking OT Cliente",    data.ranking.map(filaRanking)],
       ["Mora de Pago",          data.mora.map(filaMora)],
@@ -214,29 +219,43 @@ export default function Reportes() {
         </div>
       </div>
 
-      {/* 3. Consumo de RQ y Servicios Externos por OT */}
-      <Seccion titulo="Consumo de RQ y Servicios Externos por OT" acento="bg-indigo-500" count={data.consumo.length}>
+      {/* 3. Costos de Fabricación por OT */}
+      <Seccion titulo="Costos de Fabricación" acento="bg-indigo-500" count={data.costosFabricacion.length}>
         <thead className="bg-gray-50 text-xs uppercase tracking-wide border-b-2 border-gray-200">
           <tr>
             <th className={`${TH} text-left`}>N° OT</th>
+            <th className={`${TH} text-left`}>N° OC</th>
             <th className={`${TH} text-left`}>Título</th>
             <th className={`${TH} text-left`}>Empresa</th>
-            <th className={`${TH} text-right`}>Costo Materiales</th>
-            <th className={`${TH} text-right`}>Costo Servicios</th>
-            <th className={`${TH} text-right`}>Costo Total</th>
+            <th className={`${TH} text-right`}>OC sin IGV</th>
+            <th className={`${TH} text-right`}>HH</th>
+            <th className={`${TH} text-right`}>HM</th>
+            <th className={`${TH} text-right`}>Materiales</th>
+            <th className={`${TH} text-right`}>Servicios</th>
+            <th className={`${TH} text-right`}>Costo de Fabricación</th>
+            <th className={`${TH} text-right`}>Margen</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {data.consumo.length === 0 ? (
-            <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Sin datos</td></tr>
-          ) : data.consumo.map((c) => (
+          {data.costosFabricacion.length === 0 ? (
+            <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">Sin datos</td></tr>
+          ) : data.costosFabricacion.map((c) => (
             <tr key={c.otId} className="hover:bg-gray-50 transition-colors">
               <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{c.numeroOT}</td>
+              <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{c.numeroOrdenCompra || "—"}</td>
               <td className="px-4 py-3.5 text-gray-600">{c.titulo}</td>
               <td className="px-4 py-3.5 text-gray-700">{nombreEmpresa(c.empresa)}</td>
+              <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">
+                {c.ocSubtotal != null ? money(c.ocSubtotal) : "—"}
+              </td>
+              <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{money(c.costoHH)}</td>
+              <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{money(c.costoHM)}</td>
               <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{money(c.costoMateriales)}</td>
               <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{money(c.costoServicios)}</td>
-              <td className="px-4 py-3.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">{money(c.costoTotal)}</td>
+              <td className="px-4 py-3.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">{money(c.costoFabricacion)}</td>
+              <td className={`px-4 py-3.5 text-right font-bold tabular-nums whitespace-nowrap ${c.margen == null ? "text-gray-400" : c.margen >= 0 ? "text-green-600" : "text-red-600"}`}>
+                {c.margen != null ? money(c.margen) : "—"}
+              </td>
             </tr>
           ))}
         </tbody>

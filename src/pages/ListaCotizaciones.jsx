@@ -71,12 +71,7 @@ const totalesDuales = (c, tipoCambio) => {
   return { pen: total, usd: tc > 0 ? total / tc : null };
 };
 
-// Días transcurridos desde que se marcó "informe enviado" — null si nunca
-// se marcó (no hay `fechaInformeEnviado`).
-const diasDesdeInforme = (c) =>
-  c.fechaInformeEnviado ? Math.floor((Date.now() - new Date(c.fechaInformeEnviado).getTime()) / 86400000) : null;
-
-function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, tipoCambio, mostrarDiasInforme, puedeVerPrecios, mostrarEstadoServicio, mostrarTituloOT, otsPorCot, colOtEstrecha }) {
+function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, tipoCambio, puedeVerPrecios, mostrarEstadoServicio, mostrarTituloOT, otsPorCot, colOtEstrecha }) {
   return (
     <div className="mb-6">
       <div className="flex items-center gap-2 mb-3">
@@ -100,16 +95,12 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, t
               <th className={`${TH} text-left`}>Planta</th>
               {puedeVerPrecios && <th className={`${TH} text-right`}>Total sin IGV (S/)</th>}
               {puedeVerPrecios && <th className={`${TH} text-right`}>Total sin IGV (US$)</th>}
-              <th className={`${TH} text-center`}>Aprobado</th>
-              <th className={`${TH} text-center`}>Enviado</th>
-              <th className={`${TH} text-center`}>Informe enviado</th>
-              {mostrarDiasInforme && <th className={`${TH} text-center`}>Días desde informe enviado</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {cotizaciones.length === 0 ? (
               <tr>
-                <td colSpan={8 + (puedeVerPrecios ? 2 : 0) + (mostrarDiasInforme ? 1 : 0) + (mostrarEstadoServicio ? 3 : 0) + (mostrarTituloOT ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
+                <td colSpan={6 + (puedeVerPrecios ? 2 : 0) + (mostrarEstadoServicio ? 3 : 0) + (mostrarTituloOT ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
               </tr>
             ) : (
               cotizaciones.map((c) => {
@@ -177,35 +168,6 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, t
                   {puedeVerPrecios && (
                     <td className="px-4 py-3.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">
                       {usd != null ? usd.toLocaleString("es-PE", { minimumFractionDigits: 2 }) : "—"}
-                    </td>
-                  )}
-                  <td className="px-4 py-3.5 text-center">
-                    {c._esOT ? <span className="text-gray-300">—</span> : (
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wide whitespace-nowrap ${c.aprobado ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                        {c.aprobado ? "Aprobada" : "Pendiente"}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5 text-center">
-                    {c._esOT ? <span className="text-gray-300">—</span> : (
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wide whitespace-nowrap ${c.enviado ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                        {c.enviado ? "Enviada" : "No enviada"}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5 text-center">
-                    {c._esOT ? <span className="text-gray-300">—</span> : (
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wide whitespace-nowrap ${c.informeEnviado ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                        {c.informeEnviado ? "Enviado" : "No enviado"}
-                      </span>
-                    )}
-                  </td>
-                  {mostrarDiasInforme && (
-                    <td className="px-4 py-3.5 text-center text-gray-600 tabular-nums">
-                      {(() => {
-                        const dias = c._esOT ? null : diasDesdeInforme(c);
-                        return dias != null ? `${dias} día${dias !== 1 ? "s" : ""}` : <span className="text-gray-300">—</span>;
-                      })()}
                     </td>
                   )}
                 </tr>
@@ -412,10 +374,6 @@ export default function ListaCotizaciones() {
         "Total sin IGV (S/)":   pen != null ? pen.toFixed(2) : "—",
         "Total sin IGV (US$)":  usd != null ? usd.toFixed(2) : "—",
       } : {}),
-      "Aprobado":               c._esOT ? "—" : (c.aprobado ? "Aprobada" : "Pendiente"),
-      "Enviado":                c._esOT ? "—" : (c.enviado ? "Enviada" : "No enviada"),
-      "Informe enviado":        c._esOT ? "—" : (c.informeEnviado ? "Enviado" : "No enviado"),
-      "Días desde informe enviado": c._esOT ? "—" : (diasDesdeInforme(c) ?? "—"),
     };
   };
 
@@ -548,7 +506,6 @@ export default function ListaCotizaciones() {
           mostrarEstadoServicio
           mostrarTituloOT
           otsPorCot={otsPorCot}
-          mostrarDiasInforme
           colOtEstrecha
         />
       )}
@@ -577,7 +534,6 @@ export default function ListaCotizaciones() {
           mostrarEstadoServicio
           mostrarTituloOT
           otsPorCot={otsPorCot}
-          mostrarDiasInforme
         />
       )}
 

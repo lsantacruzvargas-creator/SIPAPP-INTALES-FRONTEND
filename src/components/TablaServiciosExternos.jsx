@@ -4,8 +4,17 @@ import { formatearFecha } from "../utils/fecha";
 import ModalServicioExterno from "./ModalServicioExterno";
 import TablaScroll from "./TablaScroll";
 import PromptAccion from "./PromptAccion";
+import { Chip } from "./detalleShared";
 
-const money = (v) => "S/ " + Number(v ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 });
+// Mismo pipeline de pago que Requerimientos.jsx (por_procesar → pendiente_pago
+// → pagado) — acá se resume en un solo Chip por fila, ya que a diferencia de
+// un Requerimiento (con ítems), un Servicio Externo es un único documento
+// con un solo `estadoPago`.
+const ESTADO_SERVICIO = {
+  por_procesar:   { clase: "bg-gray-100 text-gray-600",   label: "Por procesar" },
+  pendiente_pago: { clase: "bg-amber-100 text-amber-700", label: "Pendiente de pago" },
+  pagado:         { clase: "bg-green-100 text-green-700", label: "Pagado" },
+};
 
 // Sección full-width de Servicios Externos (terceros) para el detalle de una
 // OT/sub-OT — no la ve el rol técnico (gate ya hecho en el componente padre
@@ -28,8 +37,6 @@ export default function TablaServiciosExternos({ ot, subOTs = [], servicios, pue
     setConfirmandoAnular(null);
     if (res.ok) onCambio();
   };
-
-  const totalCosto = servicios.filter(s => !s.anulado).reduce((s, v) => s + (Number(v.costo) || 0), 0);
 
   return (
     <div className="max-w-6xl mx-auto px-8 pb-8">
@@ -57,12 +64,12 @@ export default function TablaServiciosExternos({ ot, subOTs = [], servicios, pue
               <thead className="text-xs uppercase tracking-wide text-gray-400 border-b border-gray-100">
                 <tr>
                   <th className="text-left py-2 pr-3">Código</th>
-                  <th className="text-left py-2 pr-3">RUC</th>
                   <th className="text-left py-2 pr-3">Proveedor</th>
-                  <th className="text-left py-2 pr-3">Tipo de trabajo</th>
+                  <th className="text-left py-2 pr-3">Tipo de Servicio</th>
+                  <th className="text-left py-2 pr-3">Material(es)</th>
                   <th className="text-left py-2 pr-3">Sub-OT</th>
                   <th className="text-right py-2 pr-3">Cantidad</th>
-                  <th className="text-right py-2 pr-3">Costo</th>
+                  <th className="text-left py-2 pr-3">Estado</th>
                   <th className="text-left py-2 pr-3">Fecha</th>
                   {puedeEditar && <th className="text-left py-2 pr-3"></th>}
                 </tr>
@@ -72,17 +79,20 @@ export default function TablaServiciosExternos({ ot, subOTs = [], servicios, pue
                   const otOrigenId = s.ordenTrabajo?._id || s.ordenTrabajo;
                   const esPrincipal = otOrigenId === ot._id;
                   const subOrigen = subOTs.find(sub => sub._id === otOrigenId);
+                  const { clase, label } = ESTADO_SERVICIO[s.estadoPago || "por_procesar"] || ESTADO_SERVICIO.por_procesar;
                   return (
                     <tr key={s._id} className={s.anulado ? "opacity-50" : ""}>
                       <td className="py-2 pr-3 font-mono text-xs text-gray-700">{s.codigo}</td>
-                      <td className="py-2 pr-3 text-gray-500 font-mono text-xs">{s.rucProveedor || "—"}</td>
-                      <td className="py-2 pr-3 text-gray-700">{s.nombreProveedor}</td>
+                      <td className="py-2 pr-3 text-gray-700">{s.nombreProveedor || "—"}</td>
                       <td className="py-2 pr-3 text-gray-600">{s.tipoTrabajo}</td>
+                      <td className="py-2 pr-3 text-gray-600">{s.material || "—"}</td>
                       <td className="py-2 pr-3 text-gray-600">
                         {esPrincipal ? "Principal" : (subOrigen?.numeroOT || s.ordenTrabajo?.numeroOT || "—")}
                       </td>
                       <td className="py-2 pr-3 text-right text-gray-700 tabular-nums">{s.cantidad}</td>
-                      <td className="py-2 pr-3 text-right text-gray-700 tabular-nums">{s.costo > 0 ? money(s.costo) : "—"}</td>
+                      <td className="py-2 pr-3">
+                        <Chip className={clase}>{label}</Chip>
+                      </td>
                       <td className="py-2 pr-3 text-gray-500">
                         {s.createdAt ? formatearFecha(s.createdAt) : "—"}
                       </td>
@@ -100,15 +110,6 @@ export default function TablaServiciosExternos({ ot, subOTs = [], servicios, pue
                   );
                 })}
               </tbody>
-              {totalCosto > 0 && (
-                <tfoot>
-                  <tr className="border-t border-gray-100 font-semibold">
-                    <td colSpan={6} className="py-2 pr-3 text-right text-xs uppercase tracking-wide text-gray-400">Total</td>
-                    <td className="py-2 pr-3 text-right text-gray-800 tabular-nums">{money(totalCosto)}</td>
-                    <td colSpan={puedeEditar ? 2 : 1} />
-                  </tr>
-                </tfoot>
-              )}
             </table>
           </TablaScroll>
         )}

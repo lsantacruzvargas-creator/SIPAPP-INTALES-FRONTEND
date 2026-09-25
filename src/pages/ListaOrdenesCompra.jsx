@@ -40,12 +40,18 @@ const compararTexto = (na, nb) => {
   return String(nb).localeCompare(String(na));
 };
 
-// El monto de la OC no tiene moneda propia (a diferencia de Cotizacion) —
-// se trata como Soles por convención, igual que el resto de la cadena
-// (OT/Factura), y se convierte a US$ con el Tipo de Cambio compartido.
-const totalesDuales = (monto, tipoCambio) => {
+// La OC hereda `moneda` de su cotización de origen (ver pre("save") en
+// OrdenCompra.js) — antes no tenía moneda propia y se trataba siempre como
+// Soles, así que una OC creada en dólares mostraba mal la columna US$ (el
+// monto ya en dólares se volvía a dividir por el Tipo de Cambio). El Tipo
+// de Cambio compartido solo se usa para completar la columna que NO
+// coincide con la moneda real del monto.
+const totalesDuales = (monto, moneda, tipoCambio) => {
   const m = Number(monto) || 0;
   const tc = Number(tipoCambio) || 0;
+  if (moneda === "USD") {
+    return { pen: tc > 0 ? m * tc : null, usd: m };
+  }
   return { pen: m, usd: tc > 0 ? m / tc : null };
 };
 
@@ -87,7 +93,6 @@ function TablaOC({
               {mostrarTitulo && <th className={`${TH} text-left`}>Título</th>}
               {puedeVerPrecios && <th className={`${TH} text-right`}>Total (S/)</th>}
               {puedeVerPrecios && <th className={`${TH} text-right`}>Total (US$)</th>}
-              <th className={`${TH} text-center`}>Estado Cotización</th>
               <th className={`${TH} text-center`}>Estado OT</th>
               <th className={`${TH} text-center`}>GRE</th>
               {mostrarHesActa && <th className={`${TH} text-center`}>HES</th>}
@@ -104,7 +109,7 @@ function TablaOC({
               const otPadre = grupoOT?.parent || null;
               const subs = grupoOT?.subs || [];
               const factura = factByOCMap[o._id] || factMap[cotId];
-              const { pen, usd } = totalesDuales(o.monto, tipoCambio);
+              const { pen, usd } = totalesDuales(o.monto, o.moneda, tipoCambio);
 
               const filaPrincipal = (
                 <tr key={o._id}
@@ -140,19 +145,6 @@ function TablaOC({
                       {usd != null ? usd.toLocaleString("es-PE", { minimumFractionDigits: 2 }) : "—"}
                     </td>
                   )}
-                  <td className="px-4 py-3.5 text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wide whitespace-nowrap ${o.cotizacion?.aprobado ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                        {o.cotizacion?.aprobado ? "Aprobada" : "Pendiente"}
-                      </span>
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wide whitespace-nowrap ${o.cotizacion?.enviado ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                        {o.cotizacion?.enviado ? "Enviada" : "No enviada"}
-                      </span>
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wide whitespace-nowrap ${o.cotizacion?.informeEnviado ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                        {o.cotizacion?.informeEnviado ? "Informe enviado" : "Informe no enviado"}
-                      </span>
-                    </div>
-                  </td>
                   <td className="px-4 py-3.5 text-center">
                     {otPadre ? (
                       <DotChip chip={badgeOT(otPadre.estado)} dot={dotOT(otPadre.estado)}>{otPadre.estado}</DotChip>
@@ -399,7 +391,7 @@ export default function ListaOrdenesCompra() {
     const cotId = o.cotizacion?._id || o.cotizacion;
     const grupoOT = otGroupMap[o.numeroDocumento];
     const factura = factByOCMap[o._id] || factMap[cotId];
-    const { pen, usd } = totalesDuales(o.monto, tipoCambio);
+    const { pen, usd } = totalesDuales(o.monto, o.moneda, tipoCambio);
     return {
       "Cotización":         o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || "—",
       "N° Orden de Compra": o.numeroOrden || "—",
@@ -413,9 +405,6 @@ export default function ListaOrdenesCompra() {
         "Total (S/)":       pen.toFixed(2),
         "Total (US$)":      usd != null ? usd.toFixed(2) : "—",
       } : {}),
-      "Aprobado":           o.cotizacion?.aprobado ? "Aprobada" : "Pendiente",
-      "Enviado":            o.cotizacion?.enviado ? "Enviada" : "No enviada",
-      "Informe enviado":    o.cotizacion?.informeEnviado ? "Enviado" : "No enviado",
       "Estado":             grupoOT?.parent?.estado || "Sin OT",
       "GRE":                (grupoOT?.parent && greMap[grupoOT.parent._id]) || "Sin GRE",
     };

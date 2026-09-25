@@ -20,10 +20,12 @@ import ListaComprobantes from "./pages/ListaComprobantes";
 import EmitirComprobante from "./pages/EmitirComprobante";
 import ListaGuias from "./pages/ListaGuias";
 import EmitirGuia from "./pages/EmitirGuia";
-import AprobacionCotizaciones from "./pages/AprobacionCotizaciones";
 import Inventario from "./pages/Inventario";
 import Requerimientos from "./pages/Requerimientos";
 import TipoCambio from "./pages/TipoCambio";
+import CentrosCosto from "./pages/CentrosCosto";
+import Maquinas from "./pages/Maquinas";
+import TarifasPersonal from "./pages/TarifasPersonal";
 import Sistema from "./pages/Sistema";
 import NotFound from "./pages/NotFound";
 
@@ -54,7 +56,6 @@ function HomeRedirect() {
   const usuario = JSON.parse(sessionStorage.getItem("usuario") || "null");
   if (!token || !usuario) return <Navigate to="/login" replace />;
   if (["tecnico", "tecnico_prueba", "tecnico_intervencion", "supervisor", "planner", "asistente", "coordinadora"].includes(usuario.rol)) return <Navigate to="/ordenes-trabajo" replace />;
-  if (usuario.rol === "jefatura") return <Navigate to="/aprobaciones" replace />;
   if (usuario.rol === "facturacion") return <Navigate to="/facturas" replace />;
   if (usuario.rol === "almacenero") return <Navigate to="/almacen" replace />;
   return <Navigate to="/dashboard" replace />;
@@ -199,15 +200,6 @@ export default function App() {
       />
 
       <Route
-        path="/aprobaciones"
-        element={
-          <ProtectedRoute roles={["admin", "jefatura"]}>
-            <Layout><AprobacionCotizaciones /></Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
         path="/inventario"
         element={
           <ProtectedRoute roles={["admin", "almacenero", "tecnico", "tecnico_prueba", "tecnico_intervencion", "planner", "jefatura", "coordinadora"]}>
@@ -219,7 +211,7 @@ export default function App() {
       <Route
         path="/requerimientos"
         element={
-          <ProtectedRoute roles={["admin", "almacenero", "jefatura"]}>
+          <ProtectedRoute roles={["admin", "almacenero", "jefatura", "coordinadora", "vendedor"]}>
             <Layout><Requerimientos /></Layout>
           </ProtectedRoute>
         }
@@ -230,6 +222,33 @@ export default function App() {
         element={
           <ProtectedRoute roles={["admin", "asistente", "facturacion", "almacenero", "jefatura"]}>
             <Layout><TipoCambio /></Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/centros-costo"
+        element={
+          <ProtectedRoute roles={["admin"]}>
+            <Layout><CentrosCosto /></Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/maquinas"
+        element={
+          <ProtectedRoute roles={["admin", "jefatura"]}>
+            <Layout><Maquinas /></Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/tarifas-personal"
+        element={
+          <ProtectedRoute roles={["admin", "jefatura"]}>
+            <Layout><TarifasPersonal /></Layout>
           </ProtectedRoute>
         }
       />

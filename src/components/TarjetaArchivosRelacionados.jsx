@@ -31,15 +31,26 @@ const formatoTamano = (bytes = 0) => {
 // Requerimientos de Material/Servicios Externos en su propio card.
 //
 // Dos modos:
-// - `ordenId` presente (DetalleOrdenTrabajo.jsx/DetalleSubOT.jsx, la OT ya
-//   existe): cada archivo se sube de inmediato vía API y `archivos` viene
-//   del documento guardado (con `_id`/`url` reales).
-// - `ordenId` ausente (ModalNuevaOT.jsx, la OT todavía no tiene _id): los
-//   archivos quedan pendientes en memoria (`pendientes`/`onPendientesChange`,
-//   estado del padre) — el padre los sube recién después de crear la OT.
+// - `ordenId` presente (DetalleOrdenTrabajo.jsx/DetalleSubOT.jsx/
+//   DetalleCotizacion.jsx, el documento ya existe): cada archivo se sube de
+//   inmediato vía API (`endpoint`/:ordenId/archivos) y `archivos` viene del
+//   documento guardado (con `_id`/`url` reales).
+// - `ordenId` ausente (ModalNuevaOT.jsx/ModalNuevaCotizacion.jsx, el
+//   documento todavía no tiene _id): los archivos quedan pendientes en
+//   memoria (`pendientes`/`onPendientesChange`, estado del padre) — el padre
+//   los sube recién después de crear el documento.
+//
+// `archivosVinculados` (opcional): archivos del documento HERMANO en la
+// cadena (ej. la Cotización que originó esta OT, o viceversa) — el vendedor
+// sube los planos a la Cotización y deben verse también desde la OT
+// generada, y en el sentido contrario (revisión del usuario, 2026-09-14). Se
+// muestran de solo lectura acá (no se pueden borrar desde este lado) — para
+// eso hay que abrir el documento dueño.
 export default function TarjetaArchivosRelacionados({
   ordenId, archivos = [], onCambio,
   pendientes, onPendientesChange,
+  archivosVinculados = [], vinculadoLabel = "",
+  endpoint = "ordenes-trabajo",
   soloLectura = false,
   className = "",
 }) {
@@ -71,7 +82,7 @@ export default function TarjetaArchivosRelacionados({
     for (const file of files) {
       const fd = new FormData();
       fd.append("archivo", file);
-      const res = await uploadAuth(`/ordenes-trabajo/${ordenId}/archivos`, fd);
+      const res = await uploadAuth(`/${endpoint}/${ordenId}/archivos`, fd);
       if (!res.ok) setError(`No se pudo subir "${file.name}" — formato o tamaño no permitido (máx. 20 MB).`);
       else ultimaOrden = await res.json();
     }
@@ -84,7 +95,7 @@ export default function TarjetaArchivosRelacionados({
       onPendientesChange?.((pendientes || []).filter((_, i) => i !== idx));
       return;
     }
-    const res = await fetchAuth(`/ordenes-trabajo/${ordenId}/archivos/${archivo._id}`, { method: "DELETE" });
+    const res = await fetchAuth(`/${endpoint}/${ordenId}/archivos/${archivo._id}`, { method: "DELETE" });
     if (res.ok) onCambio?.(await res.json());
   };
 
@@ -93,13 +104,49 @@ export default function TarjetaArchivosRelacionados({
     else if (archivo.file) window.open(URL.createObjectURL(archivo.file), "_blank");
   };
 
+  const renderArchivo = (a, idx, { vinculado = false } = {}) => (
+    <div key={a._id || idx} className="relative border border-gray-100 rounded-xl p-3 w-[200px] space-y-2">
+      {!soloLectura && !vinculado && (
+        <button type="button" onClick={() => eliminar(a, idx)}
+          className="absolute -top-2 -right-2 bg-white border border-gray-200 text-red-400 hover:text-red-600 rounded-full w-6 h-6 text-xs leading-none z-10">
+          ✕
+        </button>
+      )}
+      <button type="button" onClick={() => abrir(a)} className="block w-full">
+        {esImagen(a.nombre) && a.url ? (
+          <ImagenProtegida src={a.url} alt={a.nombre} className="w-[200px] h-[200px] object-cover rounded-lg" />
+        ) : esImagen(a.nombre) && a.file ? (
+          <img src={URL.createObjectURL(a.file)} alt={a.nombre} className="w-[200px] h-[200px] object-cover rounded-lg" />
+        ) : (
+          <div className="w-[200px] h-[200px] bg-gray-50 rounded-lg flex items-center justify-center text-5xl">
+            {iconoPorExtension(extension(a.nombre))}
+          </div>
+        )}
+      </button>
+      <button type="button" onClick={() => abrir(a)}
+        className="text-xs text-blue-600 hover:text-blue-800 underline truncate block w-full text-left" title={a.nombre}>
+        {a.nombre}
+      </button>
+      <div className="flex items-center justify-between gap-1">
+        <p className="text-[11px] text-gray-400">{formatoTamano(a.tamano)}</p>
+        {vinculado && (
+          <span className="text-[10px] text-cyan-600 bg-cyan-50 rounded-full px-1.5 py-0.5 whitespace-nowrap">
+            De {vinculadoLabel}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
+  const totalArchivos = lista.length + archivosVinculados.length;
+
   return (
     <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4 ${className}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-5 rounded-full bg-cyan-500" />
           <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-            Datos relacionados ({lista.length})
+            Datos relacionados ({totalArchivos})
           </h2>
         </div>
         {!soloLectura && (
@@ -113,36 +160,12 @@ export default function TarjetaArchivosRelacionados({
 
       {error && <p className="text-xs text-red-500">{error}</p>}
 
-      {lista.length === 0 ? (
+      {totalArchivos === 0 ? (
         <p className="text-sm text-gray-400">Sin imágenes ni archivos adjuntos</p>
       ) : (
         <div className="flex flex-wrap gap-4">
-          {lista.map((a, idx) => (
-            <div key={a._id || idx} className="relative border border-gray-100 rounded-xl p-3 w-[200px] space-y-2">
-              {!soloLectura && (
-                <button type="button" onClick={() => eliminar(a, idx)}
-                  className="absolute -top-2 -right-2 bg-white border border-gray-200 text-red-400 hover:text-red-600 rounded-full w-6 h-6 text-xs leading-none z-10">
-                  ✕
-                </button>
-              )}
-              <button type="button" onClick={() => abrir(a)} className="block w-full">
-                {esImagen(a.nombre) && a.url ? (
-                  <ImagenProtegida src={a.url} alt={a.nombre} className="w-[200px] h-[200px] object-cover rounded-lg" />
-                ) : esImagen(a.nombre) && a.file ? (
-                  <img src={URL.createObjectURL(a.file)} alt={a.nombre} className="w-[200px] h-[200px] object-cover rounded-lg" />
-                ) : (
-                  <div className="w-[200px] h-[200px] bg-gray-50 rounded-lg flex items-center justify-center text-5xl">
-                    {iconoPorExtension(extension(a.nombre))}
-                  </div>
-                )}
-              </button>
-              <button type="button" onClick={() => abrir(a)}
-                className="text-xs text-blue-600 hover:text-blue-800 underline truncate block w-full text-left" title={a.nombre}>
-                {a.nombre}
-              </button>
-              <p className="text-[11px] text-gray-400">{formatoTamano(a.tamano)}</p>
-            </div>
-          ))}
+          {lista.map((a, idx) => renderArchivo(a, idx))}
+          {archivosVinculados.map((a, idx) => renderArchivo(a, idx, { vinculado: true }))}
         </div>
       )}
     </div>

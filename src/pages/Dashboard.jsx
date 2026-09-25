@@ -383,7 +383,7 @@ export default function Dashboard() {
           <h2 className="text-xl font-bold text-gray-800">
             Bienvenido, {usuario?.nombre}
           </h2>
-          <p className="text-sm text-gray-400 mt-0.5">Panel principal — SIP App Intales</p>
+          <p className="text-sm text-gray-400 mt-0.5">Panel principal — SIP App Metalmecanica</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <select value={filtroAno} onChange={(e) => setFiltroAno(e.target.value)} className={SELECT}>

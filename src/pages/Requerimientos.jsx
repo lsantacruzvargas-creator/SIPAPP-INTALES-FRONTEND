@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import * as XLSX from "xlsx";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { formatearFecha } from "../utils/fecha";
 import SelectorMateriales from "../components/SelectorMateriales";
 import PromptAccion from "../components/PromptAccion";
+import ConfirmacionAccion from "../components/ConfirmacionAccion";
+import ModalProcesarSolicitud from "../components/ModalProcesarSolicitud";
 
 const ESTADO_ITEM = {
   pendiente: "bg-blue-100 text-blue-700",
@@ -10,6 +13,8 @@ const ESTADO_ITEM = {
   cerrado: "bg-green-100 text-green-700",
   rechazado: "bg-red-100 text-red-700",
 };
+
+const money = (v) => "S/ " + Number(v ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 });
 
 function resumenCompra(item) {
   return Object.entries(item.camposCompra || {}).map(([k, v]) => `${k}: ${v}`).join(" · ");
@@ -169,7 +174,7 @@ function BadgesMaterial({ material, cantidad }) {
   );
 }
 
-// ─── Fila de un ítem dentro de un requerimiento ─────────────────────────────
+// ─── Fila de un ítem dentro de un requerimiento (tabs Activos/Completados) ──
 
 function FilaItem({ requerimiento, item, puedeAtender, onActualizado }) {
   const [panelSalida, setPanelSalida] = useState(false);
@@ -285,92 +290,491 @@ function FilaItem({ requerimiento, item, puedeAtender, onActualizado }) {
   );
 }
 
+// ─── Fila con checkbox del pipeline Por procesar / Pendiente de pago / Pagados ──
+
+// Un ítem de solicitud puede tratarse a nombre de un cliente/planta distinto
+// del de quien lo pidió — el usuario pidió que OC/OT/Cliente/Planta queden
+// notoriamente visibles en cada fila, no solo la OT (revisión 2026-09-14).
+function FilaSeleccionable({ seleccionado, onToggle, disabledCheckbox, ot, oc, cliente, planta, titulo, subtitulo, cantidad, unidad, fecha, chips }) {
+  return (
+    <div className="flex items-start gap-3 border-t border-gray-50 first:border-t-0 py-3">
+      <input type="checkbox" checked={seleccionado} disabled={disabledCheckbox}
+        onChange={onToggle} className="mt-1 w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-400 disabled:opacity-30" />
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+          <span className="text-[15px] font-mono font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">
+            OT {ot?.numeroOT || ot?.codigo || "—"}
+          </span>
+          {oc && (
+            <span className="text-[15px] font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">
+              OC {oc.numeroOrden || oc.codigo}
+            </span>
+          )}
+          {ot?.titulo && <span className="text-sm text-gray-800 truncate">{ot.titulo}</span>}
+        </div>
+        {(cliente || planta) && (
+          <p className="text-xs font-semibold text-gray-600 mb-0.5">
+            {cliente}{planta ? ` — ${planta}` : ""}
+          </p>
+        )}
+        <p className="text-sm font-medium text-gray-800">{titulo}</p>
+        {subtitulo && <p className="text-xs text-gray-400">{subtitulo}</p>}
+        {chips}
+      </div>
+      <div className="text-right shrink-0">
+        <p className="text-sm text-gray-700">{cantidad} {unidad || ""}</p>
+        <p className="text-xs text-gray-400">{fecha}</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Página principal ────────────────────────────────────────────────────────
+
+const TABS_MATERIALES = [
+  { id: "activos", label: "Activos" },
+  { id: "completados", label: "Completados" },
+  { id: "por-procesar", label: "Por procesar" },
+  { id: "pendiente-pago", label: "Pendiente de pago" },
+  { id: "pagados", label: "Pagados" },
+];
+const TABS_SERVICIOS = [
+  { id: "por-procesar", label: "Por procesar" },
+  { id: "pendiente-pago", label: "Pendiente de pago" },
+  { id: "pagados", label: "Pagados" },
+];
 
 export default function Requerimientos() {
   const [lista, setLista] = useState([]);
-  const [filtro, setFiltro] = useState("activos");
+  const [servicios, setServicios] = useState([]);
+  const [ordenesCompra, setOrdenesCompra] = useState([]);
+  const [seccion, setSeccion] = useState("materiales");
+  const [tabMateriales, setTabMateriales] = useState("activos");
+  const [tabServicios, setTabServicios] = useState("por-procesar");
+  const [seleccionados, setSeleccionados] = useState(() => new Set());
+  const [procesarOpen, setProcesarOpen] = useState(false);
+  const [confirmandoPago, setConfirmandoPago] = useState(false);
+  const [pagando, setPagando] = useState(false);
+  const [exitoPago, setExitoPago] = useState("");
   const usuario = getUsuario();
   const puedeAtender = ["admin", "jefatura", "almacenero"].includes(usuario?.rol);
+  // "Procesar solicitud" (elegir proveedor + monto) — rol vendedor, más
+  // admin como excepción (mismo criterio que el resto de acciones
+  // restringidas de la app).
+  const puedeProcesar = ["vendedor", "admin"].includes(usuario?.rol);
+  // "Marcar como pagado" — exclusivo Coordinadora/Jefatura/Admin.
+  const puedePagar = ["admin", "jefatura", "coordinadora"].includes(usuario?.rol);
 
   const cargar = useCallback(async () => {
-    const r = await fetchAuth("/requerimientos");
-    if (r.ok) setLista(await r.json());
+    const [r1, r2, r3] = await Promise.all([
+      fetchAuth("/requerimientos"),
+      fetchAuth("/servicios-externos"),
+      fetchAuth("/ordenes-compra"),
+    ]);
+    if (r1.ok) setLista(await r1.json());
+    if (r2.ok) setServicios(await r2.json());
+    if (r3.ok) setOrdenesCompra(await r3.json());
   }, []);
 
+  // OC no tiene FK directa a la OT — se resuelve por el mismo salto de 2
+  // pasos OT → cotización → OC que ya usa DetalleOrdenTrabajo.jsx.
+  const resolverOC = (ot) => {
+    const cotId = ot?.cotizacion?._id || ot?.cotizacion;
+    if (!cotId) return null;
+    return ordenesCompra.find((o) => (o.cotizacion?._id || o.cotizacion) === cotId) || null;
+  };
+  const nombreEmpresa = (emp) => emp ? (emp.alias ? `${emp.alias} — ${emp.razonSocial}` : emp.razonSocial) : "";
+
   useEffect(() => { cargar(); }, [cargar]);
+
+  // Cambiar de sección/tab limpia la selección — evita procesar/pagar ítems
+  // que ya no se ven en pantalla.
+  useEffect(() => { setSeleccionados(new Set()); }, [seccion, tabMateriales, tabServicios]);
 
   const actualizarEnLista = (actualizado) => {
     setLista((prev) => prev.map((r) => r._id === actualizado._id ? actualizado : r));
   };
 
   const tieneItemsPendientes = (r) => r.items.some((it) => it.estado === "pendiente");
-  // "Materiales pendientes": solicitudes de compra (sin SKU todavía)
-  // pendientes de comprar — distinto de "Activos", que incluye también los
-  // ítems de stock existente pendientes de dar salida.
-  const esPendientePorComprar = (it) => it.esSolicitudCompra && it.estado === "pendiente";
-  const tieneItemsPendientesCompra = (r) => r.items.some(esPendientePorComprar);
-  const filtrados = lista.filter((r) => {
-    if (filtro === "activos") return tieneItemsPendientes(r);
-    if (filtro === "pendientes-compra") return tieneItemsPendientesCompra(r);
-    return !tieneItemsPendientes(r);
+  const filtradosActivosCompletados = lista.filter((r) => {
+    if (tabMateriales === "activos") return tieneItemsPendientes(r);
+    if (tabMateriales === "completados") return !tieneItemsPendientes(r);
+    return false;
   });
 
+  // Ítems de solicitud de compra "aplanados" con su Requerimiento padre —
+  // el pipeline de pago vive a nivel de ítem, no de Requerimiento completo.
+  const itemsCompra = lista.flatMap((r) =>
+    (r.items || [])
+      .filter((it) => it.esSolicitudCompra)
+      .map((it) => ({ ...it, requerimiento: r }))
+  );
+  const itemsPorProcesar = itemsCompra.filter((it) => (it.estadoPago || "por_procesar") === "por_procesar");
+  const itemsPendientePago = itemsCompra.filter((it) => it.estadoPago === "pendiente_pago");
+  const itemsPagados = itemsCompra.filter((it) => it.estadoPago === "pagado");
+
+  const serviciosActivos = servicios.filter((s) => !s.anulado);
+  const serviciosPorProcesar = serviciosActivos.filter((s) => (s.estadoPago || "por_procesar") === "por_procesar");
+  const serviciosPendientePago = serviciosActivos.filter((s) => s.estadoPago === "pendiente_pago");
+  const serviciosPagados = serviciosActivos.filter((s) => s.estadoPago === "pagado");
+
   const fmtFecha = (d) => d ? formatearFecha(d, { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—";
+  const fmtFechaExcel = (d) => d ? formatearFecha(d, { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
+
+  // Excel de todo lo pagado (materiales + servicios) — mismo patrón de
+  // XLSX.json_to_sheet + multi-hoja que ya usan ListaCotizaciones.jsx /
+  // ListaOrdenesCompra.jsx.
+  const filaPagoMaterial = (it) => {
+    const ot = it.requerimiento.ordenTrabajo;
+    const oc = resolverOC(ot);
+    const costo = Number(it.montoUnitario) || 0;
+    const flete = Number(it.costoTransporte) || 0;
+    const cantidad = Number(it.cantidad) || 0;
+    return {
+      "OC": oc?.numeroOrden || oc?.codigo || "—",
+      "OT": ot?.numeroOT || ot?.codigo || "—",
+      "TITULO": ot?.titulo || "—",
+      "CLIENTE": nombreEmpresa(ot?.empresa) || "—",
+      "MATERIALES": [it.categoriaNombre, resumenCompra(it)].filter(Boolean).join(" — "),
+      "PROVEEDOR": it.proveedorNombre || "—",
+      "COSTO": costo,
+      "CANTIDAD": cantidad,
+      "FLETE": flete,
+      "TOTAL": costo * cantidad + flete,
+      "FECHA": fmtFechaExcel(it.fechaPago || it.createdAt),
+    };
+  };
+
+  const filaPagoServicio = (s) => {
+    const ot = s.ordenTrabajo;
+    const oc = resolverOC(ot);
+    const costo = Number(s.costo) || 0;
+    const flete = Number(s.costoTransporte) || 0;
+    const cantidad = Number(s.cantidad) || 0;
+    return {
+      "OC": oc?.numeroOrden || oc?.codigo || "—",
+      "OT": ot?.numeroOT || ot?.codigo || "—",
+      "TITULO": ot?.titulo || "—",
+      "CLIENTE": nombreEmpresa(ot?.empresa) || "—",
+      "MATERIALES": [s.tipoTrabajo, s.material].filter(Boolean).join(" — "),
+      "PROVEEDOR": s.nombreProveedor || "—",
+      "COSTO": costo,
+      "CANTIDAD": cantidad,
+      "FLETE": flete,
+      "TOTAL": costo * cantidad + flete,
+      "FECHA": fmtFechaExcel(s.fechaPago || s.createdAt),
+    };
+  };
+
+  const exportarPagadosExcel = () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(itemsPagados.map(filaPagoMaterial)), "Materiales pagados");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(serviciosPagados.map(filaPagoServicio)), "Servicios pagados");
+    XLSX.writeFile(wb, "solicitudes-pagadas.xlsx");
+  };
+
+  // ── Selección con checkbox (compartida entre Materiales y Servicios) ──
+  const toggleSeleccion = (key) => setSeleccionados((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+
+  const filaMaterialKey = (it) => `mat-${it._id}`;
+  const filaServicioKey = (s) => `serv-${s._id}`;
+
+  const itemsSeleccionadosMateriales = itemsPorProcesar.filter((it) => seleccionados.has(filaMaterialKey(it)));
+  const itemsSeleccionadosPagoMateriales = itemsPendientePago.filter((it) => seleccionados.has(filaMaterialKey(it)));
+  const serviciosSeleccionados = serviciosPorProcesar.filter((s) => seleccionados.has(filaServicioKey(s)));
+  const serviciosSeleccionadosPago = serviciosPendientePago.filter((s) => seleccionados.has(filaServicioKey(s)));
+
+  const hayPorProcesarSeleccionados = seccion === "materiales" ? itemsSeleccionadosMateriales.length > 0 : serviciosSeleccionados.length > 0;
+  const hayPendientePagoSeleccionados = seccion === "materiales" ? itemsSeleccionadosPagoMateriales.length > 0 : serviciosSeleccionadosPago.length > 0;
+
+  const itemsParaModal = seccion === "materiales"
+    ? itemsSeleccionadosMateriales.map((it) => ({
+        key: filaMaterialKey(it),
+        requerimientoId: it.requerimiento._id,
+        id: it._id,
+        label: `${it.categoriaNombre} — ${it.requerimiento.codigo}`,
+        cantidad: it.cantidad,
+        unidad: it.materialAsociado?.unidad || "",
+      }))
+    : serviciosSeleccionados.map((s) => ({
+        key: filaServicioKey(s),
+        id: s._id,
+        label: `${s.tipoTrabajo} — ${s.material}`,
+        cantidad: s.cantidad,
+        unidad: "",
+      }));
+
+  // El propio ModalProcesarSolicitud ya muestra su rectángulo verde de éxito
+  // (mismo patrón que ModalCrearOrdenCompra) antes de llamar a onProcesado.
+  const procesarListo = async () => {
+    setProcesarOpen(false);
+    setSeleccionados(new Set());
+    await cargar();
+  };
+
+  const pagarSeleccionados = async () => {
+    setPagando(true);
+    if (seccion === "materiales") {
+      for (const it of itemsSeleccionadosPagoMateriales) {
+        await fetchAuth(`/requerimientos/${it.requerimiento._id}/items/${it._id}/pagar`, { method: "PATCH" });
+      }
+    } else {
+      for (const s of serviciosSeleccionadosPago) {
+        await fetchAuth(`/servicios-externos/${s._id}/pagar`, { method: "PATCH" });
+      }
+    }
+    setPagando(false);
+    await cargar();
+    setSeleccionados(new Set());
+    // Mismo patrón que ModalCrearOrdenCompra: el rectángulo verde reemplaza
+    // la pregunta de confirmación y el panel se cierra solo tras el delay.
+    setExitoPago("Solicitud(es) marcada(s) como Pagado.");
+    setTimeout(() => { setConfirmandoPago(false); setExitoPago(""); }, 1800);
+  };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-gray-800">Requerimientos de material</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Solicitudes de material hechas desde las Órdenes de Trabajo</p>
+        <h1 className="text-xl font-bold text-gray-800">Requerimientos</h1>
+        <p className="text-sm text-gray-400 mt-0.5">Solicitudes de material y servicios externos hechas desde las Órdenes de Trabajo</p>
       </div>
 
-      <div className="flex border-b border-gray-200 gap-1">
-        {[
-          { id: "activos", label: "Activos" },
-          { id: "completados", label: "Completados" },
-          { id: "pendientes-compra", label: "Materiales pendientes" },
-        ].map((t) => (
-          <button key={t.id} onClick={() => setFiltro(t.id)}
-            className={`px-5 py-2.5 text-sm font-medium transition border-b-2 -mb-px ${
-              filtro === t.id ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"
+      {/* Sección: Materiales / Servicios */}
+      <div className="flex gap-2">
+        {[{ id: "materiales", label: "Materiales" }, { id: "servicios", label: "Servicios" }].map((s) => (
+          <button key={s.id} onClick={() => setSeccion(s.id)}
+            className={`px-5 py-2 rounded-xl text-sm font-semibold transition ${
+              seccion === s.id ? "bg-purple-600 text-white shadow-sm" : "bg-white border border-gray-200 text-gray-500 hover:text-gray-700"
+            }`}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Sub-tabs */}
+      <div className="flex border-b border-gray-200 gap-1 flex-wrap">
+        {(seccion === "materiales" ? TABS_MATERIALES : TABS_SERVICIOS).map((t) => (
+          <button key={t.id}
+            onClick={() => seccion === "materiales" ? setTabMateriales(t.id) : setTabServicios(t.id)}
+            className={`px-4 py-2.5 text-sm font-medium transition border-b-2 -mb-px ${
+              (seccion === "materiales" ? tabMateriales : tabServicios) === t.id
+                ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}>
             {t.label}
           </button>
         ))}
       </div>
 
-      <div className="space-y-4">
-        {filtrados.length === 0 && (
-          <p className="text-center py-10 text-gray-300 text-sm">
-            Sin requerimientos {filtro === "activos" ? "activos" : filtro === "pendientes-compra" ? "con materiales pendientes por comprar" : "completados"}
-          </p>
-        )}
-        {filtrados.map((r) => {
-          const itemsAMostrar = filtro === "pendientes-compra" ? r.items.filter(esPendientePorComprar) : r.items;
-          return (
-          <div key={r._id} className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
-            <div className="flex flex-wrap justify-between items-start gap-2 mb-2">
-              <div>
-                <p className="font-mono text-xs text-gray-400">{r.codigo}</p>
-                <p className="text-sm font-semibold text-gray-800">
-                  {r.ordenTrabajo?.numeroOT} — {r.ordenTrabajo?.titulo}
-                </p>
-                <p className="text-xs text-gray-500">{r.solicitadoPor}{r.dni ? ` — DNI ${r.dni}` : ""}</p>
+      {/* Barra de acción masiva */}
+      {seccion === "materiales" && tabMateriales === "por-procesar" && puedeProcesar && hayPorProcesarSeleccionados && (
+        <div className="flex justify-end">
+          <button onClick={() => setProcesarOpen(true)}
+            className="text-sm bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition font-medium">
+            Procesar solicitud ({itemsSeleccionadosMateriales.length})
+          </button>
+        </div>
+      )}
+      {seccion === "materiales" && tabMateriales === "pendiente-pago" && puedePagar && hayPendientePagoSeleccionados && (
+        <div className="flex justify-end">
+          <button onClick={() => setConfirmandoPago(true)}
+            className="text-sm bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition font-medium">
+            Marcar como pagado ({itemsSeleccionadosPagoMateriales.length})
+          </button>
+        </div>
+      )}
+      {seccion === "servicios" && tabServicios === "por-procesar" && puedeProcesar && hayPorProcesarSeleccionados && (
+        <div className="flex justify-end">
+          <button onClick={() => setProcesarOpen(true)}
+            className="text-sm bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition font-medium">
+            Procesar solicitud ({serviciosSeleccionados.length})
+          </button>
+        </div>
+      )}
+      {seccion === "servicios" && tabServicios === "pendiente-pago" && puedePagar && hayPendientePagoSeleccionados && (
+        <div className="flex justify-end">
+          <button onClick={() => setConfirmandoPago(true)}
+            className="text-sm bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition font-medium">
+            Marcar como pagado ({serviciosSeleccionadosPago.length})
+          </button>
+        </div>
+      )}
+      {((seccion === "materiales" && tabMateriales === "pagados") || (seccion === "servicios" && tabServicios === "pagados")) && (
+        <div className="flex justify-end">
+          <button onClick={exportarPagadosExcel}
+            className="text-sm border border-gray-300 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
+            Exportar Excel
+          </button>
+        </div>
+      )}
+
+      {/* ── Materiales: Activos / Completados (tarjetas por Requerimiento, sin cambios) ── */}
+      {seccion === "materiales" && (tabMateriales === "activos" || tabMateriales === "completados") && (
+        <div className="space-y-4">
+          {filtradosActivosCompletados.length === 0 && (
+            <p className="text-center py-10 text-gray-300 text-sm">
+              Sin requerimientos {tabMateriales === "activos" ? "activos" : "completados"}
+            </p>
+          )}
+          {filtradosActivosCompletados.map((r) => {
+            const ocRel = resolverOC(r.ordenTrabajo);
+            return (
+            <div key={r._id} className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
+              <div className="flex flex-wrap justify-between items-start gap-2 mb-2">
+                <div>
+                  <p className="font-mono text-xs text-gray-400">{r.codigo}</p>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                    <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">
+                      OT {r.ordenTrabajo?.numeroOT || r.ordenTrabajo?.codigo || "—"}
+                    </span>
+                    {ocRel && (
+                      <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">
+                        OC {ocRel.numeroOrden || ocRel.codigo}
+                      </span>
+                    )}
+                  </div>
+                  {(r.ordenTrabajo?.empresa || r.ordenTrabajo?.planta) && (
+                    <p className="text-xs font-semibold text-gray-600 mt-0.5">
+                      {nombreEmpresa(r.ordenTrabajo?.empresa)}{r.ordenTrabajo?.planta ? ` — ${r.ordenTrabajo.planta}` : ""}
+                    </p>
+                  )}
+                  <p className="text-sm font-semibold text-gray-800 mt-0.5">{r.ordenTrabajo?.titulo}</p>
+                  <p className="text-xs text-gray-500">{r.solicitadoPor}{r.dni ? ` — DNI ${r.dni}` : ""}</p>
+                </div>
+                <span className="text-xs text-gray-400">{fmtFecha(r.createdAt)}</span>
               </div>
-              <span className="text-xs text-gray-400">{fmtFecha(r.createdAt)}</span>
+              {r.observaciones && <p className="text-xs text-gray-400 italic mb-2">{r.observaciones}</p>}
+              <div>
+                {r.items.map((item) => (
+                  <FilaItem key={item._id} requerimiento={r} item={item} puedeAtender={puedeAtender}
+                    onActualizado={actualizarEnLista} />
+                ))}
+              </div>
             </div>
-            {r.observaciones && <p className="text-xs text-gray-400 italic mb-2">{r.observaciones}</p>}
-            <div>
-              {itemsAMostrar.map((item) => (
-                <FilaItem key={item._id} requerimiento={r} item={item} puedeAtender={puedeAtender}
-                  onActualizado={actualizarEnLista} />
-              ))}
-            </div>
-          </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Materiales: Por procesar / Pendiente de pago / Pagados (lista con checkbox) ── */}
+      {seccion === "materiales" && ["por-procesar", "pendiente-pago", "pagados"].includes(tabMateriales) && (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
+          {(() => {
+            const items = tabMateriales === "por-procesar" ? itemsPorProcesar
+              : tabMateriales === "pendiente-pago" ? itemsPendientePago
+              : itemsPagados;
+            if (items.length === 0) {
+              return <p className="text-center py-10 text-gray-00 text-md">Sin solicitudes de compra en esta vista</p>;
+            }
+            return items.map((it) => {
+              const key = filaMaterialKey(it);
+              const puedeMarcar = tabMateriales === "por-procesar" ? puedeProcesar : tabMateriales === "pendiente-pago" ? puedePagar : false;
+              return (
+                <FilaSeleccionable key={key}
+                  seleccionado={seleccionados.has(key)}
+                  disabledCheckbox={!puedeMarcar}
+                  onToggle={() => toggleSeleccion(key)}
+                  ot={it.requerimiento.ordenTrabajo}
+                  oc={resolverOC(it.requerimiento.ordenTrabajo)}
+                  cliente={nombreEmpresa(it.requerimiento.ordenTrabajo?.empresa)}
+                  planta={it.requerimiento.ordenTrabajo?.planta}
+                  titulo={`${it.categoriaNombre} — ${it.requerimiento.codigo}`}
+                  subtitulo={resumenCompra(it)}
+                  cantidad={it.cantidad}
+                  unidad={it.materialAsociado?.unidad}
+                  fecha={fmtFecha(it.fechaProcesado || it.createdAt)}
+                  chips={
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      <span className={`px-2 py-0.5 rounded-full text-[1px] font-semibold ${ESTADO_ITEM[it.estado]}`}>{it.estado}</span>
+                      {it.proveedorNombre && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">
+                          {it.proveedorNombre}
+                        </span>
+                      )}
+                      {it.montoUnitario != null && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                          {money(it.montoUnitario)}/u{it.costoTransporte > 0 ? ` + ${money(it.costoTransporte)} transporte` : ""}
+                        </span>
+                      )}
+                    </div>
+                  }
+                />
+              );
+            });
+          })()}
+        </div>
+      )}
+
+      {/* ── Servicios: Por procesar / Pendiente de pago / Pagados ── */}
+      {seccion === "servicios" && (
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
+          {(() => {
+            const items = tabServicios === "por-procesar" ? serviciosPorProcesar
+              : tabServicios === "pendiente-pago" ? serviciosPendientePago
+              : serviciosPagados;
+            if (items.length === 0) {
+              return <p className="text-center py-1 text-gray-300 text-sm">Sin servicios en esta vista</p>;
+            }
+            return items.map((s) => {
+              const key = filaServicioKey(s);
+              const puedeMarcar = tabServicios === "por-procesar" ? puedeProcesar : tabServicios === "pendiente-pago" ? puedePagar : false;
+              return (
+                <FilaSeleccionable key={key}
+                  seleccionado={seleccionados.has(key)}
+                  disabledCheckbox={!puedeMarcar}
+                  onToggle={() => toggleSeleccion(key)}
+                  ot={s.ordenTrabajo}
+                  oc={resolverOC(s.ordenTrabajo)}
+                  cliente={nombreEmpresa(s.ordenTrabajo?.empresa)}
+                  planta={s.ordenTrabajo?.planta}
+                  titulo={s.tipoTrabajo}
+                  subtitulo={s.material}
+                  cantidad={s.cantidad}
+                  unidad=""
+                  fecha={fmtFecha(s.fechaProcesado || s.createdAt)}
+                  chips={
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      {s.nombreProveedor && (
+                        <span className="text-[px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">
+                          {s.nombreProveedor}
+                        </span>
+                      )}
+                      {s.costo > 0 && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                          {money(s.costo)}/u{s.costoTransporte > 0 ? ` + ${money(s.costoTransporte)} transporte` : ""}
+                        </span>
+                      )}
+                    </div>
+                  }
+                />
+              );
+            });
+          })()}
+        </div>
+      )}
+
+      {procesarOpen && (
+        <ModalProcesarSolicitud
+          tipo={seccion === "materiales" ? "material" : "servicio"}
+          items={itemsParaModal}
+          onClose={() => setProcesarOpen(false)}
+          onProcesado={procesarListo}
+        />
+      )}
+
+      {confirmandoPago && (
+        <ConfirmacionAccion
+          mensaje={`¿Marcar ${seccion === "materiales" ? itemsSeleccionadosPagoMateriales.length : serviciosSeleccionadosPago.length} solicitud(es) como Pagado?`}
+          onCancelar={() => setConfirmandoPago(false)}
+          onConfirmar={pagarSeleccionados}
+          procesando={pagando}
+          textoConfirmar="Marcar como pagado"
+          exito={exitoPago}
+        />
+      )}
     </div>
   );
 }

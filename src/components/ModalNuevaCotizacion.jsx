@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
-import { fetchAuth, getUsuario } from "../utils/fetchAuth";
+import { fetchAuth, uploadAuth, getUsuario } from "../utils/fetchAuth";
 import { calcSubtotal, itemInvalido } from "../utils/cotizacionItems";
 import TablaItemsCotizacion from "./TablaItemsCotizacion";
+import SelectFormaPago from "./SelectFormaPago";
 import SelectorEmpresas from "./SelectorEmpresas";
+import TarjetaArchivosRelacionados from "./TarjetaArchivosRelacionados";
 import { FlujoNegocio, TarjetaRelacion, money } from "./detalleShared";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 w-full transition";
@@ -22,7 +24,8 @@ function calcular(sub, descuentoPct = 0) {
 const FORM_VACIO = {
   empresa: "", tipo: "venta", atencion: "", rq: "",
   fecha: new Date().toISOString().split("T")[0], fechaRecibida: "",
-  encargado: "", planta: "", personaContacto: "", condicionPago: "Factura 30 días",
+  encargado: "", planta: "", personaContacto: "", condicionPago: "Factura a 30 días",
+  validezOferta: "7", tipoDiasEntrega: "habiles",
   lugarEntrega: "",
   numeroGuiaEmision: "", numeroGuiaRemision: "", codigoSap: "", fechaSalida: "",
   subtotal: "", descuentoGlobal: "", moneda: "PEN",
@@ -55,6 +58,9 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
   // (mismo criterio que ModalNuevaOT.jsx).
   const [busquedaEmpresa, setBusquedaEmpresa] = useState("");
   const [listaEmpresaAbierta, setListaEmpresaAbierta] = useState(false);
+  // La cotización todavía no tiene _id acá — los archivos quedan pendientes
+  // en memoria y se suben recién después de crearla (ver guardar()).
+  const [archivosPendientes, setArchivosPendientes] = useState([]);
   const [guardando, setGuardando] = useState(false);
   const [intentoGuardar, setIntentoGuardar] = useState(false);
   const [error, setError] = useState("");
@@ -121,6 +127,8 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
     const payload = {
       tipo: form.tipo,
       condicionPago: form.condicionPago,
+      validezOferta: form.validezOferta,
+      tipoDiasEntrega: form.tipoDiasEntrega,
       rq: form.rq,
       atencion: form.atencion,
       encargado: form.encargado,
@@ -159,6 +167,16 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
     });
     if (res.ok) {
       const nueva = await res.json();
+      // Los archivos quedaron pendientes en memoria (la cotización no tenía
+      // _id todavía) — se suben recién ahora, uno por uno (mismo criterio
+      // que TarjetaArchivosRelacionados: nunca en paralelo sobre el mismo
+      // documento). Best-effort: si alguno falla, la cotización ya quedó
+      // creada igual, no se bloquea la creación por esto.
+      for (const pendiente of archivosPendientes) {
+        const fd = new FormData();
+        fd.append("archivo", pendiente.file);
+        await uploadAuth(`/cotizaciones/${nueva._id}/archivos`, fd);
+      }
       onCreada?.(nueva);
     } else {
       setError("Error al crear la cotización.");
@@ -215,8 +233,38 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
           {/* Datos editables */}
           <div className="lg:col-span-2 space-y-6 self-start">
 
-            {/* Datos del cliente + cotización — formato único de Intales,
-                ver docs/superpowers/specs/2026-09-10-cotizacion-intales-design.md */}
+            {/* Cards agrupadas igual que en DetalleCotizacion.jsx / SIPAPP-
+                HUAQUIAN (revisión del usuario, 2026-09-14) — mismos campos
+                que ya tenía Intales, solo reorganizados. */}
+
+            {/* Card: Detalle de cotización */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-5 rounded-full bg-blue-500" />
+                <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Detalle de cotización</h2>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Fecha</label>
+                <input type="date" name="fecha" value={form.fecha} onChange={handleChange} className={INP} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Validez de la oferta (días)</label>
+                  <input type="number" min="0" name="validezOferta" value={form.validezOferta} onChange={handleChange} className={INP} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Tiempo de entrega</label>
+                  <select name="tipoDiasEntrega" value={form.tipoDiasEntrega} onChange={handleChange} className={INP}>
+                    <option value="habiles">Días hábiles</option>
+                    <option value="utiles">Días útiles</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">Los días de entrega se definen por ítem, en la tabla de abajo.</p>
+            </div>
+
+            {/* Card: Datos del cliente */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-5 rounded-full bg-sky-500" />
@@ -285,22 +333,21 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
                   </p>
                 )}
               </div>
+            </div>
+
+            {/* Card: Otros datos — resto de campos que ya tenía Intales y no
+                forman parte de las cards de arriba (mismo criterio que
+                DetalleCotizacion.jsx / Huaquian: "Otros datos" es el resto). */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-5 rounded-full bg-gray-400" />
+                <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Otros datos</h2>
+              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Atención</label>
                   <input name="atencion" value={form.atencion} onChange={handleChange} placeholder="Ej. Ing. Jorge Torres" className={INP} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">RQ</label>
-                  <input name="rq" value={form.rq} onChange={handleChange} placeholder="Ej. Proyección 2026" className={INP} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Fecha</label>
-                  <input type="date" name="fecha" value={form.fecha} onChange={handleChange} className={INP} />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Tipo</label>
@@ -309,6 +356,11 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
                     <option value="servicio">Servicio</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">RQ</label>
+                <input name="rq" value={form.rq} onChange={handleChange} placeholder="Ej. Proyección 2026" className={INP} />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -321,12 +373,9 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Forma de pago</label>
-                  <input name="condicionPago" value={form.condicionPago} onChange={handleChange} placeholder="Factura 30 días" className={INP} />
+                  <SelectFormaPago name="condicionPago" value={form.condicionPago} onChange={handleChange} className={INP} />
                 </div>
               </div>
-              <p className="text-xs text-gray-400">
-                Tiempo de entrega: <span className="font-medium">Días hábiles</span> — se define por ítem, en la tabla de abajo.
-              </p>
 
               <div hidden>
                 <label className="text-xs text-gray-500 block mb-1">Encargado</label>
@@ -444,6 +493,17 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
             descuentoGlobal={descuentoGlobalNum}
             seleccionables={false}
             puedeVerPrecios={puedeVerPrecios}
+          />
+        </div>
+
+        {/* Datos relacionados — la cotización todavía no existe, los
+            archivos quedan pendientes y se suben recién al crearla. Visibles
+            también desde la OT que se genere a partir de esta cotización
+            (y viceversa), ver TarjetaArchivosRelacionados. */}
+        <div className="max-w-6xl mx-auto px-8 pb-8">
+          <TarjetaArchivosRelacionados
+            pendientes={archivosPendientes}
+            onPendientesChange={setArchivosPendientes}
           />
         </div>
       </div>

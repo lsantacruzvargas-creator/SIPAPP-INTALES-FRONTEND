@@ -44,6 +44,11 @@ export const IconServicio = () => (
     <rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18" />
   </svg>
 );
+export const IconReloj = () => (
+  <svg className={svg} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" />
+  </svg>
+);
 
 /* ─── Paletas por entidad ───────────────────────────────────────── */
 export const TEMAS = {
@@ -54,6 +59,7 @@ export const TEMAS = {
   factura:    { icon: IconFactura,    ring: "ring-emerald-200", dot: "bg-emerald-500", soft: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-100", label: "Factura" },
   gre:        { icon: IconGRE,        ring: "ring-purple-200",  dot: "bg-purple-500",  soft: "bg-purple-50",  text: "text-purple-700",  border: "border-purple-100",  label: "Guía de Remisión" },
   servicio:   { icon: IconServicio,   ring: "ring-purple-200",  dot: "bg-purple-500",  soft: "bg-purple-50",  text: "text-purple-700",  border: "border-purple-100",  label: "Servicios Externos" },
+  notificacionTrabajo: { icon: IconReloj, ring: "ring-orange-200", dot: "bg-orange-500", soft: "bg-orange-50", text: "text-orange-700", border: "border-orange-100", label: "Notificación de Trabajo" },
 };
 
 /* ─── Stepper del flujo de negocio ──────────────────────────────── */

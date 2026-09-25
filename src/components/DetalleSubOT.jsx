@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { formatearFecha } from "../utils/fecha";
 import ModalRequerimiento from "./ModalRequerimiento";
+import ModalNotificacionTrabajo from "./ModalNotificacionTrabajo";
+import ModalDetalleNotificacionTrabajo from "./ModalDetalleNotificacionTrabajo";
 import TablaServiciosExternos from "./TablaServiciosExternos";
 import TablaScroll from "./TablaScroll";
 import { Chip, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada } from "./detalleShared";
@@ -17,6 +19,33 @@ const colorEstado = (e, activo) => {
   if (e === "en progreso") return "bg-blue-600 text-white";
   return "bg-amber-500 text-white";
 };
+
+// Descripción de un ítem de requerimiento — para solicitudes de compra sin
+// SKU todavía no hay `material.nombre`, el detalle real vive en
+// `camposCompra` (categoría "Otros" siempre trae `.descripcion`; el resto de
+// categorías traen campos dinámicos definidos por el almacenero — ahí no hay
+// una key fija, así que se cae a `categoriaNombre`).
+const descripcionItem = (it) => it.esSolicitudCompra
+  ? (it.camposCompra?.descripcion || it.categoriaNombre)
+  : (it.material?.nombre || "—");
+
+// Estado de un ítem de requerimiento — una solicitud de compra sigue el
+// pipeline de pago (por_procesar/pendiente_pago/pagado, ver
+// Requerimientos.jsx), independiente del pipeline de despacho de almacén
+// (pendiente/atendido/rechazado) que sí aplica a los ítems de stock.
+const ESTADO_ITEM_COMPRA = {
+  por_procesar:   { clase: "bg-gray-100 text-gray-600",   label: "Por procesar" },
+  pendiente_pago: { clase: "bg-amber-100 text-amber-700", label: "Pendiente de pago" },
+  pagado:         { clase: "bg-green-100 text-green-700", label: "Pagado" },
+};
+const ESTADO_ITEM_STOCK = {
+  pendiente: { clase: "bg-blue-100 text-blue-700",  label: "Pendiente" },
+  atendido:  { clase: "bg-green-100 text-green-700", label: "Atendido" },
+  rechazado: { clase: "bg-red-100 text-red-700",     label: "Rechazado" },
+};
+const estadoItem = (it) => it.esSolicitudCompra
+  ? (ESTADO_ITEM_COMPRA[it.estadoPago || "por_procesar"] || ESTADO_ITEM_COMPRA.por_procesar)
+  : (ESTADO_ITEM_STOCK[it.estado] || { clase: "bg-gray-100 text-gray-500", label: it.estado || "—" });
 
 // Vista de detalle dedicada a una sub-OT — a propósito NO reutiliza el
 // formulario completo de DetalleOrdenTrabajo.jsx: cliente/planta/N° OT/guía
@@ -63,8 +92,13 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   const [requerimientos, setRequerimientos] = useState([]);
   const [crearRequerimientoOpen, setCrearRequerimientoOpen] = useState(false);
   const [servicios, setServicios] = useState([]);
+  const [notificacionesTrabajo, setNotificacionesTrabajo] = useState([]);
+  const [crearNotificacionOpen, setCrearNotificacionOpen] = useState(false);
+  const [detalleNotificacion, setDetalleNotificacion] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  // Notificar trabajo (HH/HM) — supervisor, +admin como excepción.
+  const puedeNotificarTrabajo = ["supervisor", "admin"].includes(rolActual);
 
   const cargarRelaciones = () => {
     fetchAuth(`/requerimientos?ordenTrabajo=${ot._id}`)
@@ -74,6 +108,9 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
       fetchAuth(`/servicios-externos?ordenTrabajo=${ot._id}`)
         .then(r => r.ok && r.json())
         .then(servs => setServicios(servs || []));
+      fetchAuth(`/notificaciones-trabajo?ordenTrabajo=${ot._id}`)
+        .then(r => r.ok && r.json())
+        .then(nots => setNotificacionesTrabajo(nots || []));
     }
   };
 
@@ -370,35 +407,41 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
                       <th className="text-left py-2 pr-3">Código</th>
                       <th className="text-left py-2 pr-3">Solicitado por</th>
                       <th className="text-left py-2 pr-3">Ítems</th>
+                      <th className="text-right py-2 pr-3">Cantidad</th>
                       <th className="text-left py-2 pr-3">Estado</th>
                       <th className="text-left py-2 pr-3">Fecha</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {requerimientos.map(req => {
-                      const pendientes = req.items.filter(it => it.estado === "pendiente").length;
-                      return (
+                    {requerimientos.map(req => (
                         <tr key={req._id}>
                           <td className="py-2 pr-3 font-mono text-xs text-gray-700">{req.codigo}</td>
                           <td className="py-2 pr-3 text-gray-600">{req.solicitadoPor}</td>
                           <td className="py-2 pr-3 text-gray-600">
                             {req.items.map((it, i) => (
-                              <span key={i} className="block text-xs">
-                                {it.esSolicitudCompra ? `${it.categoriaNombre} (compra)` : it.material?.nombre} — {it.cantidad}
-                              </span>
+                              <span key={i} className="block text-xs">{descripcionItem(it)}</span>
+                            ))}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-gray-600">
+                            {req.items.map((it, i) => (
+                              <span key={i} className="block text-xs">{it.cantidad}</span>
                             ))}
                           </td>
                           <td className="py-2 pr-3">
-                            <Chip className={pendientes > 0 ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}>
-                              {pendientes > 0 ? `${pendientes} pendiente(s)` : "Completado"}
-                            </Chip>
+                            {req.items.map((it, i) => {
+                              const { clase, label } = estadoItem(it);
+                              return (
+                                <span key={i} className="block mb-1 last:mb-0">
+                                  <Chip className={clase}>{label}</Chip>
+                                </span>
+                              );
+                            })}
                           </td>
                           <td className="py-2 pr-3 text-gray-500">
                             {req.createdAt ? formatearFecha(req.createdAt) : "—"}
                           </td>
                         </tr>
-                      );
-                    })}
+                    ))}
                   </tbody>
                 </table>
               </TablaScroll>
@@ -410,13 +453,72 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
           <TablaServiciosExternos ot={ot} servicios={servicios}
             puedeEditar={puedeEditarCampos} onCambio={cargarRelaciones} />
         )}
+
+        {puedeVerServicios && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-5 rounded-full bg-orange-500" />
+                <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                  Notificación de Trabajo ({notificacionesTrabajo.length})
+                </h2>
+              </div>
+              {puedeNotificarTrabajo && !ot.anulado && (
+                <button type="button" onClick={() => setCrearNotificacionOpen(true)}
+                  className="text-sm bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition font-medium">
+                  + Notificar trabajo
+                </button>
+              )}
+            </div>
+            {notificacionesTrabajo.length === 0 ? (
+              <p className="text-sm text-gray-400">Sin notificaciones de trabajo</p>
+            ) : (
+              <div className="space-y-2">
+                {notificacionesTrabajo.map((n) => (
+                  <button key={n._id} type="button" onClick={() => setDetalleNotificacion(n)}
+                    className="w-full flex items-center justify-between border border-gray-100 rounded-xl px-4 py-2.5 hover:bg-gray-50 transition text-left">
+                    <span className="font-mono text-xs text-gray-700">{n.codigo}</span>
+                    <Chip className={n.estado === "abierta" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}>
+                      {n.estado === "abierta" ? "Abierta" : "Cerrada"}
+                    </Chip>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {crearRequerimientoOpen && (
         <ModalRequerimiento
           ot={ot}
           onClose={() => setCrearRequerimientoOpen(false)}
-          onCreado={() => { setCrearRequerimientoOpen(false); cargarRelaciones(); }}
+          onCreado={() => {
+            setCrearRequerimientoOpen(false);
+            cargarRelaciones();
+          }}
+        />
+      )}
+
+      {crearNotificacionOpen && (
+        <ModalNotificacionTrabajo
+          ot={ot}
+          onClose={() => setCrearNotificacionOpen(false)}
+          onCreado={() => {
+            setCrearNotificacionOpen(false);
+            cargarRelaciones();
+          }}
+        />
+      )}
+
+      {detalleNotificacion && (
+        <ModalDetalleNotificacionTrabajo
+          notificacion={detalleNotificacion}
+          onClose={() => setDetalleNotificacion(null)}
+          onActualizada={(actualizada) => {
+            setDetalleNotificacion(actualizada);
+            cargarRelaciones();
+          }}
         />
       )}
     </div>

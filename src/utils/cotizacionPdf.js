@@ -61,38 +61,11 @@ function formatoImagen(img) {
   return "PNG";
 }
 
-// bcp_logo_intales.png es técnicamente RGBA (tiene canal alfa), pero el
-// archivo en sí quedó con el fondo "horneado" en alfa=255 (opaco) en vez de
-// transparente — confirmado decodificando los píxeles del archivo, no es un
-// problema de jsPDF. Acá se lo dejamos realmente transparente en tiempo de
-// exportación (canvas + umbral de blanco), sin tocar el asset original.
-// Se devuelve el propio <canvas>: jsPDF lo acepta directo como fuente de
-// addImage() y ya quedó pintado de forma síncrona, sin esperar ningún
-// evento de carga (a diferencia de un nuevo <img src="data:...">).
-function quitarFondoBlanco(img, umbral = 235) {
-  if (!img) return null;
-  const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, 0, 0);
-  const datos = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const px = datos.data;
-  for (let i = 0; i < px.length; i += 4) {
-    if (px[i] >= umbral && px[i + 1] >= umbral && px[i + 2] >= umbral) {
-      px[i + 3] = 0;
-    }
-  }
-  ctx.putImageData(datos, 0, 0);
-  return canvas;
-}
-
 // Paleta del formato de Intales, tomada de formato-cotizacion-INTALES.xlsx
 // (raíz de SIPAPP-INTALES) — ver docs/superpowers/specs/2026-09-10-cotizacion-intales-design.md.
 const NAVY = [0, 0, 40];
 const AZUL = [0, 74, 173];
 const GRIS_CLARO = [232, 232, 232];
-const MOSTAZA = [255, 224, 130];
 
 // Alto de cada logo del PDF, en mm — ajustable individualmente por logo (el
 // ancho siempre se deriva de la proporción real de cada imagen, nunca se
@@ -116,7 +89,6 @@ const LOGO_ALTO = {
 const LOGO_POS = {
   intales: { x: null, y: null },
   grupoLexacaucho: { x: 130, y: null },
-  bcp: { x: null, y: null },
 };
 
 // Texto descriptivo fijo junto al logo de Grupo Lexacaucho, a la derecha del
@@ -182,11 +154,8 @@ export const exportarCotizacionPdf = async (cotizacion) => {
 
   // Logo de Grupo Lexacaucho, pegado al extremo derecho del logo de Intales,
   // con su texto descriptivo fijo a la derecha (ver captura de referencia
-  // del usuario). A diferencia del logo BCP (que sí necesita quitarFondoBlanco
-  // porque se dibuja sobre la caja mostaza), este va sobre el fondo blanco de
-  // la hoja — aplicarle el mismo tratamiento de umbral de blanco le comía
-  // parte del propio dibujo (texto/triángulo con tonos claros), dejándolo
-  // distorsionado; se dibuja tal cual viene el archivo.
+  // del usuario). Se dibuja tal cual viene el archivo: quitarle el blanco le
+  // comía parte del propio dibujo (texto/triángulo con tonos claros).
   let altoMaxEncabezado = altoIntales;
   if (logoGrupoLexacaucho) {
     const altoGL = LOGO_ALTO.grupoLexacaucho;
@@ -319,7 +288,7 @@ export const exportarCotizacionPdf = async (cotizacion) => {
       }
       const diasEntrega = item.diasEntrega;
       if (diasEntrega !== "" && diasEntrega != null) {
-        desc += `\nTiempo de entrega: ${diasEntrega} días hábiles`;
+        desc += `\nTiempo de entrega: ${diasEntrega} días`;
       }
       if (item.imagenes?.[0]) {
         desc += "\n".repeat(LINEAS_RESERVA_IMAGEN);
@@ -425,8 +394,7 @@ export const exportarCotizacionPdf = async (cotizacion) => {
       ],
       [
         { content: "TIEMPO DE ENTREGA", styles: { fontStyle: "bold", halign: "left" } },
-        // Texto fijo — no es un campo editable, ver spec (decisión del usuario).
-        { content: "DÍAS HÁBILES" },
+        { content: cotizacion.tipoDiasEntrega === "utiles" ? "DÍAS ÚTILES" : "DÍAS HÁBILES" },
         { content: "TOTAL", styles: { fontStyle: "bold", fontSize: 9 } },
         { content: `${simboloDoc} ${Number(cotizacion.total || 0).toFixed(2)}`, styles: { fontStyle: "bold", fontSize: 9, halign: "right" } },
       ],
@@ -445,103 +413,77 @@ export const exportarCotizacionPdf = async (cotizacion) => {
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6);
-  doc.text("** VALIDEZ DE LA OFERTA 15 DÍAS", M, y); y += 4;
-  doc.text("** CONSULTAR CONDICIONES DE TRANSPORTE", M, y); y += 8;
+  doc.text(`** VALIDEZ DE LA OFERTA ${cotizacion.validezOferta || 7} DÍAS`, M, y); y += 8;
 
-  // Ambos bloques de cierre (firma a la izquierda, caja de cuentas bancarias
-  // a la derecha) arrancan en el mismo `y` — van lado a lado, no apilados
-  // (corrección del usuario contra el Excel de referencia).
-  const cajaX = PAGE_W / 2 + 6;
-  const cajaW = PAGE_W - M - cajaX;
-  const cajaPad = 4;
-  // 8 líneas de texto × 4mm + 2 gaps de 2mm entre los 3 grupos de cuenta +
-  // 3mm de offset antes de la primera línea + padding arriba/abajo (cajaPad
-  // ×2) — debe coincidir exactamente con lo que recorre `lineaCaja()` más
-  // abajo para que la caja no corte el texto.
-  const cajaAltura = cajaPad + 3 + 4 * 8 + 2 * 2 + cajaPad;
-  if (y + Math.max(40, cajaAltura + 8) > PAGE_H - 15) { doc.addPage(); y = 15; }
-  const yBloque = y;
+  const cajaAltura = 16;
+  const firmaLineas = 4 + [cotizacion.creadoPor?.nombre, cotizacion.creadoPor?.cargo, cotizacion.creadoPor?.telefono, cotizacion.creadoPor?.correo].filter(Boolean).length;
+  if (y + 24 + cajaAltura + firmaLineas * 4.2 > PAGE_H - 15) { doc.addPage(); y = 15; }
 
-  // ─── Cierre: generar OC a nombre de + firma dinámica del creador (columna izquierda) ───
+  // ─── Pie: condiciones al margen izquierdo, caja de cuentas bancarias de
+  // ancho completo (borde negro, fondo blanco) y firma del creador centrada.
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.text("EN CASO DE SER FAVORECIDOS", PAGE_W / 4, y, { align: "center" });
-  y += 5;
-  doc.text(" GENERAR LA OC A NOMBRE DE:", PAGE_W / 4, y, { align: "center" });
-  y += 5;
-
   doc.setFontSize(8);
-  doc.setFont("helvetica", "bold");
-  doc.text(`${emisor.razonSocial || "—"}`, PAGE_W / 4, y, { align: "center" });
-  y += 5;
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "bold");
-  doc.text(`RUC ${emisor.ruc || "—"}`, PAGE_W / 4, y, { align: "center" })
+  doc.text("* En caso de ser favorecidos, girar la O/C a nombre de:", M, y); y += 4;
+  doc.text(`  ${emisor.razonSocial || "—"}, RUC ${emisor.ruc || "—"}`, M, y); y += 4;
+  doc.text(`* CTA de detracción BCO NACION S/ ${BANCOS.bnCuentaDetraccion}`, M, y); y += 4;
+  doc.text("* NO INCLUYE TRANSPORTE", M, y); y += 6;
 
-  y += 8;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.text("Atentamente,", PAGE_W / 4, y, { align: "center" });
-  y += 4.2;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.4);
+  doc.rect(M, y, CONTENT_W, cajaAltura);
+
+  const mitad = CONTENT_W / 2;
+  const columnaBanco = (x0, lineas) => {
+    let xTexto = x0 + 3;
+    if (logoBcp) {
+      const hLogo = LOGO_ALTO.bcp;
+      const wLogo = hLogo * (logoBcp.naturalWidth / logoBcp.naturalHeight);
+      doc.addImage(logoBcp, formatoImagen(logoBcp), x0 + 3, y + (cajaAltura - hLogo) / 2, wLogo, hLogo);
+      xTexto += wLogo + 3;
+    }
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(0, 0, 0);
+    doc.text(lineas[0], xTexto, y + cajaAltura / 2 - 1);
+    doc.text(lineas[1], xTexto, y + cajaAltura / 2 + 3.5);
+  };
+  columnaBanco(M, [
+    `Cuenta corriente BCP DÓLARES: ${BANCOS.bcpCuentaDolares}`,
+    `Cuenta corriente BCP SOLES:      ${BANCOS.bcpCuentaSoles}`,
+  ]);
+  columnaBanco(M + mitad, [
+    `CCI BCP DÓLARES: ${BANCOS.bcpCciDolares}`,
+    `CCI BCP SOLES:      ${BANCOS.bcpCciSoles}`,
+  ]);
+  y += cajaAltura + 8;
+
   const creador = cotizacion.creadoPor;
   if (creador?.nombre) {
-    doc.setFont("helvetica", "bold");
-    doc.text(creador.nombre, PAGE_W / 4, y, { align: "center" });
-    y += 4.2;
-    doc.setFont("helvetica", "normal");
-    if (creador.cargo) { doc.text(creador.cargo, PAGE_W / 4, y, { align: "center" }); y += 4.2; }
-    // const contacto = [creador.correo, creador.telefono].filter(Boolean).join(" · ");
-    // if (contacto) { doc.text(contacto, PAGE_W / 2, y, { align: "center" }); y += 4.2; }
-    doc.setFont("helvetica", "normal");
+    const cx = PAGE_W / 2;
     doc.setFontSize(8.5);
-    doc.text(creador.correo, PAGE_W / 4, y, { align: "center" });
-    y += 4.2
-    doc.setFontSize(8.5);
-    doc.text(creador.telefono, PAGE_W / 4, y, { align: "center" });
-
+    doc.setFont("helvetica", "normal");
+    doc.text(creador.nombre, cx, y, { align: "center" }); y += 4.2;
+    if (creador.cargo) {
+      doc.setFont("helvetica", "bold");
+      doc.text(creador.cargo, cx, y, { align: "center" }); y += 4.2;
+      doc.setFont("helvetica", "normal");
+    }
+    if (creador.telefono) { doc.text(`Teléfono: ${creador.telefono}`, cx, y, { align: "center" }); y += 4.2; }
+    if (creador.correo) { doc.text(creador.correo, cx, y, { align: "center" }); y += 4.2; }
   }
 
-  // ─── Cuentas bancarias — caja mostaza con borde azul, a la derecha del
-  // bloque "EN CASO DE SER FAVORECIDOS" (mismo `yBloque` de arranque), en
-  // vez de ir apiladas debajo a lo ancho de toda la hoja.
-  doc.setFillColor(...MOSTAZA);
+  y += 4;
+  if (y + 12 > PAGE_H - 10) { doc.addPage(); y = 15; }
   doc.setDrawColor(...AZUL);
-  doc.setLineWidth(0.4);
-  doc.rect(cajaX, yBloque, cajaW, cajaAltura, "FD");
-
-  // Logo BCP como insignia flotante en la esquina superior derecha de la
-  // caja (no ocupa una fila propia en el flujo de texto — ver captura de
-  // referencia del usuario).
-  if (logoBcp) {
-    const hLogo = LOGO_ALTO.bcp;
-    const wLogo = hLogo * (logoBcp.naturalWidth / logoBcp.naturalHeight);
-    const logoBcpSinFondo = quitarFondoBlanco(logoBcp);
-    const xBcp = LOGO_POS.bcp.x ?? (cajaX + cajaW - wLogo - cajaPad);
-    const yBcp = LOGO_POS.bcp.y ?? (yBloque + cajaPad - 1);
-    doc.addImage(logoBcpSinFondo || logoBcp, "PNG", xBcp, yBcp, wLogo, hLogo);
-  }
-
-  let yCaja = yBloque + cajaPad + 3;
-  const cxCaja = cajaX + cajaW / 2;
-  const lineaCaja = (texto, negrita = false) => {
-    doc.setFont("helvetica", negrita ? "bold" : "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(0, 0, 0);
-    doc.text(texto, cxCaja, yCaja, { align: "center" });
-    yCaja += 4;
-  };
-  lineaCaja("CUENTA CORRIENTE BCP DÓLARES", true);
-  lineaCaja(`CÓDIGO DE CUENTA: ${BANCOS.bcpCuentaDolares}`);
-  lineaCaja(`CCI: ${BANCOS.bcpCciDolares}`);
-  yCaja += 2;
-  lineaCaja("CUENTA CORRIENTE BCP SOLES", true);
-  lineaCaja(`CÓDIGO DE CUENTA: ${BANCOS.bcpCuentaSoles}`);
-  lineaCaja(`CCI: ${BANCOS.bcpCciSoles}`);
-  yCaja += 2;
-  lineaCaja("CUENTA DE DETRACCIÓN BANCO DE LA NACIÓN S/.", true);
-  lineaCaja(BANCOS.bnCuentaDetraccion);
-
-  y = Math.max(y, yBloque + cajaAltura) + 6;
+  doc.setLineWidth(0.15);
+  doc.line(M + 8, y, PAGE_W - M - 8, y);
+  y += 4;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6);
+  doc.setTextColor(0, 0, 0);
+  doc.text("Para consulta, reclamo, crédito, sugerencia o reasignación de vendedor(a); enviar un correo a consultas@lexacaucho.com .Donde se detallará", M + 30, y);
+  doc.text("la sugerencia, consulta o reclamo, manteniendo la confidencialidad y tomando las medidas necesarias para mejorar el servicio a ustedes.", M + 32, y + 3);
 
   doc.save(`Cotización N° ${codigoCompleto}.pdf`);
 };

@@ -59,11 +59,10 @@ export default function ModalNuevaOT({ cotizacion, onClose, onCreada }) {
       r.ok && r.json().then((d) => setForm((f) => ({ ...f, numeroOT: d.siguiente })))
     );
     cargarEmpresas();
-    // Encargado de Progreso se elige entre los usuarios con login y alguno
-    // de los 3 roles de técnico (antes salían de Personal, que no tiene
-    // ninguna relación real con quién puede loguearse como técnico y que su
-    // nombre coincida con el de la OT — ver Fase 13).
-    fetchAuth("/usuarios/lista").then((r) => r.ok && r.json()).then((u) => setTecnicos((u || []).filter((x) => ["tecnico", "tecnico_prueba", "tecnico_intervencion"].includes(x.rol))));
+    // Encargado de Progreso se elige entre los usuarios con login y rol
+    // Supervisor (antes eran los 3 roles de técnico — revisión del usuario,
+    // 2026-09-14).
+    fetchAuth("/usuarios/lista").then((r) => r.ok && r.json()).then((u) => setTecnicos((u || []).filter((x) => x.rol === "supervisor")));
   }, []);
 
   const empresaSel = empresas.find((e) => e._id === form.empresa);
@@ -333,10 +332,15 @@ export default function ModalNuevaOT({ cotizacion, onClose, onCreada }) {
           </div>
 
           {/* Card 4: Datos relacionados — la OT todavía no existe, los
-              archivos quedan pendientes y se suben recién al crearla. */}
+              archivos quedan pendientes y se suben recién al crearla. Si
+              viene de una Cotización, sus archivos (ej. los planos) se ven
+              acá de una vez, de solo lectura — el vínculo en ambos sentidos
+              queda armado ya creada la OT (ver DetalleOrdenTrabajo.jsx). */}
           <TarjetaArchivosRelacionados
             pendientes={archivosPendientes}
             onPendientesChange={setArchivosPendientes}
+            archivosVinculados={cotizacion?.archivos || []}
+            vinculadoLabel="la Cotización"
           />
 
           {error && <p className="text-xs text-red-500">{error}</p>}

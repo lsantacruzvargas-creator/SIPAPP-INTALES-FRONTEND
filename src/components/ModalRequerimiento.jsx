@@ -18,16 +18,18 @@ export default function ModalRequerimiento({ ot, onClose, onCreado }) {
   const [solicitudAbierta, setSolicitudAbierta] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  const [exito, setExito] = useState("");
 
   // "Solicitado por" lista a los 3 roles técnico (tecnico/tecnico_prueba/
   // tecnico_intervencion — los 3 tienen exactamente los mismos privilegios,
-  // no solo Personal general). Si el usuario logueado es uno de ellos, se
-  // autoselecciona y se bloquea (no puede pedir a nombre de otro técnico);
-  // si es otro rol (admin/jefatura/coordinadora pidiendo a nombre de un
-  // técnico) el select arranca vacío y editable.
+  // no solo Personal general) más Supervisor (revisión del usuario,
+  // 2026-09-14 — ahora también solicita material). Si el usuario logueado
+  // es uno de ellos, se autoselecciona y se bloquea (no puede pedir a
+  // nombre de otra persona); si es otro rol (admin/jefatura/coordinadora
+  // pidiendo a nombre de alguien) el select arranca vacío y editable.
   useEffect(() => {
     fetchAuth("/usuarios/lista").then((r) => r.ok && r.json()).then((d) => {
-      const filtrados = (d || []).filter((u) => ["tecnico", "tecnico_prueba", "tecnico_intervencion"].includes(u.rol));
+      const filtrados = (d || []).filter((u) => ["tecnico", "tecnico_prueba", "tecnico_intervencion", "supervisor"].includes(u.rol));
       setPersonal(filtrados);
       const propio = filtrados.find((u) => u._id === getUsuario()?.id);
       if (propio) {
@@ -86,7 +88,9 @@ export default function ModalRequerimiento({ ot, onClose, onCreado }) {
       body: JSON.stringify(body),
     });
     if (r.ok) {
-      onCreado(await r.json());
+      const data = await r.json();
+      setExito(`Requerimiento ${data.codigo} registrado.`);
+      setTimeout(() => onCreado(data), 1800);
     } else {
       const d = await r.json();
       setError(d.mensaje || "Error al guardar el requerimiento");
@@ -165,13 +169,20 @@ export default function ModalRequerimiento({ ot, onClose, onCreado }) {
             <textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)}
               className={INP} rows={2} placeholder="Opcional" />
           </div>
+
+          {exito && (
+            <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3">
+              {exito}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-2 justify-end px-6 py-4 border-t border-gray-100">
-          <button onClick={onClose} className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
+          <button onClick={onClose} disabled={guardando || !!exito}
+            className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={guardar} disabled={guardando}
+          <button onClick={guardar} disabled={guardando || !!exito}
             className="text-sm bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition font-medium">
             {guardando ? "Guardando…" : "Enviar requerimiento"}
           </button>

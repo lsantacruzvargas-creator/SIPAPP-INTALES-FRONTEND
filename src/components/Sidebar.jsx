@@ -46,9 +46,6 @@ const IconArchive = (p) => (
 const IconUsers = (p) => (
   <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-2.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3.5 3.5 0 10-1-6.87" /></svg>
 );
-const IconCheckCircle = (p) => (
-  <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-);
 const IconTruck = (p) => (
   <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16V6a1 1 0 011-1h9a1 1 0 011 1v10M3 16h11m0 0h2.5m-2.5 0V9h3.5L21 12.5V16h-2.5M7 19a2 2 0 100-4 2 2 0 000 4zm11 0a2 2 0 100-4 2 2 0 000 4z" /></svg>
 );
@@ -110,6 +107,7 @@ export default function Sidebar() {
   const esComercial  = ["admin", "asistente"].includes(usuario?.rol);
   const esCoordinadora = usuario?.rol === "coordinadora";
   const esAsistente  = usuario?.rol === "asistente";
+  const esVendedor   = usuario?.rol === "vendedor";
 
   const ir = (path) => { navigate(path); setAbierto(false); };
   const inicial = usuario?.nombre?.charAt(0)?.toUpperCase() || "?";
@@ -173,8 +171,10 @@ export default function Sidebar() {
     { to: "/catalogo-servicios", label: "Catálogo", Icon: IconTag, show: esAdmin || esJefatura || esCoordinadora },
     { to: "/almacen", label: "Almacén", Icon: IconArchive, show: esAdmin || esAlmacenero || esJefatura || esCoordinadora },
     { to: "/inventario", label: "Inventario", Icon: IconBoxes, show: esAdmin || esAlmacenero || esTecnico || esPlanner || esJefatura || esCoordinadora },
-    { to: "/requerimientos", label: "Requerimientos", Icon: IconClipboardList, show: esAdmin || esAlmacenero || esJefatura },
-    { to: "/aprobaciones", label: "Aprobaciones", Icon: IconCheckCircle, show: esAdmin || esJefatura },
+    { to: "/requerimientos", label: "Requerimientos", Icon: IconClipboardList, show: esAdmin || esAlmacenero || esJefatura || esCoordinadora || esVendedor },
+    { to: "/centros-costo", label: "Centros de Costo", Icon: IconTag, show: esAdmin },
+    { to: "/maquinas", label: "Máquinas", Icon: IconServer, show: esAdmin || esJefatura },
+    { to: "/tarifas-personal", label: "Tarifas de Personal", Icon: IconUsers, show: esAdmin || esJefatura },
     { to: "/usuarios", label: "Usuarios", Icon: IconUsers, show: esAdmin },
     { to: "/sistema", label: "Sistema", Icon: IconServer, show: esAdmin || esJefatura },
   ];
@@ -189,10 +189,10 @@ export default function Sidebar() {
       {/* Header móvil (<md): logo + hamburguesa. El sidebar completo se abre como drawer. */}
       <div className="md:hidden sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm h-14 flex items-center justify-between px-4">
         <div className="flex items-center gap-2.5 cursor-pointer"
-          onClick={() => ir(esTecnico || esPlanner ? "/ordenes-trabajo" : esAlmacenero ? "/almacen" : esJefatura ? "/aprobaciones" : esFacturacion ? "/facturas" : "/dashboard")}>
+          onClick={() => ir(esTecnico || esPlanner ? "/ordenes-trabajo" : esAlmacenero ? "/almacen" : esFacturacion ? "/facturas" : "/dashboard")}>
           <img src={`${import.meta.env.BASE_URL}assets/logos/logo_huaquian.jpg`} alt="Intales"
             className="w-8 h-8 rounded-lg object-contain shrink-0" />
-          <span className="font-bold text-gray-800 text-base tracking-tight">Intales</span>
+          <span className="font-bold text-gray-800 text-base tracking-tight">Metalmecanica</span>
         </div>
         <button onClick={() => setAbierto(true)} className="p-2 text-gray-500 hover:text-gray-800">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -222,14 +222,14 @@ export default function Sidebar() {
 
         {/* Bloque 1: logo */}
         <div
-          onClick={() => ir(esTecnico || esPlanner ? "/ordenes-trabajo" : esAlmacenero ? "/almacen" : esJefatura ? "/aprobaciones" : esFacturacion ? "/facturas" : "/dashboard")}
+          onClick={() => ir(esTecnico || esPlanner ? "/ordenes-trabajo" : esAlmacenero ? "/almacen" : esFacturacion ? "/facturas" : "/dashboard")}
           className={`h-16 shrink-0 flex items-center border-b border-gray-100 cursor-pointer gap-2.5 ${
             colapsado ? "px-4 md:px-0 md:justify-center" : "px-4"
           }`}
         >
           <img src={`${import.meta.env.BASE_URL}assets/logos/logo_huaquian.jpg`} alt="Intales"
             className="w-9 h-9 rounded-xl object-contain shrink-0" />
-          <span className={`font-bold text-gray-800 text-base tracking-tight ${colapsado ? "md:hidden" : ""}`}>Intales</span>
+          <span className={`font-bold text-gray-800 text-base tracking-tight ${colapsado ? "md:hidden" : ""}`}>Metalmecanica</span>
         </div>
 
         {/* Bloque 2: navegación */}

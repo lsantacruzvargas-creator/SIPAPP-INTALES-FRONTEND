@@ -207,7 +207,9 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
           {!esAsistente && (
             <div className="bg-gray-50 rounded-xl p-4 grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label className="text-xs text-gray-500 block mb-1">Subtotal sin IGV *</label>
+                <label className="text-xs text-gray-500 block mb-1">
+                  Subtotal sin IGV {cotVinculada?.moneda === "USD" ? "(US$)" : "(S/)"} *
+                </label>
                 <input type="number" name="subtotal" value={form.subtotal} onChange={handleChange}
                   disabled={esAsistente} step="0.01" min="0" placeholder="0.00" className={INP} />
               </div>
@@ -267,11 +269,11 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
         </div>
 
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end shrink-0">
-          <button onClick={onClose}
-            className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
+          <button onClick={onClose} disabled={guardando || !!exito}
+            className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={guardar} disabled={guardando}
+          <button onClick={guardar} disabled={guardando || !!exito}
             className="text-sm bg-blue-700 text-white px-5 py-2 rounded-lg hover:bg-blue-800 disabled:opacity-50 transition font-medium">
             {guardando ? "Creando…" : "Crear Orden de Compra"}
           </button>
