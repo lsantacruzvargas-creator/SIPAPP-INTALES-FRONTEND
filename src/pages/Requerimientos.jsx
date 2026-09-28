@@ -401,12 +401,19 @@ export default function Requerimientos() {
       .filter((it) => it.esSolicitudCompra)
       .map((it) => ({ ...it, requerimiento: r }))
   );
-  const itemsPendientePago = itemsCompra.filter((it) => it.estadoPago === "pendiente_pago");
-  const itemsPagados = itemsCompra.filter((it) => it.estadoPago === "pagado");
+  // Con solicitud de compra el pago va por Tesorería (OC a proveedor → factura
+  // → movimiento); aquí quedan solo los pagos antiguos.
+  const itemsLegacy = itemsCompra.filter((it) => !it.solicitudCompra);
+  const itemsPendientePago = itemsLegacy.filter((it) => it.estadoPago === "pendiente_pago");
+  const itemsPagados = itemsLegacy.filter((it) => it.estadoPago === "pagado");
 
   const serviciosActivos = servicios.filter((s) => !s.anulado);
-  const serviciosPendientePago = serviciosActivos.filter((s) => s.estadoPago === "pendiente_pago");
-  const serviciosPagados = serviciosActivos.filter((s) => s.estadoPago === "pagado");
+  const serviciosLegacy = serviciosActivos.filter((s) => !s.solicitudCompra);
+  const serviciosPendientePago = serviciosLegacy.filter((s) => s.estadoPago === "pendiente_pago");
+  const serviciosPagados = serviciosLegacy.filter((s) => s.estadoPago === "pagado");
+  const hayPagosMateriales = itemsPendientePago.length + itemsPagados.length > 0;
+  const tabsMateriales = hayPagosMateriales ? TABS_MATERIALES : TABS_MATERIALES.filter((t) => t.id === "activos" || t.id === "completados");
+  const tabsServicios = serviciosPendientePago.length + serviciosPagados.length > 0 ? TABS_SERVICIOS : [];
 
   const fmtFecha = (d) => d ? formatearFecha(d, { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—";
   const fmtFechaExcel = (d) => d ? formatearFecha(d, { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
@@ -520,7 +527,7 @@ export default function Requerimientos() {
 
       {/* Sub-tabs */}
       <div className="flex border-b border-gray-200 gap-1 flex-wrap">
-        {(seccion === "materiales" ? TABS_MATERIALES : TABS_SERVICIOS).map((t) => (
+        {(seccion === "materiales" ? tabsMateriales : tabsServicios).map((t) => (
           <button key={t.id}
             onClick={() => seccion === "materiales" ? setTabMateriales(t.id) : setTabServicios(t.id)}
             className={`px-4 py-2.5 text-sm font-medium transition border-b-2 -mb-px ${
