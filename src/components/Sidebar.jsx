@@ -172,7 +172,7 @@ export default function Sidebar() {
     { to: "/almacen", label: "Almacén", Icon: IconArchive, show: esAdmin || esAlmacenero || esJefatura || esCoordinadora },
     { to: "/inventario", label: "Inventario", Icon: IconBoxes, show: esAdmin || esAlmacenero || esTecnico || esPlanner || esJefatura || esCoordinadora },
     { to: "/requerimientos", label: "Requerimientos", Icon: IconClipboardList, show: esAdmin || esAlmacenero || esJefatura || esCoordinadora || esVendedor },
-    { to: "/centros-costo", label: "Centros de Costo", Icon: IconTag, show: esAdmin },
+    { to: "/centros-costo", label: "Centros de Costo", Icon: IconTag, show: esAdmin || esJefatura },
     { to: "/maquinas", label: "Máquinas", Icon: IconServer, show: esAdmin || esJefatura },
     { to: "/tarifas-personal", label: "Tarifas de Personal", Icon: IconUsers, show: esAdmin || esJefatura },
     { to: "/usuarios", label: "Usuarios", Icon: IconUsers, show: esAdmin },

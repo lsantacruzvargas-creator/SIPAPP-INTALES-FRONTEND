@@ -229,7 +229,7 @@ export default function App() {
       <Route
         path="/centros-costo"
         element={
-          <ProtectedRoute roles={["admin"]}>
+          <ProtectedRoute roles={["admin", "jefatura"]}>
             <Layout><CentrosCosto /></Layout>
           </ProtectedRoute>
         }
