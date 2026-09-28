@@ -79,7 +79,7 @@ export default function ModalEditarFactura({ factura: inicial, onClose, onGuarda
   const [error, setError]         = useState("");
 
   useEffect(() => {
-    fetchAuth("/empresas").then(r => r.ok && r.json()).then(d => setEmpresas(d || []));
+    fetchAuth("/empresas?tipo=cliente").then(r => r.ok && r.json()).then(d => setEmpresas(d || []));
   }, []);
 
   const plantasEmpresa = empresas.find(e => e._id === form.empresa)?.plantas ?? [];

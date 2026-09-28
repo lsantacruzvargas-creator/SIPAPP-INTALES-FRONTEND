@@ -52,7 +52,7 @@ export default function ModalNuevaOT({ cotizacion, onClose, onCreada }) {
   const [archivosPendientes, setArchivosPendientes] = useState([]);
 
   const cargarEmpresas = () =>
-    fetchAuth("/empresas").then((res) => res.ok && res.json().then(setEmpresas));
+    fetchAuth("/empresas?tipo=cliente").then((res) => res.ok && res.json().then(setEmpresas));
 
   useEffect(() => {
     fetchAuth("/ordenes-trabajo/siguiente-numero-ot").then((r) =>

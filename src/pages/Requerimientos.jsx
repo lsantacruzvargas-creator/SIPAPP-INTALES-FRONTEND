@@ -5,7 +5,6 @@ import { formatearFecha } from "../utils/fecha";
 import SelectorMateriales from "../components/SelectorMateriales";
 import PromptAccion from "../components/PromptAccion";
 import ConfirmacionAccion from "../components/ConfirmacionAccion";
-import ModalProcesarSolicitud from "../components/ModalProcesarSolicitud";
 
 const ESTADO_ITEM = {
   pendiente: "bg-blue-100 text-blue-700",
@@ -334,12 +333,10 @@ function FilaSeleccionable({ seleccionado, onToggle, disabledCheckbox, ot, oc, c
 const TABS_MATERIALES = [
   { id: "activos", label: "Activos" },
   { id: "completados", label: "Completados" },
-  { id: "por-procesar", label: "Por procesar" },
   { id: "pendiente-pago", label: "Pendiente de pago" },
   { id: "pagados", label: "Pagados" },
 ];
 const TABS_SERVICIOS = [
-  { id: "por-procesar", label: "Por procesar" },
   { id: "pendiente-pago", label: "Pendiente de pago" },
   { id: "pagados", label: "Pagados" },
 ];
@@ -350,18 +347,13 @@ export default function Requerimientos() {
   const [ordenesCompra, setOrdenesCompra] = useState([]);
   const [seccion, setSeccion] = useState("materiales");
   const [tabMateriales, setTabMateriales] = useState("activos");
-  const [tabServicios, setTabServicios] = useState("por-procesar");
+  const [tabServicios, setTabServicios] = useState("pendiente-pago");
   const [seleccionados, setSeleccionados] = useState(() => new Set());
-  const [procesarOpen, setProcesarOpen] = useState(false);
   const [confirmandoPago, setConfirmandoPago] = useState(false);
   const [pagando, setPagando] = useState(false);
   const [exitoPago, setExitoPago] = useState("");
   const usuario = getUsuario();
   const puedeAtender = ["admin", "jefatura", "almacenero"].includes(usuario?.rol);
-  // "Procesar solicitud" (elegir proveedor + monto) — rol vendedor, más
-  // admin como excepción (mismo criterio que el resto de acciones
-  // restringidas de la app).
-  const puedeProcesar = ["vendedor", "admin"].includes(usuario?.rol);
   // "Marcar como pagado" — exclusivo Coordinadora/Jefatura/Admin.
   const puedePagar = ["admin", "jefatura", "coordinadora"].includes(usuario?.rol);
 
@@ -409,12 +401,10 @@ export default function Requerimientos() {
       .filter((it) => it.esSolicitudCompra)
       .map((it) => ({ ...it, requerimiento: r }))
   );
-  const itemsPorProcesar = itemsCompra.filter((it) => (it.estadoPago || "por_procesar") === "por_procesar");
   const itemsPendientePago = itemsCompra.filter((it) => it.estadoPago === "pendiente_pago");
   const itemsPagados = itemsCompra.filter((it) => it.estadoPago === "pagado");
 
   const serviciosActivos = servicios.filter((s) => !s.anulado);
-  const serviciosPorProcesar = serviciosActivos.filter((s) => (s.estadoPago || "por_procesar") === "por_procesar");
   const serviciosPendientePago = serviciosActivos.filter((s) => s.estadoPago === "pendiente_pago");
   const serviciosPagados = serviciosActivos.filter((s) => s.estadoPago === "pagado");
 
@@ -483,38 +473,10 @@ export default function Requerimientos() {
   const filaMaterialKey = (it) => `mat-${it._id}`;
   const filaServicioKey = (s) => `serv-${s._id}`;
 
-  const itemsSeleccionadosMateriales = itemsPorProcesar.filter((it) => seleccionados.has(filaMaterialKey(it)));
   const itemsSeleccionadosPagoMateriales = itemsPendientePago.filter((it) => seleccionados.has(filaMaterialKey(it)));
-  const serviciosSeleccionados = serviciosPorProcesar.filter((s) => seleccionados.has(filaServicioKey(s)));
   const serviciosSeleccionadosPago = serviciosPendientePago.filter((s) => seleccionados.has(filaServicioKey(s)));
 
-  const hayPorProcesarSeleccionados = seccion === "materiales" ? itemsSeleccionadosMateriales.length > 0 : serviciosSeleccionados.length > 0;
   const hayPendientePagoSeleccionados = seccion === "materiales" ? itemsSeleccionadosPagoMateriales.length > 0 : serviciosSeleccionadosPago.length > 0;
-
-  const itemsParaModal = seccion === "materiales"
-    ? itemsSeleccionadosMateriales.map((it) => ({
-        key: filaMaterialKey(it),
-        requerimientoId: it.requerimiento._id,
-        id: it._id,
-        label: `${it.categoriaNombre} — ${it.requerimiento.codigo}`,
-        cantidad: it.cantidad,
-        unidad: it.materialAsociado?.unidad || "",
-      }))
-    : serviciosSeleccionados.map((s) => ({
-        key: filaServicioKey(s),
-        id: s._id,
-        label: `${s.tipoTrabajo} — ${s.material}`,
-        cantidad: s.cantidad,
-        unidad: "",
-      }));
-
-  // El propio ModalProcesarSolicitud ya muestra su rectángulo verde de éxito
-  // (mismo patrón que ModalCrearOrdenCompra) antes de llamar a onProcesado.
-  const procesarListo = async () => {
-    setProcesarOpen(false);
-    setSeleccionados(new Set());
-    await cargar();
-  };
 
   const pagarSeleccionados = async () => {
     setPagando(true);
@@ -541,6 +503,7 @@ export default function Requerimientos() {
       <div>
         <h1 className="text-xl font-bold text-gray-800">Requerimientos</h1>
         <p className="text-sm text-gray-400 mt-0.5">Solicitudes de material y servicios externos hechas desde las Órdenes de Trabajo</p>
+        <p className="text-xs text-purple-600 mt-1">Las solicitudes de compra por procesar ahora se gestionan en Compras (SC → licitación → OC al proveedor).</p>
       </div>
 
       {/* Sección: Materiales / Servicios */}
@@ -570,27 +533,11 @@ export default function Requerimientos() {
       </div>
 
       {/* Barra de acción masiva */}
-      {seccion === "materiales" && tabMateriales === "por-procesar" && puedeProcesar && hayPorProcesarSeleccionados && (
-        <div className="flex justify-end">
-          <button onClick={() => setProcesarOpen(true)}
-            className="text-sm bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition font-medium">
-            Procesar solicitud ({itemsSeleccionadosMateriales.length})
-          </button>
-        </div>
-      )}
       {seccion === "materiales" && tabMateriales === "pendiente-pago" && puedePagar && hayPendientePagoSeleccionados && (
         <div className="flex justify-end">
           <button onClick={() => setConfirmandoPago(true)}
             className="text-sm bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition font-medium">
             Marcar como pagado ({itemsSeleccionadosPagoMateriales.length})
-          </button>
-        </div>
-      )}
-      {seccion === "servicios" && tabServicios === "por-procesar" && puedeProcesar && hayPorProcesarSeleccionados && (
-        <div className="flex justify-end">
-          <button onClick={() => setProcesarOpen(true)}
-            className="text-sm bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition font-medium">
-            Procesar solicitud ({serviciosSeleccionados.length})
           </button>
         </div>
       )}
@@ -660,18 +607,16 @@ export default function Requerimientos() {
       )}
 
       {/* ── Materiales: Por procesar / Pendiente de pago / Pagados (lista con checkbox) ── */}
-      {seccion === "materiales" && ["por-procesar", "pendiente-pago", "pagados"].includes(tabMateriales) && (
+      {seccion === "materiales" && ["pendiente-pago", "pagados"].includes(tabMateriales) && (
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
           {(() => {
-            const items = tabMateriales === "por-procesar" ? itemsPorProcesar
-              : tabMateriales === "pendiente-pago" ? itemsPendientePago
-              : itemsPagados;
+            const items = tabMateriales === "pendiente-pago" ? itemsPendientePago : itemsPagados;
             if (items.length === 0) {
               return <p className="text-center py-10 text-gray-00 text-md">Sin solicitudes de compra en esta vista</p>;
             }
             return items.map((it) => {
               const key = filaMaterialKey(it);
-              const puedeMarcar = tabMateriales === "por-procesar" ? puedeProcesar : tabMateriales === "pendiente-pago" ? puedePagar : false;
+              const puedeMarcar = tabMateriales === "pendiente-pago" && puedePagar;
               return (
                 <FilaSeleccionable key={key}
                   seleccionado={seleccionados.has(key)}
@@ -712,15 +657,13 @@ export default function Requerimientos() {
       {seccion === "servicios" && (
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
           {(() => {
-            const items = tabServicios === "por-procesar" ? serviciosPorProcesar
-              : tabServicios === "pendiente-pago" ? serviciosPendientePago
-              : serviciosPagados;
+            const items = tabServicios === "pendiente-pago" ? serviciosPendientePago : serviciosPagados;
             if (items.length === 0) {
               return <p className="text-center py-1 text-gray-300 text-sm">Sin servicios en esta vista</p>;
             }
             return items.map((s) => {
               const key = filaServicioKey(s);
-              const puedeMarcar = tabServicios === "por-procesar" ? puedeProcesar : tabServicios === "pendiente-pago" ? puedePagar : false;
+              const puedeMarcar = tabServicios === "pendiente-pago" && puedePagar;
               return (
                 <FilaSeleccionable key={key}
                   seleccionado={seleccionados.has(key)}
@@ -754,15 +697,6 @@ export default function Requerimientos() {
             });
           })()}
         </div>
-      )}
-
-      {procesarOpen && (
-        <ModalProcesarSolicitud
-          tipo={seccion === "materiales" ? "material" : "servicio"}
-          items={itemsParaModal}
-          onClose={() => setProcesarOpen(false)}
-          onProcesado={procesarListo}
-        />
       )}
 
       {confirmandoPago && (

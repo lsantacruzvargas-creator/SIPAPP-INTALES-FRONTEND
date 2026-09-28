@@ -6,7 +6,7 @@ import { fetchAuth, fetchUpload } from "./fetchAuth";
 // Se cargan desde /public (no un import de módulo) para que, si el archivo
 // todavía no fue subido, solo falle la carga de esa imagen puntual en vez
 // de romper el build o la exportación completa del PDF.
-function cargarImagen(url) {
+export function cargarImagen(url) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => resolve(img);
@@ -54,7 +54,7 @@ function cargarImagenProtegida(url) {
 // subida como JPEG/WEBP (bug real, confirmado 2026-09-11, mismo síntoma que
 // el de la Object URL revocada). Se detecta del propio `src` (funciona
 // tanto para rutas de archivo en /public como para data URIs).
-function formatoImagen(img) {
+export function formatoImagen(img) {
   const src = img?.src || "";
   if (/\.jpe?g(\?|$)/i.test(src) || /^data:image\/jpe?g/i.test(src)) return "JPEG";
   if (/\.webp(\?|$)/i.test(src) || /^data:image\/webp/i.test(src)) return "WEBP";

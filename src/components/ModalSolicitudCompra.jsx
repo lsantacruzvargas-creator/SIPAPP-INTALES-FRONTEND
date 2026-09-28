@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
+import SelectorTipoArticulo from "./SelectorTipoArticulo";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 
@@ -16,6 +17,7 @@ export default function ModalSolicitudCompra({ onAgregar, onClose }) {
   const [cantidad, setCantidad] = useState("");
   const [valores, setValores] = useState({});
   const [descripcionOtros, setDescripcionOtros] = useState("");
+  const [tipoArticulo, setTipoArticulo] = useState({ id: "", nombre: "" });
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -29,6 +31,7 @@ export default function ModalSolicitudCompra({ onAgregar, onClose }) {
   const agregar = () => {
     if (!categoria) { setError("Selecciona una categoría"); return; }
     if (!cantidad || cantidad <= 0) { setError("Ingresa la cantidad"); return; }
+    if (!tipoArticulo.id) { setError("Selecciona el tipo de artículo"); return; }
     if (categoria._id === "otros") {
       if (!descripcionOtros.trim()) { setError("Describe el material"); return; }
     } else {
@@ -45,6 +48,8 @@ export default function ModalSolicitudCompra({ onAgregar, onClose }) {
       categoriaMaterial: categoria._id === "otros" ? null : categoria._id,
       categoriaNombre: categoria.nombre,
       camposCompra: categoria._id === "otros" ? { descripcion: descripcionOtros.trim() } : valores,
+      tipoArticulo: tipoArticulo.id,
+      tipoArticuloNombre: tipoArticulo.nombre,
     });
   };
 
@@ -91,6 +96,13 @@ export default function ModalSolicitudCompra({ onAgregar, onClose }) {
               )}
             </div>
           ))}
+
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Tipo de artículo *</label>
+            <SelectorTipoArticulo value={tipoArticulo.id}
+              onChange={(id, tipo) => setTipoArticulo({ id, nombre: tipo?.nombre || "" })} />
+            <p className="text-[11px] text-gray-400 mt-1">Sirve para sugerir proveedores en Compras. Si no existe, escríbelo y agrégalo.</p>
+          </div>
 
           <div>
             <label className="text-xs text-gray-500 block mb-1">Cantidad *</label>

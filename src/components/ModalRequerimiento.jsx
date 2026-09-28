@@ -79,7 +79,7 @@ export default function ModalRequerimiento({ ot, onClose, onCreado }) {
       personal: personalId,
       observaciones,
       items: items.map((it) => it.esSolicitudCompra
-        ? { esSolicitudCompra: true, cantidad: it.cantidad, categoriaMaterial: it.categoriaMaterial, categoriaNombre: it.categoriaNombre, camposCompra: it.camposCompra }
+        ? { esSolicitudCompra: true, cantidad: it.cantidad, categoriaMaterial: it.categoriaMaterial, categoriaNombre: it.categoriaNombre, camposCompra: it.camposCompra, tipoArticulo: it.tipoArticulo }
         : { esSolicitudCompra: false, material: it.material, cantidad: it.cantidad }),
     };
     const r = await fetchAuth("/requerimientos", {
@@ -144,6 +144,9 @@ export default function ModalRequerimiento({ ot, onClose, onCreado }) {
                       <p className="text-sm font-medium text-gray-800">
                         <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 mr-1.5">Compra</span>
                         {it.categoriaNombre}
+                        {it.tipoArticuloNombre && (
+                          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">{it.tipoArticuloNombre}</span>
+                        )}
                       </p>
                       <p className="text-xs text-gray-400 truncate">
                         {Object.entries(it.camposCompra).map(([k, v]) => `${k}: ${v}`).join(" · ")}

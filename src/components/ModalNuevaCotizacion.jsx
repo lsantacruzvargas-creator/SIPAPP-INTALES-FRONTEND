@@ -69,7 +69,7 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
   const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(getUsuario()?.rol);
 
   const cargarEmpresas = () =>
-    fetchAuth("/empresas").then(r => r.ok && r.json()).then(d => setEmpresas(d || []));
+    fetchAuth("/empresas?tipo=cliente").then(r => r.ok && r.json()).then(d => setEmpresas(d || []));
 
   useEffect(() => {
     cargarEmpresas();

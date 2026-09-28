@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
+import SelectorTipoArticulo from "./SelectorTipoArticulo";
 
-const FORM_VACIO = { razonSocial: "", ruc: "", direccion: "", alias: "", requiereHes: false, requiereActaConformidad: false, plantas: [] };
+const FORM_VACIO = { razonSocial: "", ruc: "", direccion: "", alias: "", tipo: "cliente", tipoArticulos: [], requiereHes: false, requiereActaConformidad: false, plantas: [] };
 const PLANTA_VACIA = { nombre: "", ubigeo: "", direccion: "", contactoNombre: "", contactoTelefono: "", contactoCorreo: "" };
 
 export default function ModalEmpresa({ empresa, onClose, onGuardada }) {
@@ -12,6 +13,9 @@ export default function ModalEmpresa({ empresa, onClose, onGuardada }) {
         ruc: empresa.ruc,
         direccion: empresa.direccion || "",
         alias: empresa.alias || "",
+        tipo: empresa.tipo || "cliente",
+        // GET /empresas los trae poblados ({ _id, nombre }); el form guarda solo ids.
+        tipoArticulos: (empresa.tipoArticulos || []).map((t) => String(t._id || t)),
         requiereHes: empresa.requiereHes || false,
         requiereActaConformidad: empresa.requiereActaConformidad || false,
         plantas: empresa.plantas || [],
@@ -232,6 +236,25 @@ export default function ModalEmpresa({ empresa, onClose, onGuardada }) {
             />
           </div>
           <div className="col-span-2 grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Tipo</label>
+              <select name="tipo" value={form.tipo} onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
+                <option value="cliente">Cliente</option>
+                <option value="proveedor">Proveedor</option>
+                <option value="ambos">Cliente y proveedor</option>
+              </select>
+            </div>
+            {form.tipo !== "cliente" && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Tipos de artículo que provee</label>
+                <SelectorTipoArticulo multiple value={form.tipoArticulos}
+                  onChange={(ids) => setForm((f) => ({ ...f, tipoArticulos: ids }))} />
+              </div>
+            )}
+          </div>
+          {form.tipo !== "proveedor" && (
+          <div className="col-span-2 grid grid-cols-2 gap-3">
             <label className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 cursor-pointer">
               <input
                 type="checkbox"
@@ -256,6 +279,7 @@ export default function ModalEmpresa({ empresa, onClose, onGuardada }) {
               Cada uno es independiente — si está activo, las Órdenes de Compra de esta empresa mostrarán ese checkbox y deberá marcarse antes de poder generar la factura.
             </p>
           </div>
+          )}
 
           <div className="col-span-2">
             <label className="block text-xs font-medium text-gray-600 mb-1">Plantas</label>

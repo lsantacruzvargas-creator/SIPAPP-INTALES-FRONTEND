@@ -118,7 +118,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
   const sumaCuotas = cuotas.reduce((s, c) => s + (Number(c.monto) || 0), 0);
 
   useEffect(() => {
-    fetchAuth("/empresas").then(r => r.ok && r.json()).then(d => setEmpresas(d || []));
+    fetchAuth("/empresas?tipo=cliente").then(r => r.ok && r.json()).then(d => setEmpresas(d || []));
   }, []);
 
   const plantasEmpresa = empresas.find(e => e._id === form.empresa)?.plantas ?? [];

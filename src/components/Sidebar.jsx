@@ -28,6 +28,9 @@ const IconDocument = (p) => (
 const IconCart = (p) => (
   <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-1.7 1.7c-.6.6-.2 1.7.7 1.7H17m-10 4a1 1 0 102 0 1 1 0 00-2 0zm10 0a1 1 0 102 0 1 1 0 00-2 0z" /></svg>
 );
+const IconBag = (p) => (
+  <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+);
 const IconReceipt = (p) => (
   <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6" /></svg>
 );
@@ -155,6 +158,7 @@ export default function Sidebar() {
   // - coordinadora (nuevo rol): Almacén (nivel almacenero), Inventario,
   //   OTs (nivel admin), Cotizaciones y Órdenes de Compra de solo lectura
   //   (sin precios/montos) — ver detalle de permisos en cada página/ruta.
+  // - Compras (SC → licitación → OC a proveedor): admin, jefatura y vendedor.
   const NAV_ITEMS = [
     { to: "/dashboard", label: "Dashboard", Icon: IconHome, show: esAdmin || esJefatura || esPlanner || esCoordinadora || esAsistente },
     { to: "/ordenes-trabajo", label: "Orden de Trabajo", Icon: IconClipboard, show: esComercial || esTecnico || esSupervisor || esPlanner || esJefatura || esCoordinadora },
@@ -172,7 +176,8 @@ export default function Sidebar() {
     { to: "/almacen", label: "Almacén", Icon: IconArchive, show: esAdmin || esAlmacenero || esJefatura || esCoordinadora },
     { to: "/inventario", label: "Inventario", Icon: IconBoxes, show: esAdmin || esAlmacenero || esTecnico || esPlanner || esJefatura || esCoordinadora },
     { to: "/requerimientos", label: "Requerimientos", Icon: IconClipboardList, show: esAdmin || esAlmacenero || esJefatura || esCoordinadora || esVendedor },
-    { to: "/centros-costo", label: "Centros de Costo", Icon: IconTag, show: esAdmin },
+    { to: "/compras", label: "Compras", Icon: IconBag, show: esAdmin || esJefatura || esVendedor },
+    { to: "/centros-costo", label: "Centros de Costo", Icon: IconTag, show: esAdmin || esJefatura },
     { to: "/maquinas", label: "Máquinas", Icon: IconServer, show: esAdmin || esJefatura },
     { to: "/tarifas-personal", label: "Tarifas de Personal", Icon: IconUsers, show: esAdmin || esJefatura },
     { to: "/usuarios", label: "Usuarios", Icon: IconUsers, show: esAdmin },
