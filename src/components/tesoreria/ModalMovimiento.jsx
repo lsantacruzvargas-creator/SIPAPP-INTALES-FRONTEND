@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
 import { money } from "../../utils/compras";
-import { cuentasPara, tipoMovimientoEsperado, etiquetaImpuesto } from "../../utils/tesoreria";
+import { cuentasPara, tipoMovimientoEsperado, etiquetaImpuesto, avisoMoneda } from "../../utils/tesoreria";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full";
 const MEDIOS = [
@@ -39,6 +39,8 @@ export default function ModalMovimiento({ lado, documento, onClose, onGuardado }
   const etiquetaOperacion = tipo === "retencion" ? "N° de comprobante de retención"
     : esDetraccion ? "N° de constancia de depósito" : "N° de operación";
   const verbo = lado === "compra" ? "pago" : "cobro";
+  const aviso = tipo === "retencion" ? null
+    : avisoMoneda(cuentas.find((c) => c._id === form.cuenta), form.concepto === "neto" ? moneda : "PEN");
 
   const guardar = async () => {
     setGuardando(true);
@@ -49,11 +51,16 @@ export default function ModalMovimiento({ lado, documento, onClose, onGuardado }
     };
     if (tipo !== "retencion") body.cuenta = form.cuenta;
     if (tipo === "transferencia") body.cuentaDestino = form.cuentaDestino;
-    const r = await fetchAuth("/movimientos-tesoreria", { method: "POST", body: JSON.stringify(body) });
-    const data = await r.json().catch(() => ({}));
-    setGuardando(false);
-    if (!r.ok) return setError(data.mensaje || `No se pudo registrar el ${verbo}.`);
-    onGuardado(data);
+    try {
+      const r = await fetchAuth("/movimientos-tesoreria", { method: "POST", body: JSON.stringify(body) });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) return setError(data.mensaje || `No se pudo registrar el ${verbo}.`);
+      onGuardado(data);
+    } catch {
+      setError("Error de conexión con el servidor: el pago no se registró, intenta de nuevo.");
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const parte = (concepto, titulo, saldo, mon) => (
@@ -113,6 +120,7 @@ export default function ModalMovimiento({ lado, documento, onClose, onGuardado }
             <input value={form.numeroOperacion} onChange={set("numeroOperacion")} className={INP} />
           </label>
         </div>
+        {aviso && <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">{aviso}</p>}
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>

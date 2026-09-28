@@ -34,11 +34,16 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
   const anular = async (motivo) => {
     setProcesando(true);
     setError("");
-    const r = await fetchAuth(`/facturas-proveedor/${anulando._id}/anular`, { method: "PATCH", body: JSON.stringify({ motivo }) });
-    if (r.ok) await cargar();
-    else setError((await r.json().catch(() => ({}))).mensaje || "No se pudo anular la factura.");
-    setProcesando(false);
-    setAnulando(null);
+    try {
+      const r = await fetchAuth(`/facturas-proveedor/${anulando._id}/anular`, { method: "PATCH", body: JSON.stringify({ motivo }) });
+      if (r.ok) await cargar();
+      else setError((await r.json().catch(() => ({}))).mensaje || "No se pudo anular la factura.");
+    } catch {
+      setError("Error de conexión con el servidor, intenta de nuevo.");
+    } finally {
+      setProcesando(false);
+      setAnulando(null);
+    }
   };
 
   return (

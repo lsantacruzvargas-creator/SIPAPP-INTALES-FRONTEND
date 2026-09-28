@@ -4,6 +4,7 @@ import { formatearFecha } from "../utils/fecha";
 import { round2 } from "../utils/compras";
 import { calcularImpuesto, partes, etiquetaImpuesto } from "../utils/tesoreria";
 import ModalMovimiento from "./tesoreria/ModalMovimiento";
+import ConfirmacionAccion from "./ConfirmacionAccion";
 import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgeOT, badgePago, money, BotonAnular, BannerAnulado, bloqueadoPorCadenaCerrada,
@@ -90,6 +91,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState("");
   const [cobrando, setCobrando]   = useState(false);
+  const [recalculo, setRecalculo] = useState(null);
   const puedeCobrar = ["admin", "jefatura", "facturacion"].includes(getUsuario()?.rol);
   const [cargandoOC, setCargandoOC] = useState(false);
   // "jefatura" agregado acá para calzar con el gate real del backend
@@ -190,7 +192,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
     });
   };
 
-  const guardar = async () => {
+  const guardar = async (confirmarRecalculo = false) => {
     setError(""); setGuardando(true);
     const payload = {
       numeroFactura:      form.numeroFactura,
@@ -207,15 +209,26 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
     if (form.fechaCancelacion) payload.fechaCancelacion = form.fechaCancelacion;
     if (form.empresa)          payload.empresa          = form.empresa;
     if (!payload.ordenCompra)  delete payload.ordenCompra;
+    if (confirmarRecalculo)    payload.confirmarRecalculo = true;
 
-    const res = await fetchAuth(`/facturas/${inicial._id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) { onGuardada(await res.json()); }
-    else { setError("No se pudo guardar los cambios."); }
-    setGuardando(false);
+    try {
+      const res = await fetchAuth(`/facturas/${inicial._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      // 409: el cambio de subtotal recalcula IGV, total, impuesto y cuotas — se
+      // muestra la vista previa y se reenvía solo si el usuario confirma.
+      if (res.status === 409 && data.recalculo) { setRecalculo(data.recalculo); return; }
+      setRecalculo(null);
+      if (!res.ok) { setError(data.mensaje || "No se pudo guardar los cambios."); return; }
+      onGuardada(data);
+    } catch {
+      setError("Error de conexión con el servidor, intenta de nuevo.");
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const anular = async (motivo) => {
@@ -272,7 +285,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
               </div>
               {!inicial.anulado && !cadenaCerrada && puedeEditar && <BotonAnular onAnular={anular} />}
               {!inicial.anulado && !cadenaCerrada && puedeEditar && (
-                <button onClick={guardar} disabled={guardando}
+                <button onClick={() => guardar()} disabled={guardando}
                   className="bg-white text-emerald-700 text-sm px-5 py-2 rounded-lg hover:bg-emerald-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">
                   {guardando ? "Guardando…" : "Guardar cambios"}
                 </button>
@@ -509,6 +522,21 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
       </div>
     </div>
 
+    {recalculo && (
+      <ConfirmacionAccion
+        mensaje={<>
+          <span className="block mb-2">Cambiar el subtotal recalcula la factura. Revisa los nuevos valores:</span>
+          <span className="block">Subtotal: {money(recalculo.subtotal)} · IGV: {money(recalculo.igv)} · Total: {money(recalculo.total)}</span>
+          {recalculo.tipoImpuesto !== "ninguno" && <span className="block">{recalculo.tipoImpuesto === "retencion" ? "Retención" : "Detracción"}: {money(recalculo.impuesto)}</span>}
+          <span className="block font-semibold">Neto a cobrar: {money(recalculo.totalAPagar)}</span>
+          {recalculo.cuotas.map((c) => <span key={c.numero} className="block text-xs">Cuota {c.numero}: {money(c.monto)}</span>)}
+        </>}
+        onCancelar={() => setRecalculo(null)}
+        onConfirmar={() => guardar(true)}
+        procesando={guardando}
+        textoConfirmar="Recalcular y guardar"
+      />
+    )}
     {cobrando && (
       <ModalMovimiento lado="venta" documento={inicial} onClose={() => setCobrando(false)}
         onGuardado={() => { setCobrando(false); onClose(); }} />

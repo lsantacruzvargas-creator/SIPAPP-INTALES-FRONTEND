@@ -136,3 +136,15 @@ export const fechaIsoTexto = (v) => {
 // Un origen que pasó por Compras (SC → OCP) se paga en Tesorería; en Requerimientos
 // solo quedan los pagos antiguos. La SC queda en el Requerimiento (ítems) o en el Servicio.
 export const esPagoAntiguo = (x) => !(x.solicitudCompra || x.requerimiento?.solicitudCompra);
+
+// Pagar desde una cuenta en otra moneda está permitido (hay conversión en el banco),
+// pero se avisa porque el libro por cuenta mezcla monedas.
+export function avisoMoneda(cuenta, monedaParte) {
+  if (!cuenta || cuenta.moneda === monedaParte) return null;
+  return `La cuenta ${cuenta.nombre} está en ${cuenta.moneda} y este monto es en ${monedaParte}: verifica la conversión antes de registrar.`;
+}
+
+export function diasEntre(desdeIso, hastaIso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(desdeIso || "") || !/^\d{4}-\d{2}-\d{2}$/.test(hastaIso || "")) return null;
+  return Math.round((Date.parse(hastaIso) - Date.parse(desdeIso)) / 86400000);
+}

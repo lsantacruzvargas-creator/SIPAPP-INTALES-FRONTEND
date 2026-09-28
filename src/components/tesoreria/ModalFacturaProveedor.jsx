@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { fetchAuth, uploadAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
 import { money, round2, nombreEmpresa } from "../../utils/compras";
-import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, CODIGOS_DETRACCION } from "../../utils/tesoreria";
+import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION } from "../../utils/tesoreria";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full";
 const TIPOS = [{ valor: "01", label: "Factura" }, { valor: "02", label: "Recibo por honorarios" }, { valor: "03", label: "Boleta" }];
@@ -13,6 +13,7 @@ function desdeOCP(o, fechaEmision) {
     modo: "oc", ordenCompraProveedor: o._id, proveedor: String(o.proveedor), moneda: o.moneda,
     subtotal: String(o.saldoPorFacturar), hayServicios: !!o.hayServicios,
     condicion: dias > 0 ? "credito" : "contado", fechaVencimiento: dias > 0 ? sumarDias(fechaEmision, dias) : "",
+    plazoDias: dias > 0 ? dias : null,
   };
 }
 
@@ -38,6 +39,8 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   }));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  // Factura ya registrada cuyo PDF no se pudo subir: el modal pasa a "reintentar PDF".
+  const [registrada, setRegistrada] = useState(null);
 
   useEffect(() => {
     fetchAuth("/tesoreria/por-pagar").then((r) => (r.ok ? r.json() : { ocps: [] })).then((d) => {
@@ -55,6 +58,18 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
     const o = ocps.find((x) => x._id === e.target.value);
     setForm((f) => (o ? { ...f, ...desdeOCP(o, f.fechaEmision) } : { ...f, ordenCompraProveedor: "" }));
   };
+  // El plazo de crédito se conserva: mover la emisión mueve el vencimiento.
+  const cambiarEmision = (e) => {
+    const fechaEmision = e.target.value;
+    setForm((f) => ({
+      ...f, fechaEmision,
+      fechaVencimiento: f.condicion === "credito" && f.plazoDias != null && fechaEmision ? sumarDias(fechaEmision, f.plazoDias) : f.fechaVencimiento,
+    }));
+  };
+  const cambiarVencimiento = (e) => {
+    const fechaVencimiento = e.target.value;
+    setForm((f) => ({ ...f, fechaVencimiento, plazoDias: diasEntre(f.fechaEmision, fechaVencimiento) }));
+  };
   const elegirImpuesto = (campo) => (e) => setForm((f) => ({ ...f, impuestoManual: true, [campo]: e.target.value }));
 
   const subtotal = round2(form.subtotal || 0);
@@ -68,39 +83,53 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   const resumen = partes({ lado: "compra", total, moneda: form.moneda, tipoCambio, impuesto: { tipo: imp.tipo, monto, quienDeposita } });
   const ocpsConSaldo = ocps.filter((o) => o.saldoPorFacturar > 0.1);
 
-  const guardar = async () => {
-    setGuardando(true);
-    setError("");
-    const body = {
-      tipoComprobante: form.tipoComprobante, serie: form.serie, numero: form.numero, fechaEmision: form.fechaEmision,
-      moneda: form.moneda, tipoCambio, subtotal, igv, flete: Number(form.flete) || 0,
-      condicion: form.condicion, fechaVencimiento: form.fechaVencimiento,
-      impuesto: { tipo: imp.tipo, codigoSunat: imp.codigoSunat, quienDeposita },
-    };
-    if (form.modo === "oc") body.ordenCompraProveedor = form.ordenCompraProveedor;
-    else body.proveedor = form.proveedor;
-    if (form.modo === "flete") body.esFleteDe = form.esFleteDe;
-    if (form.modo === "sinOc") body.centroCosto = form.centroCosto;
-    const r = await fetchAuth("/facturas-proveedor", { method: "POST", body: JSON.stringify(body) });
-    let fp = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      setGuardando(false);
-      return setError(fp.mensaje || "No se pudo registrar la factura.");
-    }
-    if (archivo) {
+  const subirPdf = async (fp) => {
+    try {
       const fd = new FormData();
       fd.append("archivo", archivo);
       const ra = await uploadAuth(`/facturas-proveedor/${fp._id}/archivos`, fd);
-      if (ra.ok) fp = await ra.json();
+      if (ra.ok) return onGuardada(await ra.json());
+      const d = await ra.json().catch(() => ({}));
+      setError(d.mensaje || "Formato o tamaño no permitido (PDF o imagen, máx. 20 MB).");
+    } catch {
+      setError("Error de conexión al subir el PDF.");
     }
-    setGuardando(false);
-    onGuardada(fp);
+    setRegistrada(fp);
   };
+
+  const guardar = async () => {
+    setGuardando(true);
+    setError("");
+    try {
+      if (registrada) return await subirPdf(registrada);
+      const body = {
+        tipoComprobante: form.tipoComprobante, serie: form.serie, numero: form.numero, fechaEmision: form.fechaEmision,
+        moneda: form.moneda, tipoCambio, subtotal, igv, flete: Number(form.flete) || 0,
+        condicion: form.condicion, fechaVencimiento: form.fechaVencimiento,
+        impuesto: { tipo: imp.tipo, codigoSunat: imp.codigoSunat, quienDeposita },
+      };
+      if (form.modo === "oc") body.ordenCompraProveedor = form.ordenCompraProveedor;
+      else body.proveedor = form.proveedor;
+      if (form.modo === "flete") body.esFleteDe = form.esFleteDe;
+      if (form.modo === "sinOc") body.centroCosto = form.centroCosto;
+      const r = await fetchAuth("/facturas-proveedor", { method: "POST", body: JSON.stringify(body) });
+      const fp = await r.json().catch(() => ({}));
+      if (!r.ok) return setError(fp.mensaje || "No se pudo registrar la factura.");
+      if (archivo) await subirPdf(fp);
+      else onGuardada(fp);
+    } catch {
+      setError("Error de conexión con el servidor: verifica en Por pagar si la factura quedó registrada antes de reintentar.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4" style={{ zIndex: 50 }}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-6 space-y-4">
         <h3 className="text-lg font-bold text-gray-800">Registrar factura de proveedor</h3>
+        <fieldset disabled={!!registrada} className="space-y-4 disabled:opacity-60">
         <div className="flex gap-4 text-sm">
           {[["oc", "De una OC"], ["sinOc", "Sin OC"], ["flete", "Flete de transportista"]].map(([valor, label]) => (
             <label key={valor} className="flex items-center gap-1.5">
@@ -151,7 +180,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
           </label>
           <label className="text-xs text-gray-500">Serie<input value={form.serie} onChange={set("serie")} className={INP} /></label>
           <label className="text-xs text-gray-500">Número<input value={form.numero} onChange={set("numero")} className={INP} /></label>
-          <label className="text-xs text-gray-500">Emisión<input type="date" value={form.fechaEmision} onChange={set("fechaEmision")} className={INP} /></label>
+          <label className="text-xs text-gray-500">Emisión<input type="date" value={form.fechaEmision} onChange={cambiarEmision} className={INP} /></label>
           <label className="text-xs text-gray-500">Moneda
             <select value={form.moneda} onChange={set("moneda")} disabled={form.modo === "oc"} className={INP}>
               <option value="PEN">PEN</option><option value="USD">USD</option>
@@ -173,7 +202,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
             </select>
           </label>
           {form.condicion === "credito" && (
-            <label className="text-xs text-gray-500">Vencimiento<input type="date" value={form.fechaVencimiento} onChange={set("fechaVencimiento")} className={INP} /></label>
+            <label className="text-xs text-gray-500">Vencimiento<input type="date" value={form.fechaVencimiento} onChange={cambiarVencimiento} className={INP} /></label>
           )}
         </div>
 
@@ -215,15 +244,24 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
           </div>
         </div>
 
+        </fieldset>
+
+        {registrada && (
+          <p className="text-xs text-amber-800 bg-amber-50 rounded-lg p-2">
+            La factura {registrada.codigo} ({registrada.serie}-{registrada.numero}) quedó registrada, pero el PDF no se subió. Elige de nuevo el archivo y reintenta, o termina sin PDF.
+          </p>
+        )}
         <label className="text-xs text-gray-500 block">PDF de la factura (opcional)
           <input type="file" accept="application/pdf,image/*" onChange={(e) => setArchivo(e.target.files?.[0] || null)} className="block mt-1 text-sm" />
         </label>
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
-          <button onClick={guardar} disabled={guardando || !(subtotal > 0)}
+          {registrada
+            ? <button onClick={() => onGuardada(registrada)} disabled={guardando} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Terminar sin PDF</button>
+            : <button onClick={onClose} disabled={guardando} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>}
+          <button onClick={guardar} disabled={guardando || !(subtotal > 0) || (registrada && !archivo)}
             className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50">
-            {guardando ? "Guardando…" : "Registrar factura"}
+            {guardando ? "Guardando…" : registrada ? "Reintentar subir PDF" : "Registrar factura"}
           </button>
         </div>
       </div>

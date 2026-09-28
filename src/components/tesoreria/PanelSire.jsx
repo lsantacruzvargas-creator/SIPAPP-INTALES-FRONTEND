@@ -38,10 +38,15 @@ export default function PanelSire({ onRegistrarFactura }) {
   const accion = async (fn) => {
     setOcupado(true);
     setError("");
-    const r = await fn();
-    if (!r.ok) setError((await r.json().catch(() => ({}))).mensaje || "La operación con el SIRE falló.");
-    await cargar();
-    setOcupado(false);
+    try {
+      const r = await fn();
+      if (!r.ok) setError((await r.json().catch(() => ({}))).mensaje || "La operación con el SIRE falló.");
+      await cargar();
+    } catch {
+      setError("Error de conexión con el servidor, intenta de nuevo.");
+    } finally {
+      setOcupado(false);
+    }
   };
   const descargar = () => accion(() => fetchAuth(`${base}/descargar`, { method: "POST" }));
   const subir = (e) => {

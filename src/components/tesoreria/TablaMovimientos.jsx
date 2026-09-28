@@ -36,11 +36,16 @@ export default function TablaMovimientos() {
   const anular = async (motivo) => {
     setProcesando(true);
     setError("");
-    const r = await fetchAuth(`/movimientos-tesoreria/${anulando._id}/anular`, { method: "PATCH", body: JSON.stringify({ motivo }) });
-    if (r.ok) await cargar();
-    else setError((await r.json().catch(() => ({}))).mensaje || "No se pudo anular el movimiento.");
-    setProcesando(false);
-    setAnulando(null);
+    try {
+      const r = await fetchAuth(`/movimientos-tesoreria/${anulando._id}/anular`, { method: "PATCH", body: JSON.stringify({ motivo }) });
+      if (r.ok) await cargar();
+      else setError((await r.json().catch(() => ({}))).mensaje || "No se pudo anular el movimiento.");
+    } catch {
+      setError("Error de conexión con el servidor, intenta de nuevo.");
+    } finally {
+      setProcesando(false);
+      setAnulando(null);
+    }
   };
 
   const exportarExcel = () => {

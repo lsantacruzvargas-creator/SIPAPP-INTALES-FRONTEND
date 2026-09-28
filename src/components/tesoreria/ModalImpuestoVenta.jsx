@@ -23,11 +23,16 @@ export default function ModalImpuestoVenta({ factura, onClose, onGuardada }) {
   const guardar = async () => {
     setGuardando(true);
     setError("");
-    const r = await fetchAuth(`/facturas/${factura._id}/impuesto`, { method: "PATCH", body: JSON.stringify({ ...form, quienDeposita: quien }) });
-    const data = await r.json().catch(() => ({}));
-    setGuardando(false);
-    if (!r.ok) return setError(data.mensaje || "No se pudo cambiar el impuesto.");
-    onGuardada(data);
+    try {
+      const r = await fetchAuth(`/facturas/${factura._id}/impuesto`, { method: "PATCH", body: JSON.stringify({ ...form, quienDeposita: quien }) });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) return setError(data.mensaje || "No se pudo cambiar el impuesto.");
+      onGuardada(data);
+    } catch {
+      setError("Error de conexión con el servidor, intenta de nuevo.");
+    } finally {
+      setGuardando(false);
+    }
   };
 
   return (

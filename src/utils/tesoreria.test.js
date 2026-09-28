@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   calcularImpuesto, partes, tipoMovimientoEsperado, sugerirImpuesto, impuestoVentaPorDefecto, etiquetaImpuesto,
-  diasCredito, sumarDias, vencimientoDe, semaforo, filtrarFacturas, FILTROS_TESORERIA, totalesMovimientos, cuentasPara, periodoDeMes, fechaIsoTexto, esPagoAntiguo,
+  diasCredito, sumarDias, vencimientoDe, semaforo, filtrarFacturas, FILTROS_TESORERIA, totalesMovimientos, cuentasPara, periodoDeMes, fechaIsoTexto, esPagoAntiguo, avisoMoneda, diasEntre,
 } from "./tesoreria.js";
 
 test("calcularImpuesto replica al backend: detracción entera en soles y retención 3 %", () => {
@@ -103,4 +103,16 @@ test("esPagoAntiguo: solo lo que no pasó por Compras (la SC vive en el Requerim
   assert.equal(esPagoAntiguo({ estadoPago: "pendiente_pago", requerimiento: { solicitudCompra: null } }), true);
   assert.equal(esPagoAntiguo({ estadoPago: "pagado", solicitudCompra: "sc2" }), false);
   assert.equal(esPagoAntiguo({ estadoPago: "pagado", solicitudCompra: null }), true);
+});
+
+test("avisoMoneda solo avisa cuando la cuenta y la parte están en monedas distintas", () => {
+  assert.equal(avisoMoneda({ nombre: "BCP Soles", moneda: "PEN" }, "PEN"), null);
+  assert.equal(avisoMoneda(undefined, "USD"), null);
+  assert.match(avisoMoneda({ nombre: "BCP Soles", moneda: "PEN" }, "USD"), /BCP Soles está en PEN.*USD/);
+});
+
+test("diasEntre cuenta días calendario entre dos fechas YYYY-MM-DD", () => {
+  assert.equal(diasEntre("2026-09-28", "2026-10-28"), 30);
+  assert.equal(diasEntre("2026-09-28", "2026-09-28"), 0);
+  assert.equal(diasEntre("2026-09-28", ""), null);
 });

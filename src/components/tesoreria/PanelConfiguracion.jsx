@@ -10,6 +10,7 @@ export default function PanelConfiguracion({ onCambio }) {
   const [config, setConfig] = useState({ esAgenteRetencion: false });
   const [nueva, setNueva] = useState(VACIA);
   const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
 
   const cargar = useCallback(() => Promise.all([fetchAuth("/cuentas-tesoreria"), fetchAuth("/configuracion")]).then(async ([rc, rg]) => {
     if (rc.ok) setCuentas(await rc.json());
@@ -18,19 +19,31 @@ export default function PanelConfiguracion({ onCambio }) {
   useEffect(() => { cargar(); }, [cargar]);
 
   const guardar = async (ruta, metodo, body) => {
+    setGuardando(true);
     setError("");
-    const r = await fetchAuth(ruta, { method: metodo, body: JSON.stringify(body) });
-    if (!r.ok) return setError((await r.json().catch(() => ({}))).mensaje || "No se pudo guardar.");
-    await cargar();
-    onCambio();
+    try {
+      const r = await fetchAuth(ruta, { method: metodo, body: JSON.stringify(body) });
+      if (!r.ok) {
+        setError((await r.json().catch(() => ({}))).mensaje || "No se pudo guardar.");
+        return false;
+      }
+      await cargar();
+      onCambio();
+      return true;
+    } catch {
+      setError("Error de conexión con el servidor, intenta de nuevo.");
+      return false;
+    } finally {
+      setGuardando(false);
+    }
   };
   const set = (campo) => (e) => setNueva((n) => ({ ...n, [campo]: e.target.value }));
-  const crear = async () => { await guardar("/cuentas-tesoreria", "POST", nueva); setNueva(VACIA); };
+  const crear = async () => { if (await guardar("/cuentas-tesoreria", "POST", nueva)) setNueva(VACIA); };
 
   return (
     <div className="space-y-6 max-w-3xl">
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={!!config.esAgenteRetencion} onChange={(e) => guardar("/configuracion", "PUT", { esAgenteRetencion: e.target.checked })} />
+        <input type="checkbox" disabled={guardando} checked={!!config.esAgenteRetencion} onChange={(e) => guardar("/configuracion", "PUT", { esAgenteRetencion: e.target.checked })} />
         INTALES es agente de retención (habilita la retención del 3 % en compras)
       </label>
       <div className="space-y-2">
@@ -43,7 +56,7 @@ export default function PanelConfiguracion({ onCambio }) {
                 <td className="px-3 py-2">{c.nombre}</td>
                 <td className="px-3 py-2">{TIPOS[c.tipo]}</td>
                 <td className="px-3 py-2">{c.moneda}</td>
-                <td className="px-3 py-2"><input type="checkbox" checked={c.activo} onChange={(e) => guardar(`/cuentas-tesoreria/${c._id}`, "PUT", { activo: e.target.checked })} /></td>
+                <td className="px-3 py-2"><input type="checkbox" disabled={guardando} checked={c.activo} onChange={(e) => guardar(`/cuentas-tesoreria/${c._id}`, "PUT", { activo: e.target.checked })} /></td>
               </tr>
             ))}
           </tbody>
@@ -52,7 +65,7 @@ export default function PanelConfiguracion({ onCambio }) {
           <input value={nueva.nombre} onChange={set("nombre")} placeholder="Nombre de la cuenta" className={INP} />
           <select value={nueva.tipo} onChange={set("tipo")} className={INP}>{Object.entries(TIPOS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           <select value={nueva.moneda} onChange={set("moneda")} className={INP}><option value="PEN">PEN</option><option value="USD">USD</option></select>
-          <button onClick={crear} disabled={!nueva.nombre.trim()} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50">Agregar cuenta</button>
+          <button onClick={crear} disabled={guardando || !nueva.nombre.trim()} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50">Agregar cuenta</button>
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
       </div>
