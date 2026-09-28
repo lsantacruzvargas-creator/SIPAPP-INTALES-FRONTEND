@@ -4,6 +4,7 @@ import { proveedorMasBarato, money } from "../../utils/compras";
 import { exportarSolicitudCotizacionPdf } from "../../utils/compraPdf";
 import ModalEnviarProveedores from "./ModalEnviarProveedores";
 import ArchivosProveedor from "./ArchivosProveedor";
+import ModalGenerarOCP from "./ModalGenerarOCP";
 
 const INP = "border border-gray-200 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300";
 
@@ -22,11 +23,12 @@ function borradorDesde(lic) {
   };
 }
 
-export default function ModalCuadroComparativo({ licitacionId, catalogos, onClose }) {
+export default function ModalCuadroComparativo({ licitacionId, catalogos, onClose, onAdjudicado }) {
   const [lic, setLic] = useState(null);
   const [borrador, setBorrador] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [invitarAbierto, setInvitarAbierto] = useState(false);
+  const [generarAbierto, setGenerarAbierto] = useState(false);
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
 
@@ -89,6 +91,11 @@ export default function ModalCuadroComparativo({ licitacionId, catalogos, onClos
 
   const invitar = async () => {
     if (await guardar()) setInvitarAbierto(true);
+  };
+
+  // Se guarda primero: el modal de OCs parte de los ganadores y precios persistidos.
+  const abrirGenerar = async () => {
+    if (await guardar()) setGenerarAbierto(true);
   };
 
   const comparables = lic.proveedores.map((p) => ({
@@ -211,6 +218,10 @@ export default function ModalCuadroComparativo({ licitacionId, catalogos, onClos
             className="text-sm bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition disabled:opacity-50">
             {guardando ? "Guardando…" : "Guardar cuadro"}
           </button>
+          <button type="button" onClick={abrirGenerar} disabled={guardando}
+            className="text-sm bg-purple-600 text-white px-5 py-2 rounded-lg hover:bg-purple-700 transition disabled:opacity-50 font-medium">
+            Generar OC(s)
+          </button>
         </div>
       </div>
 
@@ -218,6 +229,10 @@ export default function ModalCuadroComparativo({ licitacionId, catalogos, onClos
         <ModalEnviarProveedores licitacion={lic} proveedores={catalogos.proveedores}
           onClose={() => setInvitarAbierto(false)}
           onEnviado={(nueva) => { setInvitarAbierto(false); aplicar(nueva); }} />
+      )}
+      {generarAbierto && (
+        <ModalGenerarOCP licitacion={lic} onClose={() => setGenerarAbierto(false)}
+          onGenerado={(ocps) => { setGenerarAbierto(false); onAdjudicado(ocps); }} />
       )}
     </div>
   );

@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable";
 import { fetchAuth } from "./fetchAuth";
 import { formatearFecha } from "./fecha";
 import { cargarImagen, formatoImagen } from "./cotizacionPdf";
+import { money } from "./compras";
 
 const NAVY = [0, 0, 40];
 const M = 12;
@@ -88,4 +89,48 @@ export async function exportarSolicitudCotizacionPdf(licitacion, proveedor) {
   const ancho = doc.internal.pageSize.getWidth() - M * 2;
   doc.text(doc.splitTextToSize("Favor de cotizar precios unitarios sin IGV indicando moneda, plazo de entrega y forma de pago.", ancho), M, y);
   doc.save(`${licitacion.codigo}_${empresa.ruc || proveedor.ruc || "proveedor"}.pdf`);
+}
+
+export async function exportarOrdenCompraProveedorPdf(ocp) {
+  const doc = new jsPDF();
+  const PAGE_W = doc.internal.pageSize.getWidth();
+  const m = (v) => money(v, ocp.moneda);
+  let y = await encabezado(doc, "ORDEN DE COMPRA", ocp.codigo, ocp.fecha);
+  y = bloqueDatos(doc, y, [
+    ["Proveedor", ocp.proveedorRazonSocial || "—"],
+    ["RUC", ocp.proveedorRuc || "—"],
+    ["Dirección", ocp.proveedorDireccion || "—"],
+    ["Forma de pago", ocp.formaPago || "—"],
+    ["Lugar de entrega", ocp.lugarEntrega || "—"],
+    ["Fecha de entrega", ocp.fechaEntrega ? formatearFecha(ocp.fechaEntrega) : "—"],
+    ["Moneda", ocp.moneda === "USD" ? "Dólares (US$)" : "Soles (S/)"],
+  ]);
+  autoTable(doc, {
+    ...ESTILO_TABLA,
+    startY: y,
+    head: [["#", "Descripción", "Und.", "Cant.", "P. unit.", "Subtotal"]],
+    body: ocp.items.map((it, i) => [i + 1, it.descripcion, it.unidad, it.cantidad, m(it.precioUnitario), m(it.subtotal)]),
+    columnStyles: {
+      0: { cellWidth: 8, halign: "center" }, 2: { cellWidth: 16, halign: "center" }, 3: { cellWidth: 16, halign: "right" },
+      4: { cellWidth: 28, halign: "right" }, 5: { cellWidth: 30, halign: "right" },
+    },
+  });
+  autoTable(doc, {
+    startY: doc.lastAutoTable.finalY + 2,
+    margin: { left: PAGE_W - M - 74, right: M },
+    theme: "plain",
+    body: [["Subtotal", m(ocp.subtotal)], [ocp.afectoIgv ? "IGV 18%" : "No afecto a IGV", m(ocp.igv)], ["TOTAL", m(ocp.total)]],
+    styles: { fontSize: 9, cellPadding: 1.2 },
+    columnStyles: { 0: { fontStyle: "bold" }, 1: { halign: "right" } },
+    didParseCell: (d) => { if (d.row.index === 2) d.cell.styles.fontStyle = "bold"; },
+  });
+  y = doc.lastAutoTable.finalY + 6;
+  if (ocp.observaciones) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("Observaciones:", M, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(doc.splitTextToSize(ocp.observaciones, PAGE_W - M * 2), M, y + 5);
+  }
+  doc.save(`${ocp.codigo}.pdf`);
 }

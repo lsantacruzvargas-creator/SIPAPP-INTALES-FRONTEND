@@ -5,7 +5,7 @@ import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
 import ModalCuadroComparativo from "./ModalCuadroComparativo";
 
-export default function TablaLicitaciones({ catalogos }) {
+export default function TablaLicitaciones({ catalogos, onAdjudicado }) {
   const [lics, setLics] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [abiertaId, setAbiertaId] = useState(null);
@@ -78,7 +78,8 @@ export default function TablaLicitaciones({ catalogos }) {
 
       {abiertaId && (
         <ModalCuadroComparativo licitacionId={abiertaId} catalogos={catalogos}
-          onClose={() => { setAbiertaId(null); cargar(); }} />
+          onClose={() => { setAbiertaId(null); cargar(); }}
+          onAdjudicado={() => { setAbiertaId(null); cargar(); onAdjudicado?.(); }} />
       )}
       {anulando && (
         <PromptAccion titulo={`Anular ${anulando.codigo}`} placeholder="Las líneas volverán a Por procesar"
