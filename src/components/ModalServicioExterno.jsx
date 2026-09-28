@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
+import SelectorTipoArticulo from "./SelectorTipoArticulo";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full transition";
 
 export default function ModalServicioExterno({ ot, onClose, onCreado }) {
-  const [form, setForm] = useState({ rucProveedor: "", nombreProveedor: "", tipoTrabajo: "", material: "", cantidad: "1", costo: "" });
+  const [form, setForm] = useState({ rucProveedor: "", nombreProveedor: "", tipoTrabajo: "", material: "", cantidad: "1", costo: "", tipoArticulo: "" });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
@@ -15,6 +16,7 @@ export default function ModalServicioExterno({ ot, onClose, onCreado }) {
     if (!form.tipoTrabajo.trim()) return setError("El tipo de servicio es obligatorio.");
     if (!form.material.trim()) return setError("El material es obligatorio.");
     if (!form.cantidad || Number(form.cantidad) <= 0) return setError("Ingresa una cantidad válida.");
+    if (!form.tipoArticulo) return setError("Selecciona el tipo de artículo.");
     setGuardando(true);
     setError("");
 
@@ -29,6 +31,7 @@ export default function ModalServicioExterno({ ot, onClose, onCreado }) {
         material: form.material.trim(),
         cantidad: Number(form.cantidad),
         costo: form.costo ? Number(form.costo) : 0,
+        tipoArticulo: form.tipoArticulo,
       }),
     });
 
@@ -71,6 +74,12 @@ export default function ModalServicioExterno({ ot, onClose, onCreado }) {
             <label className="text-xs text-gray-500 block mb-1">Tipo de Servicio *</label>
             <input name="tipoTrabajo" value={form.tipoTrabajo} onChange={handleChange}
               placeholder="Tratamiento térmico" className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Tipo de artículo *</label>
+            <SelectorTipoArticulo value={form.tipoArticulo}
+              onChange={(id) => setForm((f) => ({ ...f, tipoArticulo: id }))}
+              placeholder="Ej: Servicios mecánicos" />
           </div>
           <div>
             <label className="text-xs text-gray-500 block mb-1">Material(es) *</label>
