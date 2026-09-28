@@ -197,6 +197,7 @@ export default function TablaPorProcesar({ catalogos, onTipoCreado, onEnviado })
       )}
       {anulando && (
         <PromptAccion titulo={`Anular "${anulando.descripcion}" (${anulando.sc.codigo})`} placeholder="¿Por qué ya no se compra?"
+          label={anulando.sc.origen === "manual" ? "Motivo" : "Motivo (también rechaza el pedido de origen)"}
           onCancelar={() => setAnulando(null)} onConfirmar={anular} procesando={procesando} textoConfirmar="Anular línea" />
       )}
       {creandoTipoPara && (
