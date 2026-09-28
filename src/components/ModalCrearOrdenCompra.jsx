@@ -73,7 +73,7 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
   const [exito, setExito]         = useState(null);
 
   useEffect(() => {
-    fetchAuth("/empresas").then(r => r.ok && r.json()).then(d => setEmpresas(d || []));
+    fetchAuth("/empresas?tipo=cliente").then(r => r.ok && r.json()).then(d => setEmpresas(d || []));
   }, []);
 
   const plantasEmpresa = empresas.find(e => e._id === form.empresa)?.plantas ?? [];

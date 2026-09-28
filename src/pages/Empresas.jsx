@@ -5,9 +5,13 @@ import TablaScroll from "../components/TablaScroll";
 import ConfirmacionAccion from "../components/ConfirmacionAccion";
 import AvisoAccion from "../components/AvisoAccion";
 
+const TIPO_LABEL = { cliente: "Cliente", proveedor: "Proveedor", ambos: "Cliente y proveedor" };
+const TIPO_BADGE = { cliente: "bg-blue-50 text-blue-700", proveedor: "bg-amber-50 text-amber-700", ambos: "bg-purple-50 text-purple-700" };
+
 export default function Empresas() {
   const [empresas, setEmpresas] = useState([]);
   const [filtro, setFiltro] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState("");
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState(null);
   const [eliminandoId, setEliminandoId] = useState(null);
@@ -42,7 +46,10 @@ export default function Empresas() {
     // tira TypeError apenas hay una empresa sin RUC que no matchea por
     // nombre, y filter() completo revienta silenciosamente (el input parece
     // "no hacer nada").
-    return e.razonSocial?.toLowerCase().includes(q) || e.ruc?.toLowerCase().includes(q);
+    const coincideTexto = e.razonSocial?.toLowerCase().includes(q) || e.ruc?.toLowerCase().includes(q);
+    const tipo = e.tipo || "cliente";
+    const coincideTipo = !filtroTipo || tipo === "ambos" || tipo === filtroTipo;
+    return coincideTexto && coincideTipo;
   });
 
   const abrirNuevo = () => {
@@ -60,6 +67,12 @@ export default function Empresas() {
       <div className="flex flex-wrap justify-between items-center mb-6">
         <h2 className="text-xl font-semibold text-gray-800 mb-2">Empresas</h2>
         <div className="flex flex-wrap items-center gap-3">
+          <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
+            <option value="">Todas</option>
+            <option value="cliente">Clientes</option>
+            <option value="proveedor">Proveedores</option>
+          </select>
           <input
             type="text"
             placeholder="Buscar por nombre o RUC…"
@@ -85,13 +98,14 @@ export default function Empresas() {
               <th className="px-4 py-3 text-left">Alias</th>
               <th className="px-4 py-3 text-left">Razón social</th>
               <th className="px-4 py-3 text-left">RUC</th>
+              <th className="px-4 py-3 text-left">Tipo</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {empresasFiltradas.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
                   {filtro ? "Sin resultados para la búsqueda" : "Sin empresas registradas"}
                 </td>
               </tr>
@@ -102,6 +116,18 @@ export default function Empresas() {
                   <td className="px-4 py-3 font-medium">{e.alias}</td>
                   <td className="px-4 py-3">{e.razonSocial}</td>
                   <td className="px-4 py-3">{e.ruc}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${TIPO_BADGE[e.tipo || "cliente"]}`}>
+                      {TIPO_LABEL[e.tipo || "cliente"]}
+                    </span>
+                    {(e.tipoArticulos || []).length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {e.tipoArticulos.map((t) => (
+                          <span key={t._id || t} className="text-[10px] bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">{t.nombre}</span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-right space-x-3">
                     <button
                       onClick={() => abrirEditar(e)}

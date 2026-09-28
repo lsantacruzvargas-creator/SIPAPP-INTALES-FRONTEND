@@ -176,7 +176,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   };
 
   const cargarEmpresas = () =>
-    fetchAuth("/empresas").then(r => r.ok && r.json()).then(emps => setEmpresas(emps || []));
+    fetchAuth("/empresas?tipo=cliente").then(r => r.ok && r.json()).then(emps => setEmpresas(emps || []));
 
   useEffect(() => {
     cargarEmpresas();

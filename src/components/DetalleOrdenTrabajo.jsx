@@ -223,7 +223,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   };
 
   const cargarEmpresas = () =>
-    fetchAuth("/empresas").then((res) => res.ok && res.json().then(setEmpresas));
+    fetchAuth("/empresas?tipo=cliente").then((res) => res.ok && res.json().then(setEmpresas));
 
   useEffect(() => {
     // Encargado de Progreso se elige entre los usuarios con login y rol

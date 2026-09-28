@@ -151,7 +151,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
   };
 
   useEffect(() => {
-    fetchAuth("/empresas").then(r => r.ok && r.json()).then(emps => setEmpresas(emps || []));
+    fetchAuth("/empresas?tipo=cliente").then(r => r.ok && r.json()).then(emps => setEmpresas(emps || []));
     cargarRelaciones();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

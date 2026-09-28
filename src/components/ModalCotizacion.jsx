@@ -337,7 +337,7 @@ export default function ModalCotizacion({ cotizacion: inicial, onClose, onSaved 
   };
 
   const entrarEdicion = () => {
-    fetchAuth("/empresas").then((r) => r.ok && r.json().then(setEmpresas));
+    fetchAuth("/empresas?tipo=cliente").then((r) => r.ok && r.json().then(setEmpresas));
     setForm({
       tipo: cot.tipo,
       empresa: cot.empresa?._id || "",

@@ -55,7 +55,7 @@ export default function IngresoEquipos() {
   const cargar = () =>
     Promise.all([
       fetchAuth("/ingresos-equipo").then((r) => r.ok ? r.json() : []),
-      fetchAuth("/empresas").then((r) => r.ok ? r.json() : []),
+      fetchAuth("/empresas?tipo=cliente").then((r) => r.ok ? r.json() : []),
       fetchAuth("/ordenes-trabajo").then((r) => r.ok ? r.json() : []),
     ]).then(([ings, emps, ots]) => {
       setIngresos(ings);

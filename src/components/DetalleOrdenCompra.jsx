@@ -202,7 +202,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   };
 
   useEffect(() => {
-    fetchAuth("/empresas").then(r => r.ok && r.json()).then(emps => setEmpresas(emps || []));
+    fetchAuth("/empresas?tipo=cliente").then(r => r.ok && r.json()).then(emps => setEmpresas(emps || []));
     cargarOTeInformes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
