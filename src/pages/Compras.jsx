@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
 import TablaPorProcesar from "../components/compras/TablaPorProcesar";
 import TablaLicitaciones from "../components/compras/TablaLicitaciones";
+import TablaCompras from "../components/compras/TablaCompras";
 
 const TABS = [
   { id: "por-procesar", label: "Por procesar" },
   { id: "licitacion", label: "En licitación" },
+  { id: "compras", label: "Compras" },
 ];
 
 const porNombre = (a, b) => a.nombre.localeCompare(b.nombre, "es");
@@ -56,7 +58,8 @@ export default function Compras() {
       {tab === "por-procesar" && (
         <TablaPorProcesar catalogos={catalogos} onTipoCreado={agregarTipoArticulo} onEnviado={() => setTab("licitacion")} />
       )}
-      {tab === "licitacion" && <TablaLicitaciones catalogos={catalogos} />}
+      {tab === "licitacion" && <TablaLicitaciones catalogos={catalogos} onAdjudicado={() => setTab("compras")} />}
+      {tab === "compras" && <TablaCompras catalogos={catalogos} />}
     </div>
   );
 }
