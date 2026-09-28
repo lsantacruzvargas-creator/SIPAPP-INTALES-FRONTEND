@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { fetchAuth } from "../utils/fetchAuth";
+import { fechaHoyLima } from "../utils/fecha";
 import TablaScroll from "../components/TablaScroll";
 import SelectorDireccionGuardada from "../components/SelectorDireccionGuardada";
 import {
@@ -290,6 +291,7 @@ export default function EmitirGuia() {
     if (!serie.trim()) return "La serie es requerida.";
     if (!serieValida(serie)) return "La serie debe tener exactamente 4 caracteres (ej. T001).";
     if (!fechaTraslado) return "La fecha de traslado es requerida.";
+    if (fechaTraslado < fechaHoyLima()) return "La fecha de traslado no puede ser anterior a hoy (fecha de emisión).";
     if (!pesoBrutoTotal || Number(pesoBrutoTotal) <= 0) return "El peso bruto total debe ser mayor a 0.";
     if (motivoTraslado === "13" && !descripcionMotivo.trim()) return "Describe el motivo cuando seleccionas 'Otros'.";
     if (!destinatario.numDoc.trim() || !destinatario.nombre.trim()) return "Los datos del destinatario son requeridos.";
@@ -357,6 +359,9 @@ export default function EmitirGuia() {
       }
       if (!fechaEntregaBienesTransportista) {
         return "El transporte público requiere la fecha de entrega de bienes al transportista.";
+      }
+      if (fechaEntregaBienesTransportista < fechaHoyLima()) {
+        return "La fecha de entrega al transportista no puede ser anterior a hoy (fecha de emisión).";
       }
     }
     for (const doc of documentosRelacionados) {
@@ -556,7 +561,7 @@ export default function EmitirGuia() {
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Fecha de traslado<Oblig /></label>
               <input type="date" value={fechaTraslado} onChange={(e) => setFechaTraslado(e.target.value)}
-                disabled={ro} required
+                disabled={ro} required min={ro ? undefined : fechaHoyLima()}
                 className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
             </div>
 
@@ -968,7 +973,7 @@ export default function EmitirGuia() {
                   <label className="block text-xs font-medium text-gray-500 mb-1">Fecha de entrega de bienes al transportista<Oblig /></label>
                   <input type="date" value={fechaEntregaBienesTransportista}
                     onChange={(e) => setFechaEntregaBienesTransportista(e.target.value)}
-                    disabled={ro} required
+                    disabled={ro} required min={ro ? undefined : fechaHoyLima()}
                     className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
                 </div>
               </div>
@@ -994,7 +999,7 @@ export default function EmitirGuia() {
                     <label className="block text-xs font-medium text-gray-500 mb-1">Fecha de entrega de bienes al transportista<Oblig /></label>
                     <input type="date" value={fechaEntregaBienesTransportista}
                       onChange={(e) => setFechaEntregaBienesTransportista(e.target.value)}
-                      disabled={ro} required
+                      disabled={ro} required min={ro ? undefined : fechaHoyLima()}
                       className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
                   </div>
                   <div>
