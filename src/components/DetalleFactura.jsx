@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { formatearFecha } from "../utils/fecha";
+import { round2 } from "../utils/compras";
+import { calcularImpuesto, partes, etiquetaImpuesto } from "../utils/tesoreria";
+import ModalMovimiento from "./tesoreria/ModalMovimiento";
 import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgeOT, badgePago, money, BotonAnular, BannerAnulado, bloqueadoPorCadenaCerrada,
@@ -9,14 +12,14 @@ import {
 const INP    = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 w-full transition";
 const INP_RO = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full cursor-not-allowed";
 
-function calcular(sub) {
-  const s = Math.round(Number(sub) * 100) / 100 || 0;
-  const igv = Math.round(s * 0.18 * 100) / 100;
-  const total = Math.round((s + igv) * 100) / 100;
-  // R.S. 178-2005/SUNAT: aplica solo si el total (con IGV) es >= S/ 701, y el
-  // depósito se hace en números enteros (sin decimales).
-  const detraccion = total >= 701 ? Math.round(total * 0.12) : 0;
-  return { igv, total, detraccion, totalAPagar: Math.round((total - detraccion) * 100) / 100 };
+function calcular(sub, impuesto) {
+  const s = round2(Number(sub) || 0);
+  const igv = round2(s * 0.18);
+  const total = round2(s + igv);
+  const tipo = impuesto?.tipo || "ninguno";
+  const { monto } = calcularImpuesto({ tipo, codigoSunat: impuesto?.codigoSunat, total });
+  const quienDeposita = impuesto?.quienDeposita || "cliente";
+  return { igv, total, detraccion: monto, totalAPagar: partes({ lado: "venta", total, impuesto: { tipo, monto, quienDeposita } }).neto };
 }
 
 function BuscadorOC({ onSelect, onClose }) {
@@ -77,7 +80,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
     fechaSalida: inicial.fechaSalida
       ? new Date(inicial.fechaSalida).toISOString().split("T")[0] : "",
   });
-  const [calc, setCalc]           = useState(calcular(subtotalInicial));
+  const [calc, setCalc]           = useState(calcular(subtotalInicial, inicial.impuesto));
   const [ocVinculada, setOC]      = useState(inicial.ordenCompra || null);
   const [empresas, setEmpresas]   = useState([]);
   const [buscadorOC, setBOC]      = useState(false);
@@ -86,6 +89,8 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
   const [informes, setInformes]   = useState([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState("");
+  const [cobrando, setCobrando]   = useState(false);
+  const puedeCobrar = ["admin", "jefatura", "facturacion"].includes(getUsuario()?.rol);
   const [cargandoOC, setCargandoOC] = useState(false);
   // "jefatura" agregado acá para calzar con el gate real del backend
   // (routes/facturas.js `puedeEditar`) — se había quedado desactualizado.
@@ -160,7 +165,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === "subtotal") setCalc(calcular(value));
+    if (name === "subtotal") setCalc(calcular(value, inicial.impuesto));
     setForm(prev => ({
       ...prev,
       [name]: value,
@@ -173,7 +178,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
     setBOC(false);
     setForm(prev => {
       const nuevoSub = prev.subtotal || (oc.subtotal > 0 ? String(oc.subtotal) : prev.subtotal);
-      if (!prev.subtotal && oc.subtotal > 0) setCalc(calcular(oc.subtotal));
+      if (!prev.subtotal && oc.subtotal > 0) setCalc(calcular(oc.subtotal, inicial.impuesto));
       return {
         ...prev,
         empresa:     prev.empresa     || oc.empresa?._id || "",
@@ -197,8 +202,6 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
       numeroGuiaRemision: form.numeroGuiaRemision,
       codigoSap:          form.codigoSap,
       fechaSalida:        form.fechaSalida || null,
-      montoPagado:        inicial.montoPagado,
-      estadoPago:         inicial.estadoPago,
       ordenCompra:        ocVinculada?._id || null,
     };
     if (form.fechaCancelacion) payload.fechaCancelacion = form.fechaCancelacion;
@@ -426,7 +429,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
                   <p className="font-semibold text-gray-700">{calc.total.toFixed(2)}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xs text-gray-400">Detracción 12%</p>
+                  <p className="text-xs text-gray-400">{etiquetaImpuesto(inicial.impuesto)}</p>
                   <p className="font-semibold text-gray-700">{calc.detraccion.toFixed(2)}</p>
                 </div>
               </div>
@@ -434,6 +437,24 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
                 <span className="text-sm font-medium text-gray-600">Total a pagar</span>
                 <span className="text-lg font-bold text-emerald-700">{money(calc.totalAPagar)}</span>
               </div>
+              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200 text-sm">
+                <div>
+                  <p className="text-xs text-gray-400">Neto cobrado</p>
+                  <p className="font-semibold text-gray-700">{money(inicial.pagadoNeto ?? 0)} <span className="text-xs text-gray-400">saldo {money(inicial.saldoNeto ?? 0)}</span></p>
+                </div>
+                {inicial.impuesto?.tipo && inicial.impuesto.tipo !== "ninguno" && (
+                  <div>
+                    <p className="text-xs text-gray-400">{etiquetaImpuesto(inicial.impuesto)} depositada</p>
+                    <p className="font-semibold text-gray-700">{money(inicial.pagadoImpuesto ?? 0)} <span className="text-xs text-gray-400">saldo {money(inicial.saldoImpuesto ?? 0)}</span></p>
+                  </div>
+                )}
+              </div>
+              {puedeCobrar && !inicial.anulado && (inicial.saldoNeto > 0.009 || inicial.saldoImpuesto > 0.009) && (
+                <button type="button" onClick={() => setCobrando(true)}
+                  className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700">
+                  Registrar cobro
+                </button>
+              )}
             </div>
 
             {error && <p className="text-xs text-red-500">{error}</p>}
@@ -488,6 +509,10 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
       </div>
     </div>
 
+    {cobrando && (
+      <ModalMovimiento lado="venta" documento={inicial} onClose={() => setCobrando(false)}
+        onGuardado={() => { setCobrando(false); onClose(); }} />
+    )}
     {buscadorOC && <BuscadorOC onSelect={seleccionarOC} onClose={() => setBOC(false)} />}
     </>
   );

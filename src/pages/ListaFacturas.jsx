@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
-import { fetchAuth, getUsuario } from "../utils/fetchAuth";
+import { Link } from "react-router-dom";
+import { fetchAuth } from "../utils/fetchAuth";
 import { formatearFecha } from "../utils/fecha";
 import DetalleDocumento from "../components/DetalleDocumento";
 import ModalCrearFactura  from "../components/ModalCrearFactura";
 import ModalImportarExcel, { COLS_FACTURAS } from "../components/ModalImportarExcel";
 import { DotChip, badgePago, dotPago } from "../components/detalleShared";
 import TablaScroll from "../components/TablaScroll";
-import ConfirmacionAccion from "../components/ConfirmacionAccion";
-import AvisoAccion from "../components/AvisoAccion";
 import * as XLSX from "xlsx";
 
 const MESES = [
@@ -60,85 +59,7 @@ const compararTexto = (na, nb) => {
   return String(nb).localeCompare(String(na));
 };
 
-// Campo numérico (reemplaza el checkbox "Pagado") — permite anotar un pago
-// parcial, no solo todo-o-nada. Se confirma con el botón ✓ (no dispara el
-// PATCH en cada tecla); el estado agregado (badge de arriba) se deriva del
-// monto en `handlePagoMonto`.
-function CeldaMontoPagado({ factura, rolActual, handlePagoMonto }) {
-  const [monto, setMonto] = useState(String(factura.montoPagado ?? 0));
-  const [guardando, setGuardando] = useState(false);
-  // Re-sincroniza el input si `montoPagado` cambia por fuera (guardado
-  // exitoso o reversión tras error) — ajuste durante el render en vez de un
-  // efecto, patrón recomendado por React para "adjusting state on prop change".
-  const [montoPrevio, setMontoPrevio] = useState(factura.montoPagado);
-  if (factura.montoPagado !== montoPrevio) {
-    setMontoPrevio(factura.montoPagado);
-    setMonto(String(factura.montoPagado ?? 0));
-  }
-
-  const bloqueada = factura.estadoPago === "pagado" && rolActual !== "admin";
-  const disabled = factura.anulado || !(Number(factura.totalAPagar) > 0) || bloqueada;
-  const cambiado = Number(monto) !== Number(factura.montoPagado ?? 0);
-
-  const confirmar = async () => {
-    setGuardando(true);
-    await handlePagoMonto(factura._id, monto);
-    setGuardando(false);
-  };
-
-  return (
-    <div className="flex items-center gap-1"
-      title={factura.anulado ? "Factura anulada" : !(Number(factura.totalAPagar) > 0) ? "Sin monto a pagar" : bloqueada ? "Solo un administrador puede deshacer un pago" : undefined}>
-      <input type="number" min="0" step="0.01" value={monto} disabled={disabled}
-        onChange={e => setMonto(e.target.value)}
-        onKeyDown={e => { if (e.key === "Enter" && cambiado) confirmar(); }}
-        className="w-20 border border-gray-200 rounded-lg px-1.5 py-1 text-xs text-right disabled:opacity-40 disabled:cursor-not-allowed" />
-      <button type="button" onClick={confirmar} disabled={disabled || guardando || !cambiado}
-        className="text-xs text-emerald-600 hover:text-emerald-800 disabled:opacity-30 disabled:cursor-not-allowed font-semibold px-1">
-        {guardando ? "…" : "✓"}
-      </button>
-    </div>
-  );
-}
-
-// Campo numérico (reemplaza el checkbox "Pagado" de la cuota) — mismo patrón
-// estructural que CeldaMontoPagado, pero por cuota individual.
-function CeldaMontoPagadoCuota({ factura, cuota, rolActual, handleCuotaPagoMonto }) {
-  const [monto, setMonto] = useState(String(cuota.montoPagado ?? 0));
-  const [guardando, setGuardando] = useState(false);
-  const [montoPrevio, setMontoPrevio] = useState(cuota.montoPagado);
-  if (cuota.montoPagado !== montoPrevio) {
-    setMontoPrevio(cuota.montoPagado);
-    setMonto(String(cuota.montoPagado ?? 0));
-  }
-
-  const bloqueada = cuota.pagado && rolActual !== "admin";
-  const disabled = factura.anulado || bloqueada;
-  const cambiado = Number(monto) !== Number(cuota.montoPagado ?? 0);
-
-  const confirmar = async () => {
-    setGuardando(true);
-    await handleCuotaPagoMonto(factura._id, cuota._id, monto);
-    setGuardando(false);
-  };
-
-  return (
-    <div className="flex items-center justify-center gap-1"
-      title={factura.anulado ? "Factura anulada" : bloqueada ? "Solo un administrador puede deshacer un pago" : undefined}>
-      <input type="number" min="0" step="0.01" value={monto} disabled={disabled}
-        onChange={e => setMonto(e.target.value)}
-        onKeyDown={e => { if (e.key === "Enter" && cambiado) confirmar(); }}
-        className="w-20 border border-gray-200 rounded-lg px-1.5 py-1 text-xs text-right disabled:opacity-40 disabled:cursor-not-allowed" />
-      <button type="button" onClick={confirmar} disabled={disabled || guardando || !cambiado}
-        className="text-xs text-emerald-600 hover:text-emerald-800 disabled:opacity-30 disabled:cursor-not-allowed font-semibold px-1">
-        {guardando ? "…" : "✓"}
-      </button>
-    </div>
-  );
-}
-
-function TablaFacturas({ titulo, acento, facturas, onSelect, handlePagoMonto, handleCuotaPagoMonto, handleDetraccionPagoCheck, vacioMsg }) {
-  const rolActual = getUsuario()?.rol;
+function TablaFacturas({ titulo, acento, facturas, onSelect, vacioMsg }) {
   // Las anuladas siguen visibles en la tabla, pero no cuentan en los totales
   const noAnuladas = facturas.filter(f => !f.anulado);
   const totales = {
@@ -171,7 +92,7 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, handlePagoMonto, ha
                 <th className={`${TH} text-right`}>Subtotal (S/)</th>
                 <th className={`${TH} text-right`}>IGV 18% (S/)</th>
                 <th className={`${TH} text-right`}>Total (S/)</th>
-                <th className={`${TH} text-right`}>Detracción 12% (S/)</th>
+                <th className={`${TH} text-right`}>Detracción / Retención (S/)</th>
                 <th className={`${TH} text-right`}>Total a pagar (S/)</th>
                 <th className={`${TH} text-center`}>Estado pago</th>
               </tr>
@@ -227,39 +148,27 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, handlePagoMonto, ha
                       <td className={`${TD_NUM} text-gray-600`}>
                         {Number(f.total ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
                       </td>
-                      <td className={`${TD_NUM} text-gray-400`} onClick={e => e.stopPropagation()}>
-                        <div className="flex flex-col items-end gap-1">
-                          <span>{Number(f.detraccion ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}</span>
-                          {Number(f.detraccion) > 0 && (() => {
-                            const bloqueadaDetraccion = f.detraccionPagada && rolActual !== "admin";
-                            const disabledDetraccion = f.anulado || bloqueadaDetraccion;
-                            return (
-                              <label className={`flex items-center gap-1 text-[11px] select-none ${f.detraccionPagada ? "text-emerald-600" : "text-gray-400"} ${disabledDetraccion ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
-                                title={f.anulado ? "Factura anulada" : bloqueadaDetraccion ? "Solo un administrador puede deshacer un pago" : undefined}>
-                                <input type="checkbox"
-                                  checked={!!f.detraccionPagada}
-                                  disabled={disabledDetraccion}
-                                  onChange={e => handleDetraccionPagoCheck(f._id, e.target.checked)}
-                                  className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-400" />
-                                Detracción pagada
-                              </label>
-                            );
-                          })()}
+                      <td className={`${TD_NUM} text-gray-400`}>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span>{Number(f.impuesto?.monto ?? f.detraccion ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}</span>
+                          {f.impuesto?.tipo && f.impuesto.tipo !== "ninguno" && (
+                            <span className={`text-[11px] ${f.saldoImpuesto > 0.009 ? "text-gray-400" : "text-emerald-600"}`}>
+                              {f.impuesto.tipo === "retencion" ? "Retención" : "Detracción"} {f.saldoImpuesto > 0.009 ? "pendiente" : "✓"}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className={`${TD_NUM} font-bold text-gray-900`}>
                         {Number(f.totalAPagar ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
-                        <div className="flex flex-col items-center gap-1.5 min-w-[110px]">
+                      <td className="px-3 py-2 text-center">
+                        <div className="flex flex-col items-center gap-1 min-w-[110px]">
                           <DotChip chip={badgePago(f.estadoPago)} dot={dotPago(f.estadoPago)}>
                             {f.estadoPago}
                           </DotChip>
-                          {tieneCuotas ? (
-                            <span className="text-[11px] text-gray-400">Marca cada cuota abajo</span>
-                          ) : (
-                            <CeldaMontoPagado factura={f} rolActual={rolActual} handlePagoMonto={handlePagoMonto} />
-                          )}
+                          <span className="text-[11px] text-gray-400 tabular-nums">
+                            Cobrado {Number(f.montoPagado ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                          </span>
                         </div>
                       </td>
                     </tr>
@@ -285,8 +194,8 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, handlePagoMonto, ha
                         <td className={`${TD_NUM} font-semibold text-gray-700`}>
                           {Number(c.monto).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
-                          <CeldaMontoPagadoCuota factura={f} cuota={c} rolActual={rolActual} handleCuotaPagoMonto={handleCuotaPagoMonto} />
+                        <td className="px-3 py-2 text-center text-xs tabular-nums text-gray-500">
+                          {Number(c.montoPagado ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
                         </td>
                       </tr>
                     );
@@ -328,9 +237,6 @@ export default function ListaFacturas() {
   const [crearOpen, setCrearOpen]     = useState(false);
   const [importarOpen, setImportarOpen] = useState(false);
   const [sortBy, setSortBy]           = useState("fecha");
-  const [avisoPermiso, setAvisoPermiso] = useState("");
-  const [confirmandoPago, setConfirmandoPago] = useState(null);
-  const [procesandoPago, setProcesandoPago] = useState(false);
 
   const cargar = () =>
     Promise.all([
@@ -400,168 +306,6 @@ export default function ListaFacturas() {
     return new Date(b.fechaEmision) - new Date(a.fechaEmision);
   });
 
-  // Campo numérico (no checkbox): el usuario anota cuánto se pagó hasta
-  // ahora — puede ser parcial. `estadoPago` se deriva del monto igual que en
-  // el backend (routes/facturas.js /estado-pago): 0 = sin pago, entre 0 y el
-  // total = pago parcial, >= total = pagado.
-  const ejecutarPagoMonto = async (id, montoIngresado) => {
-    const factura = facturas.find(f => f._id === id);
-    if (!factura) return;
-
-    const totalAPagar = Number(factura.totalAPagar) || 0;
-    const pago = Math.max(0, Number(montoIngresado) || 0);
-    let estadoPago = "sin pago";
-    if (pago > 0 && pago < totalAPagar) estadoPago = "pago parcial";
-    if (totalAPagar > 0 && pago >= totalAPagar) estadoPago = "pagado";
-
-    // Al pagar se cierra toda la cadena (Cotización/OT/Informe/OC/Factura); se
-    // refleja de inmediato en memoria, el backend hace lo mismo en la BD.
-    const estadoCadena = estadoPago === "pagado" ? "cerrado" : "abierto";
-    const previo = {
-      montoPagado: factura.montoPagado,
-      estadoPago: factura.estadoPago,
-      estadoCadena: factura.estadoCadena,
-    };
-    setFacturas(prev =>
-      prev.map(f => f._id === id ? { ...f, montoPagado: pago, estadoPago, estadoCadena } : f)
-    );
-    try {
-      const res = await fetchAuth(`/facturas/${id}/estado-pago`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ montoPagado: pago }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch {
-      // Revertir el cambio optimista para que la UI no mienta si no se guardó
-      setFacturas(prev => prev.map(f => f._id === id ? { ...f, ...previo } : f));
-      setAvisoPermiso("No se pudo guardar el estado de pago. Verifica que el servidor esté disponible e intenta de nuevo.");
-    }
-  };
-
-  const handlePagoMonto = async (id, montoIngresado) => {
-    const factura = facturas.find(f => f._id === id);
-    if (!factura) return;
-
-    const totalAPagar = Number(factura.totalAPagar) || 0;
-    const pago = Math.max(0, Number(montoIngresado) || 0);
-    const estadoPagoAnterior = factura.estadoPago;
-    let estadoPago = "sin pago";
-    if (pago > 0 && pago < totalAPagar) estadoPago = "pago parcial";
-    if (totalAPagar > 0 && pago >= totalAPagar) estadoPago = "pagado";
-
-    if (estadoPagoAnterior === "pagado" && estadoPago !== "pagado" && getUsuario()?.rol !== "admin") {
-      setAvisoPermiso("Solo un administrador puede deshacer un pago ya confirmado.");
-      return;
-    }
-    if (estadoPago === "pagado" && estadoPagoAnterior !== "pagado") {
-      setConfirmandoPago({ tipo: "factura", id, montoIngresado });
-      return;
-    }
-    await ejecutarPagoMonto(id, montoIngresado);
-  };
-
-  // Igual que handlePagoMonto pero por cuota — campo numérico (no checkbox):
-  // anota cuánto se pagó de ESA cuota, puede ser parcial. El agregado
-  // (montoPagado/estadoPago) se recalcula acá en espejo de lo que hace el
-  // backend (Backend/src/routes/facturas.js:/:id/cuotas/:cuotaId/pagar), no
-  // se reemplaza la factura completa con la respuesta del server para no
-  // perder los campos `_numeroOT`/`_numeroCotizacion` que solo viven en el
-  // frontend.
-  const ejecutarCuotaPagoMonto = async (facturaId, cuotaId, montoIngresado) => {
-    const factura = facturas.find(f => f._id === facturaId);
-    const cuota = factura?.cuotas?.find(c => c._id === cuotaId);
-    if (!factura || !cuota) return;
-
-    const pago = Math.max(0, Number(montoIngresado) || 0);
-    const pagada = pago >= Number(cuota.monto);
-    const cuotasActualizadas = factura.cuotas.map(c =>
-      c._id === cuotaId ? { ...c, montoPagado: pago, pagado: pagada, fechaPago: pagada ? new Date().toISOString() : null } : c
-    );
-    const total = cuotasActualizadas.length;
-    const pagadas = cuotasActualizadas.filter(c => c.pagado).length;
-    const montoPagado = cuotasActualizadas.reduce((s, c) => s + (Number(c.montoPagado) || 0), 0);
-    const estadoPago = pagadas === 0 ? "sin pago" : pagadas === total ? "pagado" : "pago parcial";
-    const estadoCadena = estadoPago === "pagado" ? "cerrado" : "abierto";
-
-    const previo = {
-      cuotas: factura.cuotas,
-      montoPagado: factura.montoPagado,
-      estadoPago: factura.estadoPago,
-      estadoCadena: factura.estadoCadena,
-    };
-    setFacturas(prev => prev.map(f =>
-      f._id === facturaId ? { ...f, cuotas: cuotasActualizadas, montoPagado, estadoPago, estadoCadena } : f
-    ));
-
-    try {
-      const res = await fetchAuth(`/facturas/${facturaId}/cuotas/${cuotaId}/pagar`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ montoPagado: pago }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch {
-      setFacturas(prev => prev.map(f => f._id === facturaId ? { ...f, ...previo } : f));
-      setAvisoPermiso("No se pudo guardar el estado de pago. Verifica que el servidor esté disponible e intenta de nuevo.");
-    }
-  };
-
-  const handleCuotaPagoMonto = async (facturaId, cuotaId, montoIngresado) => {
-    const factura = facturas.find(f => f._id === facturaId);
-    const cuota = factura?.cuotas?.find(c => c._id === cuotaId);
-    if (!factura || !cuota) return;
-
-    const pago = Math.max(0, Number(montoIngresado) || 0);
-    const pagadaAntes = cuota.pagado;
-    const pagadaAhora = pago >= Number(cuota.monto);
-
-    if (pagadaAntes && !pagadaAhora && getUsuario()?.rol !== "admin") {
-      setAvisoPermiso("Solo un administrador puede deshacer un pago ya confirmado.");
-      return;
-    }
-    if (pagadaAhora && !pagadaAntes) {
-      setConfirmandoPago({ tipo: "cuota", facturaId, cuotaId, montoIngresado });
-      return;
-    }
-    await ejecutarCuotaPagoMonto(facturaId, cuotaId, montoIngresado);
-  };
-
-  // Independiente del pago del cliente (montoPagado/estadoPago): la
-  // detracción se deposita aparte al Banco de la Nación, se marca pagada o
-  // no con su propio flag (ver detraccionPagada en models/Factura.js).
-  const ejecutarDetraccionPagoCheck = async (id, pagada) => {
-    const factura = facturas.find(f => f._id === id);
-    if (!factura) return;
-    const previo = { detraccionPagada: factura.detraccionPagada };
-    setFacturas(prev => prev.map(f => f._id === id ? { ...f, detraccionPagada: pagada } : f));
-    try {
-      const res = await fetchAuth(`/facturas/${id}/detraccion-pagada`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pagada }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch {
-      setFacturas(prev => prev.map(f => f._id === id ? { ...f, ...previo } : f));
-      setAvisoPermiso("No se pudo guardar el estado de la detracción. Verifica que el servidor esté disponible e intenta de nuevo.");
-    }
-  };
-
-  const handleDetraccionPagoCheck = async (id, pagada) => {
-    const factura = facturas.find(f => f._id === id);
-    if (!factura) return;
-    if (pagada) {
-      setConfirmandoPago({ tipo: "detraccion", id, pagada });
-      return;
-    }
-    if (getUsuario()?.rol !== "admin") {
-      setAvisoPermiso("Solo un administrador puede deshacer un pago.");
-      return;
-    }
-    await ejecutarDetraccionPagoCheck(id, pagada);
-  };
-
   const cerradas = filtradas.filter(f => f.estadoCadena === "cerrado");
   const abiertas = filtradas.filter(f => f.estadoCadena !== "cerrado");
   const hayFiltro = Object.values(filtros).some(Boolean);
@@ -578,7 +322,7 @@ export default function ListaFacturas() {
     "Subtotal":          Number(f.subtotal ?? f.monto ?? 0).toFixed(2),
     "IGV 18%":           Number(f.igv ?? 0).toFixed(2),
     "Total":             Number(f.total ?? 0).toFixed(2),
-    "Detracción 12%":    Number(f.detraccion ?? 0).toFixed(2),
+    "Detracción / Retención": Number(f.impuesto?.monto ?? f.detraccion ?? 0).toFixed(2),
     "Total a pagar":     Number(f.totalAPagar ?? 0).toFixed(2),
     "Estado pago":       f.estadoPago,
     "Monto pagado":      Number(f.montoPagado ?? 0).toFixed(2),
@@ -603,6 +347,7 @@ export default function ListaFacturas() {
         <div>
           <h2 className="text-xl font-semibold text-gray-800">Facturas</h2>
           <p className="text-xs text-gray-400 mt-0.5">{filtradas.length} registro{filtradas.length !== 1 ? "s" : ""}</p>
+          <p className="text-xs text-gray-400 mt-0.5">Los cobros se registran en <Link to="/tesoreria" className="text-purple-600 hover:underline">Tesorería</Link>.</p>
         </div>
         <div className="flex gap-2">
           <button onClick={exportarExcel}
@@ -665,9 +410,6 @@ export default function ListaFacturas() {
         acento="bg-emerald-500"
         facturas={abiertas}
         onSelect={setSeleccionada}
-        handlePagoMonto={handlePagoMonto}
-        handleCuotaPagoMonto={handleCuotaPagoMonto}
-        handleDetraccionPagoCheck={handleDetraccionPagoCheck}
         vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin facturas registradas"}
       />
 
@@ -676,9 +418,6 @@ export default function ListaFacturas() {
         acento="bg-gray-500"
         facturas={cerradas}
         onSelect={setSeleccionada}
-        handlePagoMonto={handlePagoMonto}
-        handleCuotaPagoMonto={handleCuotaPagoMonto}
-        handleDetraccionPagoCheck={handleDetraccionPagoCheck}
         vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin facturas cerradas"}
       />
     </div>
@@ -712,28 +451,6 @@ export default function ListaFacturas() {
       />
     )}
 
-    {confirmandoPago && (
-      <ConfirmacionAccion
-        mensaje={
-          confirmandoPago.tipo === "factura" ? "¿Confirmas marcar esta factura como pagada?" :
-          confirmandoPago.tipo === "detraccion" ? "¿Confirmas marcar la detracción de esta factura como pagada?" :
-          "¿Confirmas marcar esta cuota como pagada?"
-        }
-        onCancelar={() => setConfirmandoPago(null)}
-        onConfirmar={async () => {
-          setProcesandoPago(true);
-          if (confirmandoPago.tipo === "factura") await ejecutarPagoMonto(confirmandoPago.id, confirmandoPago.montoIngresado);
-          else if (confirmandoPago.tipo === "detraccion") await ejecutarDetraccionPagoCheck(confirmandoPago.id, confirmandoPago.pagada);
-          else await ejecutarCuotaPagoMonto(confirmandoPago.facturaId, confirmandoPago.cuotaId, confirmandoPago.montoIngresado);
-          setProcesandoPago(false);
-          setConfirmandoPago(null);
-        }}
-        procesando={procesandoPago}
-        textoConfirmar="Confirmar"
-      />
-    )}
-
-    {avisoPermiso && <AvisoAccion mensaje={avisoPermiso} onCerrar={() => setAvisoPermiso("")} />}
     </>
   );
 }

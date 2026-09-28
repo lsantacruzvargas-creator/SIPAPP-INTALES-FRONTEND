@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
+import { impuestoVentaPorDefecto } from "../utils/tesoreria";
 
 const INP     = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 const INP_DIS = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full";
@@ -20,9 +21,7 @@ function calcular(subtotal, descuentoPct) {
   const base = Math.round(sub * (1 - desc / 100) * 100) / 100;
   const igv = Math.round(base * 0.18 * 100) / 100;
   const total = Math.round((base + igv) * 100) / 100;
-  // R.S. 178-2005/SUNAT: aplica solo si el total (con IGV) es >= S/ 701, y el
-  // depósito se hace en números enteros (sin decimales).
-  const detraccion = total >= 701 ? Math.round(total * 0.12) : 0;
+  const detraccion = impuestoVentaPorDefecto(total).monto;
   return { base, igv, total, detraccion, totalAPagar: Math.round((total - detraccion) * 100) / 100 };
 }
 
