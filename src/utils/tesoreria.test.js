@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   calcularImpuesto, partes, tipoMovimientoEsperado, sugerirImpuesto, impuestoVentaPorDefecto, etiquetaImpuesto,
-  diasCredito, sumarDias, vencimientoDe, semaforo, filtrarFacturas, FILTROS_TESORERIA, totalesMovimientos, cuentasPara, periodoDeMes,
+  diasCredito, sumarDias, vencimientoDe, semaforo, filtrarFacturas, FILTROS_TESORERIA, totalesMovimientos, cuentasPara, periodoDeMes, fechaIsoTexto,
 } from "./tesoreria.js";
 
 test("calcularImpuesto replica al backend: detracción entera en soles y retención 3 %", () => {
@@ -90,4 +90,10 @@ test("cuentasPara filtra la cuenta de detracciones según la parte", () => {
   assert.deepEqual([ids(auto.origen), ids(auto.destino)], [["bcp", "caja"], ["bn"]]);
   assert.deepEqual(cuentasPara({ cuentas, lado: "venta", concepto: "impuesto", impuesto: { tipo: "retencion", quienDeposita: "cliente" } }), { origen: [], destino: [] });
   assert.equal(periodoDeMes("2026-09"), "202609");
+});
+
+test("fechaIsoTexto muestra un día YYYY-MM-DD como dd/mm/aaaa sin correrlo por zona horaria", () => {
+  assert.equal(fechaIsoTexto("2026-09-28"), "28/09/2026");
+  assert.equal(fechaIsoTexto("2026-09-28T05:00:00.000Z"), "28/09/2026");
+  assert.equal(fechaIsoTexto(""), "—");
 });

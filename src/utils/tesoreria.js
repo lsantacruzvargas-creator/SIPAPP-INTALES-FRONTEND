@@ -125,3 +125,10 @@ export function cuentasPara({ cuentas, lado, concepto, impuesto }) {
 }
 
 export const periodoDeMes = (mes) => String(mes || "").replace("-", "");
+
+// Los días de SIRE llegan como "YYYY-MM-DD" (ya en hora Lima): se reordenan como
+// texto; pasarlos por new Date() los correría al día anterior.
+export const fechaIsoTexto = (v) => {
+  const d = String(v || "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.split("-").reverse().join("/") : "—";
+};

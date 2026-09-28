@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchAuth, uploadAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima, formatearFechaHora } from "../../utils/fecha";
 import { money } from "../../utils/compras";
-import { periodoDeMes } from "../../utils/tesoreria";
+import { periodoDeMes, fechaIsoTexto } from "../../utils/tesoreria";
 import TablaScroll from "../TablaScroll";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
@@ -58,10 +58,11 @@ export default function PanelSire({ onRegistrarFactura }) {
   const celda = (f, [clave, campo]) => {
     const dato = f.sire?.[campo] ?? f.sistema?.[campo];
     const difiere = f.diferencias.includes(clave);
-    const texto = campo === "total" || campo === "igv" ? money(dato || 0, f.sire?.moneda || f.sistema?.moneda || "PEN") : String(dato ?? "—").slice(0, 10);
+    const texto = campo === "total" || campo === "igv" ? money(dato || 0, f.sire?.moneda || f.sistema?.moneda || "PEN")
+      : campo === "fechaEmision" ? fechaIsoTexto(dato) : String(dato ?? "—");
     return (
       <td key={clave} className={`px-3 py-2 ${difiere ? "bg-amber-100 font-semibold" : ""}`}>
-        {texto}{difiere && f.sistema ? <span className="block text-[11px] text-gray-500">sistema: {String(f.sistema[campo]).slice(0, 10)}</span> : null}
+        {texto}{difiere && f.sistema ? <span className="block text-[11px] text-gray-500">sistema: {campo === "fechaEmision" ? fechaIsoTexto(f.sistema[campo]) : String(f.sistema[campo])}</span> : null}
       </td>
     );
   };
