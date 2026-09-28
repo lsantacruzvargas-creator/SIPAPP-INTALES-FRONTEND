@@ -132,3 +132,7 @@ export const fechaIsoTexto = (v) => {
   const d = String(v || "").slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.split("-").reverse().join("/") : "—";
 };
+
+// Un origen que pasó por Compras (SC → OCP) se paga en Tesorería; en Requerimientos
+// solo quedan los pagos antiguos. La SC queda en el Requerimiento (ítems) o en el Servicio.
+export const esPagoAntiguo = (x) => !(x.solicitudCompra || x.requerimiento?.solicitudCompra);

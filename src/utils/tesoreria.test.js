@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   calcularImpuesto, partes, tipoMovimientoEsperado, sugerirImpuesto, impuestoVentaPorDefecto, etiquetaImpuesto,
-  diasCredito, sumarDias, vencimientoDe, semaforo, filtrarFacturas, FILTROS_TESORERIA, totalesMovimientos, cuentasPara, periodoDeMes, fechaIsoTexto,
+  diasCredito, sumarDias, vencimientoDe, semaforo, filtrarFacturas, FILTROS_TESORERIA, totalesMovimientos, cuentasPara, periodoDeMes, fechaIsoTexto, esPagoAntiguo,
 } from "./tesoreria.js";
 
 test("calcularImpuesto replica al backend: detracción entera en soles y retención 3 %", () => {
@@ -96,4 +96,11 @@ test("fechaIsoTexto muestra un día YYYY-MM-DD como dd/mm/aaaa sin correrlo por 
   assert.equal(fechaIsoTexto("2026-09-28"), "28/09/2026");
   assert.equal(fechaIsoTexto("2026-09-28T05:00:00.000Z"), "28/09/2026");
   assert.equal(fechaIsoTexto(""), "—");
+});
+
+test("esPagoAntiguo: solo lo que no pasó por Compras (la SC vive en el Requerimiento o en el Servicio)", () => {
+  assert.equal(esPagoAntiguo({ estadoPago: "pendiente_pago", requerimiento: { solicitudCompra: "sc1" } }), false);
+  assert.equal(esPagoAntiguo({ estadoPago: "pendiente_pago", requerimiento: { solicitudCompra: null } }), true);
+  assert.equal(esPagoAntiguo({ estadoPago: "pagado", solicitudCompra: "sc2" }), false);
+  assert.equal(esPagoAntiguo({ estadoPago: "pagado", solicitudCompra: null }), true);
 });

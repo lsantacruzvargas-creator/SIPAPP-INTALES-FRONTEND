@@ -5,6 +5,7 @@ import { formatearFecha } from "../utils/fecha";
 import SelectorMateriales from "../components/SelectorMateriales";
 import PromptAccion from "../components/PromptAccion";
 import ConfirmacionAccion from "../components/ConfirmacionAccion";
+import { esPagoAntiguo } from "../utils/tesoreria";
 
 const ESTADO_ITEM = {
   pendiente: "bg-blue-100 text-blue-700",
@@ -403,12 +404,12 @@ export default function Requerimientos() {
   );
   // Con solicitud de compra el pago va por Tesorería (OC a proveedor → factura
   // → movimiento); aquí quedan solo los pagos antiguos.
-  const itemsLegacy = itemsCompra.filter((it) => !it.solicitudCompra);
+  const itemsLegacy = itemsCompra.filter(esPagoAntiguo);
   const itemsPendientePago = itemsLegacy.filter((it) => it.estadoPago === "pendiente_pago");
   const itemsPagados = itemsLegacy.filter((it) => it.estadoPago === "pagado");
 
   const serviciosActivos = servicios.filter((s) => !s.anulado);
-  const serviciosLegacy = serviciosActivos.filter((s) => !s.solicitudCompra);
+  const serviciosLegacy = serviciosActivos.filter(esPagoAntiguo);
   const serviciosPendientePago = serviciosLegacy.filter((s) => s.estadoPago === "pendiente_pago");
   const serviciosPagados = serviciosLegacy.filter((s) => s.estadoPago === "pagado");
   const hayPagosMateriales = itemsPendientePago.length + itemsPagados.length > 0;
