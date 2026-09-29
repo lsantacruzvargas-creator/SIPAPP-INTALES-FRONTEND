@@ -6,6 +6,7 @@ import SelectFormaPago from "./SelectFormaPago";
 import SelectorEmpresas from "./SelectorEmpresas";
 import TarjetaArchivosRelacionados from "./TarjetaArchivosRelacionados";
 import { FlujoNegocio, TarjetaRelacion, money } from "./detalleShared";
+import { conBloqueo } from "../utils/bloqueoApi";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 w-full transition";
 
@@ -172,10 +173,15 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
       // que TarjetaArchivosRelacionados: nunca en paralelo sobre el mismo
       // documento). Best-effort: si alguno falla, la cotización ya quedó
       // creada igual, no se bloquea la creación por esto.
-      for (const pendiente of archivosPendientes) {
-        const fd = new FormData();
-        fd.append("archivo", pendiente.file);
-        await uploadAuth(`/cotizaciones/${nueva._id}/archivos`, fd);
+      if (archivosPendientes.length) {
+        await conBloqueo("cotizacion", nueva._id, async (h) => {
+          for (const pendiente of archivosPendientes) {
+            const fd = new FormData();
+            fd.append("archivo", pendiente.file);
+            await uploadAuth(`/cotizaciones/${nueva._id}/archivos`, fd, h);
+          }
+          return new Response(null, { status: 204 });
+        });
       }
       onCreada?.(nueva);
     } else {

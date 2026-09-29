@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { fetchAuth, uploadAuth } from "../utils/fetchAuth";
 import SelectorEmpresas from "./SelectorEmpresas";
 import TarjetaArchivosRelacionados from "./TarjetaArchivosRelacionados";
+import { conBloqueo } from "../utils/bloqueoApi";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 
@@ -146,10 +147,15 @@ export default function ModalNuevaOT({ cotizacion, onClose, onCreada }) {
       // TarjetaArchivosRelacionados: nunca en paralelo sobre el mismo
       // documento). Best-effort: si alguno falla, la OT ya quedó creada
       // igual, no se bloquea la creación por esto.
-      for (const pendiente of archivosPendientes) {
-        const fd = new FormData();
-        fd.append("archivo", pendiente.file);
-        await uploadAuth(`/ordenes-trabajo/${nueva._id}/archivos`, fd);
+      if (archivosPendientes.length) {
+        await conBloqueo("ordenTrabajo", nueva._id, async (h) => {
+          for (const pendiente of archivosPendientes) {
+            const fd = new FormData();
+            fd.append("archivo", pendiente.file);
+            await uploadAuth(`/ordenes-trabajo/${nueva._id}/archivos`, fd, h);
+          }
+          return new Response(null, { status: 204 });
+        });
       }
       onCreada?.(nueva);
     } else {

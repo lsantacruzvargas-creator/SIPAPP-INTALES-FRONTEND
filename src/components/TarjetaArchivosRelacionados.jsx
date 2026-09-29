@@ -53,6 +53,7 @@ export default function TarjetaArchivosRelacionados({
   endpoint = "ordenes-trabajo",
   soloLectura = false,
   className = "",
+  bloqueo,
 }) {
   const [subiendo, setSubiendo] = useState(false);
   const [error, setError] = useState("");
@@ -82,7 +83,9 @@ export default function TarjetaArchivosRelacionados({
     for (const file of files) {
       const fd = new FormData();
       fd.append("archivo", file);
-      const res = await uploadAuth(`/${endpoint}/${ordenId}/archivos`, fd);
+      const url = `/${endpoint}/${ordenId}/archivos`;
+      const res = await (bloqueo ? bloqueo.upload(url, fd) : uploadAuth(url, fd));
+      if (res.status === 423) { setError((await res.json().catch(() => ({}))).mensaje); break; }
       if (!res.ok) setError(`No se pudo subir "${file.name}" — formato o tamaño no permitido (máx. 20 MB).`);
       else ultimaOrden = await res.json();
     }
@@ -95,8 +98,10 @@ export default function TarjetaArchivosRelacionados({
       onPendientesChange?.((pendientes || []).filter((_, i) => i !== idx));
       return;
     }
-    const res = await fetchAuth(`/${endpoint}/${ordenId}/archivos/${archivo._id}`, { method: "DELETE" });
+    const url = `/${endpoint}/${ordenId}/archivos/${archivo._id}`;
+    const res = await (bloqueo ? bloqueo.fetch(url, { method: "DELETE" }) : fetchAuth(url, { method: "DELETE" }));
     if (res.ok) onCambio?.(await res.json());
+    else if (res.status === 423) setError((await res.json().catch(() => ({}))).mensaje);
   };
 
   const abrir = (archivo) => {

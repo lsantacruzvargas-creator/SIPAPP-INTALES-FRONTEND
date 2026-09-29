@@ -18,6 +18,9 @@ import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgePago, badgeOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
 } from "./detalleShared";
+import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
+import BarraEdicion from "./BarraEdicion";
+import { conBloqueo } from "../utils/bloqueoApi";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 w-full transition";
 const codigoDeGuia = (g) => `${g.serie}-${String(g.correlativo).padStart(4, "0")}`;
@@ -48,6 +51,7 @@ function calcular(sub, descuentoPct = 0) {
 export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuardada, onNavegar }) {
   const navigate = useNavigate();
   const [cot, setCot] = useState(inicial);
+  const bloqueo = useBloqueoEdicion("cotizacion", cot._id, cot.updatedAt);
   const subtotalInicial = inicial.subtotal ?? 0;
   const [form, setForm] = useState({
     subtotal: subtotalInicial > 0 ? String(subtotalInicial) : "",
@@ -223,12 +227,13 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   // (ver ConfirmacionAccion más abajo) que quiere reasignarla.
   const vincularOT = async (orden) => {
     setReasignandoOT(true);
-    const res = await fetchAuth(`/ordenes-trabajo/${orden._id}/vincular-cotizacion`, {
+    const res = await conBloqueo("ordenTrabajo", orden._id, (h) => fetchAuth(`/ordenes-trabajo/${orden._id}/vincular-cotizacion`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...h },
       body: JSON.stringify({ cotizacion: cot._id }),
-    });
+    }));
     setReasignandoOT(false);
+    if (res.status === 423) setError((await res.json().catch(() => ({}))).mensaje);
     setConfirmandoReasignarOT(null);
     if (res.ok) {
       setBuscadorOTOpen(false);
@@ -276,7 +281,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     const indices = [...seleccionados].sort((a, b) => a - b);
     let ultimaCot = guardada;
     for (const idx of indices) {
-      const res = await fetchAuth(`/cotizaciones/${ultimaCot._id}/items/${idx}/generar-ot`, { method: "PATCH" });
+      const res = await bloqueo.fetch(`/cotizaciones/${ultimaCot._id}/items/${idx}/generar-ot`, { method: "PATCH" });
       if (res.ok) {
         const data = await res.json();
         ultimaCot = data.cotizacion;
@@ -292,7 +297,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   // Desvincula la OT ya generada de un ítem — la OT sigue existiendo, solo
   // queda sin cotización asociada (ver Backend/src/routes/cotizaciones.js).
   const quitarOT = async (idx) => {
-    const res = await fetchAuth(`/cotizaciones/${cot._id}/items/${idx}/quitar-ot`, { method: "PATCH" });
+    const res = await bloqueo.fetch(`/cotizaciones/${cot._id}/items/${idx}/quitar-ot`, { method: "PATCH" });
     if (res.ok) {
       const actualizada = await res.json();
       setCot(actualizada);
@@ -401,7 +406,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     if (form.fecha) payload.fecha = form.fecha;
     if (form.fechaRecibida) payload.fechaRecibida = form.fechaRecibida;
 
-    const res = await fetchAuth(`/cotizaciones/${cot._id}`, {
+    const res = await bloqueo.fetch(`/cotizaciones/${cot._id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -427,12 +432,13 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
 
   const guardar = async () => {
     setGuardando(true);
-    await persistir();
+    const actualizada = await persistir();
+    if (actualizada) await bloqueo.terminar(actualizada.updatedAt);
     setGuardando(false);
   };
 
   const anular = async (motivo) => {
-    const res = await fetchAuth(`/cotizaciones/${cot._id}/anular`, {
+    const res = await bloqueo.fetch(`/cotizaciones/${cot._id}/anular`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ motivo }),
@@ -447,7 +453,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   };
 
   const desanular = async () => {
-    const res = await fetchAuth(`/cotizaciones/${cot._id}/desanular`, { method: "PATCH" });
+    const res = await bloqueo.fetch(`/cotizaciones/${cot._id}/desanular`, { method: "PATCH" });
     if (res.ok) {
       const actualizada = await res.json();
       setCot(actualizada);
@@ -458,7 +464,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   };
 
   const toggleCerrarCadena = async (cerrado, fechaPago, numeroFactura) => {
-    const res = await fetchAuth(`/cotizaciones/${cot._id}/cerrar-cadena`, {
+    const res = await bloqueo.fetch(`/cotizaciones/${cot._id}/cerrar-cadena`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cerrado, ...(fechaPago ? { fechaPago } : {}), ...(numeroFactura ? { numeroFactura } : {}) }),
@@ -541,8 +547,9 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                 </button>
               )
             )}
+            {!cot.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} puedeEditar={puedeEditar} onCancelar={onClose} />}
             {!cot.anulado && !cadenaCerrada && puedeEditar && (
-              <button onClick={guardar} disabled={guardando}
+              <button onClick={guardar} disabled={guardando || !bloqueo.editando}
                 className="bg-white text-sky-700 text-sm px-5 py-2 rounded-lg hover:bg-sky-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">
                 {guardando ? "Guardando…" : "Guardar cambios"}
               </button>
@@ -577,7 +584,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
             {/* `contents` — el fieldset deshabilita todos los inputs de las 4
                 cards de abajo sin imponer su propio layout (cada card sigue
                 siendo un hijo directo de este space-y-6). */}
-            <fieldset disabled={cot.anulado || cadenaCerrada || !puedeEditar} className="contents">
+            <fieldset disabled={cot.anulado || cadenaCerrada || !puedeEditar || !bloqueo.editando} className="contents">
 
               {/* Cards agrupadas igual que en SIPAPP-HUAQUIAN (revisión del
                   usuario, 2026-09-14) — mismos campos que ya tenía Intales,
@@ -998,6 +1005,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
           <TarjetaArchivosRelacionados
             ordenId={cot._id}
             endpoint="cotizaciones"
+            bloqueo={bloqueo}
             archivos={cot.archivos}
             archivosVinculados={ots.flatMap(o => o.archivos || [])}
             vinculadoLabel="la OT"
