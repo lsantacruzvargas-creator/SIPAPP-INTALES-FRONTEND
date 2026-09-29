@@ -2,6 +2,7 @@ import { useState } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { money } from "../../utils/compras";
 import { calcularImpuesto, partes, CODIGOS_DETRACCION } from "../../utils/tesoreria";
+import { conBloqueo } from "../../utils/bloqueoApi";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full";
 
@@ -24,7 +25,7 @@ export default function ModalImpuestoVenta({ factura, onClose, onGuardada }) {
     setGuardando(true);
     setError("");
     try {
-      const r = await fetchAuth(`/facturas/${factura._id}/impuesto`, { method: "PATCH", body: JSON.stringify({ ...form, quienDeposita: quien }) });
+      const r = await conBloqueo("factura", factura._id, (h) => fetchAuth(`/facturas/${factura._id}/impuesto`, { method: "PATCH", headers: h, body: JSON.stringify({ ...form, quienDeposita: quien }) }));
       const data = await r.json().catch(() => ({}));
       if (!r.ok) return setError(data.mensaje || "No se pudo cambiar el impuesto.");
       onGuardada(data);

@@ -9,6 +9,8 @@ import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgeOT, badgePago, money, BotonAnular, BannerAnulado, bloqueadoPorCadenaCerrada,
 } from "./detalleShared";
+import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
+import BarraEdicion from "./BarraEdicion";
 
 const INP    = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 w-full transition";
 const INP_RO = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full cursor-not-allowed";
@@ -92,6 +94,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
   const [error, setError]         = useState("");
   const [cobrando, setCobrando]   = useState(false);
   const [recalculo, setRecalculo] = useState(null);
+  const bloqueo = useBloqueoEdicion("factura", inicial._id, inicial.updatedAt);
   const puedeCobrar = ["admin", "jefatura", "facturacion"].includes(getUsuario()?.rol);
   const [cargandoOC, setCargandoOC] = useState(false);
   // "jefatura" agregado acá para calzar con el gate real del backend
@@ -212,7 +215,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
     if (confirmarRecalculo)    payload.confirmarRecalculo = true;
 
     try {
-      const res = await fetchAuth(`/facturas/${inicial._id}`, {
+      const res = await bloqueo.fetch(`/facturas/${inicial._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -223,6 +226,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
       if (res.status === 409 && data.recalculo) { setRecalculo(data.recalculo); return; }
       setRecalculo(null);
       if (!res.ok) { setError(data.mensaje || "No se pudo guardar los cambios."); return; }
+      await bloqueo.terminar(data.updatedAt);
       onGuardada(data);
     } catch {
       setError("Error de conexión con el servidor, intenta de nuevo.");
@@ -232,7 +236,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
   };
 
   const anular = async (motivo) => {
-    const res = await fetchAuth(`/facturas/${inicial._id}/anular`, {
+    const res = await bloqueo.fetch(`/facturas/${inicial._id}/anular`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ motivo }),
@@ -283,9 +287,10 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
                   <Chip className="mt-0.5 bg-white/20 text-white">{inicial.estadoPago}</Chip>
                 )}
               </div>
+              {!inicial.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} puedeEditar={puedeEditar} onCancelar={onClose} />}
               {!inicial.anulado && !cadenaCerrada && puedeEditar && <BotonAnular onAnular={anular} />}
               {!inicial.anulado && !cadenaCerrada && puedeEditar && (
-                <button onClick={() => guardar()} disabled={guardando}
+                <button onClick={() => guardar()} disabled={guardando || !bloqueo.editando}
                   className="bg-white text-emerald-700 text-sm px-5 py-2 rounded-lg hover:bg-emerald-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">
                   {guardando ? "Guardando…" : "Guardar cambios"}
                 </button>
@@ -306,7 +311,8 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
         <div className="max-w-6xl mx-auto px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
 
           {/* Datos editables */}
-          <fieldset disabled={inicial.anulado || cadenaCerrada || !puedeEditar} className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 self-start">
+          <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 self-start">
+          <fieldset disabled={inicial.anulado || cadenaCerrada || !puedeEditar || !bloqueo.editando} className="space-y-5 min-w-0">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-5 rounded-full bg-emerald-500" />
               <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Datos de la factura</h2>
@@ -462,16 +468,17 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
                   </div>
                 )}
               </div>
-              {puedeCobrar && !inicial.anulado && (inicial.saldoNeto > 0.009 || inicial.saldoImpuesto > 0.009) && (
-                <button type="button" onClick={() => setCobrando(true)}
-                  className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700">
-                  Registrar cobro
-                </button>
-              )}
             </div>
 
             {error && <p className="text-xs text-red-500">{error}</p>}
           </fieldset>
+          {puedeCobrar && !inicial.anulado && (inicial.saldoNeto > 0.009 || inicial.saldoImpuesto > 0.009) && (
+            <button type="button" onClick={() => setCobrando(true)}
+              className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700">
+              Registrar cobro
+            </button>
+          )}
+          </div>
 
           {/* Relaciones */}
           <section className="space-y-4">
