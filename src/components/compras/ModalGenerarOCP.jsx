@@ -3,6 +3,7 @@ import { fetchAuth } from "../../utils/fetchAuth";
 import { totalesOCP, money } from "../../utils/compras";
 import { exportarOrdenCompraProveedorPdf } from "../../utils/compraPdf";
 import SelectFormaPago from "../SelectFormaPago";
+import { conBloqueo } from "../../utils/bloqueoApi";
 
 const INP = "border border-gray-200 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300";
 
@@ -32,7 +33,10 @@ function gruposDesde(lic) {
     .filter((g) => g.items.length > 0);
 }
 
-export default function ModalGenerarOCP({ licitacion, onClose, onGenerado }) {
+export default function ModalGenerarOCP({ licitacion, bloqueo, onClose, onGenerado }) {
+  // Con el bloqueo del cuadro si viene de ahí; si no, uno temporal para esta acción.
+  const llamar = (url, opciones) => (bloqueo ? bloqueo.fetch(url, opciones)
+    : conBloqueo("licitacion", licitacion._id, (h) => fetchAuth(url, { ...opciones, headers: h })));
   const [grupos, setGrupos] = useState(() => gruposDesde(licitacion));
   const [generando, setGenerando] = useState(false);
   const [error, setError] = useState("");
@@ -53,7 +57,7 @@ export default function ModalGenerarOCP({ licitacion, onClose, onGenerado }) {
     }
     setGenerando(true);
     setError("");
-    const r = await fetchAuth(`/licitaciones/${licitacion._id}/adjudicar`, {
+    const r = await llamar(`/licitaciones/${licitacion._id}/adjudicar`, {
       method: "POST",
       body: JSON.stringify({
         ordenes: grupos.map((g) => ({

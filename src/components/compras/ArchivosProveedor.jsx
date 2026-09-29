@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { fetchAuth, uploadAuth, abrirArchivoProtegido } from "../../utils/fetchAuth";
+import { conBloqueo } from "../../utils/bloqueoApi";
 
 const ACCEPT = [
   "image/jpeg", "image/png", "image/webp",
@@ -12,7 +13,7 @@ const ACCEPT = [
 
 // Versión compacta de TarjetaArchivosRelacionados para caber en una columna
 // del cuadro comparativo: cotizaciones que devolvió un proveedor.
-export default function ArchivosProveedor({ licitacionId, proveedor, puedeSubir = true, puedeBorrar = false, onCambio }) {
+export default function ArchivosProveedor({ licitacionId, proveedor, puedeSubir = true, puedeBorrar = false, onCambio, bloqueo }) {
   const [subiendo, setSubiendo] = useState(false);
   const [error, setError] = useState("");
   const base = `/licitaciones/${licitacionId}/proveedores/${proveedor._id}/archivos`;
@@ -27,8 +28,9 @@ export default function ArchivosProveedor({ licitacionId, proveedor, puedeSubir 
     for (const file of files) {
       const fd = new FormData();
       fd.append("archivo", file);
-      const r = await uploadAuth(base, fd);
+      const r = await (bloqueo ? bloqueo.upload(base, fd) : conBloqueo("licitacion", licitacionId, (h) => uploadAuth(base, fd, h)));
       if (r.ok) ultima = await r.json();
+      else if (r.status === 423) { setError((await r.json().catch(() => ({}))).mensaje); break; }
       else setError(`No se pudo subir "${file.name}" — formato o tamaño no permitido (máx. 20 MB).`);
     }
     setSubiendo(false);
@@ -36,7 +38,8 @@ export default function ArchivosProveedor({ licitacionId, proveedor, puedeSubir 
   };
 
   const borrar = async (archivo) => {
-    const r = await fetchAuth(`${base}/${archivo._id}`, { method: "DELETE" });
+    const r = await (bloqueo ? bloqueo.fetch(`${base}/${archivo._id}`, { method: "DELETE" })
+      : conBloqueo("licitacion", licitacionId, (h) => fetchAuth(`${base}/${archivo._id}`, { method: "DELETE", headers: h })));
     if (r.ok) onCambio(await r.json());
     else {
       const d = await r.json().catch(() => ({}));

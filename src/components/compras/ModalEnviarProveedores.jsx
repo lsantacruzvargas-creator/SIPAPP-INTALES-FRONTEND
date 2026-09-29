@@ -2,11 +2,15 @@ import { useState } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { ordenarProveedores, idDe } from "../../utils/compras";
 import { exportarSolicitudCotizacionPdf } from "../../utils/compraPdf";
+import { conBloqueo } from "../../utils/bloqueoApi";
 
 // Sin `licitacion`: crea la Licitación con las líneas marcadas. Con
 // `licitacion`: invita proveedores adicionales a una licitación abierta.
 // En ambos casos descarga un PDF de Solicitud de Cotización por proveedor.
-export default function ModalEnviarProveedores({ lineas = [], proveedores, licitacion = null, onClose, onEnviado }) {
+export default function ModalEnviarProveedores({ lineas = [], proveedores, licitacion = null, bloqueo, onClose, onEnviado }) {
+  // Con el bloqueo del cuadro si viene de ahí; si no, uno temporal para esta acción.
+  const llamar = (url, opciones) => (bloqueo ? bloqueo.fetch(url, opciones)
+    : conBloqueo("licitacion", licitacion._id, (h) => fetchAuth(url, { ...opciones, headers: h })));
   const modoInvitar = !!licitacion;
   const items = modoInvitar ? licitacion.items : lineas;
   const yaInvitados = new Set(modoInvitar ? licitacion.proveedores.map((p) => idDe(p.empresa)) : []);
@@ -41,7 +45,7 @@ export default function ModalEnviarProveedores({ lineas = [], proveedores, licit
     let lic = null;
     if (modoInvitar) {
       for (const empresa of marcados) {
-        const r = await fetchAuth(`/licitaciones/${licitacion._id}/proveedores`, { method: "POST", body: JSON.stringify({ empresa }) });
+        const r = await llamar(`/licitaciones/${licitacion._id}/proveedores`, { method: "POST", body: JSON.stringify({ empresa }) });
         if (!r.ok) return fallar(r, "No se pudo invitar al proveedor.");
         lic = await r.json();
       }

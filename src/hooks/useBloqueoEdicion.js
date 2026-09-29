@@ -47,6 +47,10 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cambiar de documento
   }, [documento]);
 
+  // Pantallas que cargan el documento después de montar (cuadro comparativo): se
+  // anota la primera versión conocida; las siguientes las decide versionTrasAccion.
+  useEffect(() => { if (version.current == null && versionMostrada) version.current = versionMostrada; }, [versionMostrada]);
+
   // Mientras otro lo edita se revisa cada 30 s, para habilitar "Editar" cuando lo suelte.
   useEffect(() => {
     if (estado !== "ocupado") return undefined;

@@ -5,6 +5,8 @@ import { exportarSolicitudCotizacionPdf } from "../../utils/compraPdf";
 import ModalEnviarProveedores from "./ModalEnviarProveedores";
 import ArchivosProveedor from "./ArchivosProveedor";
 import ModalGenerarOCP from "./ModalGenerarOCP";
+import useBloqueoEdicion from "../../hooks/useBloqueoEdicion";
+import BarraEdicion from "../BarraEdicion";
 
 const INP = "border border-gray-200 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300";
 
@@ -31,6 +33,7 @@ export default function ModalCuadroComparativo({ licitacionId, catalogos, onClos
   const [generarAbierto, setGenerarAbierto] = useState(false);
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
+  const bloqueo = useBloqueoEdicion("licitacion", licitacionId, lic?.updatedAt);
 
   const aplicar = (l) => { setLic(l); setBorrador(borradorDesde(l)); };
 
@@ -76,7 +79,7 @@ export default function ModalCuadroComparativo({ licitacionId, catalogos, onClos
         precios: Object.entries(borrador.proveedores[p._id].precios).map(([itemId, precioUnitario]) => ({ itemId, precioUnitario })),
       })),
     };
-    const r = await fetchAuth(`/licitaciones/${lic._id}`, { method: "PUT", body: JSON.stringify(body) });
+    const r = await bloqueo.fetch(`/licitaciones/${lic._id}`, { method: "PUT", body: JSON.stringify(body) });
     setGuardando(false);
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
@@ -125,6 +128,7 @@ export default function ModalCuadroComparativo({ licitacionId, catalogos, onClos
         </div>
 
         <div className="flex-1 overflow-auto p-4">
+          <fieldset disabled={!bloqueo.editando} className="min-w-0">
           <table className="text-sm border-collapse">
             <thead>
               <tr className="align-top">
@@ -145,7 +149,7 @@ export default function ModalCuadroComparativo({ licitacionId, catalogos, onClos
                       <button type="button" onClick={() => exportarSolicitudCotizacionPdf(lic, p)} className="text-[11px] text-purple-600 hover:underline">PDF</button>
                     </div>
                     <div className="mt-1">
-                      <ArchivosProveedor licitacionId={lic._id} proveedor={p} puedeBorrar onCambio={setLic} />
+                      <ArchivosProveedor licitacionId={lic._id} proveedor={p} puedeBorrar onCambio={setLic} bloqueo={bloqueo} />
                     </div>
                   </th>
                 ))}
@@ -207,18 +211,20 @@ export default function ModalCuadroComparativo({ licitacionId, catalogos, onClos
               </tr>
             </tfoot>
           </table>
+          </fieldset>
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 shrink-0">
+          <BarraEdicion bloqueo={bloqueo} onCancelar={onClose} className="mr-auto" />
           {error && <p className="text-sm text-red-500 mr-auto">{error}</p>}
           {aviso && !error && <p className="text-sm text-green-600 mr-auto">{aviso}</p>}
-          <button type="button" onClick={invitar} disabled={guardando}
+          <button type="button" onClick={invitar} disabled={guardando || !bloqueo.editando}
             className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition disabled:opacity-50">+ Invitar proveedor</button>
-          <button type="button" onClick={guardar} disabled={guardando}
+          <button type="button" onClick={guardar} disabled={guardando || !bloqueo.editando}
             className="text-sm bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition disabled:opacity-50">
             {guardando ? "Guardando…" : "Guardar cuadro"}
           </button>
-          <button type="button" onClick={abrirGenerar} disabled={guardando}
+          <button type="button" onClick={abrirGenerar} disabled={guardando || !bloqueo.editando}
             className="text-sm bg-purple-600 text-white px-5 py-2 rounded-lg hover:bg-purple-700 transition disabled:opacity-50 font-medium">
             Generar OC(s)
           </button>
@@ -226,12 +232,12 @@ export default function ModalCuadroComparativo({ licitacionId, catalogos, onClos
       </div>
 
       {invitarAbierto && (
-        <ModalEnviarProveedores licitacion={lic} proveedores={catalogos.proveedores}
+        <ModalEnviarProveedores licitacion={lic} bloqueo={bloqueo} proveedores={catalogos.proveedores}
           onClose={() => setInvitarAbierto(false)}
           onEnviado={(nueva) => { setInvitarAbierto(false); aplicar(nueva); }} />
       )}
       {generarAbierto && (
-        <ModalGenerarOCP licitacion={lic} onClose={() => setGenerarAbierto(false)}
+        <ModalGenerarOCP licitacion={lic} bloqueo={bloqueo} onClose={() => setGenerarAbierto(false)}
           onGenerado={(ocps) => { setGenerarAbierto(false); onAdjudicado(ocps); }} />
       )}
     </div>
