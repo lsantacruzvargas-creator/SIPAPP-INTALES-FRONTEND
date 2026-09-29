@@ -3,6 +3,8 @@ import { fetchAuth } from "../utils/fetchAuth";
 import { formatearFecha } from "../utils/fecha";
 import ModalOTEquipo from "../components/ModalOTEquipo";
 import TablaScroll from "../components/TablaScroll";
+import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
+import BarraEdicion from "../components/BarraEdicion";
 
 const ESTADOS = ["recibido", "en diagnóstico", "en reparación", "listo", "entregado"];
 const ESTADOS_OT = ["pendiente", "en progreso", "completado", "entregado"];
@@ -47,6 +49,8 @@ export default function IngresoEquipos() {
   const [plantaFiltro, setPlantaFiltro]   = useState("");
   const [modalAbierto, setModalAbierto] = useState(false);
   const [seleccionado, setSeleccionado] = useState(null);
+  const bloqueo = useBloqueoEdicion("ingresoEquipo", seleccionado?._id, seleccionado?.updatedAt);
+  const soloLectura = !!seleccionado && !bloqueo.editando;
   const [form, setForm]             = useState(FORM_VACIO);
   const [guardando, setGuardando]   = useState(false);
   const [error, setError]           = useState("");
@@ -110,13 +114,15 @@ export default function IngresoEquipos() {
     setError("");
     const url    = seleccionado ? `/ingresos-equipo/${seleccionado._id}` : "/ingresos-equipo";
     const method = seleccionado ? "PUT" : "POST";
-    const res = await fetchAuth(url, {
+    const opciones = {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...form, garantia: form.garantia === "true" }),
-    });
+    };
+    const res = await (seleccionado ? bloqueo.fetch(url, opciones) : fetchAuth(url, opciones));
     if (res.ok) {
       const data = await res.json();
+      if (seleccionado) await bloqueo.terminar(data.updatedAt);
       setIngresos((prev) =>
         seleccionado
           ? prev.map((i) => i._id === data._id ? data : i)
@@ -362,6 +368,7 @@ export default function IngresoEquipos() {
             </div>
 
             <div className="p-6 space-y-4 overflow-y-auto">
+              <fieldset disabled={soloLectura} className="contents">
 
               {/* Cliente */}
               <div>
@@ -475,6 +482,7 @@ export default function IngresoEquipos() {
                 </select>
               </div> */}
 
+              </fieldset>
               {error && <p className="text-xs text-red-500">{error}</p>}
             </div>
 
@@ -483,7 +491,8 @@ export default function IngresoEquipos() {
                 className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
                 Cancelar
               </button>
-              <button onClick={guardar} disabled={guardando}
+              {seleccionado && <BarraEdicion bloqueo={bloqueo} onCancelar={cerrar} className="mr-auto" />}
+              <button onClick={guardar} disabled={guardando || soloLectura}
                 className="text-sm bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition font-medium">
                 {guardando ? "Guardando…" : seleccionado ? "Guardar cambios" : "Registrar ingreso"}
               </button>
