@@ -46,11 +46,11 @@ export const abrirArchivoProtegido = async (ruta) => {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
 
-export const uploadAuth = (endpoint, formData) => {
+export const uploadAuth = (endpoint, formData, headers = {}) => {
   const token = sessionStorage.getItem("token");
   return fetch(`${API}${endpoint}`, {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers },
     body: formData,
   });
 };
