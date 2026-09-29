@@ -51,8 +51,9 @@ export default function ArchivosProveedor({ licitacionId, proveedor, puedeSubir 
     <div className="space-y-1">
       {(proveedor.archivos || []).map((a) => (
         <div key={a._id} className="flex items-center gap-1 text-xs">
-          <button type="button" onClick={() => abrirArchivoProtegido(a.url)} title={a.nombre}
-            className="text-blue-600 hover:underline truncate max-w-[170px] text-left">📎 {a.nombre}</button>
+          {/* Enlace, no botón: abrir es solo lectura y un <fieldset disabled> no debe impedirlo. */}
+          <a href="#" role="button" onClick={(e) => { e.preventDefault(); abrirArchivoProtegido(a.url); }} title={a.nombre}
+            className="text-blue-600 hover:underline truncate max-w-[170px] text-left">📎 {a.nombre}</a>
           {puedeBorrar && <button type="button" onClick={() => borrar(a)} className="text-gray-300 hover:text-red-500">✕</button>}
         </div>
       ))}

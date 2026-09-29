@@ -146,10 +146,11 @@ export default function ModalCuadroComparativo({ licitacionId, catalogos, onClos
                         <option value="PEN">S/</option>
                         <option value="USD">US$</option>
                       </select>
-                      <button type="button" onClick={() => exportarSolicitudCotizacionPdf(lic, p)} className="text-[11px] text-purple-600 hover:underline">PDF</button>
+                      {/* Enlace: descargar el PDF es solo lectura y el fieldset del cuadro no debe bloquearlo. */}
+                      <a href="#" role="button" onClick={(e) => { e.preventDefault(); exportarSolicitudCotizacionPdf(lic, p); }} className="text-[11px] text-purple-600 hover:underline">PDF</a>
                     </div>
                     <div className="mt-1">
-                      <ArchivosProveedor licitacionId={lic._id} proveedor={p} puedeBorrar onCambio={setLic} bloqueo={bloqueo} />
+                      <ArchivosProveedor licitacionId={lic._id} proveedor={p} puedeSubir={bloqueo.editando} puedeBorrar={bloqueo.editando} onCambio={setLic} bloqueo={bloqueo} />
                     </div>
                   </th>
                 ))}
