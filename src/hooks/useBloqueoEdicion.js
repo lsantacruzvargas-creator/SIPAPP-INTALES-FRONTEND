@@ -11,12 +11,13 @@ const EVENTOS_ACTIVIDAD = ["keydown", "mousedown", "input"];
 // lo toma, un latido lo mantiene mientras hay actividad, y se suelta al guardar,
 // cancelar o cerrar. fetch/upload agregan las cabeceras; si no se está editando,
 // toman un bloqueo temporal solo para esa acción.
-export default function useBloqueoEdicion(entidad, documento, versionMostrada) {
+export default function useBloqueoEdicion(entidad, documento, versionMostrada, { autoEditar = false } = {}) {
   const [estado, setEstado] = useState("cargando");
   const [mensaje, setMensaje] = useState("");
   const clave = useRef(null);
   const version = useRef(versionMostrada);
   const ultimaActividad = useRef(0); // se fija al pulsar "Editar"
+  const autoIntentado = useRef(null);
 
   // Otro documento en la misma pantalla (Ingresos de equipo): vuelve a empezar.
   const [documentoActual, setDocumentoActual] = useState(documento);
@@ -98,6 +99,16 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada) {
     ultimaActividad.current = Date.now();
     setEstado("editando");
   };
+
+  // Formularios que se abren desde el "Editar" de una fila (catálogos): la
+  // intención ya está expresada, se toma sin un segundo clic. Solo una vez por
+  // documento: si estaba ocupado y se libera, queda el botón "Editar".
+  useEffect(() => {
+    if (!autoEditar || estado !== "lectura" || autoIntentado.current === documento) return;
+    autoIntentado.current = documento;
+    editar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- editar cambia en cada render
+  }, [autoEditar, estado, documento]);
 
   const soltar = async (nuevaVersion) => {
     if (nuevaVersion) version.current = nuevaVersion;
