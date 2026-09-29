@@ -7,6 +7,7 @@ import { exportarOrdenCompraProveedorPdf } from "../../utils/compraPdf";
 import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
 import DetalleOCP from "./DetalleOCP";
+import { conBloqueo } from "../../utils/bloqueoApi";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
 const fecha = (d) => formatearFecha(d, { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -34,7 +35,7 @@ export default function TablaCompras({ catalogos }) {
   const anular = async (motivo) => {
     setProcesando(true);
     setError("");
-    const r = await fetchAuth(`/ordenes-compra-proveedor/${anulando._id}/anular`, { method: "PATCH", body: JSON.stringify({ motivo }) });
+    const r = await conBloqueo("ordenCompraProveedor", anulando._id, (h) => fetchAuth(`/ordenes-compra-proveedor/${anulando._id}/anular`, { headers: h, method: "PATCH", body: JSON.stringify({ motivo }) }));
     if (r.ok) await cargar();
     else {
       const d = await r.json().catch(() => ({}));

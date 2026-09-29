@@ -6,6 +6,7 @@ import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
 import ModalNuevaSC from "./ModalNuevaSC";
 import ModalEnviarProveedores from "./ModalEnviarProveedores";
+import { conBloqueo } from "../../utils/bloqueoApi";
 
 // En la tabla el tipo de artículo es un <select> (un buscador con lista
 // desplegable quedaría recortado por el scroll horizontal); "+ Nuevo tipo…"
@@ -56,7 +57,7 @@ export default function TablaPorProcesar({ catalogos, onTipoCreado, onEnviado })
 
   const editarLinea = async (fila, cambios) => {
     setError("");
-    const r = await fetchAuth(`/solicitudes-compra/${fila.sc._id}/lineas/${fila._id}`, { method: "PATCH", body: JSON.stringify(cambios) });
+    const r = await conBloqueo("solicitudCompra", fila.sc._id, (h) => fetchAuth(`/solicitudes-compra/${fila.sc._id}/lineas/${fila._id}`, { headers: h, method: "PATCH", body: JSON.stringify(cambios) }));
     if (r.ok) reemplazarSC(await r.json());
     else await leerError(r, "No se pudo guardar el cambio.");
   };
@@ -82,7 +83,7 @@ export default function TablaPorProcesar({ catalogos, onTipoCreado, onEnviado })
 
   const anular = async (motivo) => {
     setProcesando(true);
-    const r = await fetchAuth(`/solicitudes-compra/${anulando.sc._id}/lineas/${anulando._id}/anular`, { method: "PATCH", body: JSON.stringify({ motivo }) });
+    const r = await conBloqueo("solicitudCompra", anulando.sc._id, (h) => fetchAuth(`/solicitudes-compra/${anulando.sc._id}/lineas/${anulando._id}/anular`, { headers: h, method: "PATCH", body: JSON.stringify({ motivo }) }));
     if (r.ok) reemplazarSC(await r.json());
     else await leerError(r, "No se pudo anular la línea.");
     setProcesando(false);

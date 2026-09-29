@@ -4,6 +4,7 @@ import { formatearFecha } from "../../utils/fecha";
 import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
 import ModalCuadroComparativo from "./ModalCuadroComparativo";
+import { conBloqueo } from "../../utils/bloqueoApi";
 
 export default function TablaLicitaciones({ catalogos, onAdjudicado }) {
   const [lics, setLics] = useState([]);
@@ -22,7 +23,7 @@ export default function TablaLicitaciones({ catalogos, onAdjudicado }) {
   const anular = async (motivo) => {
     setProcesando(true);
     setError("");
-    const r = await fetchAuth(`/licitaciones/${anulando._id}/anular`, { method: "PATCH", body: JSON.stringify({ motivo }) });
+    const r = await conBloqueo("licitacion", anulando._id, (h) => fetchAuth(`/licitaciones/${anulando._id}/anular`, { headers: h, method: "PATCH", body: JSON.stringify({ motivo }) }));
     if (r.ok) await cargar();
     else {
       const d = await r.json().catch(() => ({}));

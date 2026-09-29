@@ -3,6 +3,7 @@ import { fetchAuth, uploadAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
 import { money, round2, nombreEmpresa } from "../../utils/compras";
 import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION } from "../../utils/tesoreria";
+import { conBloqueo } from "../../utils/bloqueoApi";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full";
 const TIPOS = [{ valor: "01", label: "Factura" }, { valor: "02", label: "Recibo por honorarios" }, { valor: "03", label: "Boleta" }];
@@ -87,7 +88,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
     try {
       const fd = new FormData();
       fd.append("archivo", archivo);
-      const ra = await uploadAuth(`/facturas-proveedor/${fp._id}/archivos`, fd);
+      const ra = await conBloqueo("facturaProveedor", fp._id, (h) => uploadAuth(`/facturas-proveedor/${fp._id}/archivos`, fd, h));
       if (ra.ok) return onGuardada(await ra.json());
       const d = await ra.json().catch(() => ({}));
       setError(d.mensaje || "Formato o tamaño no permitido (PDF o imagen, máx. 20 MB).");
