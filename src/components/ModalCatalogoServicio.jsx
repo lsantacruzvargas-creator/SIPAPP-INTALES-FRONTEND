@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
+import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
+import BarraEdicion from "./BarraEdicion";
+import { avisoDeRespuesta } from "../utils/bloqueo";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 w-full";
 
@@ -11,6 +14,8 @@ export default function ModalCatalogoServicio({ grupoServicio, onClose, onGuarda
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  const bloqueo = useBloqueoEdicion("catalogoServicio", grupoServicio?._id, grupoServicio?.updatedAt, { autoEditar: true });
+  const soloLectura = esEdicion && !bloqueo.editando;
 
   const setItem = (i, valor) =>
     setForm((f) => ({ ...f, items: f.items.map((it, j) => (j === i ? valor : it)) }));
@@ -23,17 +28,14 @@ export default function ModalCatalogoServicio({ grupoServicio, onClose, onGuarda
     if (items.length === 0) { setError("Agrega al menos un ítem."); return; }
     setError("");
     setGuardando(true);
-    const res = await fetchAuth(
-      esEdicion ? `/catalogo-servicios/${grupoServicio._id}` : "/catalogo-servicios",
-      {
-        method: esEdicion ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ grupo: form.grupo.trim(), items }),
-      }
-    );
+    const body = JSON.stringify({ grupo: form.grupo.trim(), items });
+    const res = esEdicion
+      ? await bloqueo.fetch(`/catalogo-servicios/${grupoServicio._id}`, { method: "PUT", body })
+      : await fetchAuth("/catalogo-servicios", { method: "POST", body });
     if (res.ok) {
+      if (esEdicion) await bloqueo.terminar();
       onGuardado(await res.json());
-    } else {
+    } else if (!avisoDeRespuesta(res.status, await res.clone().json().catch(() => null))) {
       const data = await res.json().catch(() => ({}));
       setError(data.mensaje ?? "Error al guardar.");
     }
@@ -50,7 +52,8 @@ export default function ModalCatalogoServicio({ grupoServicio, onClose, onGuarda
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
         </div>
 
-        <div className="p-6 space-y-4 overflow-y-auto">
+        {esEdicion && <BarraEdicion bloqueo={bloqueo} onCancelar={onClose} className="mx-6 mt-4" />}
+        <fieldset disabled={soloLectura} className="p-6 space-y-4 overflow-y-auto min-w-0">
           <div>
             <label className="text-xs text-gray-500 block mb-1">Nombre del grupo</label>
             <input
@@ -82,13 +85,13 @@ export default function ModalCatalogoServicio({ grupoServicio, onClose, onGuarda
           </div>
 
           {error && <p className="text-xs text-red-500">{error}</p>}
-        </div>
+        </fieldset>
 
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end shrink-0">
           <button onClick={onClose} className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
             Cancelar
           </button>
-          <button onClick={guardar} disabled={guardando}
+          <button onClick={guardar} disabled={guardando || soloLectura}
             className="text-sm bg-gray-900 text-white px-5 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition font-medium">
             {guardando ? "Guardando…" : esEdicion ? "Guardar cambios" : "Crear grupo"}
           </button>

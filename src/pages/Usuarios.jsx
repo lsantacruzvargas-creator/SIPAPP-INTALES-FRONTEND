@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
+import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
+import BarraEdicion from "../components/BarraEdicion";
+import { avisoDeRespuesta } from "../utils/bloqueo";
 import TablaScroll from "../components/TablaScroll";
 
 const ROLES = ["admin", "tecnico", "tecnico_prueba", "tecnico_intervencion", "almacenero", "asistente", "supervisor", "jefatura", "facturacion", "planner", "coordinadora", "vendedor"];
@@ -45,6 +48,8 @@ function ModalUsuario({ usuario, onClose, onGuardado }) {
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError]   = useState("");
+  const bloqueo = useBloqueoEdicion("usuario", usuario?._id, usuario?.updatedAt, { autoEditar: true });
+  const soloLectura = esEdicion && !bloqueo.editando;
 
   const handleChange = (e) => {
     const val = e.target.type === "checkbox" ? e.target.checked : e.target.value;
@@ -65,17 +70,14 @@ function ModalUsuario({ usuario, onClose, onGuardado }) {
     const payload = { ...form };
     if (esEdicion && !payload.password) delete payload.password;
 
-    const res = await fetchAuth(
-      esEdicion ? `/usuarios/${usuario._id}` : "/usuarios",
-      {
-        method: esEdicion ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }
-    );
+    const body = JSON.stringify(payload);
+    const res = esEdicion
+      ? await bloqueo.fetch(`/usuarios/${usuario._id}`, { method: "PUT", body })
+      : await fetchAuth("/usuarios", { method: "POST", body });
     if (res.ok) {
+      if (esEdicion) await bloqueo.terminar();
       onGuardado(await res.json());
-    } else {
+    } else if (!avisoDeRespuesta(res.status, await res.clone().json().catch(() => null))) {
       const data = await res.json().catch(() => ({}));
       setError(data.mensaje ?? "Error al guardar.");
     }
@@ -92,7 +94,8 @@ function ModalUsuario({ usuario, onClose, onGuardado }) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
         </div>
 
-        <div className="p-6 space-y-4">
+        {esEdicion && <BarraEdicion bloqueo={bloqueo} onCancelar={onClose} className="mx-6 mt-4" />}
+        <fieldset disabled={soloLectura} className="p-6 space-y-4 min-w-0">
           <div>
             <label className="text-xs text-gray-500 block mb-1">Nombre completo</label>
             <input name="nombre" value={form.nombre} onChange={handleChange} className={INP} placeholder="Ej. Juan Pérez" />
@@ -146,13 +149,13 @@ function ModalUsuario({ usuario, onClose, onGuardado }) {
             </div>
           </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
-        </div>
+        </fieldset>
 
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end">
           <button onClick={onClose} className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
             Cancelar
           </button>
-          <button onClick={guardar} disabled={guardando}
+          <button onClick={guardar} disabled={guardando || soloLectura}
             className="text-sm bg-gray-900 text-white px-5 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition font-medium">
             {guardando ? "Guardando…" : esEdicion ? "Guardar cambios" : "Crear usuario"}
           </button>
@@ -172,6 +175,8 @@ function ModalPersonal({ persona, onClose, onGuardado }) {
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  const bloqueo = useBloqueoEdicion("personal", persona?._id, persona?.updatedAt, { autoEditar: true });
+  const soloLectura = esEdicion && !bloqueo.editando;
 
   const handleChange = (e) => {
     const val = e.target.type === "checkbox" ? e.target.checked : e.target.value;
@@ -182,17 +187,14 @@ function ModalPersonal({ persona, onClose, onGuardado }) {
     if (!form.nombre.trim()) { setError("El nombre es obligatorio."); return; }
     setError("");
     setGuardando(true);
-    const res = await fetchAuth(
-      esEdicion ? `/personal/${persona._id}` : "/personal",
-      {
-        method: esEdicion ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      }
-    );
+    const body = JSON.stringify(form);
+    const res = esEdicion
+      ? await bloqueo.fetch(`/personal/${persona._id}`, { method: "PUT", body })
+      : await fetchAuth("/personal", { method: "POST", body });
     if (res.ok) {
+      if (esEdicion) await bloqueo.terminar();
       onGuardado(await res.json());
-    } else {
+    } else if (!avisoDeRespuesta(res.status, await res.clone().json().catch(() => null))) {
       setError("Error al guardar.");
     }
     setGuardando(false);
@@ -207,7 +209,8 @@ function ModalPersonal({ persona, onClose, onGuardado }) {
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
         </div>
-        <div className="p-6 space-y-4">
+        {esEdicion && <BarraEdicion bloqueo={bloqueo} onCancelar={onClose} className="mx-6 mt-4" />}
+        <fieldset disabled={soloLectura} className="p-6 space-y-4 min-w-0">
           <div>
             <label className="text-xs text-gray-500 block mb-1">Nombre completo</label>
             <input name="nombre" value={form.nombre} onChange={handleChange} className={INP} placeholder="Ej. Carlos Quispe" />
@@ -223,12 +226,12 @@ function ModalPersonal({ persona, onClose, onGuardado }) {
             </label>
           )}
           {error && <p className="text-xs text-red-500">{error}</p>}
-        </div>
+        </fieldset>
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end">
           <button onClick={onClose} className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
             Cancelar
           </button>
-          <button onClick={guardar} disabled={guardando}
+          <button onClick={guardar} disabled={guardando || soloLectura}
             className="text-sm bg-amber-500 text-white px-5 py-2 rounded-lg hover:bg-amber-600 disabled:opacity-50 transition font-medium">
             {guardando ? "Guardando…" : esEdicion ? "Guardar cambios" : "Agregar"}
           </button>

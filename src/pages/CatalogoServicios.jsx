@@ -3,11 +3,14 @@ import { fetchAuth } from "../utils/fetchAuth";
 import ModalCatalogoServicio from "../components/ModalCatalogoServicio";
 import TablaScroll from "../components/TablaScroll";
 import ConfirmacionAccion from "../components/ConfirmacionAccion";
+import AvisoAccion from "../components/AvisoAccion";
+import { conBloqueo } from "../utils/bloqueoApi";
 
 export default function CatalogoServicios() {
   const [catalogo, setCatalogo] = useState([]);
   const [modal, setModal] = useState(null); // null | "nuevo" | objeto grupo
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(null);
+  const [avisoError, setAvisoError] = useState("");
 
   useEffect(() => {
     fetchAuth("/catalogo-servicios").then((r) => r.ok ? r.json() : []).then(setCatalogo);
@@ -24,8 +27,9 @@ export default function CatalogoServicios() {
   const eliminar = async () => {
     const g = confirmandoEliminar;
     setConfirmandoEliminar(null);
-    const res = await fetchAuth(`/catalogo-servicios/${g._id}`, { method: "DELETE" });
+    const res = await conBloqueo("catalogoServicio", g._id, (h) => fetchAuth(`/catalogo-servicios/${g._id}`, { method: "DELETE", headers: h }));
     if (res.ok) setCatalogo((prev) => prev.filter((x) => x._id !== g._id));
+    else setAvisoError((await res.json().catch(() => ({}))).mensaje || "No se pudo eliminar el grupo.");
   };
 
   return (
@@ -95,6 +99,8 @@ export default function CatalogoServicios() {
           textoConfirmar="Eliminar"
         />
       )}
+
+      {avisoError && <AvisoAccion mensaje={avisoError} onCerrar={() => setAvisoError("")} />}
     </div>
   );
 }

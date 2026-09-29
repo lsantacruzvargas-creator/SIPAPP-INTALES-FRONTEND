@@ -4,6 +4,7 @@ import ModalEmpresa from "../components/ModalEmpresa";
 import TablaScroll from "../components/TablaScroll";
 import ConfirmacionAccion from "../components/ConfirmacionAccion";
 import AvisoAccion from "../components/AvisoAccion";
+import { conBloqueo } from "../utils/bloqueoApi";
 
 const TIPO_LABEL = { cliente: "Cliente", proveedor: "Proveedor", ambos: "Cliente y proveedor" };
 const TIPO_BADGE = { cliente: "bg-blue-50 text-blue-700", proveedor: "bg-amber-50 text-amber-700", ambos: "bg-purple-50 text-purple-700" };
@@ -26,7 +27,7 @@ export default function Empresas() {
     const empresa = confirmandoEliminar;
     setConfirmandoEliminar(null);
     setEliminandoId(empresa._id);
-    const r = await fetchAuth(`/empresas/${empresa._id}`, { method: "DELETE" });
+    const r = await conBloqueo("empresa", empresa._id, (h) => fetchAuth(`/empresas/${empresa._id}`, { method: "DELETE", headers: h }));
     if (r.ok) {
       await cargar();
     } else {

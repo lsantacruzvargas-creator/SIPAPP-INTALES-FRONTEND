@@ -1,6 +1,9 @@
 import { useState, useRef } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
 import SelectorTipoArticulo from "./SelectorTipoArticulo";
+import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
+import BarraEdicion from "./BarraEdicion";
+import { avisoDeRespuesta } from "../utils/bloqueo";
 
 const FORM_VACIO = { razonSocial: "", ruc: "", direccion: "", alias: "", tipo: "cliente", tipoArticulos: [], requiereHes: false, requiereActaConformidad: false, plantas: [] };
 const PLANTA_VACIA = { nombre: "", ubigeo: "", direccion: "", contactoNombre: "", contactoTelefono: "", contactoCorreo: "" };
@@ -27,6 +30,8 @@ export default function ModalEmpresa({ empresa, onClose, onGuardada }) {
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
   const [buscandoRuc, setBuscandoRuc] = useState(false);
+  const bloqueo = useBloqueoEdicion("empresa", empresa?._id, empresa?.updatedAt, { autoEditar: true });
+  const soloLectura = !!empresa && !bloqueo.editando;
   // Edición in-place de una planta ya creada — un solo botón "Editar" por
   // planta abre nombre/ubigeo/dirección Y sus contactos juntos (agregar,
   // editar, quitar) en un solo bloque, con un solo Guardar/Cancelar. Antes
@@ -163,12 +168,13 @@ export default function ModalEmpresa({ empresa, onClose, onGuardada }) {
         setError("No se pudo obtener la razón social para este RUC. Verifica que el RUC sea correcto.");
         return;
       }
-      const res = await fetchAuth(
-        empresa ? `/empresas/${empresa._id}` : "/empresas",
-        { method: empresa ? "PUT" : "POST", body: JSON.stringify(form) }
-      );
+      const body = JSON.stringify(form);
+      const res = empresa
+        ? await bloqueo.fetch(`/empresas/${empresa._id}`, { method: "PUT", body })
+        : await fetchAuth("/empresas", { method: "POST", body });
       const data = await res.json();
-      if (!res.ok) return setError(data.mensaje || "Error al guardar");
+      if (!res.ok) return avisoDeRespuesta(res.status, data) ? undefined : setError(data.mensaje || "Error al guardar");
+      if (empresa) await bloqueo.terminar();
       onGuardada?.(data);
     } catch {
       setError("Error de conexión");
@@ -184,6 +190,8 @@ export default function ModalEmpresa({ empresa, onClose, onGuardada }) {
           {empresa ? "Editar empresa" : "Nueva empresa"}
         </h3>
 
+        {empresa && <BarraEdicion bloqueo={bloqueo} onCancelar={onClose} className="mb-4" />}
+
         {error && (
           <p className="text-red-600 text-sm mb-4 bg-red-50 border border-red-200 rounded px-3 py-2">
             {error}
@@ -191,6 +199,7 @@ export default function ModalEmpresa({ empresa, onClose, onGuardada }) {
         )}
 
         <form onSubmit={guardar} className="grid grid-cols-2 gap-4">
+          <fieldset disabled={soloLectura} className="col-span-2 grid grid-cols-2 gap-4 min-w-0">
           <div className="col-span-2" >
             <label className="block text-xs font-medium text-gray-600 mb-1">Razón social</label>
             <input
@@ -462,6 +471,8 @@ export default function ModalEmpresa({ empresa, onClose, onGuardada }) {
             )}
           </div>
 
+          </fieldset>
+
           <div className="col-span-2 flex justify-end gap-3 pt-2">
             <button
               type="button"
@@ -472,7 +483,7 @@ export default function ModalEmpresa({ empresa, onClose, onGuardada }) {
             </button>
             <button
               type="submit"
-              disabled={cargando || buscandoRuc}
+              disabled={cargando || buscandoRuc || soloLectura}
               className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-700 transition disabled:opacity-50"
             >
               {cargando ? "Guardando..." : "Guardar"}
