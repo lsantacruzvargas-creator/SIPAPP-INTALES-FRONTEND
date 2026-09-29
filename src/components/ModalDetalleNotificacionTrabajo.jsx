@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import PromptAccion from "./PromptAccion";
+import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
+import BarraEdicion from "./BarraEdicion";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 w-full transition";
 const ROLES_TECNICO = ["tecnico", "tecnico_prueba", "tecnico_intervencion", "supervisor"];
@@ -17,6 +19,7 @@ export default function ModalDetalleNotificacionTrabajo({ notificacion: inicial,
   const puedeEditar = ["admin", "supervisor"].includes(rolActual);
 
   const [notificacion, setNotificacion] = useState(inicial);
+  const bloqueo = useBloqueoEdicion("notificacionTrabajo", notificacion._id, notificacion.updatedAt);
   const [tecnicos, setTecnicos] = useState([]);
   const [maquinas, setMaquinas] = useState([]);
   const [nuevasLineas, setNuevasLineas] = useState([]);
@@ -39,7 +42,7 @@ export default function ModalDetalleNotificacionTrabajo({ notificacion: inicial,
 
   const abrir = async () => {
     setAbriendo(true);
-    const r = await fetchAuth(`/notificaciones-trabajo/${notificacion._id}/abrir`, { method: "PATCH" });
+    const r = await bloqueo.fetch(`/notificaciones-trabajo/${notificacion._id}/abrir`, { method: "PATCH" });
     if (r.ok) {
       const actualizada = await r.json();
       setNotificacion(actualizada);
@@ -50,7 +53,7 @@ export default function ModalDetalleNotificacionTrabajo({ notificacion: inicial,
 
   const anular = async (motivo) => {
     setAnulando(true);
-    const r = await fetchAuth(`/notificaciones-trabajo/${notificacion._id}/items/${confirmandoAnular._id}/anular`, {
+    const r = await bloqueo.fetch(`/notificaciones-trabajo/${notificacion._id}/items/${confirmandoAnular._id}/anular`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ motivo }),
@@ -84,7 +87,7 @@ export default function ModalDetalleNotificacionTrabajo({ notificacion: inicial,
       ...notificacion.items.map((it) => ({ _id: it._id })),
       ...nuevasLineas.map((it) => ({ tipo: it.tipo, recurso: it.recurso, horas: Number(it.horas) })),
     ];
-    const r = await fetchAuth(`/notificaciones-trabajo/${notificacion._id}`, {
+    const r = await bloqueo.fetch(`/notificaciones-trabajo/${notificacion._id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ items }),
@@ -94,6 +97,7 @@ export default function ModalDetalleNotificacionTrabajo({ notificacion: inicial,
       setNotificacion(actualizada);
       onActualizada(actualizada);
       setNuevasLineas([]);
+      await bloqueo.terminar(actualizada.updatedAt);
     } else {
       const d = await r.json().catch(() => ({}));
       setError(d.mensaje || "No se pudo guardar.");
@@ -141,7 +145,8 @@ export default function ModalDetalleNotificacionTrabajo({ notificacion: inicial,
 
           <p className="text-sm font-semibold text-gray-700 text-right pt-2">Total: {money(totalActivo)}</p>
 
-          {notificacion.estado === "abierta" && puedeEditar && (
+          {notificacion.estado === "abierta" && puedeEditar && <BarraEdicion bloqueo={bloqueo} className="mt-4" />}
+          {notificacion.estado === "abierta" && puedeEditar && bloqueo.editando && (
             <div className="border-t border-gray-100 pt-4 mt-4 space-y-3">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Agregar líneas</p>
               <div className="flex gap-2">

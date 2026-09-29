@@ -7,6 +7,8 @@ import ModalDetalleNotificacionTrabajo from "./ModalDetalleNotificacionTrabajo";
 import TablaServiciosExternos from "./TablaServiciosExternos";
 import TablaScroll from "./TablaScroll";
 import { Chip, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada } from "./detalleShared";
+import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
+import BarraEdicion from "./BarraEdicion";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 w-full transition";
 
@@ -55,6 +57,7 @@ const estadoItem = (it) => it.esSolicitudCompra
 // franja de solo lectura, con un link para saltar al padre si hace falta.
 export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNavegar }) {
   const [ot, setOt] = useState(inicial);
+  const bloqueo = useBloqueoEdicion("ordenTrabajo", ot._id, ot.updatedAt);
   const [form, setForm] = useState({
     titulo:               inicial.titulo               || "",
     descripcion:           inicial.descripcion           || "",
@@ -135,7 +138,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
     if (!body.personalAsignado) delete body.personalAsignado;
     if (!body.fechaEntrega) delete body.fechaEntrega;
 
-    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}`, {
+    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -143,6 +146,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
     if (res.ok) {
       const actualizada = await res.json();
       setOt(actualizada);
+      await bloqueo.terminar(actualizada.updatedAt);
       onGuardada?.(actualizada);
     } else {
       setError("Error al guardar los cambios.");
@@ -154,7 +158,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   // puede usar) — no llaman `onGuardada` a propósito: ese callback cierra el
   // modal entero, y marcar un estado no debería sacar al usuario de la vista.
   const cambiarEstado = async (nuevo) => {
-    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}/estado`, {
+    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/estado`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ estado: nuevo }),
@@ -167,7 +171,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   };
 
   const cambiarEncargado = async (campo, nombre) => {
-    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}/encargados`, {
+    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/encargados`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [campo]: nombre }),
@@ -180,7 +184,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   };
 
   const anular = async (motivo) => {
-    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}/anular`, {
+    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/anular`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ motivo }),
@@ -195,7 +199,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   };
 
   const desanular = async () => {
-    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}/desanular`, { method: "PATCH" });
+    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/desanular`, { method: "PATCH" });
     if (res.ok) {
       const actualizada = await res.json();
       setOt(actualizada);
@@ -206,7 +210,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   };
 
   const toggleCerrarCadena = async (cerrado) => {
-    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}/cerrar-cadena`, {
+    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/cerrar-cadena`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cerrado }),
@@ -266,8 +270,9 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
             {!ot.anulado && !cadenaCerrada && puedeAnular && <BotonAnular onAnular={anular} />}
             {esAdmin && ot.anulado && <BotonDesanular onDesanular={desanular} />}
             {esAdmin && <BotonCerrarCadena cerrado={cadenaCerrada} onToggle={toggleCerrarCadena} />}
+            {!ot.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} puedeEditar={puedeEditarCampos} onCancelar={onClose} />}
             {!ot.anulado && !cadenaCerrada && puedeEditarCampos && (
-              <button onClick={guardar} disabled={guardando}
+              <button onClick={guardar} disabled={guardando || !bloqueo.editando}
                 className="bg-white text-violet-700 text-sm px-5 py-2 rounded-lg hover:bg-violet-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">
                 {guardando ? "Guardando…" : "Guardar cambios"}
               </button>
@@ -316,7 +321,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
         <div className="max-w-6xl mx-auto px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
 
           {/* Datos editables — solo lo propio de la sub-tarea */}
-          <fieldset disabled={ot.anulado || cadenaCerrada || !puedeEditarCampos} className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 self-start">
+          <fieldset disabled={ot.anulado || cadenaCerrada || !puedeEditarCampos || !bloqueo.editando} className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 self-start">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-5 rounded-full bg-violet-500" />
               <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Datos de la sub-orden</h2>

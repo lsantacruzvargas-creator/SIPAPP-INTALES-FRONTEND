@@ -19,6 +19,8 @@ import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgePago, badgeOT, badgeGeneral, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
 } from "./detalleShared";
+import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
+import BarraEdicion from "./BarraEdicion";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 w-full transition";
 const RO = "bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm text-gray-600 w-full";
@@ -64,6 +66,7 @@ const estadoItem = (it) => it.esSolicitudCompra
 
 export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardada, onNavegar }) {
   const [ot, setOt] = useState(inicial);
+  const bloqueo = useBloqueoEdicion("ordenTrabajo", ot._id, ot.updatedAt);
   const [form, setForm] = useState({
     numeroOT: inicial.numeroOT || "",
     codigoSap: inicial.codigoSap || "",
@@ -263,7 +266,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     if (!body.fechaSalida) delete body.fechaSalida;
     body.cantidad = body.cantidad === "" ? null : Number(body.cantidad);
 
-    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}`, {
+    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -271,6 +274,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     if (res.ok) {
       const actualizada = await res.json();
       setOt(actualizada);
+      await bloqueo.terminar(actualizada.updatedAt);
       onGuardada?.(actualizada);
     } else {
       setError("Error al guardar los cambios.");
@@ -283,7 +287,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   // modal entero (ver DetalleDocumento.jsx `cerrarGuardando`), y marcar un
   // estado no debería sacar al usuario de la vista.
   const cambiarEstado = async (nuevo) => {
-    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}/estado`, {
+    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/estado`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ estado: nuevo }),
@@ -296,7 +300,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   };
 
   const cambiarEncargado = async (campo, nombre) => {
-    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}/encargados`, {
+    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/encargados`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [campo]: nombre }),
@@ -309,7 +313,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   };
 
   const anular = async (motivo) => {
-    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}/anular`, {
+    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/anular`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ motivo }),
@@ -324,7 +328,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   };
 
   const desanular = async () => {
-    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}/desanular`, { method: "PATCH" });
+    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/desanular`, { method: "PATCH" });
     if (res.ok) {
       const actualizada = await res.json();
       setOt(actualizada);
@@ -335,7 +339,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   };
 
   const toggleCerrarCadena = async (cerrado) => {
-    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}/cerrar-cadena`, {
+    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/cerrar-cadena`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cerrado }),
@@ -382,7 +386,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     });
     if (!res.ok) { setError("Error al crear la cotización."); setCreandoCotizacion(false); setConfirmandoCrearCotizacion(false); return; }
     const nueva = await res.json();
-    await fetchAuth(`/ordenes-trabajo/${ot._id}/vincular-cotizacion`, {
+    await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/vincular-cotizacion`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cotizacion: nueva._id }),
@@ -467,8 +471,9 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
             {!ot.anulado && !cadenaCerrada && puedeAnular && <BotonAnular onAnular={anular} />}
             {esAdmin && ot.anulado && <BotonDesanular onDesanular={desanular} />}
             {esAdmin && <BotonCerrarCadena cerrado={cadenaCerrada} onToggle={toggleCerrarCadena} />}
+            {!ot.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} puedeEditar={puedeEditarCampos} onCancelar={onClose} />}
             {!ot.anulado && !cadenaCerrada && puedeEditarCampos && (
-              <button onClick={guardar} disabled={guardando}
+              <button onClick={guardar} disabled={guardando || !bloqueo.editando}
                 className="bg-white text-indigo-700 text-sm px-5 py-2 rounded-lg hover:bg-indigo-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">
                 {guardando ? "Guardando…" : "Guardar cambios"}
               </button>
@@ -518,7 +523,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
           {/* Datos editables — separados en 2 cards (pedido del usuario,
               2026-09-11): "Datos de la empresa" agrupa cliente/planta/
               contacto/guías; "Datos de la orden de trabajo" agrupa el resto. */}
-          <fieldset disabled={ot.anulado || cadenaCerrada || !puedeEditarCampos} className="lg:col-span-2 space-y-6 self-start">
+          <fieldset disabled={ot.anulado || cadenaCerrada || !puedeEditarCampos || !bloqueo.editando} className="lg:col-span-2 space-y-6 self-start">
             {ot.anulado && (
               <BannerAnulado motivo={ot.motivoAnulacion} por={ot.anuladoPor} fecha={ot.fechaAnulacion} />
             )}
@@ -835,6 +840,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
         <div className="max-w-6xl mx-auto px-8 pb-8">
           <TarjetaArchivosRelacionados
             ordenId={ot._id}
+            bloqueo={bloqueo}
             archivos={ot.archivos}
             archivosVinculados={cot?.archivos || []}
             vinculadoLabel="la Cotización"
