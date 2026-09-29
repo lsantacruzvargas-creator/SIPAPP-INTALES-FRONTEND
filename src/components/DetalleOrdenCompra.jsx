@@ -9,6 +9,8 @@ import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgePago, badgeOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
 } from "./detalleShared";
+import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
+import BarraEdicion from "./BarraEdicion";
 
 const codigoDeGuia = (g) => `${g.serie}-${String(g.correlativo).padStart(4, "0")}`;
 
@@ -63,6 +65,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   const [guardandoConfirmacion, setGuardandoConfirmacion] = useState("");
   const rolActual = getUsuario()?.rol;
   const puedeEditar = ["admin", "asistente", "facturacion", "jefatura"].includes(rolActual);
+  const bloqueo = useBloqueoEdicion("ordenCompra", orden._id, orden.updatedAt);
   // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
   // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
   const puedeAnular = ["admin", "jefatura"].includes(rolActual);
@@ -91,7 +94,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
 
   const confirmarHesActa = async (campo, valor) => {
     setGuardandoConfirmacion(campo);
-    const res = await fetchAuth(`/ordenes-compra/${orden._id}/confirmaciones`, {
+    const res = await bloqueo.fetch(`/ordenes-compra/${orden._id}/confirmaciones`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [campo]: valor }),
@@ -239,18 +242,18 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
     };
     if (form.empresa) payload.empresa = form.empresa;
 
-    const res = await fetchAuth(`/ordenes-compra/${orden._id}`, {
+    const res = await bloqueo.fetch(`/ordenes-compra/${orden._id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (res.ok) { onGuardada(await res.json()); }
+    if (res.ok) { const actualizada = await res.json(); await bloqueo.terminar(actualizada.updatedAt); onGuardada(actualizada); }
     else { setError("Error al guardar los cambios."); }
     setGuardando(false);
   };
 
   const anular = async (motivo) => {
-    const res = await fetchAuth(`/ordenes-compra/${orden._id}/anular`, {
+    const res = await bloqueo.fetch(`/ordenes-compra/${orden._id}/anular`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ motivo }),
@@ -260,13 +263,13 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   };
 
   const desanular = async () => {
-    const res = await fetchAuth(`/ordenes-compra/${orden._id}/desanular`, { method: "PATCH" });
+    const res = await bloqueo.fetch(`/ordenes-compra/${orden._id}/desanular`, { method: "PATCH" });
     if (res.ok) { onGuardada(await res.json()); }
     else { setError("Error al desanular el documento."); }
   };
 
   const toggleCerrarCadena = async (cerrado) => {
-    const res = await fetchAuth(`/ordenes-compra/${orden._id}/cerrar-cadena`, {
+    const res = await bloqueo.fetch(`/ordenes-compra/${orden._id}/cerrar-cadena`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cerrado }),
@@ -347,8 +350,9 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
               {!orden.anulado && !cadenaCerrada && puedeAnular && <BotonAnular onAnular={anular} />}
               {esAdmin && orden.anulado && <BotonDesanular onDesanular={desanular} />}
               {esAdmin && <BotonCerrarCadena cerrado={cadenaCerrada} onToggle={toggleCerrarCadena} />}
+              {!orden.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} puedeEditar={puedeEditar} onCancelar={onClose} />}
               {!orden.anulado && !cadenaCerrada && puedeEditar && (
-                <button onClick={guardar} disabled={guardando}
+                <button onClick={guardar} disabled={guardando || !bloqueo.editando}
                   className="bg-white text-blue-700 text-sm px-5 py-2 rounded-lg hover:bg-blue-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">
                   {guardando ? "Guardando…" : "Guardar cambios"}
                 </button>
@@ -406,7 +410,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
         <div className="max-w-6xl mx-auto px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
 
           {/* Datos editables */}
-          <fieldset disabled={orden.anulado || cadenaCerrada || !puedeEditar} className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 self-start">
+          <fieldset disabled={orden.anulado || cadenaCerrada || !puedeEditar || !bloqueo.editando} className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 self-start">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-5 rounded-full bg-blue-500" />
               <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Datos de la orden</h2>

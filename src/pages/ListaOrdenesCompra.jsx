@@ -7,6 +7,8 @@ import ModalImportarExcel, { COLS_OC, COLS_CADENA } from "../components/ModalImp
 import { DotChip, badgeOT, dotOT } from "../components/detalleShared";
 import TablaScroll from "../components/TablaScroll";
 import * as XLSX from "xlsx";
+import AvisoAccion from "../components/AvisoAccion";
+import { conBloqueo } from "../utils/bloqueoApi";
 
 const ESTADOS_OT = ["", "pendiente", "en progreso", "completado"];
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -260,6 +262,7 @@ export default function ListaOrdenesCompra() {
   // 2026-09-04; mismo criterio que ListaCotizaciones.jsx).
   const [anio, setAnio]         = useState("");
   const [mes, setMes]           = useState("");
+  const [aviso, setAviso]       = useState("");
 
   const cargar = () =>
     Promise.all([
@@ -426,7 +429,8 @@ export default function ListaOrdenesCompra() {
   const subirDocumento = async (id, file) => {
     const fd = new FormData();
     fd.append("documento", file);
-    const res = await uploadAuth(`/ordenes-compra/${id}/documento`, fd);
+    const res = await conBloqueo("ordenCompra", id, (h) => uploadAuth(`/ordenes-compra/${id}/documento`, fd, h));
+    if (res.status === 423) { setAviso((await res.json().catch(() => ({}))).mensaje); return; }
     if (res.ok) {
       const actualizada = await res.json();
       setOrdenes((prev) => prev.map((o) => o._id === id ? { ...o, documento: actualizada.documento } : o));
@@ -638,6 +642,7 @@ export default function ListaOrdenesCompra() {
           onImportado={cargar}
         />
       )}
+      {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
     </div>
   );
 }
