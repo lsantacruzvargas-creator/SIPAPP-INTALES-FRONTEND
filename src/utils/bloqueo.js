@@ -17,3 +17,12 @@ export function avisoDeRespuesta(status, data) {
 }
 
 export const cabecerasBloqueo = (clave, version) => ({ "X-Bloqueo": clave, ...(version ? { "X-Version": version } : {}) });
+
+// Qué versión anotar tras una escritura propia exitosa. Editando, la releída (nadie
+// más pudo escribir). Desde lectura (bloqueo temporal) solo si al tomarlo el documento
+// seguía igual al del formulario; si no, se conserva la vieja para que "Editar" avise
+// que cambió — adoptar la nueva dejaría guardar un formulario viejo encima de otro.
+export function versionTrasAccion({ editando, versionFormulario, versionTomada, versionNueva }) {
+  if (editando || versionTomada === versionFormulario) return versionNueva;
+  return versionFormulario;
+}

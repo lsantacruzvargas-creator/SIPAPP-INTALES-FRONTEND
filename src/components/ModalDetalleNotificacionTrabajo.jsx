@@ -20,6 +20,8 @@ export default function ModalDetalleNotificacionTrabajo({ notificacion: inicial,
 
   const [notificacion, setNotificacion] = useState(inicial);
   const bloqueo = useBloqueoEdicion("notificacionTrabajo", notificacion._id, notificacion.updatedAt);
+  // Errores de acciones de jefatura (anular línea, reabrir), visibles aunque no edite.
+  const [avisoAccion, setAvisoAccion] = useState("");
   const [tecnicos, setTecnicos] = useState([]);
   const [maquinas, setMaquinas] = useState([]);
   const [nuevasLineas, setNuevasLineas] = useState([]);
@@ -47,7 +49,7 @@ export default function ModalDetalleNotificacionTrabajo({ notificacion: inicial,
       const actualizada = await r.json();
       setNotificacion(actualizada);
       onActualizada(actualizada);
-    }
+    } else setAvisoAccion((await r.json().catch(() => ({}))).mensaje || "No se pudo reabrir la notificación.");
     setAbriendo(false);
   };
 
@@ -64,7 +66,7 @@ export default function ModalDetalleNotificacionTrabajo({ notificacion: inicial,
       const actualizada = await r.json();
       setNotificacion(actualizada);
       onActualizada(actualizada);
-    }
+    } else setAvisoAccion((await r.json().catch(() => ({}))).mensaje || "No se pudo anular la línea.");
   };
 
   const agregarLinea = (tipo) => {
@@ -145,6 +147,7 @@ export default function ModalDetalleNotificacionTrabajo({ notificacion: inicial,
 
           <p className="text-sm font-semibold text-gray-700 text-right pt-2">Total: {money(totalActivo)}</p>
 
+          {avisoAccion && <p className="text-xs text-red-500 mt-3">{avisoAccion}</p>}
           {notificacion.estado === "abierta" && puedeEditar && <BarraEdicion bloqueo={bloqueo} className="mt-4" />}
           {notificacion.estado === "abierta" && puedeEditar && bloqueo.editando && (
             <div className="border-t border-gray-100 pt-4 mt-4 space-y-3">

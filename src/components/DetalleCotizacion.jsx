@@ -233,7 +233,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       body: JSON.stringify({ cotizacion: cot._id }),
     }));
     setReasignandoOT(false);
-    if (res.status === 423) setError((await res.json().catch(() => ({}))).mensaje);
+    if (!res.ok) setError((await res.json().catch(() => ({}))).mensaje || "No se pudo vincular la OT.");
     setConfirmandoReasignarOT(null);
     if (res.ok) {
       setBuscadorOTOpen(false);
@@ -276,7 +276,9 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     // editar ítems (admin/asistente/facturación/jefatura) — Planner y
     // Coordinadora ven los ítems de solo lectura, así que nunca hay nada
     // pendiente que guardar y `cot` ya refleja exactamente lo persistido.
-    const guardada = puedeEditar ? await guardarCotizacion() : cot;
+    // Desde solo lectura no hay cambios propios que guardar (y no se deben guardar
+    // sin haber pulsado Editar): se genera sobre lo ya persistido.
+    const guardada = puedeEditar && bloqueo.editando ? await guardarCotizacion() : cot;
     if (!guardada) { setGenerandoOT(false); return; }
     const indices = [...seleccionados].sort((a, b) => a - b);
     let ultimaCot = guardada;
@@ -983,7 +985,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
             onItemsChange={setItems}
             tipo={form.tipo}
             puedeEditar={puedeEditar}
-            disabled={cot.anulado}
+            disabled={cot.anulado || !bloqueo.editando}
             intentoGuardar={intentoGuardar}
             totalesMostrados={totalesMostrados}
             descuentoGlobal={descuentoGlobalNum}

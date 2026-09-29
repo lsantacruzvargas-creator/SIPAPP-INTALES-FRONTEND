@@ -17,7 +17,7 @@ export async function conBloqueo(entidad, documento, fn) {
   const { r, data } = await tomarBloqueo(entidad, documento);
   if (!r.ok) return r;
   try {
-    return await fn(cabecerasBloqueo(data.clave));
+    return await fn(cabecerasBloqueo(data.clave), data);
   } finally {
     await soltarBloqueo(data.clave);
   }

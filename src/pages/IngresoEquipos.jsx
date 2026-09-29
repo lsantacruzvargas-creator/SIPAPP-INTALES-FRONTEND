@@ -101,7 +101,7 @@ export default function IngresoEquipos() {
     setModalAbierto(true);
   };
 
-  const cerrar = () => { setModalAbierto(false); setSeleccionado(null); };
+  const cerrar = () => { setModalAbierto(false); setSeleccionado(null); cargar(); };
 
   const handleChange = (e) => {
     const { name, value } = e.target;

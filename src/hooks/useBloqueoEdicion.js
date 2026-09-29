@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { fetchAuth, uploadAuth } from "../utils/fetchAuth";
 import { tomarBloqueo, soltarBloqueo, conBloqueo } from "../utils/bloqueoApi";
-import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo } from "../utils/bloqueo";
+import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion } from "../utils/bloqueo";
 
 const LATIDO_MS = 60 * 1000;
 const CONSULTA_OCUPADO_MS = 30 * 1000;
@@ -18,9 +18,13 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada) {
   const version = useRef(versionMostrada);
   const ultimaActividad = useRef(0); // se fija al pulsar "Editar"
 
-  // La versión mostrada cambia al guardar o al elegir otro documento; mientras se
-  // edita manda la releída tras cada escritura propia (refrescarVersion).
-  useEffect(() => { if (!clave.current) version.current = versionMostrada; }, [versionMostrada]);
+  // Otro documento en la misma pantalla (Ingresos de equipo): vuelve a empezar.
+  const [documentoActual, setDocumentoActual] = useState(documento);
+  if (documentoActual !== documento) {
+    setDocumentoActual(documento);
+    setEstado("cargando");
+    setMensaje("");
+  }
 
   const consultar = useCallback(() => fetchAuth(`/bloqueos/${entidad}/${documento}`).then(async (r) => {
     if (!r.ok || clave.current) return;
@@ -32,9 +36,15 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada) {
 
   useEffect(() => { if (documento) consultar(); }, [documento, consultar]);
 
-  // Al cambiar de documento o cerrar el detalle se suelta el bloqueo propio.
-  useEffect(() => () => {
-    if (clave.current) { soltarBloqueo(clave.current); clave.current = null; }
+  // La versión del formulario se fija al abrir cada documento (no cuando cambia
+  // después: eso lo decide versionTrasAccion). Al cambiar de documento o cerrar el
+  // detalle se suelta el bloqueo propio.
+  useEffect(() => {
+    version.current = versionMostrada;
+    return () => {
+      if (clave.current) { soltarBloqueo(clave.current); clave.current = null; }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cambiar de documento
   }, [documento]);
 
   // Mientras otro lo edita se revisa cada 30 s, para habilitar "Editar" cuando lo suelte.
@@ -49,6 +59,7 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada) {
     const marcar = () => { ultimaActividad.current = Date.now(); };
     EVENTOS_ACTIVIDAD.forEach((e) => window.addEventListener(e, marcar, true));
     const latido = setInterval(async () => {
+      if (!clave.current) return;
       const r = await fetchAuth(`/bloqueos/${clave.current}`, {
         method: "PUT", body: JSON.stringify({ activo: huboActividad(ultimaActividad.current, Date.now()) }),
       }).catch(() => null);
@@ -93,19 +104,26 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada) {
     if (c) await soltarBloqueo(c);
   };
 
-  // Tras una escritura propia se relee la versión, para que el próximo guardado no choque consigo mismo.
-  const refrescarVersion = async () => {
+  const leerVersion = async () => {
     const r = await fetchAuth(`/bloqueos/${entidad}/${documento}`);
-    if (r.ok) version.current = (await r.json()).version;
+    return r.ok ? (await r.json()).version : null;
   };
 
   const ejecutar = async (llamar) => {
-    const res = clave.current
+    const editando = !!clave.current;
+    let versionTomada = null;
+    const res = editando
       ? await llamar(cabecerasBloqueo(clave.current, version.current))
-      : await conBloqueo(entidad, documento, (h) => llamar(cabecerasBloqueo(h["X-Bloqueo"], version.current)));
+      : await conBloqueo(entidad, documento, (h, tomado) => {
+        versionTomada = tomado.version;
+        return llamar(cabecerasBloqueo(h["X-Bloqueo"], version.current));
+      });
     const aviso = avisoDeRespuesta(res.status, await res.clone().json().catch(() => null));
     if (aviso) setMensaje(aviso.mensaje);
-    else if (res.ok) await refrescarVersion();
+    else if (res.ok) {
+      const versionNueva = await leerVersion();
+      if (versionNueva) version.current = versionTrasAccion({ editando, versionFormulario: version.current, versionTomada, versionNueva });
+    }
     return res;
   };
 

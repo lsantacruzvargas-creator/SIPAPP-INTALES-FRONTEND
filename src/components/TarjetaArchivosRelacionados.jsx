@@ -85,7 +85,7 @@ export default function TarjetaArchivosRelacionados({
       fd.append("archivo", file);
       const url = `/${endpoint}/${ordenId}/archivos`;
       const res = await (bloqueo ? bloqueo.upload(url, fd) : uploadAuth(url, fd));
-      if (res.status === 423) { setError((await res.json().catch(() => ({}))).mensaje); break; }
+      if (res.status === 423 || res.status === 403) { setError((await res.json().catch(() => ({}))).mensaje); break; }
       if (!res.ok) setError(`No se pudo subir "${file.name}" — formato o tamaño no permitido (máx. 20 MB).`);
       else ultimaOrden = await res.json();
     }
@@ -101,7 +101,7 @@ export default function TarjetaArchivosRelacionados({
     const url = `/${endpoint}/${ordenId}/archivos/${archivo._id}`;
     const res = await (bloqueo ? bloqueo.fetch(url, { method: "DELETE" }) : fetchAuth(url, { method: "DELETE" }));
     if (res.ok) onCambio?.(await res.json());
-    else if (res.status === 423) setError((await res.json().catch(() => ({}))).mensaje);
+    else setError((await res.json().catch(() => ({}))).mensaje || "No se pudo eliminar el archivo.");
   };
 
   const abrir = (archivo) => {
