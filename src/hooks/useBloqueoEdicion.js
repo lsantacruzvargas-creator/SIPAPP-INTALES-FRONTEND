@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { fetchAuth, uploadAuth } from "../utils/fetchAuth";
 import { tomarBloqueo, soltarBloqueo, conBloqueo } from "../utils/bloqueoApi";
-import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar, tomaVigente } from "../utils/bloqueo";
+import { huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar, tomaVigente, resultadoConsulta } from "../utils/bloqueo";
 
 const LATIDO_MS = 60 * 1000;
 const CONSULTA_OCUPADO_MS = 30 * 1000;
@@ -29,13 +29,17 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
     setMensaje("");
   }
 
-  const consultar = useCallback(() => fetchAuth(`/bloqueos/${entidad}/${documento}`).then(async (r) => {
-    if (!r.ok || clave.current) return;
-    const d = await r.json();
-    if (d.ocupado) { setEstado("ocupado"); setMensaje(mensajeOcupado(d)); return; }
-    setEstado((e) => (e === "ocupado" || e === "cargando" ? "lectura" : e));
-    setMensaje((m) => (d.ocupado ? m : ""));
-  }), [entidad, documento]);
+  // sondeo: la revisión cada 30 s mientras otro lo tiene; si falla, se conserva
+  // el aviso de quién lo tiene en vez de pasar a error.
+  const consultar = useCallback(({ sondeo = false } = {}) => fetchAuth(`/bloqueos/${entidad}/${documento}`)
+    .then(async (r) => ({ r, data: await r.json().catch(() => null) }), () => ({ r: null, data: null }))
+    .then(({ r, data }) => {
+      if (clave.current) return;
+      const res = resultadoConsulta({ ok: r?.ok, status: r?.status, data, errorRed: !r });
+      if (sondeo && res.estado === "error") return;
+      setEstado(res.estado);
+      setMensaje(res.mensaje);
+    }), [entidad, documento]);
 
   useEffect(() => { if (documento) consultar(); }, [documento, consultar]);
 
@@ -61,7 +65,7 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
   // Mientras otro lo edita se revisa cada 30 s, para habilitar "Editar" cuando lo suelte.
   useEffect(() => {
     if (estado !== "ocupado") return undefined;
-    const t = setInterval(consultar, CONSULTA_OCUPADO_MS);
+    const t = setInterval(() => consultar({ sondeo: true }), CONSULTA_OCUPADO_MS);
     return () => clearInterval(t);
   }, [estado, consultar]);
 
@@ -161,6 +165,7 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
     estado, mensaje, editando: estado === "editando",
     editar,
     cancelar: () => soltar(),
+    reintentar: () => consultar(),
     terminar: soltar,
     fetch: (url, opciones = {}) => ejecutar((h) => fetchAuth(url, { ...opciones, headers: { ...opciones.headers, ...h } })),
     upload: (url, formData) => ejecutar((h) => uploadAuth(url, formData, h)),

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar, tomaVigente } from "./bloqueo.js";
+import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar, tomaVigente, resultadoConsulta } from "./bloqueo.js";
 
 test("mensajeOcupado: hora de Lima y otra ventana propia", () => {
   assert.equal(mensajeOcupado({ ocupado: true, usuarioNombre: "Ana", tomadoEn: "2026-09-28T15:32:00Z" }), "En edición por Ana desde las 10:32");
@@ -44,4 +44,16 @@ test("tomaVigente: la respuesta de tomar solo se aplica si el formulario sigue e
   assert.equal(tomaVigente({ documentoPedido: "a", documentoActual: "a" }), true);
   assert.equal(tomaVigente({ documentoPedido: "a", documentoActual: null }), false);
   assert.equal(tomaVigente({ documentoPedido: "a", documentoActual: "b" }), false);
+});
+
+test("resultadoConsulta: libre → lectura, tomado → ocupado, y si la consulta falla → error con el motivo", () => {
+  assert.deepEqual(resultadoConsulta({ ok: true, data: { ocupado: false } }), { estado: "lectura", mensaje: "" });
+  assert.equal(resultadoConsulta({ ok: true, data: { ocupado: true, propio: true } }).estado, "ocupado");
+  const caido = resultadoConsulta({ errorRed: true });
+  assert.equal(caido.estado, "error");
+  assert.match(caido.mensaje, /sin conexión/);
+  const noExiste = resultadoConsulta({ ok: false, status: 404, data: { mensaje: "Documento no encontrado" } });
+  assert.equal(noExiste.estado, "error");
+  assert.match(noExiste.mensaje, /Documento no encontrado/);
+  assert.match(resultadoConsulta({ ok: false, status: 500, data: null }).mensaje, /500/);
 });

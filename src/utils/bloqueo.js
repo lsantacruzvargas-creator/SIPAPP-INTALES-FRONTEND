@@ -40,3 +40,13 @@ export function pasoAutoEditar({ autoEditar, estado, intentado, documento }) {
 // Tomar es asíncrono: si mientras tanto se cerró el formulario o se pasó a otra
 // fila, la respuesta ya no aplica (y el bloqueo obtenido hay que soltarlo).
 export const tomaVigente = ({ documentoPedido, documentoActual }) => documentoPedido === documentoActual;
+
+// Estado de la barra tras consultar si el documento está tomado. Si la consulta
+// falla la barra no se queda en "cargando": muestra el motivo y deja reintentar.
+export function resultadoConsulta({ ok, status, data, errorRed = false }) {
+  const prefijo = "No se pudo verificar si alguien está editando";
+  if (errorRed) return { estado: "error", mensaje: `${prefijo} (sin conexión con el servidor).` };
+  if (!ok) return { estado: "error", mensaje: `${prefijo}: ${data?.mensaje || `error ${status}`}.` };
+  if (data.ocupado) return { estado: "ocupado", mensaje: mensajeOcupado(data) };
+  return { estado: "lectura", mensaje: "" };
+}
