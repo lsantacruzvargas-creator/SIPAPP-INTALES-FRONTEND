@@ -14,12 +14,29 @@ const RESULTADOS = {
 };
 const CAMPOS = [["fecha", "fechaEmision"], ["total", "total"], ["igv", "igv"], ["moneda", "moneda"]];
 
+const sinTildes = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+// Texto que se ve en cada columna: es lo que se compara con el filtro de esa columna.
+const TEXTO_COL = {
+  ruc: (f) => (f.sire || f.sistema).rucContraparte,
+  razon: (f) => (f.sire || f.sistema).razonSocial,
+  comprobante: (f) => { const d = f.sire || f.sistema; return `${d.tipo} ${d.serie}-${d.numero}`; },
+  fecha: (f) => fechaIsoTexto((f.sire || f.sistema).fechaEmision),
+  total: (f) => String((f.sire || f.sistema).total ?? ""),
+  igv: (f) => String((f.sire || f.sistema).igv ?? ""),
+  moneda: (f) => (f.sire || f.sistema).moneda,
+};
+const COLUMNAS = [["resultado", "Resultado"], ["ruc", "RUC"], ["razon", "Razón social"], ["comprobante", "Comprobante"], ["fecha", "Fecha"], ["total", "Total"], ["igv", "IGV"], ["moneda", "Moneda"]];
+const INP_COL = "w-full border border-gray-300 rounded px-2 py-1 text-xs font-normal normal-case text-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-300";
+
 export default function PanelSire({ onRegistrarFactura }) {
   const [libro, setLibro] = useState("RCE");
   const [mes, setMes] = useState(fechaHoyLima().slice(0, 7));
   const [estado, setEstado] = useState(null);
   const [filas, setFilas] = useState([]);
   const [filtro, setFiltro] = useState("");
+  const [colFiltros, setColFiltros] = useState({});
+  const limpiarFiltros = () => { setColFiltros({}); setFiltro(""); };
+  const setCol = (k, v) => setColFiltros((p) => ({ ...p, [k]: v }));
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState("");
   const base = `/sire/${libro}/${periodoDeMes(mes)}`;
@@ -58,7 +75,10 @@ export default function PanelSire({ onRegistrarFactura }) {
     accion(() => uploadAuth(`${base}/archivo`, fd));
   };
 
-  const visibles = filas.filter((f) => !filtro || f.estado === filtro);
+  const visibles = filas.filter((f) => (!filtro || f.estado === filtro)
+    && (!colFiltros.resultado || f.estado === colFiltros.resultado)
+    && Object.entries(TEXTO_COL).every(([k, fn]) => !colFiltros[k] || sinTildes(fn(f)).includes(sinTildes(colFiltros[k]).trim())));
+  const hayColFiltros = Object.values(colFiltros).some(Boolean);
   const conteo = (e) => filas.filter((f) => f.estado === e).length;
   const celda = (f, [clave, campo]) => {
     const dato = f.sire?.[campo] ?? f.sistema?.[campo];
@@ -75,10 +95,10 @@ export default function PanelSire({ onRegistrarFactura }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-center">
-        <select value={libro} onChange={(e) => setLibro(e.target.value)} className={INP}>
+        <select value={libro} onChange={(e) => { setLibro(e.target.value); limpiarFiltros(); }} className={INP}>
           <option value="RCE">Compras (RCE)</option><option value="RVIE">Ventas (RVIE)</option>
         </select>
-        <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className={INP} />
+        <input type="month" value={mes} onChange={(e) => { setMes(e.target.value); limpiarFiltros(); }} className={INP} />
         <button onClick={descargar} disabled={ocupado} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50">Descargar de SUNAT</button>
         {estado?.estado === "descargando" && <button onClick={() => accion(() => fetchAuth(`${base}/estado`))} disabled={ocupado} className="border border-gray-300 px-4 py-2 rounded-lg text-sm">Actualizar estado</button>}
         <label className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 cursor-pointer">
@@ -102,7 +122,26 @@ export default function PanelSire({ onRegistrarFactura }) {
         <TablaScroll className="overflow-x-auto">
           <table className="w-full text-sm" style={{ minWidth: "1000px" }}>
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-              <tr>{["Resultado", "RUC", "Razón social", "Comprobante", "Fecha", "Total", "IGV", "Moneda", ""].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
+              <tr>{[...COLUMNAS.map(([, h]) => h), ""].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
+              {filas.length > 0 && (
+                <tr className="bg-white">
+                  {COLUMNAS.map(([k, h]) => (
+                    <th key={k} className="px-3 py-1">
+                      {k === "resultado" ? (
+                        <select value={colFiltros.resultado || ""} onChange={(e) => setCol(k, e.target.value)} className={INP_COL} aria-label="Filtrar Resultado">
+                          <option value="">Todos</option>
+                          {Object.entries(RESULTADOS).map(([v, r]) => <option key={v} value={v}>{r.label}</option>)}
+                        </select>
+                      ) : (
+                        <input value={colFiltros[k] || ""} onChange={(e) => setCol(k, e.target.value)} placeholder="Filtrar" className={INP_COL} aria-label={`Filtrar ${h}`} />
+                      )}
+                    </th>
+                  ))}
+                  <th className="px-3 py-1 text-right">
+                    {hayColFiltros && <button onClick={() => setColFiltros({})} className="text-xs font-normal normal-case text-purple-600 hover:text-purple-800">Limpiar</button>}
+                  </th>
+                </tr>
+              )}
             </thead>
             <tbody className="divide-y divide-gray-100">
               {visibles.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">Sin comprobantes para conciliar</td></tr>}
