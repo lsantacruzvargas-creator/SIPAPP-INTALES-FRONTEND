@@ -60,3 +60,8 @@ export function edicionPerdida({ editando, status, data }) {
   if (data?.mensaje?.startsWith("En edición por")) return `${base} ${data.mensaje}.`;
   return `${base} Pulsa «Editar» para volver a tomarlo: tus cambios siguen en pantalla.`;
 }
+
+// Mensaje de error para el formulario, o null si ya lo muestra la barra de edición
+// (423 ocupado, 409 "cambió"): así el aviso sale una sola vez.
+export const errorDelFormulario = (status, data, porDefecto) =>
+  (avisoDeRespuesta(status, data) ? null : data?.mensaje || porDefecto);

@@ -7,6 +7,7 @@ import ArchivosProveedor from "./ArchivosProveedor";
 import ModalGenerarOCP from "./ModalGenerarOCP";
 import useBloqueoEdicion from "../../hooks/useBloqueoEdicion";
 import BarraEdicion from "../BarraEdicion";
+import { errorDelFormulario } from "../../utils/bloqueo";
 
 const INP = "border border-gray-200 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300";
 
@@ -83,7 +84,7 @@ export default function ModalCuadroComparativo({ licitacionId, catalogos, onClos
     setGuardando(false);
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
-      setError(d.mensaje || "No se pudo guardar el cuadro.");
+      setError(errorDelFormulario(r.status, d, "No se pudo guardar el cuadro.") || "");
       return null;
     }
     const actualizada = await r.json();

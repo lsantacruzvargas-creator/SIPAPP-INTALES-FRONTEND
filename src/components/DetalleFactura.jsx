@@ -11,6 +11,7 @@ import {
 } from "./detalleShared";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "./BarraEdicion";
+import { errorDelFormulario } from "../utils/bloqueo";
 
 const INP    = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 w-full transition";
 const INP_RO = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full cursor-not-allowed";
@@ -225,7 +226,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
       // muestra la vista previa y se reenvía solo si el usuario confirma.
       if (res.status === 409 && data.recalculo) { setRecalculo(data.recalculo); return; }
       setRecalculo(null);
-      if (!res.ok) { setError(data.mensaje || "No se pudo guardar los cambios."); return; }
+      if (!res.ok) { setError(errorDelFormulario(res.status, data, "No se pudo guardar los cambios.") || ""); return; }
       await bloqueo.terminar(data.updatedAt);
       onGuardada(data);
     } catch {
@@ -241,8 +242,9 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ motivo }),
     });
-    if (res.ok) { onGuardada(await res.json()); }
-    else { setError("Error al anular el documento."); }
+    if (res.ok) { onGuardada(await res.json()); return; }
+    const data = await res.json().catch(() => ({}));
+    setError(errorDelFormulario(res.status, data, "Error al anular el documento.") || "");
   };
 
   const oc     = ocVinculada;

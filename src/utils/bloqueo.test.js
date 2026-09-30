@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar, tomaVigente, resultadoConsulta, edicionPerdida } from "./bloqueo.js";
+import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar, tomaVigente, resultadoConsulta, edicionPerdida, errorDelFormulario } from "./bloqueo.js";
 
 test("mensajeOcupado: hora de Lima y otra ventana propia", () => {
   assert.equal(mensajeOcupado({ ocupado: true, usuarioNombre: "Ana", tomadoEn: "2026-09-28T15:32:00Z" }), "En edición por Ana desde las 10:32");
@@ -68,4 +68,12 @@ test("edicionPerdida: un 423 mientras se edita significa que el bloqueo propio v
   const tomadoPorOtro = edicionPerdida({ editando: true, status: 423, data: { mensaje: "En edición por Ana desde las 10:32" } });
   assert.match(tomadoPorOtro, /se liberó/);
   assert.match(tomadoPorOtro, /En edición por Ana/);
+});
+
+test("errorDelFormulario: lo que ya muestra la barra (423, 409 'cambió') no se repite en el formulario", () => {
+  assert.equal(errorDelFormulario(423, { mensaje: "En edición por Ana" }, "x"), null);
+  assert.equal(errorDelFormulario(409, { mensaje: "Este documento cambió", cambio: true }, "x"), null);
+  assert.equal(errorDelFormulario(409, { mensaje: "Ya existe" }, "x"), "Ya existe");
+  assert.equal(errorDelFormulario(400, { mensaje: "Tiene cobros" }, "x"), "Tiene cobros");
+  assert.equal(errorDelFormulario(500, null, "No se pudo"), "No se pudo");
 });
