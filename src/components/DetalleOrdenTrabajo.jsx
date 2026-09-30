@@ -983,6 +983,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
       {crearSubOTOpen && (
         <ModalNuevaSubOT
           padre={ot}
+          fetchPadre={bloqueo.editando ? bloqueo.fetch : undefined}
           onClose={() => setCrearSubOTOpen(false)}
           onCreada={() => { setCrearSubOTOpen(false); cargarRelaciones(); }}
         />

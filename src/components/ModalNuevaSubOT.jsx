@@ -12,7 +12,10 @@ const colorEstado = (e, activo) => {
   return "bg-amber-500 text-white";
 };
 
-export default function ModalNuevaSubOT({ padre, onClose, onCreada }) {
+// fetchPadre: si el padre está abierto en edición, crear la sub-OT recalcula su estado
+// (cambia su versión): se hace con su bloqueo para que el formulario del padre
+// adopte la versión nueva y el siguiente guardado no dé un "cambió" falso.
+export default function ModalNuevaSubOT({ padre, onClose, onCreada, fetchPadre = fetchAuth }) {
   const [form, setForm] = useState({
     titulo: "", descripcion: "",
     personalAsignado: "", estado: "pendiente", observaciones: "",
@@ -44,7 +47,7 @@ export default function ModalNuevaSubOT({ padre, onClose, onCreada }) {
     if (!body.personalAsignado) delete body.personalAsignado;
     if (!body.fechaEntrega) delete body.fechaEntrega;
 
-    const res = await fetchAuth(`/ordenes-trabajo/${padre._id}/sub-ot`, {
+    const res = await fetchPadre(`/ordenes-trabajo/${padre._id}/sub-ot`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

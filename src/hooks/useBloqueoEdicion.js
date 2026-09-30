@@ -37,11 +37,11 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
     .then(async (r) => ({ r, data: await r.json().catch(() => null) }), () => ({ r: null, data: null }))
     .then(({ r, data }) => {
       if (clave.current) return;
-      const res = resultadoConsulta({ ok: r?.ok, status: r?.status, data, errorRed: !r, sondeo });
+      const res = resultadoConsulta({ ok: r?.ok, status: r?.status, data, errorRed: !r, sondeo, puedeEditar: autoEditar });
       if (sondeo && res.estado === "error") return;
       setEstado(res.estado);
       setMensaje(res.mensaje);
-    }), [entidad, documento]);
+    }), [entidad, documento, autoEditar]);
 
   useEffect(() => { if (documento) consultar(); }, [documento, consultar]);
 
@@ -101,15 +101,26 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
     const pedido = documento;
     tomando.current = pedido;
     setMensaje("");
-    const { r, data } = await tomarBloqueo(entidad, pedido).finally(() => {
+    let toma;
+    try {
+      toma = await tomarBloqueo(entidad, pedido);
+    } catch {
+      toma = null;
+    } finally {
       if (tomando.current === pedido) tomando.current = null;
-    });
+    }
+    if (!toma) {
+      setEstado("error");
+      setMensaje("No se pudo abrir el documento para editar (sin conexión con el servidor).");
+      return;
+    }
+    const { r, data } = toma;
     if (!tomaVigente({ documentoPedido: pedido, documentoActual: documentoAbierto.current })) {
       if (r.ok) soltarBloqueo(data.clave);
       return;
     }
     if (r.status === 423) { setEstado("ocupado"); setMensaje(data.mensaje); return; }
-    if (!r.ok) { setMensaje(data.mensaje || "No se pudo tomar el documento para editar."); return; }
+    if (!r.ok) { setEstado("error"); setMensaje(data.mensaje || "No se pudo abrir el documento para editar."); return; }
     if (version.current && data.version && data.version !== version.current) {
       await soltarBloqueo(data.clave);
       setEstado("desactualizado");
@@ -121,6 +132,15 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
     ultimaActividad.current = Date.now();
     setEstado("editando");
   };
+
+  // Si el documento deja de ser editable con la pantalla abierta (se anuló, la
+  // notificación se cerró al guardar), se suelta para que otros puedan actuar.
+  useEffect(() => {
+    if (autoEditar || !clave.current) return;
+    const c = clave.current;
+    clave.current = null;
+    soltarBloqueo(c).then(() => { setEstado("lectura"); setMensaje(""); });
+  }, [autoEditar]);
 
   // Abrir = editar: se toma al abrir, una sola vez por apertura.
   useEffect(() => {
@@ -138,6 +158,7 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
 
   const ejecutar = async (llamar) => {
     const editando = !!clave.current;
+    const versionPrevia = editando ? await leerVersion().catch(() => null) : null;
     let versionTomada = null;
     const res = editando
       ? await llamar(cabecerasBloqueo(clave.current, version.current))
@@ -156,7 +177,7 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
     } else if (aviso) setMensaje(aviso.mensaje);
     else if (res.ok) {
       const versionNueva = await leerVersion();
-      if (versionNueva) version.current = versionTrasAccion({ editando, versionFormulario: version.current, versionTomada, versionNueva });
+      if (versionNueva) version.current = versionTrasAccion({ editando, versionFormulario: version.current, versionPrevia, versionTomada, versionNueva });
     }
     return res;
   };
@@ -164,7 +185,8 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
   return {
     estado, mensaje, editando: estado === "editando",
     editar,
-    reintentar: () => consultar(),
+    // Reintentar vuelve a consultar y, si está libre, a tomarlo (abrir = editar).
+    reintentar: () => { autoIntentado.current = null; return consultar(); },
     // Tras guardar se sigue editando (el bloqueo se suelta al cerrar la pantalla).
     terminar: (nuevaVersion) => { if (nuevaVersion) version.current = nuevaVersion; },
     fetch: (url, opciones = {}) => ejecutar((h) => fetchAuth(url, { ...opciones, headers: { ...opciones.headers, ...h } })),

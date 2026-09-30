@@ -18,13 +18,14 @@ export function avisoDeRespuesta(status, data) {
 
 export const cabecerasBloqueo = (clave, version) => ({ "X-Bloqueo": clave, ...(version ? { "X-Version": version } : {}) });
 
-// Qué versión anotar tras una escritura propia exitosa. Editando, la releída (nadie
-// más pudo escribir). Desde lectura (bloqueo temporal) solo si al tomarlo el documento
-// seguía igual al del formulario; si no, se conserva la vieja para que "Editar" avise
-// que cambió — adoptar la nueva dejaría guardar un formulario viejo encima de otro.
-export function versionTrasAccion({ editando, versionFormulario, versionTomada, versionNueva }) {
-  if (editando || versionTomada === versionFormulario) return versionNueva;
-  return versionFormulario;
+// Qué versión anotar tras una escritura propia exitosa: la releída solo si, justo
+// antes de la acción, el documento seguía igual al del formulario (editando: la
+// versión leída antes de la acción; desde lectura: la del bloqueo temporal). Si
+// otro lo cambió entretanto (procesos sin bloqueo: cadena, cobros, SUNAT), se
+// conserva la vieja para que el guardado dé 409 en vez de pisar ese cambio.
+export function versionTrasAccion({ editando, versionFormulario, versionPrevia, versionTomada, versionNueva }) {
+  const referencia = editando ? versionPrevia : versionTomada;
+  return referencia === versionFormulario ? versionNueva : versionFormulario;
 }
 
 // Formularios abiertos desde el "Editar" de una fila: se toman solos una vez al
@@ -45,12 +46,12 @@ export const tomaVigente = ({ documentoPedido, documentoActual }) => documentoPe
 // falla la barra no se queda en "cargando": muestra el motivo y deja reintentar.
 // sondeo: la revisión periódica mientras otro lo tiene. Si se libera, no se toma
 // solo (quien miraba puede haberse ido): queda "libre" hasta salir y volver a entrar.
-export function resultadoConsulta({ ok, status, data, errorRed = false, sondeo = false }) {
+export function resultadoConsulta({ ok, status, data, errorRed = false, sondeo = false, puedeEditar = true }) {
   const prefijo = "No se pudo verificar si alguien está editando";
   if (errorRed) return { estado: "error", mensaje: `${prefijo} (sin conexión con el servidor).` };
   if (!ok) return { estado: "error", mensaje: `${prefijo}: ${data?.mensaje || `error ${status}`}.` };
   if (data.ocupado) return { estado: "ocupado", mensaje: mensajeOcupado(data) };
-  if (sondeo) return { estado: "libre", mensaje: "Ya está libre: sal y vuelve a entrar para editarlo." };
+  if (sondeo && puedeEditar) return { estado: "libre", mensaje: "Ya está libre: sal y vuelve a entrar para editarlo." };
   return { estado: "lectura", mensaje: "" };
 }
 
@@ -61,7 +62,7 @@ export function edicionPerdida({ editando, status, data }) {
   if (!editando || status !== 423) return null;
   const base = "Tu edición se liberó (el bloqueo venció) y no se guardó.";
   if (data?.mensaje?.startsWith("En edición por")) return `${base} ${data.mensaje}.`;
-  return `${base} Pulsa «Editar» para volver a tomarlo: tus cambios siguen en pantalla.`;
+  return `${base} Pulsa «Retomar edición»: tus cambios siguen en pantalla.`;
 }
 
 // Mensaje de error para el formulario, o null si ya lo muestra la barra de edición

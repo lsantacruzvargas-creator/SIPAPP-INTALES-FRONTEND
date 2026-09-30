@@ -25,7 +25,7 @@ test("cabecerasBloqueo incluye la versión solo si la hay", () => {
 });
 
 test("versionTrasAccion: desde lectura no adopta la versión nueva si el formulario ya estaba viejo", () => {
-  assert.equal(versionTrasAccion({ editando: true, versionFormulario: "v1", versionTomada: "v1", versionNueva: "v2" }), "v2");
+  assert.equal(versionTrasAccion({ editando: true, versionFormulario: "v1", versionPrevia: "v1", versionNueva: "v2" }), "v2");
   assert.equal(versionTrasAccion({ editando: false, versionFormulario: "v1", versionTomada: "v1", versionNueva: "v2" }), "v2");
   assert.equal(versionTrasAccion({ editando: false, versionFormulario: "v1", versionTomada: "v3", versionNueva: "v4" }), "v1");
 });
@@ -62,9 +62,9 @@ test("edicionPerdida: un 423 mientras se edita significa que el bloqueo propio v
   assert.equal(edicionPerdida({ editando: false, status: 423, data: {} }), null);
   assert.equal(edicionPerdida({ editando: true, status: 409, data: { cambio: true } }), null);
   assert.equal(edicionPerdida({ editando: true, status: 200, data: {} }), null);
-  const vencido = edicionPerdida({ editando: true, status: 423, data: { mensaje: "Pulsa «Editar» antes de guardar" } });
+  const vencido = edicionPerdida({ editando: true, status: 423, data: { mensaje: "El documento no está tomado para edición" } });
   assert.match(vencido, /se liberó/);
-  assert.match(vencido, /Editar/);
+  assert.match(vencido, /Retomar edición/);
   const tomadoPorOtro = edicionPerdida({ editando: true, status: 423, data: { mensaje: "En edición por Ana desde las 10:32" } });
   assert.match(tomadoPorOtro, /se liberó/);
   assert.match(tomadoPorOtro, /En edición por Ana/);
@@ -84,4 +84,13 @@ test("resultadoConsulta: si se libera mientras lo miras, queda 'libre' hasta sal
   assert.match(libre.mensaje, /sal y vuelve a entrar/);
   assert.equal(resultadoConsulta({ ok: true, data: { ocupado: false } }).estado, "lectura");
   assert.equal(resultadoConsulta({ ok: true, data: { ocupado: true, usuarioNombre: "Ana", tomadoEn: new Date().toISOString() }, sondeo: true }).estado, "ocupado");
+});
+
+test("versionTrasAccion: editando, si otro cambió el documento antes de la acción propia se conserva la versión vieja (el guardado dará 409)", () => {
+  assert.equal(versionTrasAccion({ editando: true, versionFormulario: "v1", versionPrevia: "v1b", versionNueva: "v2" }), "v1");
+  assert.equal(versionTrasAccion({ editando: true, versionFormulario: "v1", versionPrevia: null, versionNueva: "v2" }), "v1");
+});
+
+test("resultadoConsulta: a quien no puede editar, al liberarse no se le dice 'sal y vuelve a entrar'", () => {
+  assert.equal(resultadoConsulta({ ok: true, data: { ocupado: false }, sondeo: true, puedeEditar: false }).estado, "lectura");
 });
