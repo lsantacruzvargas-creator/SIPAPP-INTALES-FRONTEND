@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { fetchAuth, uploadAuth } from "../utils/fetchAuth";
 import { tomarBloqueo, soltarBloqueo, conBloqueo } from "../utils/bloqueoApi";
-import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar } from "../utils/bloqueo";
+import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar, tomaVigente } from "../utils/bloqueo";
 
 const LATIDO_MS = 60 * 1000;
 const CONSULTA_OCUPADO_MS = 30 * 1000;
@@ -18,6 +18,8 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
   const version = useRef(versionMostrada);
   const ultimaActividad = useRef(0); // se fija al pulsar "Editar"
   const autoIntentado = useRef(null);
+  const documentoAbierto = useRef(null); // null al cerrar el detalle
+  const tomando = useRef(null); // documento con un "tomar" en vuelo
 
   // Otro documento en la misma pantalla (Ingresos de equipo): vuelve a empezar.
   const [documentoActual, setDocumentoActual] = useState(documento);
@@ -42,7 +44,11 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
   // detalle se suelta el bloqueo propio.
   useEffect(() => {
     version.current = versionMostrada;
+    documentoAbierto.current = documento;
     return () => {
+      documentoAbierto.current = null;
+      // Reabrir la misma fila (Almacén: editar, guardar y volver a editar) vuelve a tomarla sola.
+      autoIntentado.current = null;
       if (clave.current) { soltarBloqueo(clave.current); clave.current = null; }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cambiar de documento
@@ -84,8 +90,17 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
   }, [estado]);
 
   const editar = async () => {
+    if (tomando.current === documento || clave.current) return;
+    const pedido = documento;
+    tomando.current = pedido;
     setMensaje("");
-    const { r, data } = await tomarBloqueo(entidad, documento);
+    const { r, data } = await tomarBloqueo(entidad, pedido).finally(() => {
+      if (tomando.current === pedido) tomando.current = null;
+    });
+    if (!tomaVigente({ documentoPedido: pedido, documentoActual: documentoAbierto.current })) {
+      if (r.ok) soltarBloqueo(data.clave);
+      return;
+    }
     if (r.status === 423) { setEstado("ocupado"); setMensaje(data.mensaje); return; }
     if (!r.ok) { setMensaje(data.mensaje || "No se pudo tomar el documento para editar."); return; }
     if (version.current && data.version && data.version !== version.current) {

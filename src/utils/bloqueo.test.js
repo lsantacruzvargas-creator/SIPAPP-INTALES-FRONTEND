@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar } from "./bloqueo.js";
+import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar, tomaVigente } from "./bloqueo.js";
 
 test("mensajeOcupado: hora de Lima y otra ventana propia", () => {
   assert.equal(mensajeOcupado({ ocupado: true, usuarioNombre: "Ana", tomadoEn: "2026-09-28T15:32:00Z" }), "En edición por Ana desde las 10:32");
@@ -38,4 +38,10 @@ test("pasoAutoEditar: toma una sola vez al abrir libre; si lo abrió ocupado no 
   assert.equal(pasoAutoEditar({ autoEditar: true, estado: "lectura", intentado: "a", documento: "a" }), null);
   assert.equal(pasoAutoEditar({ autoEditar: true, estado: "lectura", intentado: "a", documento: "b" }), "editar");
   assert.equal(pasoAutoEditar({ autoEditar: true, estado: "lectura", intentado: null, documento: null }), null);
+});
+
+test("tomaVigente: la respuesta de tomar solo se aplica si el formulario sigue en ese documento", () => {
+  assert.equal(tomaVigente({ documentoPedido: "a", documentoActual: "a" }), true);
+  assert.equal(tomaVigente({ documentoPedido: "a", documentoActual: null }), false);
+  assert.equal(tomaVigente({ documentoPedido: "a", documentoActual: "b" }), false);
 });

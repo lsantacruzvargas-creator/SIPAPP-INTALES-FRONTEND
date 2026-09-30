@@ -36,3 +36,7 @@ export function pasoAutoEditar({ autoEditar, estado, intentado, documento }) {
   if (estado === "ocupado") return "marcar";
   return null;
 }
+
+// Tomar es asíncrono: si mientras tanto se cerró el formulario o se pasó a otra
+// fila, la respuesta ya no aplica (y el bloqueo obtenido hay que soltarlo).
+export const tomaVigente = ({ documentoPedido, documentoActual }) => documentoPedido === documentoActual;
