@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { fetchAuth, uploadAuth } from "../utils/fetchAuth";
 import { tomarBloqueo, soltarBloqueo, conBloqueo } from "../utils/bloqueoApi";
 import { quitarBloqueo } from "../utils/bloqueosActivos";
-import { huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar, tomaVigente, resultadoConsulta } from "../utils/bloqueo";
+import { huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar, tomaVigente, resultadoConsulta, edicionPerdida } from "../utils/bloqueo";
 
 const LATIDO_MS = 60 * 1000;
 const CONSULTA_OCUPADO_MS = 30 * 1000;
@@ -154,8 +154,15 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
         versionTomada = tomado.version;
         return llamar(cabecerasBloqueo(h["X-Bloqueo"], version.current));
       });
-    const aviso = avisoDeRespuesta(res.status, await res.clone().json().catch(() => null));
-    if (aviso) setMensaje(aviso.mensaje);
+    const data = await res.clone().json().catch(() => null);
+    const perdida = edicionPerdida({ editando, status: res.status, data });
+    const aviso = avisoDeRespuesta(res.status, data);
+    if (perdida) {
+      quitarBloqueo(clave.current);
+      clave.current = null;
+      setEstado("liberado");
+      setMensaje(perdida);
+    } else if (aviso) setMensaje(aviso.mensaje);
     else if (res.ok) {
       const versionNueva = await leerVersion();
       if (versionNueva) version.current = versionTrasAccion({ editando, versionFormulario: version.current, versionTomada, versionNueva });

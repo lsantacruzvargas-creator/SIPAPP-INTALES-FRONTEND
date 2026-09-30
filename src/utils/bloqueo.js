@@ -50,3 +50,13 @@ export function resultadoConsulta({ ok, status, data, errorRed = false }) {
   if (data.ocupado) return { estado: "ocupado", mensaje: mensajeOcupado(data) };
   return { estado: "lectura", mensaje: "" };
 }
+
+// Mientras se edita, un 423 al guardar solo puede significar que el bloqueo propio
+// venció (PC suspendida, red caída): se avisa en el acto, sin esperar al latido.
+// Los cambios siguen en pantalla; "Editar" vuelve a tomarlo si nadie lo cambió.
+export function edicionPerdida({ editando, status, data }) {
+  if (!editando || status !== 423) return null;
+  const base = "Tu edición se liberó (el bloqueo venció) y no se guardó.";
+  if (data?.mensaje?.startsWith("En edición por")) return `${base} ${data.mensaje}.`;
+  return `${base} Pulsa «Editar» para volver a tomarlo: tus cambios siguen en pantalla.`;
+}

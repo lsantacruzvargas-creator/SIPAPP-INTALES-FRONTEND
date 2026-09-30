@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar, tomaVigente, resultadoConsulta } from "./bloqueo.js";
+import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar, tomaVigente, resultadoConsulta, edicionPerdida } from "./bloqueo.js";
 
 test("mensajeOcupado: hora de Lima y otra ventana propia", () => {
   assert.equal(mensajeOcupado({ ocupado: true, usuarioNombre: "Ana", tomadoEn: "2026-09-28T15:32:00Z" }), "En edición por Ana desde las 10:32");
@@ -56,4 +56,16 @@ test("resultadoConsulta: libre → lectura, tomado → ocupado, y si la consulta
   assert.equal(noExiste.estado, "error");
   assert.match(noExiste.mensaje, /Documento no encontrado/);
   assert.match(resultadoConsulta({ ok: false, status: 500, data: null }).mensaje, /500/);
+});
+
+test("edicionPerdida: un 423 mientras se edita significa que el bloqueo propio venció", () => {
+  assert.equal(edicionPerdida({ editando: false, status: 423, data: {} }), null);
+  assert.equal(edicionPerdida({ editando: true, status: 409, data: { cambio: true } }), null);
+  assert.equal(edicionPerdida({ editando: true, status: 200, data: {} }), null);
+  const vencido = edicionPerdida({ editando: true, status: 423, data: { mensaje: "Pulsa «Editar» antes de guardar" } });
+  assert.match(vencido, /se liberó/);
+  assert.match(vencido, /Editar/);
+  const tomadoPorOtro = edicionPerdida({ editando: true, status: 423, data: { mensaje: "En edición por Ana desde las 10:32" } });
+  assert.match(tomadoPorOtro, /se liberó/);
+  assert.match(tomadoPorOtro, /En edición por Ana/);
 });
