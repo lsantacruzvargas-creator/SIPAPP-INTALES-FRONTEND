@@ -74,3 +74,15 @@ export function filtrarOCPs(ocps, f) {
 export function aplanarItemsOCP(ocps, f) {
   return filtrarOCPs(ocps, f).flatMap((ocp) => ocp.items.filter((it) => itemCumple(it, f)).map((it) => ({ ...it, ocp })));
 }
+
+// Fila de tareas por clave: los cambios seguidos a líneas de una misma SC esperan
+// al anterior (cada uno toma y suelta el bloqueo de la SC; en paralelo chocarían
+// consigo mismos). Una tarea que falla no detiene a las siguientes.
+export function crearFila() {
+  const colas = new Map();
+  return (clave, tarea) => {
+    const siguiente = (colas.get(clave) || Promise.resolve()).then(tarea);
+    colas.set(clave, siguiente.catch(() => {}));
+    return siguiente;
+  };
+}

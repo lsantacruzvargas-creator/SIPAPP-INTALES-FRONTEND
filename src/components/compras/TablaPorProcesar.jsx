@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha } from "../../utils/fecha";
-import { lineasDeSCs, idDe } from "../../utils/compras";
+import { lineasDeSCs, idDe, crearFila } from "../../utils/compras";
 import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
 import ModalNuevaSC from "./ModalNuevaSC";
@@ -18,6 +18,7 @@ export default function TablaPorProcesar({ catalogos, onTipoCreado, onEnviado })
   const [scs, setScs] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [seleccion, setSeleccion] = useState(() => new Set());
+  const [enFila] = useState(crearFila); // una fila por SC, estable entre renders
   const [filtros, setFiltros] = useState({ texto: "", tipoArticulo: "", tipo: "" });
   const [nuevaAbierta, setNuevaAbierta] = useState(false);
   const [enviarAbierto, setEnviarAbierto] = useState(false);
@@ -57,7 +58,7 @@ export default function TablaPorProcesar({ catalogos, onTipoCreado, onEnviado })
 
   const editarLinea = async (fila, cambios) => {
     setError("");
-    const r = await conBloqueo("solicitudCompra", fila.sc._id, (h) => fetchAuth(`/solicitudes-compra/${fila.sc._id}/lineas/${fila._id}`, { headers: h, method: "PATCH", body: JSON.stringify(cambios) }));
+    const r = await enFila(fila.sc._id, () => conBloqueo("solicitudCompra", fila.sc._id, (h) => fetchAuth(`/solicitudes-compra/${fila.sc._id}/lineas/${fila._id}`, { headers: h, method: "PATCH", body: JSON.stringify(cambios) })));
     if (r.ok) reemplazarSC(await r.json());
     else await leerError(r, "No se pudo guardar el cambio.");
   };

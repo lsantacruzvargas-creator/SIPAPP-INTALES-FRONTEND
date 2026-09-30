@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  lineasDeSCs, ordenarProveedores, totalesOCP, proveedorMasBarato,
+  crearFila, lineasDeSCs, ordenarProveedores, totalesOCP, proveedorMasBarato,
   filtrarOCPs, aplanarItemsOCP, FILTROS_VACIOS,
 } from "./compras.js";
 
@@ -61,4 +61,18 @@ test("filtros de la pestaña Compras por OC, proveedor, texto, fechas y estado",
   const items = aplanarItemsOCP(ocps, f({ texto: "cable" }));
   assert.deepEqual(items.map((i) => [i.ocp.codigo, i.descripcion]), [["OCP-0001", "Cable 4mm"], ["OCP-0002", "Cable 6mm"]]);
   assert.equal(aplanarItemsOCP(ocps, f({ centroCosto: "c1" })).length, 2);
+});
+
+test("crearFila: las tareas de una misma clave corren una tras otra; claves distintas no se esperan", async () => {
+  const enFila = crearFila();
+  const orden = [];
+  const tarea = (nombre, ms) => () => new Promise((r) => setTimeout(() => { orden.push(nombre); r(nombre); }, ms));
+  const a1 = enFila("sc1", tarea("a1", 30));
+  const a2 = enFila("sc1", tarea("a2", 1));
+  const b1 = enFila("sc2", tarea("b1", 5));
+  assert.deepEqual(await Promise.all([a1, a2, b1]), ["a1", "a2", "b1"]);
+  assert.deepEqual(orden, ["b1", "a1", "a2"]);
+  const falla = enFila("sc1", () => Promise.reject(new Error("x")));
+  await assert.rejects(falla);
+  assert.equal(await enFila("sc1", async () => "sigue"), "sigue");
 });
