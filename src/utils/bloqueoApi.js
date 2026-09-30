@@ -3,7 +3,7 @@ import { cabecerasBloqueo } from "./bloqueo";
 import { registrarBloqueo, quitarBloqueo, estaActivo } from "./bloqueosActivos";
 
 export async function tomarBloqueo(entidad, documento) {
-  const r = await fetchAuth("/bloqueos", { method: "POST", body: JSON.stringify({ entidad, documento }) });
+  const r = await fetchAuth("/bloqueos", { method: "POST", body: JSON.stringify({ entidad, documento }), sinAvisoGuardado: true });
   const data = await r.clone().json().catch(() => ({}));
   if (r.ok && data.clave) registrarBloqueo(data.clave);
   return { r, data };
@@ -14,7 +14,7 @@ export async function tomarBloqueo(entidad, documento) {
 export const soltarBloqueo = (clave, { alCerrar = false } = {}) => {
   if (!estaActivo(clave)) return Promise.resolve(null);
   quitarBloqueo(clave);
-  return fetchAuth(`/bloqueos/${clave}`, { method: "DELETE", keepalive: alCerrar }).catch(() => null);
+  return fetchAuth(`/bloqueos/${clave}`, { method: "DELETE", keepalive: alCerrar, sinAvisoGuardado: true }).catch(() => null);
 };
 
 // Acción puntual sobre un documento que no se está editando (anular, subir un

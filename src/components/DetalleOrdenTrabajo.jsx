@@ -15,6 +15,7 @@ import TablaScroll from "./TablaScroll";
 import ModalGenerarGRE from "./ModalGenerarGRE";
 import ModalDetalleGuia from "./ModalDetalleGuia";
 import ConfirmacionAccion from "./ConfirmacionAccion";
+import AvisoAccion from "./AvisoAccion";
 import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgePago, badgeOT, badgeGeneral, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
@@ -140,6 +141,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const [detalleNotificacion, setDetalleNotificacion] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  const [avisoVinculo, setAvisoVinculo] = useState(null); // { mensaje, cotizacion }
   const [crearOCOpen, setCrearOCOpen] = useState(false);
   const [crearSubOTOpen, setCrearSubOTOpen] = useState(false);
   const [generarGREOpen, setGenerarGREOpen] = useState(false);
@@ -386,13 +388,23 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     });
     if (!res.ok) { setError("Error al crear la cotización."); setCreandoCotizacion(false); setConfirmandoCrearCotizacion(false); return; }
     const nueva = await res.json();
-    await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/vincular-cotizacion`, {
+    // Vincular exige el bloqueo de la OT: si otro la está editando (o se cae la red)
+    // la cotización ya existe pero queda suelta — se avisa antes de ir a ella.
+    const vinculo = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/vincular-cotizacion`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cotizacion: nueva._id }),
-    });
+    }).catch(() => null);
     setCreandoCotizacion(false);
     setConfirmandoCrearCotizacion(false);
+    if (!vinculo?.ok) {
+      const motivo = vinculo ? (await vinculo.json().catch(() => ({}))).mensaje : "sin conexión con el servidor";
+      setAvisoVinculo({
+        mensaje: `Se creó la cotización ${nueva.codigo || ""}, pero no se pudo vincular a la OT: ${motivo || "error del servidor"}. Vincúlala desde la OT cuando esté libre.`,
+        cotizacion: nueva,
+      });
+      return;
+    }
     onNavegar?.({ tipo: "cotizacion", data: nueva });
   };
 
@@ -995,6 +1007,13 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
           onConfirmar={crearCotizacion}
           procesando={creandoCotizacion}
           textoConfirmar="Crear cotización"
+        />
+      )}
+
+      {avisoVinculo && (
+        <AvisoAccion
+          mensaje={avisoVinculo.mensaje}
+          onCerrar={() => { const c = avisoVinculo.cotizacion; setAvisoVinculo(null); onNavegar?.({ tipo: "cotizacion", data: c }); }}
         />
       )}
 

@@ -77,7 +77,7 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
     const latido = setInterval(async () => {
       if (!clave.current) return;
       const r = await fetchAuth(`/bloqueos/${clave.current}`, {
-        method: "PUT", body: JSON.stringify({ activo: huboActividad(ultimaActividad.current, Date.now()) }),
+        method: "PUT", body: JSON.stringify({ activo: huboActividad(ultimaActividad.current, Date.now()) }), sinAvisoGuardado: true,
       }).catch(() => null);
       if (r?.status === 410) {
         quitarBloqueo(clave.current);

@@ -1,4 +1,5 @@
 import { soltarTodos } from "./bloqueosActivos";
+import { avisaGuardado } from "./avisoGuardado";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const BASE = API.replace(/\/api$/, "");
@@ -61,12 +62,11 @@ export const uploadAuth = (endpoint, formData, headers = {}) => {
   });
 };
 
-const METODOS_ESCRITURA = ["POST", "PUT", "PATCH", "DELETE"];
-
 export const fetchAuth = async (endpoint, options = {}) => {
   const token = sessionStorage.getItem("token");
+  const { sinAvisoGuardado, ...opcionesFetch } = options;
   const res = await fetch(`${API}${endpoint}`, {
-    ...options,
+    ...opcionesFetch,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -79,7 +79,7 @@ export const fetchAuth = async (endpoint, options = {}) => {
   }
   // Avisa al Navbar que hubo un guardado exitoso para que refresque la
   // campana de notificaciones al instante, sin esperar el polling de 60s.
-  if (res.ok && METODOS_ESCRITURA.includes(options.method)) {
+  if (avisaGuardado(res.ok, { method: options.method, sinAvisoGuardado })) {
     window.dispatchEvent(new Event("app:cambio-guardado"));
   }
   return res;
