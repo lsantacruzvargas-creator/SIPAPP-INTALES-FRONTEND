@@ -51,6 +51,13 @@ export default function PanelSire({ onRegistrarFactura }) {
     } else setFilas([]);
   }), [base]);
   useEffect(() => { cargar(); }, [cargar]);
+  // Mientras SUNAT procesa el ticket se consulta solo cada 15 s (antes había que pulsar "Actualizar estado").
+  const descargando = estado?.estado === "descargando";
+  useEffect(() => {
+    if (!descargando) return undefined;
+    const t = setInterval(cargar, 15000);
+    return () => clearInterval(t);
+  }, [descargando, cargar]);
 
   const accion = async (fn) => {
     setOcupado(true);
