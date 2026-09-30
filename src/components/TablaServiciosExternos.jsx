@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
+import { conBloqueo } from "../utils/bloqueoApi";
 import { formatearFecha } from "../utils/fecha";
 import ModalServicioExterno from "./ModalServicioExterno";
 import TablaScroll from "./TablaScroll";
@@ -25,17 +26,21 @@ export default function TablaServiciosExternos({ ot, subOTs = [], servicios, pue
   const [crearOpen, setCrearOpen] = useState(false);
   const [confirmandoAnular, setConfirmandoAnular] = useState(null);
   const [anulando, setAnulando] = useState(false);
+  const [error, setError] = useState("");
 
   const anular = async (motivo) => {
     setAnulando(true);
-    const res = await fetchAuth(`/servicios-externos/${confirmandoAnular._id}/anular`, {
+    setError("");
+    const id = confirmandoAnular._id;
+    const res = await conBloqueo("servicioExterno", id, (h) => fetchAuth(`/servicios-externos/${id}/anular`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: h,
       body: JSON.stringify({ motivo }),
-    });
+    }));
     setAnulando(false);
     setConfirmandoAnular(null);
     if (res.ok) onCambio();
+    else setError((await res.json().catch(() => ({}))).mensaje || "No se pudo anular el servicio.");
   };
 
   return (
@@ -56,6 +61,7 @@ export default function TablaServiciosExternos({ ot, subOTs = [], servicios, pue
           )}
         </div>
 
+        {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
         {servicios.length === 0 ? (
           <p className="text-sm text-gray-400">Sin servicios externos registrados</p>
         ) : (

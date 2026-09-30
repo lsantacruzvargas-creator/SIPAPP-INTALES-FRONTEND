@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import TablaScroll from "../components/TablaScroll";
+import { conBloqueo } from "../utils/bloqueoApi";
 
 // Página aparte de Usuarios.jsx (admin-only a nivel de ruta) — jefatura
 // necesita mantener la tarifa/hora de los técnicos sin abrirle el resto de
@@ -11,6 +12,7 @@ export default function TarifasPersonal() {
   const puedeGestionar = ["admin", "jefatura"].includes(getUsuario()?.rol);
   const [usuarios, setUsuarios] = useState([]);
   const [editando, setEditando] = useState({});
+  const [error, setError] = useState("");
 
   const cargar = () => fetchAuth("/usuarios/lista").then((r) => r.ok && r.json())
     .then((d) => setUsuarios((d || []).filter((u) => ROLES_TECNICO.includes(u.rol))));
@@ -19,15 +21,16 @@ export default function TarifasPersonal() {
   const guardar = async (usuario) => {
     const valor = Number(editando[usuario._id]);
     if (isNaN(valor) || valor < 0) return;
-    const r = await fetchAuth(`/usuarios/${usuario._id}/tarifa-hora`, {
+    setError("");
+    const r = await conBloqueo("usuario", usuario._id, (h) => fetchAuth(`/usuarios/${usuario._id}/tarifa-hora`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: h,
       body: JSON.stringify({ tarifaHora: valor }),
-    });
+    }));
     if (r.ok) {
       setEditando((prev) => { const next = { ...prev }; delete next[usuario._id]; return next; });
       await cargar();
-    }
+    } else setError((await r.json().catch(() => ({}))).mensaje || "No se pudo guardar la tarifa.");
   };
 
   if (!puedeGestionar) {
@@ -41,6 +44,7 @@ export default function TarifasPersonal() {
         <p className="text-sm text-gray-400 mt-0.5">Costo por hora de cada técnico, usado al notificar trabajo (horas hombre) en una OT</p>
       </div>
 
+      {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
       <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
         <TablaScroll className="overflow-x-auto">
           <table className="w-full text-sm">

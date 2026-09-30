@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import TablaScroll from "../components/TablaScroll";
+import { conBloqueo } from "../utils/bloqueoApi";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 
@@ -47,7 +48,7 @@ export default function CentrosCosto() {
 
   const actualizar = async (centro, cambios) => {
     setError("");
-    const r = await fetchAuth(`/centros-costo/${centro._id}`, { method: "PUT", body: JSON.stringify(cambios) });
+    const r = await conBloqueo("centroCosto", centro._id, (h) => fetchAuth(`/centros-costo/${centro._id}`, { method: "PUT", headers: h, body: JSON.stringify(cambios) }));
     if (r.ok) await cargar();
     else {
       const d = await r.json().catch(() => ({}));

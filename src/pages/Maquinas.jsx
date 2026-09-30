@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import TablaScroll from "../components/TablaScroll";
+import { conBloqueo } from "../utils/bloqueoApi";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 
@@ -41,24 +42,27 @@ export default function Maquinas() {
   const guardarTarifa = async (maquina) => {
     const valor = Number(editandoTarifa[maquina._id]);
     if (isNaN(valor) || valor < 0) return;
-    const r = await fetchAuth(`/maquinas/${maquina._id}`, {
+    setError("");
+    const r = await conBloqueo("maquina", maquina._id, (h) => fetchAuth(`/maquinas/${maquina._id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: h,
       body: JSON.stringify({ tarifaHora: valor }),
-    });
+    }));
     if (r.ok) {
       setEditandoTarifa((prev) => { const next = { ...prev }; delete next[maquina._id]; return next; });
       await cargar();
-    }
+    } else setError((await r.json().catch(() => ({}))).mensaje || "No se pudo guardar la tarifa.");
   };
 
   const toggleActivo = async (maquina) => {
-    const r = await fetchAuth(`/maquinas/${maquina._id}`, {
+    setError("");
+    const r = await conBloqueo("maquina", maquina._id, (h) => fetchAuth(`/maquinas/${maquina._id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: h,
       body: JSON.stringify({ activo: !maquina.activo }),
-    });
+    }));
     if (r.ok) await cargar();
+    else setError((await r.json().catch(() => ({}))).mensaje || "No se pudo cambiar el estado de la máquina.");
   };
 
   if (!puedeGestionar) {

@@ -5,6 +5,8 @@ import { formatearFecha } from "../utils/fecha";
 import SelectorMateriales from "../components/SelectorMateriales";
 import PromptAccion from "../components/PromptAccion";
 import ConfirmacionAccion from "../components/ConfirmacionAccion";
+import AvisoAccion from "../components/AvisoAccion";
+import { conBloqueo } from "../utils/bloqueoApi";
 import { esPagoAntiguo } from "../utils/tesoreria";
 
 const ESTADO_ITEM = {
@@ -47,15 +49,15 @@ function PanelSalida({ requerimientoId, item, onClose, onListo }) {
   const confirmar = async () => {
     if (!lote || !cantidad || cantidad <= 0) { setError("Selecciona el lote e ingresa la cantidad."); return; }
     setGuardando(true);
-    const r = await fetchAuth(`/requerimientos/${requerimientoId}/items/${item._id}/salida`, {
+    const r = await conBloqueo("requerimiento", requerimientoId, (h) => fetchAuth(`/requerimientos/${requerimientoId}/items/${item._id}/salida`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: h,
       body: JSON.stringify({ lote, cantidad: Number(cantidad), precioUnitario: precioAuto }),
-    });
+    }));
     if (r.ok) {
       onListo(await r.json());
     } else {
-      const d = await r.json();
+      const d = await r.json().catch(() => ({}));
       setError(d.mensaje || "Error al registrar la salida");
     }
     setGuardando(false);
@@ -121,15 +123,15 @@ function PanelDevolucion({ requerimientoId, item, onClose, onListo }) {
   const confirmar = async () => {
     if (!cantidad || cantidad <= 0) { setError("Ingresa una cantidad válida."); return; }
     setGuardando(true);
-    const r = await fetchAuth(`/requerimientos/${requerimientoId}/items/${item._id}/devolucion`, {
+    const r = await conBloqueo("requerimiento", requerimientoId, (h) => fetchAuth(`/requerimientos/${requerimientoId}/items/${item._id}/devolucion`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: h,
       body: JSON.stringify({ cantidad: Number(cantidad) }),
-    });
+    }));
     if (r.ok) {
       onListo(await r.json());
     } else {
-      const d = await r.json();
+      const d = await r.json().catch(() => ({}));
       setError(d.mensaje || "Error al registrar la devolución");
     }
     setGuardando(false);
@@ -182,15 +184,18 @@ function FilaItem({ requerimiento, item, puedeAtender, onActualizado }) {
   const [buscadorAbierto, setBuscadorAbierto] = useState(false);
   const [confirmandoRechazo, setConfirmandoRechazo] = useState(false);
   const [rechazando, setRechazando] = useState(false);
+  const [error, setError] = useState("");
   const unidad = item.esSolicitudCompra ? item.materialAsociado?.unidad : item.material?.unidad;
 
   const accion = async (endpoint, body) => {
-    const r = await fetchAuth(`/requerimientos/${requerimiento._id}/items/${item._id}/${endpoint}`, {
+    setError("");
+    const r = await conBloqueo("requerimiento", requerimiento._id, (h) => fetchAuth(`/requerimientos/${requerimiento._id}/items/${item._id}/${endpoint}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: h,
       body: JSON.stringify(body || {}),
-    });
+    }));
     if (r.ok) onActualizado(await r.json());
+    else setError((await r.json().catch(() => ({}))).mensaje || "No se pudo completar la acción.");
   };
 
   const rechazar = async (motivo) => {
@@ -262,6 +267,7 @@ function FilaItem({ requerimiento, item, puedeAtender, onActualizado }) {
       {item.cantidadDevuelta > 0 && (
         <p className="text-xs text-red-500 mt-1">Devuelto: {item.cantidadDevuelta} {unidad}</p>
       )}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
 
       {panelSalida && (
         <PanelSalida requerimientoId={requerimiento._id} item={item}
@@ -353,6 +359,7 @@ export default function Requerimientos() {
   const [confirmandoPago, setConfirmandoPago] = useState(false);
   const [pagando, setPagando] = useState(false);
   const [exitoPago, setExitoPago] = useState("");
+  const [errorPago, setErrorPago] = useState("");
   const usuario = getUsuario();
   const puedeAtender = ["admin", "jefatura", "almacenero"].includes(usuario?.rol);
   // "Marcar como pagado" — exclusivo Coordinadora/Jefatura/Admin.
@@ -488,18 +495,23 @@ export default function Requerimientos() {
 
   const pagarSeleccionados = async () => {
     setPagando(true);
-    if (seccion === "materiales") {
-      for (const it of itemsSeleccionadosPagoMateriales) {
-        await fetchAuth(`/requerimientos/${it.requerimiento._id}/items/${it._id}/pagar`, { method: "PATCH" });
-      }
-    } else {
-      for (const s of serviciosSeleccionadosPago) {
-        await fetchAuth(`/servicios-externos/${s._id}/pagar`, { method: "PATCH" });
-      }
+    // En serie: varios ítems del mismo requerimiento toman y sueltan su bloqueo uno tras otro.
+    const pagos = seccion === "materiales"
+      ? itemsSeleccionadosPagoMateriales.map((it) => ["requerimiento", it.requerimiento._id, `/requerimientos/${it.requerimiento._id}/items/${it._id}/pagar`])
+      : serviciosSeleccionadosPago.map((s) => ["servicioExterno", s._id, `/servicios-externos/${s._id}/pagar`]);
+    const fallos = [];
+    for (const [entidad, id, url] of pagos) {
+      const r = await conBloqueo(entidad, id, (h) => fetchAuth(url, { method: "PATCH", headers: h }));
+      if (!r.ok) fallos.push((await r.json().catch(() => ({}))).mensaje || "Error al marcar como pagado");
     }
     setPagando(false);
     await cargar();
     setSeleccionados(new Set());
+    if (fallos.length) {
+      setConfirmandoPago(false);
+      setErrorPago(`${fallos.length} de ${pagos.length} no se pudieron marcar como pagado: ${fallos[0]}`);
+      return;
+    }
     // Mismo patrón que ModalCrearOrdenCompra: el rectángulo verde reemplaza
     // la pregunta de confirmación y el panel se cierra solo tras el delay.
     setExitoPago("Solicitud(es) marcada(s) como Pagado.");
@@ -717,6 +729,8 @@ export default function Requerimientos() {
           exito={exitoPago}
         />
       )}
+
+      {errorPago && <AvisoAccion mensaje={errorPago} onCerrar={() => setErrorPago("")} />}
     </div>
   );
 }
