@@ -51,7 +51,6 @@ function calcular(sub, descuentoPct = 0) {
 export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuardada, onNavegar }) {
   const navigate = useNavigate();
   const [cot, setCot] = useState(inicial);
-  const bloqueo = useBloqueoEdicion("cotizacion", cot._id, cot.updatedAt);
   const subtotalInicial = inicial.subtotal ?? 0;
   const [form, setForm] = useState({
     subtotal: subtotalInicial > 0 ? String(subtotalInicial) : "",
@@ -126,6 +125,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   // Mismo set de roles que ve el card de GRE en DetalleOrdenTrabajo.jsx.
   const puedeGenerarGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
   const cadenaCerrada = bloqueadoPorCadenaCerrada(cot.estadoCadena, rolActual);
+  const bloqueo = useBloqueoEdicion("cotizacion", cot._id, cot.updatedAt, { autoEditar: puedeEditar && !cot.anulado && !cadenaCerrada });
   // Desglose mostrado en el modal de "Cerrar cadena" — mismo criterio de
   // detracción SUNAT que ya usa DetalleOrdenCompra.jsx (12% cuando el total
   // supera S/700), calculado sobre el total ya persistido de la cotización.
@@ -549,7 +549,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                 </button>
               )
             )}
-            {!cot.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} puedeEditar={puedeEditar} onCancelar={onClose} />}
+            {!cot.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} />}
             {!cot.anulado && !cadenaCerrada && puedeEditar && (
               <button onClick={guardar} disabled={guardando || !bloqueo.editando}
                 className="bg-white text-sky-700 text-sm px-5 py-2 rounded-lg hover:bg-sky-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">

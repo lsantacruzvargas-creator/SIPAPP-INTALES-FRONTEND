@@ -34,7 +34,7 @@ export default function ModalCuadroComparativo({ licitacionId, catalogos, onClos
   const [generarAbierto, setGenerarAbierto] = useState(false);
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
-  const bloqueo = useBloqueoEdicion("licitacion", licitacionId, lic?.updatedAt);
+  const bloqueo = useBloqueoEdicion("licitacion", licitacionId, lic?.updatedAt, { autoEditar: lic?.estado === "abierta" });
 
   const aplicar = (l) => { setLic(l); setBorrador(borradorDesde(l)); };
 
@@ -217,7 +217,7 @@ export default function ModalCuadroComparativo({ licitacionId, catalogos, onClos
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 shrink-0">
-          <BarraEdicion bloqueo={bloqueo} onCancelar={onClose} className="mr-auto" />
+          <BarraEdicion bloqueo={bloqueo} className="mr-auto" />
           {error && <p className="text-sm text-red-500 mr-auto">{error}</p>}
           {aviso && !error && <p className="text-sm text-green-600 mr-auto">{aviso}</p>}
           <button type="button" onClick={invitar} disabled={guardando || !bloqueo.editando}

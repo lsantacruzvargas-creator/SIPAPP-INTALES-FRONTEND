@@ -43,11 +43,14 @@ export const tomaVigente = ({ documentoPedido, documentoActual }) => documentoPe
 
 // Estado de la barra tras consultar si el documento está tomado. Si la consulta
 // falla la barra no se queda en "cargando": muestra el motivo y deja reintentar.
-export function resultadoConsulta({ ok, status, data, errorRed = false }) {
+// sondeo: la revisión periódica mientras otro lo tiene. Si se libera, no se toma
+// solo (quien miraba puede haberse ido): queda "libre" hasta salir y volver a entrar.
+export function resultadoConsulta({ ok, status, data, errorRed = false, sondeo = false }) {
   const prefijo = "No se pudo verificar si alguien está editando";
   if (errorRed) return { estado: "error", mensaje: `${prefijo} (sin conexión con el servidor).` };
   if (!ok) return { estado: "error", mensaje: `${prefijo}: ${data?.mensaje || `error ${status}`}.` };
   if (data.ocupado) return { estado: "ocupado", mensaje: mensajeOcupado(data) };
+  if (sondeo) return { estado: "libre", mensaje: "Ya está libre: sal y vuelve a entrar para editarlo." };
   return { estado: "lectura", mensaje: "" };
 }
 

@@ -190,7 +190,7 @@ export default function ModalEmpresa({ empresa, onClose, onGuardada }) {
           {empresa ? "Editar empresa" : "Nueva empresa"}
         </h3>
 
-        {empresa && <BarraEdicion bloqueo={bloqueo} onCancelar={onClose} className="mb-4" />}
+        {empresa && <BarraEdicion bloqueo={bloqueo} className="mb-4" />}
 
         {error && (
           <p className="text-red-600 text-sm mb-4 bg-red-50 border border-red-200 rounded px-3 py-2">

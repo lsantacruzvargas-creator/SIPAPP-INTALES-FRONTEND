@@ -19,7 +19,7 @@ export default function ModalDetalleNotificacionTrabajo({ notificacion: inicial,
   const puedeEditar = ["admin", "supervisor"].includes(rolActual);
 
   const [notificacion, setNotificacion] = useState(inicial);
-  const bloqueo = useBloqueoEdicion("notificacionTrabajo", notificacion._id, notificacion.updatedAt);
+  const bloqueo = useBloqueoEdicion("notificacionTrabajo", notificacion._id, notificacion.updatedAt, { autoEditar: puedeEditar && notificacion.estado === "abierta" });
   // Errores de acciones de jefatura (anular línea, reabrir), visibles aunque no edite.
   const [avisoAccion, setAvisoAccion] = useState("");
   const [tecnicos, setTecnicos] = useState([]);

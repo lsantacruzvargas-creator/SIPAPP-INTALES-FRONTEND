@@ -57,7 +57,6 @@ const estadoItem = (it) => it.esSolicitudCompra
 // franja de solo lectura, con un link para saltar al padre si hace falta.
 export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNavegar }) {
   const [ot, setOt] = useState(inicial);
-  const bloqueo = useBloqueoEdicion("ordenTrabajo", ot._id, ot.updatedAt);
   const [form, setForm] = useState({
     titulo:               inicial.titulo               || "",
     descripcion:           inicial.descripcion           || "",
@@ -79,6 +78,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   // Tabla de Servicios Externos: la ven todos los roles menos técnico.
   const puedeVerServicios = !esTecnico;
   const cadenaCerrada = bloqueadoPorCadenaCerrada(ot.estadoCadena, rolActual);
+  const bloqueo = useBloqueoEdicion("ordenTrabajo", ot._id, ot.updatedAt, { autoEditar: puedeEditarCampos && !ot.anulado && !cadenaCerrada });
   // Progreso (Encargado de Progreso) — mismo criterio que
   // DetalleOrdenTrabajo.jsx: card independiente del fieldset, editable por
   // el técnico cuyo nombre coincide con `encargado`.
@@ -270,7 +270,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
             {!ot.anulado && !cadenaCerrada && puedeAnular && <BotonAnular onAnular={anular} />}
             {esAdmin && ot.anulado && <BotonDesanular onDesanular={desanular} />}
             {esAdmin && <BotonCerrarCadena cerrado={cadenaCerrada} onToggle={toggleCerrarCadena} />}
-            {!ot.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} puedeEditar={puedeEditarCampos} onCancelar={onClose} />}
+            {!ot.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} />}
             {!ot.anulado && !cadenaCerrada && puedeEditarCampos && (
               <button onClick={guardar} disabled={guardando || !bloqueo.editando}
                 className="bg-white text-violet-700 text-sm px-5 py-2 rounded-lg hover:bg-violet-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">

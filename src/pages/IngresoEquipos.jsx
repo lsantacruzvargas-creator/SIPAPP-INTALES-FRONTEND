@@ -49,7 +49,7 @@ export default function IngresoEquipos() {
   const [plantaFiltro, setPlantaFiltro]   = useState("");
   const [modalAbierto, setModalAbierto] = useState(false);
   const [seleccionado, setSeleccionado] = useState(null);
-  const bloqueo = useBloqueoEdicion("ingresoEquipo", seleccionado?._id, seleccionado?.updatedAt);
+  const bloqueo = useBloqueoEdicion("ingresoEquipo", seleccionado?._id, seleccionado?.updatedAt, { autoEditar: true });
   const soloLectura = !!seleccionado && !bloqueo.editando;
   const [form, setForm]             = useState(FORM_VACIO);
   const [guardando, setGuardando]   = useState(false);
@@ -491,7 +491,7 @@ export default function IngresoEquipos() {
                 className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
                 Cancelar
               </button>
-              {seleccionado && <BarraEdicion bloqueo={bloqueo} onCancelar={cerrar} className="mr-auto" />}
+              {seleccionado && <BarraEdicion bloqueo={bloqueo} className="mr-auto" />}
               <button onClick={guardar} disabled={guardando || soloLectura}
                 className="text-sm bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition font-medium">
                 {guardando ? "Guardando…" : seleccionado ? "Guardar cambios" : "Registrar ingreso"}

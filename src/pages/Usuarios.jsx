@@ -94,7 +94,7 @@ function ModalUsuario({ usuario, onClose, onGuardado }) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
         </div>
 
-        {esEdicion && <BarraEdicion bloqueo={bloqueo} onCancelar={onClose} className="mx-6 mt-4" />}
+        {esEdicion && <BarraEdicion bloqueo={bloqueo} className="mx-6 mt-4" />}
         <fieldset disabled={soloLectura} className="p-6 space-y-4 min-w-0">
           <div>
             <label className="text-xs text-gray-500 block mb-1">Nombre completo</label>
@@ -209,7 +209,7 @@ function ModalPersonal({ persona, onClose, onGuardado }) {
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
         </div>
-        {esEdicion && <BarraEdicion bloqueo={bloqueo} onCancelar={onClose} className="mx-6 mt-4" />}
+        {esEdicion && <BarraEdicion bloqueo={bloqueo} className="mx-6 mt-4" />}
         <fieldset disabled={soloLectura} className="p-6 space-y-4 min-w-0">
           <div>
             <label className="text-xs text-gray-500 block mb-1">Nombre completo</label>

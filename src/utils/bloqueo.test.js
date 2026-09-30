@@ -77,3 +77,11 @@ test("errorDelFormulario: lo que ya muestra la barra (423, 409 'cambió') no se 
   assert.equal(errorDelFormulario(400, { mensaje: "Tiene cobros" }, "x"), "Tiene cobros");
   assert.equal(errorDelFormulario(500, null, "No se pudo"), "No se pudo");
 });
+
+test("resultadoConsulta: si se libera mientras lo miras, queda 'libre' hasta salir y volver a entrar", () => {
+  const libre = resultadoConsulta({ ok: true, data: { ocupado: false }, sondeo: true });
+  assert.equal(libre.estado, "libre");
+  assert.match(libre.mensaje, /sal y vuelve a entrar/);
+  assert.equal(resultadoConsulta({ ok: true, data: { ocupado: false } }).estado, "lectura");
+  assert.equal(resultadoConsulta({ ok: true, data: { ocupado: true, usuarioNombre: "Ana", tomadoEn: new Date().toISOString() }, sondeo: true }).estado, "ocupado");
+});

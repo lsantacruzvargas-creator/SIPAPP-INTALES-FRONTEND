@@ -67,7 +67,6 @@ const estadoItem = (it) => it.esSolicitudCompra
 
 export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardada, onNavegar }) {
   const [ot, setOt] = useState(inicial);
-  const bloqueo = useBloqueoEdicion("ordenTrabajo", ot._id, ot.updatedAt);
   const [form, setForm] = useState({
     numeroOT: inicial.numeroOT || "",
     codigoSap: inicial.codigoSap || "",
@@ -109,6 +108,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   // Planner puede ver el card de Cotización (ver más abajo) pero nunca su monto.
   const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(rolActual);
   const cadenaCerrada = bloqueadoPorCadenaCerrada(ot.estadoCadena, rolActual);
+  const bloqueo = useBloqueoEdicion("ordenTrabajo", ot._id, ot.updatedAt, { autoEditar: puedeEditarCampos && !ot.anulado && !cadenaCerrada });
   // Progreso (Encargado de Progreso) es una card independiente del fieldset
   // principal — un técnico no edita el resto de la OT, solo esta tarjeta si
   // su nombre de usuario coincide con `encargado` de esta OT.
@@ -483,7 +483,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
             {!ot.anulado && !cadenaCerrada && puedeAnular && <BotonAnular onAnular={anular} />}
             {esAdmin && ot.anulado && <BotonDesanular onDesanular={desanular} />}
             {esAdmin && <BotonCerrarCadena cerrado={cadenaCerrada} onToggle={toggleCerrarCadena} />}
-            {!ot.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} puedeEditar={puedeEditarCampos} onCancelar={onClose} />}
+            {!ot.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} />}
             {!ot.anulado && !cadenaCerrada && puedeEditarCampos && (
               <button onClick={guardar} disabled={guardando || !bloqueo.editando}
                 className="bg-white text-indigo-700 text-sm px-5 py-2 rounded-lg hover:bg-indigo-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">

@@ -84,7 +84,7 @@ function SeccionUbicaciones() {
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
           {editando ? "Editar ubicación" : "Nueva ubicación"}
         </p>
-        {editando && <BarraEdicion bloqueo={bloqueo} onCancelar={cancelar} className="mb-3" />}
+        {editando && <BarraEdicion bloqueo={bloqueo} className="mb-3" />}
         {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg mb-4">{error}</p>}
         <fieldset disabled={soloLectura} className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
           <div>
@@ -357,7 +357,7 @@ function SeccionMateriales() {
             </button>
           )}
         </div>
-        {editando && <BarraEdicion bloqueo={bloqueo} onCancelar={cancelar} className="mb-3" />}
+        {editando && <BarraEdicion bloqueo={bloqueo} className="mb-3" />}
         {/* Orden del formulario: Tipo Componente → Categoría → Código → Título/Descripción */}
         <fieldset disabled={soloLectura} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-w-0">
           <div>
@@ -630,7 +630,7 @@ function SeccionCategorias() {
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
           {editando ? "Editar categoría" : "Nueva categoría de material"}
         </p>
-        {editando && <BarraEdicion bloqueo={bloqueo} onCancelar={cancelar} className="mb-3" />}
+        {editando && <BarraEdicion bloqueo={bloqueo} className="mb-3" />}
         {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg mb-4">{error}</p>}
 
         <fieldset disabled={soloLectura} className="min-w-0">
@@ -831,7 +831,7 @@ function SeccionComponentes() {
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
             {editandoTipo ? "Editar Tipo Componente" : "Nuevo Tipo Componente"}
           </p>
-          {editandoTipo && <BarraEdicion bloqueo={bloqueoTipo} onCancelar={cancelarTipo} className="mb-3" />}
+          {editandoTipo && <BarraEdicion bloqueo={bloqueoTipo} className="mb-3" />}
           {errorTipo && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg mb-3">{errorTipo}</p>}
           <input value={nombreTipo} onChange={(e) => setNombreTipo(e.target.value)} disabled={soloLecturaTipo}
             className={`w-full ${INP}`} placeholder="Ej: Semiconductores" />
@@ -884,7 +884,7 @@ function SeccionComponentes() {
           </p>
           {tipoSel && (
             <>
-              {editandoCat && <BarraEdicion bloqueo={bloqueoCat} onCancelar={cancelarCat} className="mb-3" />}
+              {editandoCat && <BarraEdicion bloqueo={bloqueoCat} className="mb-3" />}
               {errorCat && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg mb-3">{errorCat}</p>}
               <input value={nombreCat} onChange={(e) => setNombreCat(e.target.value)} disabled={soloLecturaCat}
                 className={`w-full ${INP}`} placeholder="Ej: Compresores" />

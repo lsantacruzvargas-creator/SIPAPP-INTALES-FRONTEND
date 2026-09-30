@@ -94,8 +94,8 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState("");
   const [cobrando, setCobrando]   = useState(false);
+  const [confirmandoCobro, setConfirmandoCobro] = useState(false);
   const [recalculo, setRecalculo] = useState(null);
-  const bloqueo = useBloqueoEdicion("factura", inicial._id, inicial.updatedAt);
   const puedeCobrar = ["admin", "jefatura", "facturacion"].includes(getUsuario()?.rol);
   const [cargandoOC, setCargandoOC] = useState(false);
   // "jefatura" agregado acá para calzar con el gate real del backend
@@ -107,6 +107,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
   // DetalleOrdenCompra.jsx).
   const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(rolActual);
   const cadenaCerrada = bloqueadoPorCadenaCerrada(inicial.estadoCadena, rolActual);
+  const bloqueo = useBloqueoEdicion("factura", inicial._id, inicial.updatedAt, { autoEditar: puedeEditar && !inicial.anulado && !cadenaCerrada });
 
   const abrirOC = async () => {
     if (!ocVinculada || cargandoOC) return;
@@ -289,7 +290,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
                   <Chip className="mt-0.5 bg-white/20 text-white">{inicial.estadoPago}</Chip>
                 )}
               </div>
-              {!inicial.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} puedeEditar={puedeEditar} onCancelar={onClose} />}
+              {!inicial.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} />}
               {!inicial.anulado && !cadenaCerrada && puedeEditar && <BotonAnular onAnular={anular} />}
               {!inicial.anulado && !cadenaCerrada && puedeEditar && (
                 <button onClick={() => guardar()} disabled={guardando || !bloqueo.editando}
@@ -475,8 +476,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
             {error && <p className="text-xs text-red-500">{error}</p>}
           </fieldset>
           {puedeCobrar && !inicial.anulado && (inicial.saldoNeto > 0.009 || inicial.saldoImpuesto > 0.009) && (
-            <button type="button" onClick={() => setCobrando(true)} disabled={bloqueo.editando}
-              title={bloqueo.editando ? "Guarda o cancela la edición antes de registrar un cobro" : undefined}
+            <button type="button" onClick={() => (bloqueo.editando ? setConfirmandoCobro(true) : setCobrando(true))}
               className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">
               Registrar cobro
             </button>
@@ -545,6 +545,14 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
         onConfirmar={() => guardar(true)}
         procesando={guardando}
         textoConfirmar="Recalcular y guardar"
+      />
+    )}
+    {confirmandoCobro && (
+      <ConfirmacionAccion
+        mensaje="Registrar un cobro cierra la factura: los cambios sin guardar se pierden. ¿Continuar?"
+        onCancelar={() => setConfirmandoCobro(false)}
+        onConfirmar={() => { setConfirmandoCobro(false); setCobrando(true); }}
+        textoConfirmar="Registrar cobro"
       />
     )}
     {cobrando && (

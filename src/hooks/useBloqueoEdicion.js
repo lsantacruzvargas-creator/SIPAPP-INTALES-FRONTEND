@@ -8,16 +8,17 @@ const LATIDO_MS = 60 * 1000;
 const CONSULTA_OCUPADO_MS = 30 * 1000;
 const EVENTOS_ACTIVIDAD = ["keydown", "mousedown", "input"];
 
-// Bloqueo de edición de un documento (spec 2026-09-28-bloqueo-edicion): "Editar"
-// lo toma, un latido lo mantiene mientras hay actividad, y se suelta al guardar,
-// cancelar o cerrar. fetch/upload agregan las cabeceras; si no se está editando,
-// toman un bloqueo temporal solo para esa acción.
+// Bloqueo de edición de un documento (spec 2026-09-28-bloqueo-edicion): quien abre
+// el documento con permiso (autoEditar) lo toma; un latido lo mantiene mientras hay
+// actividad y se suelta al cerrar la pantalla. Quien llega después lo ve en solo
+// lectura. fetch/upload agregan las cabeceras; si no se está editando, toman un
+// bloqueo temporal solo para esa acción.
 export default function useBloqueoEdicion(entidad, documento, versionMostrada, { autoEditar = false } = {}) {
   const [estado, setEstado] = useState("cargando");
   const [mensaje, setMensaje] = useState("");
   const clave = useRef(null);
   const version = useRef(versionMostrada);
-  const ultimaActividad = useRef(0); // se fija al pulsar "Editar"
+  const ultimaActividad = useRef(0); // se fija al tomar el documento
   const autoIntentado = useRef(null);
   const documentoAbierto = useRef(null); // null al cerrar el detalle
   const tomando = useRef(null); // documento con un "tomar" en vuelo
@@ -36,7 +37,7 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
     .then(async (r) => ({ r, data: await r.json().catch(() => null) }), () => ({ r: null, data: null }))
     .then(({ r, data }) => {
       if (clave.current) return;
-      const res = resultadoConsulta({ ok: r?.ok, status: r?.status, data, errorRed: !r });
+      const res = resultadoConsulta({ ok: r?.ok, status: r?.status, data, errorRed: !r, sondeo });
       if (sondeo && res.estado === "error") return;
       setEstado(res.estado);
       setMensaje(res.mensaje);
@@ -63,7 +64,7 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
   // anota la primera versión conocida; las siguientes las decide versionTrasAccion.
   useEffect(() => { if (version.current == null && versionMostrada) version.current = versionMostrada; }, [versionMostrada]);
 
-  // Mientras otro lo edita se revisa cada 30 s, para habilitar "Editar" cuando lo suelte.
+  // Mientras otro lo edita se revisa cada 30 s, para avisar cuando lo suelte.
   useEffect(() => {
     if (estado !== "ocupado") return undefined;
     const t = setInterval(() => consultar({ sondeo: true }), CONSULTA_OCUPADO_MS);
@@ -83,7 +84,7 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
         quitarBloqueo(clave.current);
         clave.current = null;
         setEstado("liberado");
-        setMensaje("Tu edición se liberó tras 15 min sin actividad.");
+        setMensaje("Tu edición se liberó tras 5 min sin actividad.");
       }
     }, LATIDO_MS);
     const alCerrarVentana = () => { if (clave.current) soltarBloqueo(clave.current, { alCerrar: true }); };
@@ -121,8 +122,7 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
     setEstado("editando");
   };
 
-  // Formularios que se abren desde el "Editar" de una fila (catálogos): la
-  // intención ya está expresada, se toma sin un segundo clic.
+  // Abrir = editar: se toma al abrir, una sola vez por apertura.
   useEffect(() => {
     const paso = pasoAutoEditar({ autoEditar, estado, intentado: autoIntentado.current, documento });
     if (!paso) return;
@@ -130,15 +130,6 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
     if (paso === "editar") editar();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- editar cambia en cada render
   }, [autoEditar, estado, documento]);
-
-  const soltar = async (nuevaVersion) => {
-    if (nuevaVersion) version.current = nuevaVersion;
-    const c = clave.current;
-    clave.current = null;
-    setEstado("lectura");
-    setMensaje("");
-    if (c) await soltarBloqueo(c);
-  };
 
   const leerVersion = async () => {
     const r = await fetchAuth(`/bloqueos/${entidad}/${documento}`);
@@ -173,9 +164,9 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
   return {
     estado, mensaje, editando: estado === "editando",
     editar,
-    cancelar: () => soltar(),
     reintentar: () => consultar(),
-    terminar: soltar,
+    // Tras guardar se sigue editando (el bloqueo se suelta al cerrar la pantalla).
+    terminar: (nuevaVersion) => { if (nuevaVersion) version.current = nuevaVersion; },
     fetch: (url, opciones = {}) => ejecutar((h) => fetchAuth(url, { ...opciones, headers: { ...opciones.headers, ...h } })),
     upload: (url, formData) => ejecutar((h) => uploadAuth(url, formData, h)),
   };

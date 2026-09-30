@@ -65,12 +65,12 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   const [guardandoConfirmacion, setGuardandoConfirmacion] = useState("");
   const rolActual = getUsuario()?.rol;
   const puedeEditar = ["admin", "asistente", "facturacion", "jefatura"].includes(rolActual);
-  const bloqueo = useBloqueoEdicion("ordenCompra", orden._id, orden.updatedAt);
   // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
   // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
   const puedeAnular = ["admin", "jefatura"].includes(rolActual);
   const esAdmin = rolActual === "admin";
   const cadenaCerrada = bloqueadoPorCadenaCerrada(orden.estadoCadena, rolActual);
+  const bloqueo = useBloqueoEdicion("ordenCompra", orden._id, orden.updatedAt, { autoEditar: puedeEditar && !orden.anulado && !cadenaCerrada });
   const puedeConfirmarHesActa = ["admin", "asistente", "facturacion", "jefatura"].includes(rolActual);
   // Montos/cálculos exclusivos de admin/jefatura/facturación — mismo criterio
   // que ListaOrdenesCompra.jsx y que precios de Cotización (Fase 16). Antes
@@ -350,7 +350,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
               {!orden.anulado && !cadenaCerrada && puedeAnular && <BotonAnular onAnular={anular} />}
               {esAdmin && orden.anulado && <BotonDesanular onDesanular={desanular} />}
               {esAdmin && <BotonCerrarCadena cerrado={cadenaCerrada} onToggle={toggleCerrarCadena} />}
-              {!orden.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} puedeEditar={puedeEditar} onCancelar={onClose} />}
+              {!orden.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} />}
               {!orden.anulado && !cadenaCerrada && puedeEditar && (
                 <button onClick={guardar} disabled={guardando || !bloqueo.editando}
                   className="bg-white text-blue-700 text-sm px-5 py-2 rounded-lg hover:bg-blue-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">
