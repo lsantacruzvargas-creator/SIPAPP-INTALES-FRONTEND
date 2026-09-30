@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
 import SelectorTipoArticulo from "./SelectorTipoArticulo";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
@@ -8,29 +8,38 @@ import { avisoDeRespuesta } from "../utils/bloqueo";
 const FORM_VACIO = { razonSocial: "", ruc: "", direccion: "", alias: "", tipo: "cliente", tipoArticulos: [], requiereHes: false, requiereActaConformidad: false, plantas: [] };
 const PLANTA_VACIA = { nombre: "", ubigeo: "", direccion: "", contactoNombre: "", contactoTelefono: "", contactoCorreo: "" };
 
+const formDesde = (empresa) => (!empresa ? FORM_VACIO : {
+  razonSocial: empresa.razonSocial,
+  ruc: empresa.ruc,
+  direccion: empresa.direccion || "",
+  alias: empresa.alias || "",
+  tipo: empresa.tipo || "cliente",
+  // GET /empresas los trae poblados ({ _id, nombre }); el form guarda solo ids.
+  tipoArticulos: (empresa.tipoArticulos || []).map((t) => String(t._id || t)),
+  requiereHes: empresa.requiereHes || false,
+  requiereActaConformidad: empresa.requiereActaConformidad || false,
+  plantas: empresa.plantas || [],
+});
+
 export default function ModalEmpresa({ empresa, onClose, onGuardada }) {
-  const [form, setForm] = useState(
-    empresa
-      ? {
-        razonSocial: empresa.razonSocial,
-        ruc: empresa.ruc,
-        direccion: empresa.direccion || "",
-        alias: empresa.alias || "",
-        tipo: empresa.tipo || "cliente",
-        // GET /empresas los trae poblados ({ _id, nombre }); el form guarda solo ids.
-        tipoArticulos: (empresa.tipoArticulos || []).map((t) => String(t._id || t)),
-        requiereHes: empresa.requiereHes || false,
-        requiereActaConformidad: empresa.requiereActaConformidad || false,
-        plantas: empresa.plantas || [],
-      }
-      : FORM_VACIO
-  );
+  const [form, setForm] = useState(() => formDesde(empresa));
   const [plantaInput, setPlantaInput] = useState(PLANTA_VACIA);
   const [errorPlanta, setErrorPlanta] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
   const [buscandoRuc, setBuscandoRuc] = useState(false);
-  const bloqueo = useBloqueoEdicion("empresa", empresa?._id, empresa?.updatedAt, { autoEditar: true });
+  // La empresa llega de la lista de quien abrió el modal, que puede estar vieja (p. ej.
+  // la de Nueva OT): se relee la versión actual antes de tomarla para editar.
+  const [actual, setActual] = useState(null);
+  useEffect(() => {
+    if (!empresa) return;
+    fetchAuth(`/empresas/${empresa._id}`).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((e) => {
+      const v = e || empresa;
+      setActual(v);
+      setForm(formDesde(v));
+    });
+  }, [empresa]);
+  const bloqueo = useBloqueoEdicion("empresa", actual?._id, actual?.updatedAt, { autoEditar: true });
   const soloLectura = !!empresa && !bloqueo.editando;
   // Edición in-place de una planta ya creada — un solo botón "Editar" por
   // planta abre nombre/ubigeo/dirección Y sus contactos juntos (agregar,

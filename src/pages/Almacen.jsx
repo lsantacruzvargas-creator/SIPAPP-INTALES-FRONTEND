@@ -6,6 +6,7 @@ import BuscadorMaterialInline from "../components/BuscadorMaterialInline";
 import TablaScroll from "../components/TablaScroll";
 import ConfirmacionAccion from "../components/ConfirmacionAccion";
 import BarraEdicion from "../components/BarraEdicion";
+import AvisoAccion from "../components/AvisoAccion";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import { conBloqueo } from "../utils/bloqueoApi";
 import { cabecerasBloqueo, avisoDeRespuesta } from "../utils/bloqueo";
@@ -68,7 +69,6 @@ function SeccionUbicaciones() {
       ? await bloqueo.fetch(`/ubicaciones/${editando}`, { method: "PUT", body })
       : await fetchAuth("/ubicaciones", { method: "POST", body });
     if (r.ok) {
-      await cargar();
       cancelar();
     } else {
       const d = await r.json().catch(() => ({}));
@@ -177,6 +177,7 @@ function SeccionMateriales() {
   const [mostrarInactivos, setMostrarInactivos] = useState(false);
   const [error, setError] = useState("");
   const [importarOpen, setImportarOpen] = useState(false);
+  const [aviso, setAviso] = useState("");
   const bloqueo = useBloqueoEdicion("material", editando, items.find((x) => x._id === editando)?.updatedAt, { autoEditar: true });
   const soloLectura = !!editando && !bloqueo.editando;
   const busquedaDebounced = useDebounce(busqueda);
@@ -241,17 +242,18 @@ function SeccionMateriales() {
     (c) => (c.tipoComponente?._id || c.tipoComponente) === form.tipoComponente
   );
 
-  // El PUT de material exige versión (es el mismo del formulario): se manda la del
-  // bloqueo recién tomado, que siempre es la actual.
+  // El PUT de material exige versión (es el mismo del formulario). Si es el material
+  // que uno está editando, va con ese bloqueo; si no, con uno temporal cuya versión
+  // es siempre la actual.
   const cambiarActivo = async (m, activo) => {
-    setError("");
-    const r = await conBloqueo("material", m._id, (h, tomado) => fetchAuth(`/materiales/${m._id}`, {
-      method: "PUT",
-      headers: cabecerasBloqueo(h["X-Bloqueo"], tomado.version),
-      body: JSON.stringify({ activo }),
-    }));
+    const body = JSON.stringify({ activo });
+    const r = editando === m._id && bloqueo.editando
+      ? await bloqueo.fetch(`/materiales/${m._id}`, { method: "PUT", body })
+      : await conBloqueo("material", m._id, (h, tomado) => fetchAuth(`/materiales/${m._id}`, {
+        method: "PUT", headers: cabecerasBloqueo(h["X-Bloqueo"], tomado.version), body,
+      }));
     if (r.ok) await recargar();
-    else setError((await r.json().catch(() => ({}))).mensaje || "No se pudo cambiar el estado del material.");
+    else setAviso((await r.json().catch(() => ({}))).mensaje || "No se pudo cambiar el estado del material.");
   };
 
   const iniciarEdicion = (m) => {
@@ -290,7 +292,6 @@ function SeccionMateriales() {
       ? await bloqueo.fetch(`/materiales/${editando}`, { method: "PUT", body })
       : await fetchAuth("/materiales", { method: "POST", body });
     if (r.ok) {
-      await recargar();
       cancelar();
     } else {
       const d = await r.json().catch(() => ({}));
@@ -343,6 +344,7 @@ function SeccionMateriales() {
 
   return (
     <div className="space-y-6">
+      {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
       {/* Formulario de creación/edición — el SKU (código auto-generado, ej.
           MAT-0001) nunca se edita, solo los datos descriptivos del material. */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
@@ -560,6 +562,7 @@ function SeccionCategorias() {
   const [error, setError] = useState("");
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(null);
   const [eliminando, setEliminando] = useState(false);
+  const [aviso, setAviso] = useState("");
   const bloqueo = useBloqueoEdicion("categoriaMaterial", editando, lista.find((x) => x._id === editando)?.updatedAt, { autoEditar: true });
   const soloLectura = !!editando && !bloqueo.editando;
 
@@ -605,7 +608,6 @@ function SeccionCategorias() {
       ? await bloqueo.fetch(`/categorias-material/${editando}`, { method: "PUT", body: JSON.stringify(body) })
       : await fetchAuth("/categorias-material", { method: "POST", body: JSON.stringify(body) });
     if (r.ok) {
-      await cargar();
       cancelar();
     } else {
       const d = await r.json().catch(() => ({}));
@@ -617,15 +619,19 @@ function SeccionCategorias() {
   const eliminar = async () => {
     setEliminando(true);
     const id = confirmandoEliminar._id;
-    const r = await conBloqueo("categoriaMaterial", id, (h) => fetchAuth(`/categorias-material/${id}`, { method: "DELETE", headers: h }));
+    const propia = editando === id && bloqueo.editando;
+    const r = propia
+      ? await bloqueo.fetch(`/categorias-material/${id}`, { method: "DELETE" })
+      : await conBloqueo("categoriaMaterial", id, (h) => fetchAuth(`/categorias-material/${id}`, { method: "DELETE", headers: h }));
     setEliminando(false);
     setConfirmandoEliminar(null);
-    if (r.ok) await cargar();
-    else setError((await r.json().catch(() => ({}))).mensaje || "No se pudo eliminar la categoría.");
+    if (r.ok) { if (propia) cancelar(); else await cargar(); }
+    else setAviso((await r.json().catch(() => ({}))).mensaje || "No se pudo eliminar la categoría.");
   };
 
   return (
     <div className="space-y-6">
+      {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
           {editando ? "Editar categoría" : "Nueva categoría de material"}
@@ -748,6 +754,7 @@ function SeccionComponentes() {
   const [eliminandoTipo, setEliminandoTipo] = useState(false);
   const [confirmandoCat, setConfirmandoCat] = useState(null);
   const [eliminandoCat, setEliminandoCat] = useState(false);
+  const [aviso, setAviso] = useState("");
   const bloqueoTipo = useBloqueoEdicion("tipoComponente", editandoTipo, tipos.find((x) => x._id === editandoTipo)?.updatedAt, { autoEditar: true });
   const soloLecturaTipo = !!editandoTipo && !bloqueoTipo.editando;
   const bloqueoCat = useBloqueoEdicion("categoriaComponente", editandoCat, categorias.find((x) => x._id === editandoCat)?.updatedAt, { autoEditar: true });
@@ -775,7 +782,7 @@ function SeccionComponentes() {
     const r = editandoTipo
       ? await bloqueoTipo.fetch(`/tipos-componente/${editandoTipo}`, { method: "PUT", body })
       : await fetchAuth("/tipos-componente", { method: "POST", body });
-    if (r.ok) { await cargar(); cancelarTipo(); }
+    if (r.ok) cancelarTipo();
     else {
       const d = await r.json().catch(() => ({}));
       if (!avisoDeRespuesta(r.status, d)) setErrorTipo(d.mensaje || "Error al guardar el Tipo Componente.");
@@ -786,16 +793,23 @@ function SeccionComponentes() {
   const eliminarTipo = async () => {
     const t = confirmandoTipo;
     setEliminandoTipo(true);
-    const r = await conBloqueo("tipoComponente", t._id, (h) => fetchAuth(`/tipos-componente/${t._id}`, { method: "DELETE", headers: h }));
+    const propia = editandoTipo === t._id && bloqueoTipo.editando;
+    const r = propia
+      ? await bloqueoTipo.fetch(`/tipos-componente/${t._id}`, { method: "DELETE" })
+      : await conBloqueo("tipoComponente", t._id, (h) => fetchAuth(`/tipos-componente/${t._id}`, { method: "DELETE", headers: h }));
     setEliminandoTipo(false);
     setConfirmandoTipo(null);
-    if (r.ok) { await cargar(); if (tipoSel === t._id) setTipoSel(null); }
-    else setErrorTipo((await r.json().catch(() => ({}))).mensaje || "No se pudo eliminar el Tipo Componente.");
+    if (r.ok) {
+      if (propia) cancelarTipo(); else await cargar();
+      if (tipoSel === t._id) seleccionarTipo(null);
+    } else setAviso((await r.json().catch(() => ({}))).mensaje || "No se pudo eliminar el Tipo Componente.");
   };
 
   const categoriasDelTipo = categorias.filter((c) => (c.tipoComponente?._id || c.tipoComponente) === tipoSel);
 
   const cancelarCat = () => { setEditandoCat(null); setNombreCat(""); setErrorCat(""); cargar(); };
+  // Otro Tipo: la categoría que se editaba (hija del anterior) se cierra y se suelta.
+  const seleccionarTipo = (id) => { if (id !== tipoSel && editandoCat) cancelarCat(); setTipoSel(id); };
   const iniciarEdicionCat = (c) => { setEditandoCat(c._id); setNombreCat(c.nombre); setErrorCat(""); };
 
   const guardarCat = async () => {
@@ -805,7 +819,7 @@ function SeccionComponentes() {
     const r = editandoCat
       ? await bloqueoCat.fetch(`/categorias-componente/${editandoCat}`, { method: "PUT", body: JSON.stringify({ nombre: nombreCat.trim() }) })
       : await fetchAuth("/categorias-componente", { method: "POST", body: JSON.stringify({ nombre: nombreCat.trim(), tipoComponente: tipoSel }) });
-    if (r.ok) { await cargar(); cancelarCat(); }
+    if (r.ok) cancelarCat();
     else {
       const d = await r.json().catch(() => ({}));
       if (!avisoDeRespuesta(r.status, d)) setErrorCat(d.mensaje || "Error al guardar la Categoría.");
@@ -816,15 +830,19 @@ function SeccionComponentes() {
   const eliminarCat = async () => {
     setEliminandoCat(true);
     const id = confirmandoCat._id;
-    const r = await conBloqueo("categoriaComponente", id, (h) => fetchAuth(`/categorias-componente/${id}`, { method: "DELETE", headers: h }));
+    const propia = editandoCat === id && bloqueoCat.editando;
+    const r = propia
+      ? await bloqueoCat.fetch(`/categorias-componente/${id}`, { method: "DELETE" })
+      : await conBloqueo("categoriaComponente", id, (h) => fetchAuth(`/categorias-componente/${id}`, { method: "DELETE", headers: h }));
     setEliminandoCat(false);
     setConfirmandoCat(null);
-    if (r.ok) await cargar();
-    else setErrorCat((await r.json().catch(() => ({}))).mensaje || "No se pudo eliminar la Categoría.");
+    if (r.ok) { if (propia) cancelarCat(); else await cargar(); }
+    else setAviso((await r.json().catch(() => ({}))).mensaje || "No se pudo eliminar la Categoría.");
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
       {/* Tipos Componente */}
       <div className="space-y-6">
         <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
@@ -860,7 +878,7 @@ function SeccionComponentes() {
               )}
               {tipos.map((t) => (
                 <tr key={t._id}
-                  onClick={() => setTipoSel(t._id)}
+                  onClick={() => seleccionarTipo(t._id)}
                   className={`cursor-pointer transition ${tipoSel === t._id ? "bg-blue-50" : "hover:bg-gray-50/50"}`}>
                   <td className="px-5 py-3 font-medium text-gray-800">{t.nombre}</td>
                   <td className="px-5 py-3 text-right space-x-3" onClick={(e) => e.stopPropagation()}>
