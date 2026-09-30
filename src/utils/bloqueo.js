@@ -26,3 +26,13 @@ export function versionTrasAccion({ editando, versionFormulario, versionTomada, 
   if (editando || versionTomada === versionFormulario) return versionNueva;
   return versionFormulario;
 }
+
+// Formularios abiertos desde el "Editar" de una fila: se toman solos una vez al
+// abrir. "marcar" = se abrió ocupado: cuando se libere queda el botón "Editar"
+// (no se retoma solo, quien esperaba puede haberse ido y lo dejaría tomado).
+export function pasoAutoEditar({ autoEditar, estado, intentado, documento }) {
+  if (!autoEditar || !documento || intentado === documento) return null;
+  if (estado === "lectura") return "editar";
+  if (estado === "ocupado") return "marcar";
+  return null;
+}

@@ -50,10 +50,13 @@ function SeccionUbicaciones() {
     setForm({ nombre: u.nombre, descripcion: u.descripcion });
   };
 
+  // Al cerrar una edición se recarga: si el registro cambió mientras estaba abierto
+  // (aviso "cambió"), volver a abrirlo trae la versión actual.
   const cancelar = () => {
     setEditando(null);
     setForm({ nombre: "", descripcion: "" });
     setError("");
+    cargar();
   };
 
   const guardar = async () => {
@@ -272,6 +275,7 @@ function SeccionMateriales() {
     setEditando(null);
     setForm(FORM_MATERIAL_VACIO);
     setError("");
+    recargar();
   };
 
   const guardar = async () => {
@@ -566,7 +570,7 @@ function SeccionCategorias() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const cancelar = () => { setEditando(null); setNombre(""); setCampos([]); setError(""); };
+  const cancelar = () => { setEditando(null); setNombre(""); setCampos([]); setError(""); cargar(); };
 
   const iniciarEdicion = (c) => {
     setEditando(c._id);
@@ -760,7 +764,7 @@ function SeccionComponentes() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const cancelarTipo = () => { setEditandoTipo(null); setNombreTipo(""); setErrorTipo(""); };
+  const cancelarTipo = () => { setEditandoTipo(null); setNombreTipo(""); setErrorTipo(""); cargar(); };
   const iniciarEdicionTipo = (t) => { setEditandoTipo(t._id); setNombreTipo(t.nombre); setErrorTipo(""); };
 
   const guardarTipo = async () => {
@@ -791,7 +795,7 @@ function SeccionComponentes() {
 
   const categoriasDelTipo = categorias.filter((c) => (c.tipoComponente?._id || c.tipoComponente) === tipoSel);
 
-  const cancelarCat = () => { setEditandoCat(null); setNombreCat(""); setErrorCat(""); };
+  const cancelarCat = () => { setEditandoCat(null); setNombreCat(""); setErrorCat(""); cargar(); };
   const iniciarEdicionCat = (c) => { setEditandoCat(c._id); setNombreCat(c.nombre); setErrorCat(""); };
 
   const guardarCat = async () => {

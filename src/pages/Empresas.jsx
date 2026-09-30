@@ -157,7 +157,7 @@ export default function Empresas() {
       {modal && (
         <ModalEmpresa
           empresa={editando}
-          onClose={() => setModal(false)}
+          onClose={() => { setModal(false); cargar(); }}
           onGuardada={async () => {
             await cargar();
             setModal(false);

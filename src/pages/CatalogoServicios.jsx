@@ -12,9 +12,8 @@ export default function CatalogoServicios() {
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(null);
   const [avisoError, setAvisoError] = useState("");
 
-  useEffect(() => {
-    fetchAuth("/catalogo-servicios").then((r) => r.ok ? r.json() : []).then(setCatalogo);
-  }, []);
+  const cargar = () => fetchAuth("/catalogo-servicios").then((r) => r.ok ? r.json() : []).then(setCatalogo);
+  useEffect(() => { cargar(); }, []);
 
   const upsert = (g) => {
     setCatalogo((prev) => {
@@ -86,7 +85,7 @@ export default function CatalogoServicios() {
       {modal && (
         <ModalCatalogoServicio
           grupoServicio={modal === "nuevo" ? null : modal}
-          onClose={() => setModal(null)}
+          onClose={() => { setModal(null); cargar(); }}
           onGuardado={upsert}
         />
       )}

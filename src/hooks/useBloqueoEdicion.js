@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { fetchAuth, uploadAuth } from "../utils/fetchAuth";
 import { tomarBloqueo, soltarBloqueo, conBloqueo } from "../utils/bloqueoApi";
-import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion } from "../utils/bloqueo";
+import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar } from "../utils/bloqueo";
 
 const LATIDO_MS = 60 * 1000;
 const CONSULTA_OCUPADO_MS = 30 * 1000;
@@ -101,12 +101,12 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
   };
 
   // Formularios que se abren desde el "Editar" de una fila (catálogos): la
-  // intención ya está expresada, se toma sin un segundo clic. Solo una vez por
-  // documento: si estaba ocupado y se libera, queda el botón "Editar".
+  // intención ya está expresada, se toma sin un segundo clic.
   useEffect(() => {
-    if (!autoEditar || estado !== "lectura" || autoIntentado.current === documento) return;
+    const paso = pasoAutoEditar({ autoEditar, estado, intentado: autoIntentado.current, documento });
+    if (!paso) return;
     autoIntentado.current = documento;
-    editar();
+    if (paso === "editar") editar();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- editar cambia en cada render
   }, [autoEditar, estado, documento]);
 

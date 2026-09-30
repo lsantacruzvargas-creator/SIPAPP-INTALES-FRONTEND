@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion } from "./bloqueo.js";
+import { mensajeOcupado, huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar } from "./bloqueo.js";
 
 test("mensajeOcupado: hora de Lima y otra ventana propia", () => {
   assert.equal(mensajeOcupado({ ocupado: true, usuarioNombre: "Ana", tomadoEn: "2026-09-28T15:32:00Z" }), "En edición por Ana desde las 10:32");
@@ -28,4 +28,14 @@ test("versionTrasAccion: desde lectura no adopta la versión nueva si el formula
   assert.equal(versionTrasAccion({ editando: true, versionFormulario: "v1", versionTomada: "v1", versionNueva: "v2" }), "v2");
   assert.equal(versionTrasAccion({ editando: false, versionFormulario: "v1", versionTomada: "v1", versionNueva: "v2" }), "v2");
   assert.equal(versionTrasAccion({ editando: false, versionFormulario: "v1", versionTomada: "v3", versionNueva: "v4" }), "v1");
+});
+
+test("pasoAutoEditar: toma una sola vez al abrir libre; si lo abrió ocupado no retoma al liberarse", () => {
+  assert.equal(pasoAutoEditar({ autoEditar: false, estado: "lectura", intentado: null, documento: "a" }), null);
+  assert.equal(pasoAutoEditar({ autoEditar: true, estado: "cargando", intentado: null, documento: "a" }), null);
+  assert.equal(pasoAutoEditar({ autoEditar: true, estado: "lectura", intentado: null, documento: "a" }), "editar");
+  assert.equal(pasoAutoEditar({ autoEditar: true, estado: "ocupado", intentado: null, documento: "a" }), "marcar");
+  assert.equal(pasoAutoEditar({ autoEditar: true, estado: "lectura", intentado: "a", documento: "a" }), null);
+  assert.equal(pasoAutoEditar({ autoEditar: true, estado: "lectura", intentado: "a", documento: "b" }), "editar");
+  assert.equal(pasoAutoEditar({ autoEditar: true, estado: "lectura", intentado: null, documento: null }), null);
 });

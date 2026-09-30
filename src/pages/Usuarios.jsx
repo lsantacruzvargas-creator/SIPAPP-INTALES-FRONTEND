@@ -248,12 +248,11 @@ export default function Usuarios() {
   const [modalUsr, setModalUsr] = useState(null);   // null | "nuevo" | objeto usuario
   const [modalPer, setModalPer] = useState(null);   // null | "nuevo" | objeto persona
 
-  useEffect(() => {
-    Promise.all([
-      fetchAuth("/usuarios").then((r) => r.ok ? r.json() : []),
-      fetchAuth("/personal").then((r) => r.ok ? r.json() : []),
-    ]).then(([u, p]) => { setUsuarios(u); setPersonal(p); });
-  }, []);
+  const cargar = () => Promise.all([
+    fetchAuth("/usuarios").then((r) => r.ok ? r.json() : []),
+    fetchAuth("/personal").then((r) => r.ok ? r.json() : []),
+  ]).then(([u, p]) => { setUsuarios(u); setPersonal(p); });
+  useEffect(() => { cargar(); }, []);
 
   const upsertUsuario = (u) => {
     setUsuarios((prev) => {
@@ -376,14 +375,14 @@ export default function Usuarios() {
       {modalUsr && (
         <ModalUsuario
           usuario={modalUsr === "nuevo" ? null : modalUsr}
-          onClose={() => setModalUsr(null)}
+          onClose={() => { setModalUsr(null); cargar(); }}
           onGuardado={upsertUsuario}
         />
       )}
       {modalPer && (
         <ModalPersonal
           persona={modalPer === "nuevo" ? null : modalPer}
-          onClose={() => setModalPer(null)}
+          onClose={() => { setModalPer(null); cargar(); }}
           onGuardado={upsertPersonal}
         />
       )}
