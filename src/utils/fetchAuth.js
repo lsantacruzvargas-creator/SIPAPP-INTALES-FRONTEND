@@ -1,5 +1,10 @@
+import { soltarTodos } from "./bloqueosActivos";
+
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const BASE = API.replace(/\/api$/, "");
+
+// Electron llama esto al cerrar la ventana, antes de borrar la sesión (electron/main.cjs).
+if (typeof window !== "undefined") window.__soltarBloqueos = () => soltarTodos({ api: API, token: getToken() });
 
 // El token y el usuario viven en sessionStorage (no localStorage) a propósito:
 // sessionStorage se borra solo al cerrar la pestaña/ventana, así que el
@@ -16,6 +21,7 @@ export function getUsuario() {
 }
 
 export function logout() {
+  soltarTodos({ api: API, token: getToken() });
   sessionStorage.removeItem("token");
   sessionStorage.removeItem("usuario");
 }

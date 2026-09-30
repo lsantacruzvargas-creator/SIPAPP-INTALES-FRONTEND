@@ -51,7 +51,8 @@ function createWindow() {
     if (cerrandoConLimpieza) return;
     e.preventDefault();
     mainWindow.webContents
-      .executeJavaScript("sessionStorage.clear(); localStorage.removeItem('token'); localStorage.removeItem('usuario');")
+      // Primero se sueltan los bloqueos de edición (necesitan el token), luego se borra la sesión.
+      .executeJavaScript("Promise.resolve(window.__soltarBloqueos && window.__soltarBloqueos()).catch(() => {}).then(() => { sessionStorage.clear(); localStorage.removeItem('token'); localStorage.removeItem('usuario'); })")
       .catch(() => {})
       .finally(() => {
         cerrandoConLimpieza = true;

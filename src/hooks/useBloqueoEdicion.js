@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { fetchAuth, uploadAuth } from "../utils/fetchAuth";
 import { tomarBloqueo, soltarBloqueo, conBloqueo } from "../utils/bloqueoApi";
+import { quitarBloqueo } from "../utils/bloqueosActivos";
 import { huboActividad, avisoDeRespuesta, cabecerasBloqueo, versionTrasAccion, pasoAutoEditar, tomaVigente, resultadoConsulta } from "../utils/bloqueo";
 
 const LATIDO_MS = 60 * 1000;
@@ -79,6 +80,7 @@ export default function useBloqueoEdicion(entidad, documento, versionMostrada, {
         method: "PUT", body: JSON.stringify({ activo: huboActividad(ultimaActividad.current, Date.now()) }),
       }).catch(() => null);
       if (r?.status === 410) {
+        quitarBloqueo(clave.current);
         clave.current = null;
         setEstado("liberado");
         setMensaje("Tu edición se liberó tras 15 min sin actividad.");
