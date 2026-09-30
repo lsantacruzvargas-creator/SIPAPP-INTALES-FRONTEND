@@ -3,6 +3,7 @@ import { fetchAuth, uploadAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima, formatearFechaHora } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { periodoDeMes, fechaIsoTexto } from "../../utils/tesoreria";
+import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
 import TablaScroll from "../TablaScroll";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
@@ -14,12 +15,29 @@ const RESULTADOS = {
 };
 const CAMPOS = [["fecha", "fechaEmision"], ["total", "total"], ["igv", "igv"], ["moneda", "moneda"]];
 
+const sinTildes = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+// Texto que se ve en cada columna: es lo que se compara con el filtro de esa columna.
+const TEXTO_COL = {
+  ruc: (f) => (f.sire || f.sistema).rucContraparte,
+  razon: (f) => (f.sire || f.sistema).razonSocial,
+  comprobante: (f) => { const d = f.sire || f.sistema; return `${d.tipo} ${d.serie}-${d.numero}`; },
+  fecha: (f) => fechaIsoTexto((f.sire || f.sistema).fechaEmision),
+  total: (f) => String((f.sire || f.sistema).total ?? ""),
+  igv: (f) => String((f.sire || f.sistema).igv ?? ""),
+  moneda: (f) => (f.sire || f.sistema).moneda,
+};
+const COLUMNAS = [["resultado", "Resultado"], ["ruc", "RUC"], ["razon", "Razón social"], ["comprobante", "Comprobante"], ["fecha", "Fecha"], ["total", "Total"], ["igv", "IGV"], ["moneda", "Moneda"]];
+const INP_COL = "w-full border border-gray-300 rounded px-2 py-1 text-xs font-normal normal-case text-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-300";
+
 export default function PanelSire({ onRegistrarFactura }) {
   const [libro, setLibro] = useState("RCE");
   const [mes, setMes] = useState(fechaHoyLima().slice(0, 7));
   const [estado, setEstado] = useState(null);
   const [filas, setFilas] = useState([]);
   const [filtro, setFiltro] = useState("");
+  const [colFiltros, setColFiltros] = useState({});
+  const limpiarFiltros = () => { setColFiltros({}); setFiltro(""); };
+  const setCol = (k, v) => setColFiltros((p) => ({ ...p, [k]: v }));
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState("");
   const base = `/sire/${libro}/${periodoDeMes(mes)}`;
@@ -34,6 +52,13 @@ export default function PanelSire({ onRegistrarFactura }) {
     } else setFilas([]);
   }), [base]);
   useEffect(() => { cargar(); }, [cargar]);
+  // Mientras SUNAT procesa el ticket se consulta solo cada 15 s (antes había que pulsar "Actualizar estado").
+  const descargando = estado?.estado === "descargando";
+  useEffect(() => {
+    if (!descargando) return undefined;
+    const t = setInterval(cargar, 15000);
+    return () => clearInterval(t);
+  }, [descargando, cargar]);
 
   const accion = async (fn) => {
     setOcupado(true);
@@ -58,8 +83,42 @@ export default function PanelSire({ onRegistrarFactura }) {
     accion(() => uploadAuth(`${base}/archivo`, fd));
   };
 
-  const visibles = filas.filter((f) => !filtro || f.estado === filtro);
+  const visibles = filas.filter((f) => (!filtro || f.estado === filtro)
+    && (!colFiltros.resultado || f.estado === colFiltros.resultado)
+    && Object.entries(TEXTO_COL).every(([k, fn]) => !colFiltros[k] || sinTildes(fn(f)).includes(sinTildes(colFiltros[k]).trim())));
+  const hayColFiltros = Object.values(colFiltros).some(Boolean);
   const conteo = (e) => filas.filter((f) => f.estado === e).length;
+  const dato = (f) => f.sire || f.sistema;
+  const sub = {
+    total: sumarPorMoneda(visibles, (f) => dato(f).total, (f) => dato(f).moneda),
+    igv: sumarPorMoneda(visibles, (f) => dato(f).igv, (f) => dato(f).moneda),
+  };
+  const exportarExcel = () => exportarHoja(`sire-${libro.toLowerCase()}-${periodoDeMes(mes)}.xlsx`, "Conciliación SIRE", visibles.map((f) => {
+    const d = dato(f);
+    return {
+      RESULTADO: RESULTADOS[f.estado].label, RUC: d.rucContraparte, "RAZÓN SOCIAL": d.razonSocial || "",
+      COMPROBANTE: `${d.tipo} ${d.serie}-${d.numero}`, FECHA: fechaIsoTexto(d.fechaEmision),
+      TOTAL: d.total, IGV: d.igv, MONEDA: d.moneda, DIFERENCIAS: f.diferencias.join(", "),
+    };
+  }), filasSubtotal("RESULTADO", { TOTAL: sub.total, IGV: sub.igv }));
+
+  // Plantilla con lo que el sistema tiene y el SIRE no (o con datos distintos), para cargarlo al SIRE.
+  // OJO: las columnas siguen los nombres de la propuesta SIRE; conviene contrastarlas con la
+  // plantilla de importación vigente en el portal SUNAT antes de subirla.
+  const tipoDocId = (ruc) => (String(ruc || "").length === 11 ? "6" : String(ruc || "").length === 8 ? "1" : "0");
+  const descargarPlantilla = () => {
+    const aSubir = filas.filter((f) => f.sistema && (f.estado === "solo_sistema" || f.estado === "difiere"));
+    const fechaSire = (v) => fechaIsoTexto(v);
+    exportarHoja(`plantilla-sire-${libro.toLowerCase()}-${periodoDeMes(mes)}.xlsx`, "Plantilla SIRE", aSubir.map(({ sistema: d }) => {
+      const base = Math.round(((d.total || 0) - (d.igv || 0)) * 100) / 100;
+      return {
+        "Fecha de emisión": fechaSire(d.fechaEmision), "Tipo CP/Doc.": d.tipo, "Serie del CDP": d.serie, "Nro CP o Doc. Nro Inicial (Rango)": d.numero,
+        "Tipo Doc Identidad": tipoDocId(d.rucContraparte), "Nro Doc Identidad": d.rucContraparte, "Apellidos Nombres/ Razón Social": d.razonSocial || "",
+        "BI Gravado DG": base, "IGV / IPM DG": d.igv || 0, "Total CP": d.total || 0, Moneda: d.moneda || "PEN",
+      };
+    }));
+  };
+
   const celda = (f, [clave, campo]) => {
     const dato = f.sire?.[campo] ?? f.sistema?.[campo];
     const difiere = f.diferencias.includes(clave);
@@ -75,15 +134,17 @@ export default function PanelSire({ onRegistrarFactura }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-center">
-        <select value={libro} onChange={(e) => setLibro(e.target.value)} className={INP}>
+        <select value={libro} onChange={(e) => { setLibro(e.target.value); limpiarFiltros(); }} className={INP}>
           <option value="RCE">Compras (RCE)</option><option value="RVIE">Ventas (RVIE)</option>
         </select>
-        <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className={INP} />
+        <input type="month" value={mes} onChange={(e) => { setMes(e.target.value); limpiarFiltros(); }} className={INP} />
         <button onClick={descargar} disabled={ocupado} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50">Descargar de SUNAT</button>
         {estado?.estado === "descargando" && <button onClick={() => accion(() => fetchAuth(`${base}/estado`))} disabled={ocupado} className="border border-gray-300 px-4 py-2 rounded-lg text-sm">Actualizar estado</button>}
         <label className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 cursor-pointer">
           Subir archivo<input type="file" accept=".zip,.txt" className="hidden" onChange={subir} disabled={ocupado} />
         </label>
+        <button onClick={exportarExcel} disabled={!visibles.length} className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Exportar Excel</button>
+        <button onClick={descargarPlantilla} disabled={!filas.length} title="Comprobantes del sistema que faltan o difieren en el SIRE" className="border border-purple-300 text-purple-700 px-4 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50">Descargar plantilla SIRE</button>
         <span className="text-xs text-gray-500">
           {!estado || estado.estado === "sin_datos" ? "Sin propuesta descargada"
             : `${estado.estado === "lista" ? "Lista" : estado.estado === "error" ? "Error" : "Descargando"} · ${estado.origen === "archivo" ? "archivo" : "API"} · ${estado.totalComprobantes} comprobantes${estado.fechaDescarga ? ` · ${formatearFechaHora(estado.fechaDescarga)}` : ""}${estado.mensaje ? ` · ${estado.mensaje}` : ""}`}
@@ -102,7 +163,26 @@ export default function PanelSire({ onRegistrarFactura }) {
         <TablaScroll className="overflow-x-auto">
           <table className="w-full text-sm" style={{ minWidth: "1000px" }}>
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-              <tr>{["Resultado", "RUC", "Razón social", "Comprobante", "Fecha", "Total", "IGV", "Moneda", ""].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
+              <tr>{[...COLUMNAS.map(([, h]) => h), ""].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
+              {filas.length > 0 && (
+                <tr className="bg-white">
+                  {COLUMNAS.map(([k, h]) => (
+                    <th key={k} className="px-3 py-1">
+                      {k === "resultado" ? (
+                        <select value={colFiltros.resultado || ""} onChange={(e) => setCol(k, e.target.value)} className={INP_COL} aria-label="Filtrar Resultado">
+                          <option value="">Todos</option>
+                          {Object.entries(RESULTADOS).map(([v, r]) => <option key={v} value={v}>{r.label}</option>)}
+                        </select>
+                      ) : (
+                        <input value={colFiltros[k] || ""} onChange={(e) => setCol(k, e.target.value)} placeholder="Filtrar" className={INP_COL} aria-label={`Filtrar ${h}`} />
+                      )}
+                    </th>
+                  ))}
+                  <th className="px-3 py-1 text-right">
+                    {hayColFiltros && <button onClick={() => setColFiltros({})} className="text-xs font-normal normal-case text-purple-600 hover:text-purple-800">Limpiar</button>}
+                  </th>
+                </tr>
+              )}
             </thead>
             <tbody className="divide-y divide-gray-100">
               {visibles.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">Sin comprobantes para conciliar</td></tr>}
@@ -124,6 +204,16 @@ export default function PanelSire({ onRegistrarFactura }) {
                 );
               })}
             </tbody>
+            {visibles.length > 0 && (
+              <tfoot className="bg-gray-50 font-semibold text-gray-700">
+                <tr>
+                  <td colSpan={5} className="px-3 py-2">Subtotal ({visibles.length} comprobantes)</td>
+                  <td className="px-3 py-2 tabular-nums">{textoMontos(sub.total)}</td>
+                  <td className="px-3 py-2 tabular-nums">{textoMontos(sub.igv)}</td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </TablaScroll>
       </div>

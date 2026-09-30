@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import * as XLSX from "xlsx";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { totalesMovimientos } from "../../utils/tesoreria";
+import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
 import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
 
@@ -32,6 +32,9 @@ export default function TablaMovimientos() {
       && (!filtros.desde || dia >= filtros.desde) && (!filtros.hasta || dia <= filtros.hasta);
   });
   const totales = totalesMovimientos(filtrados);
+  const vigentes = filtrados.filter((m) => !m.anulado);
+  const subIngresos = sumarPorMoneda(vigentes.filter((m) => m.tipo === "ingreso"), (m) => m.monto, (m) => m.moneda);
+  const subEgresos = sumarPorMoneda(vigentes.filter((m) => m.tipo === "egreso"), (m) => m.monto, (m) => m.moneda);
 
   const anular = async (motivo) => {
     setProcesando(true);
@@ -55,9 +58,10 @@ export default function TablaMovimientos() {
       CUENTA: m.cuenta?.nombre || "", DESTINO: m.cuentaDestino?.nombre || "", MEDIO: m.medio,
       "N° OPERACIÓN": m.numeroOperacion, MONEDA: m.moneda, MONTO: m.monto, ESTADO: m.anulado ? "Anulado" : "Vigente",
     }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), "Movimientos");
-    XLSX.writeFile(wb, "movimientos-tesoreria.xlsx");
+    exportarHoja("movimientos-tesoreria.xlsx", "Movimientos", filas, [
+      ...filasSubtotal("CÓDIGO", { MONTO: subIngresos }).map((r) => ({ ...r, "CÓDIGO": r["CÓDIGO"].replace("SUBTOTAL", "INGRESOS") })),
+      ...filasSubtotal("CÓDIGO", { MONTO: subEgresos }).map((r) => ({ ...r, "CÓDIGO": r["CÓDIGO"].replace("SUBTOTAL", "EGRESOS") })),
+    ]);
   };
 
   return (
@@ -99,6 +103,18 @@ export default function TablaMovimientos() {
                 </tr>
               ))}
             </tbody>
+            {filtrados.length > 0 && (
+              <tfoot className="bg-gray-50 font-semibold text-gray-700">
+                <tr>
+                  <td colSpan={8} className="px-3 py-2">Subtotal vigentes ({vigentes.length} movimientos)</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    <span className="block text-emerald-700">Ingresos {textoMontos(subIngresos)}</span>
+                    <span className="block text-red-600">Egresos {textoMontos(subEgresos)}</span>
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </TablaScroll>
       </div>
