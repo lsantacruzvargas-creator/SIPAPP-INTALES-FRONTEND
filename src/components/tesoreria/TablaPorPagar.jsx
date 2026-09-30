@@ -3,6 +3,7 @@ import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha, fechaHoyLima } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { FILTROS_TESORERIA, filtrarFacturas, semaforo, etiquetaImpuesto } from "../../utils/tesoreria";
+import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
 import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
 import ModalMovimiento from "./ModalMovimiento";
@@ -31,6 +32,36 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
   const set = (campo) => (e) => setFiltros((f) => ({ ...f, [campo]: e.target.value }));
   const facturas = filtrarFacturas(datos.facturas, filtros, { lado: "compra", hoyIso });
   const ocps = datos.ocps.filter((o) => !filtros.tercero || `${o.proveedorRazonSocial} ${o.proveedorRuc}`.toLowerCase().includes(filtros.tercero.toLowerCase()));
+
+  const monedaOc = (o) => o.moneda;
+  const subOc = {
+    total: sumarPorMoneda(ocps, (o) => o.total, monedaOc),
+    facturado: sumarPorMoneda(ocps, (o) => o.montoFacturado, monedaOc),
+    porFacturar: sumarPorMoneda(ocps, (o) => o.saldoPorFacturar, monedaOc),
+    saldoNeto: sumarPorMoneda(ocps, (o) => o.saldoNeto, monedaOc),
+    saldoImpuesto: sumarPorMoneda(ocps, (o) => o.saldoImpuesto),
+  };
+  const monedaFp = (f) => f.moneda;
+  const hayImpFp = (f) => f.impuesto?.tipo !== "ninguno";
+  const subFp = {
+    total: sumarPorMoneda(facturas, (f) => f.total, monedaFp),
+    impuesto: sumarPorMoneda(facturas.filter(hayImpFp), (f) => f.impuesto.monto),
+    neto: sumarPorMoneda(facturas, (f) => f.netoAPagar, monedaFp),
+    saldoNeto: sumarPorMoneda(facturas, (f) => f.saldoNeto, monedaFp),
+    saldoImpuesto: sumarPorMoneda(facturas, (f) => f.saldoImpuesto),
+  };
+  const exportarExcel = () => (vista === "oc"
+    ? exportarHoja("por-pagar-oc.xlsx", "Por OC", ocps.map((o) => ({
+      OC: o.codigo, FECHA: fecha(o.fecha), PROVEEDOR: o.proveedorRazonSocial, MONEDA: o.moneda, TOTAL: o.total,
+      FACTURADO: o.montoFacturado || 0, "POR FACTURAR": o.saldoPorFacturar, "SALDO NETO": o.saldoNeto,
+      "SALDO IMPUESTO": o.saldoImpuesto, "PRÓX. VENCIMIENTO": fecha(o.proximoVencimiento),
+    })), filasSubtotal("OC", { TOTAL: subOc.total, FACTURADO: subOc.facturado, "POR FACTURAR": subOc.porFacturar, "SALDO NETO": subOc.saldoNeto, "SALDO IMPUESTO": subOc.saldoImpuesto }))
+    : exportarHoja("por-pagar-facturas.xlsx", "Por factura", facturas.map((f) => ({
+      FP: f.codigo, COMPROBANTE: `${f.serie}-${f.numero}`, PROVEEDOR: f.proveedorRazonSocial,
+      OC: f.ordenCompraProveedor?.codigo || "", "EMISIÓN": fecha(f.fechaEmision), VENCE: fecha(f.fechaVencimiento),
+      MONEDA: f.moneda, TOTAL: f.total, IMPUESTO: hayImpFp(f) ? f.impuesto.monto : 0, NETO: f.netoAPagar,
+      "SALDO NETO": f.saldoNeto, "SALDO IMPUESTO": f.saldoImpuesto,
+    })), filasSubtotal("FP", { TOTAL: subFp.total, IMPUESTO: subFp.impuesto, NETO: subFp.neto, "SALDO NETO": subFp.saldoNeto, "SALDO IMPUESTO": subFp.saldoImpuesto })));
 
   const anular = async (motivo) => {
     setProcesando(true);
@@ -68,7 +99,8 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
             <input type="date" value={filtros.hasta} onChange={set("hasta")} className={INP} />
           </>
         )}
-        <button onClick={() => onRegistrarFactura({})} className="ml-auto bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700">+ Factura sin OC</button>
+        <button onClick={exportarExcel} className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50" style={{ marginLeft: "auto" }}>Exportar Excel</button>
+        <button onClick={() => onRegistrarFactura({})} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700">+ Factura sin OC</button>
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
 
@@ -101,6 +133,19 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
                   );
                 })}
               </tbody>
+              {ocps.length > 0 && (
+                <tfoot className="bg-gray-50 font-semibold text-gray-700">
+                  <tr>
+                    <td colSpan={3} className="px-3 py-2">Subtotal ({ocps.length} OC)</td>
+                    <td className="px-3 py-2 tabular-nums">{textoMontos(subOc.total)}</td>
+                    <td className="px-3 py-2 tabular-nums">{textoMontos(subOc.facturado)}</td>
+                    <td className="px-3 py-2 tabular-nums">{textoMontos(subOc.porFacturar)}</td>
+                    <td className="px-3 py-2 tabular-nums">{textoMontos(subOc.saldoNeto)}</td>
+                    <td className="px-3 py-2 tabular-nums">{textoMontos(subOc.saldoImpuesto)}</td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              )}
             </table>
           ) : (
             <table className="w-full text-sm" style={{ minWidth: "1200px" }}>
@@ -135,6 +180,20 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
                   );
                 })}
               </tbody>
+              {facturas.length > 0 && (
+                <tfoot className="bg-gray-50 font-semibold text-gray-700">
+                  <tr>
+                    <td colSpan={6} className="px-3 py-2">Subtotal ({facturas.length} facturas)</td>
+                    <td className="px-3 py-2 tabular-nums">{textoMontos(subFp.total)}</td>
+                    <td className="px-3 py-2 text-xs tabular-nums">{textoMontos(subFp.impuesto)}</td>
+                    <td />
+                    <td className="px-3 py-2 tabular-nums">{textoMontos(subFp.neto)}</td>
+                    <td />
+                    <td className="px-3 py-2 tabular-nums">{textoMontos(sumarPorMoneda(facturas, (f) => (f.saldoNeto || 0), monedaFp))}{subFp.saldoImpuesto.PEN ? ` + ${textoMontos(subFp.saldoImpuesto)}` : ""}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
             </table>
           )}
         </TablaScroll>

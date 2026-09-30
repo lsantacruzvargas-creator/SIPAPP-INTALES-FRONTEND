@@ -3,6 +3,7 @@ import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha, fechaHoyLima } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { FILTROS_TESORERIA, filtrarFacturas, semaforo, vencimientoDe, etiquetaImpuesto } from "../../utils/tesoreria";
+import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
 import TablaScroll from "../TablaScroll";
 import ModalMovimiento from "./ModalMovimiento";
 import ModalImpuestoVenta from "./ModalImpuestoVenta";
@@ -27,6 +28,19 @@ export default function TablaPorCobrar() {
   const set = (campo) => (e) => setFiltros((f) => ({ ...f, [campo]: e.target.value }));
   const filtradas = filtrarFacturas(facturas, filtros, { lado: "venta", hoyIso });
 
+  const hayImp = (f) => f.impuesto?.tipo && f.impuesto.tipo !== "ninguno";
+  const sub = {
+    total: sumarPorMoneda(filtradas, (f) => f.total),
+    impuesto: sumarPorMoneda(filtradas.filter(hayImp), (f) => f.impuesto.monto),
+    neto: sumarPorMoneda(filtradas, (f) => f.totalAPagar),
+    saldo: sumarPorMoneda(filtradas, (f) => (f.saldoNeto || 0) + (f.saldoImpuesto || 0)),
+  };
+  const exportarExcel = () => exportarHoja("por-cobrar.xlsx", "Por cobrar", filtradas.map((f) => ({
+    FACTURA: f.numeroFactura || f.codigo, CLIENTE: f.empresa?.razonSocial || "", "EMISIÓN": fecha(f.fechaEmision),
+    VENCE: fecha(vencimientoDe(f, "venta")), TOTAL: f.total, IMPUESTO: hayImp(f) ? f.impuesto.monto : 0,
+    NETO: f.totalAPagar, "SALDO NETO": f.saldoNeto, "SALDO IMPUESTO": f.saldoImpuesto,
+  })), filasSubtotal("FACTURA", { TOTAL: sub.total, IMPUESTO: sub.impuesto, NETO: sub.neto, "SALDO NETO": sumarPorMoneda(filtradas, (f) => f.saldoNeto), "SALDO IMPUESTO": sumarPorMoneda(filtradas, (f) => f.saldoImpuesto) }));
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-center">
@@ -39,6 +53,7 @@ export default function TablaPorCobrar() {
         </select>
         <input type="date" value={filtros.desde} onChange={set("desde")} className={INP} />
         <input type="date" value={filtros.hasta} onChange={set("hasta")} className={INP} />
+        <button onClick={exportarExcel} className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50" style={{ marginLeft: "auto" }}>Exportar Excel</button>
       </div>
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <TablaScroll className="overflow-x-auto">
@@ -75,6 +90,20 @@ export default function TablaPorCobrar() {
                 );
               })}
             </tbody>
+            {filtradas.length > 0 && (
+              <tfoot className="bg-gray-50 font-semibold text-gray-700">
+                <tr>
+                  <td colSpan={5} className="px-3 py-2">Subtotal ({filtradas.length} facturas)</td>
+                  <td className="px-3 py-2 tabular-nums">{textoMontos(sub.total)}</td>
+                  <td className="px-3 py-2 text-xs tabular-nums">{textoMontos(sub.impuesto)}</td>
+                  <td />
+                  <td className="px-3 py-2 tabular-nums">{textoMontos(sub.neto)}</td>
+                  <td />
+                  <td className="px-3 py-2 tabular-nums">{textoMontos(sub.saldo)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </TablaScroll>
       </div>

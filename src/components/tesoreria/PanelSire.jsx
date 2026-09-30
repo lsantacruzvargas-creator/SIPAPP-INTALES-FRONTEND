@@ -3,6 +3,7 @@ import { fetchAuth, uploadAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima, formatearFechaHora } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { periodoDeMes, fechaIsoTexto } from "../../utils/tesoreria";
+import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
 import TablaScroll from "../TablaScroll";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
@@ -87,6 +88,37 @@ export default function PanelSire({ onRegistrarFactura }) {
     && Object.entries(TEXTO_COL).every(([k, fn]) => !colFiltros[k] || sinTildes(fn(f)).includes(sinTildes(colFiltros[k]).trim())));
   const hayColFiltros = Object.values(colFiltros).some(Boolean);
   const conteo = (e) => filas.filter((f) => f.estado === e).length;
+  const dato = (f) => f.sire || f.sistema;
+  const sub = {
+    total: sumarPorMoneda(visibles, (f) => dato(f).total, (f) => dato(f).moneda),
+    igv: sumarPorMoneda(visibles, (f) => dato(f).igv, (f) => dato(f).moneda),
+  };
+  const exportarExcel = () => exportarHoja(`sire-${libro.toLowerCase()}-${periodoDeMes(mes)}.xlsx`, "Conciliación SIRE", visibles.map((f) => {
+    const d = dato(f);
+    return {
+      RESULTADO: RESULTADOS[f.estado].label, RUC: d.rucContraparte, "RAZÓN SOCIAL": d.razonSocial || "",
+      COMPROBANTE: `${d.tipo} ${d.serie}-${d.numero}`, FECHA: fechaIsoTexto(d.fechaEmision),
+      TOTAL: d.total, IGV: d.igv, MONEDA: d.moneda, DIFERENCIAS: f.diferencias.join(", "),
+    };
+  }), filasSubtotal("RESULTADO", { TOTAL: sub.total, IGV: sub.igv }));
+
+  // Plantilla con lo que el sistema tiene y el SIRE no (o con datos distintos), para cargarlo al SIRE.
+  // OJO: las columnas siguen los nombres de la propuesta SIRE; conviene contrastarlas con la
+  // plantilla de importación vigente en el portal SUNAT antes de subirla.
+  const tipoDocId = (ruc) => (String(ruc || "").length === 11 ? "6" : String(ruc || "").length === 8 ? "1" : "0");
+  const descargarPlantilla = () => {
+    const aSubir = filas.filter((f) => f.sistema && (f.estado === "solo_sistema" || f.estado === "difiere"));
+    const fechaSire = (v) => fechaIsoTexto(v);
+    exportarHoja(`plantilla-sire-${libro.toLowerCase()}-${periodoDeMes(mes)}.xlsx`, "Plantilla SIRE", aSubir.map(({ sistema: d }) => {
+      const base = Math.round(((d.total || 0) - (d.igv || 0)) * 100) / 100;
+      return {
+        "Fecha de emisión": fechaSire(d.fechaEmision), "Tipo CP/Doc.": d.tipo, "Serie del CDP": d.serie, "Nro CP o Doc. Nro Inicial (Rango)": d.numero,
+        "Tipo Doc Identidad": tipoDocId(d.rucContraparte), "Nro Doc Identidad": d.rucContraparte, "Apellidos Nombres/ Razón Social": d.razonSocial || "",
+        "BI Gravado DG": base, "IGV / IPM DG": d.igv || 0, "Total CP": d.total || 0, Moneda: d.moneda || "PEN",
+      };
+    }));
+  };
+
   const celda = (f, [clave, campo]) => {
     const dato = f.sire?.[campo] ?? f.sistema?.[campo];
     const difiere = f.diferencias.includes(clave);
@@ -111,6 +143,8 @@ export default function PanelSire({ onRegistrarFactura }) {
         <label className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 cursor-pointer">
           Subir archivo<input type="file" accept=".zip,.txt" className="hidden" onChange={subir} disabled={ocupado} />
         </label>
+        <button onClick={exportarExcel} disabled={!visibles.length} className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Exportar Excel</button>
+        <button onClick={descargarPlantilla} disabled={!filas.length} title="Comprobantes del sistema que faltan o difieren en el SIRE" className="border border-purple-300 text-purple-700 px-4 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50">Descargar plantilla SIRE</button>
         <span className="text-xs text-gray-500">
           {!estado || estado.estado === "sin_datos" ? "Sin propuesta descargada"
             : `${estado.estado === "lista" ? "Lista" : estado.estado === "error" ? "Error" : "Descargando"} · ${estado.origen === "archivo" ? "archivo" : "API"} · ${estado.totalComprobantes} comprobantes${estado.fechaDescarga ? ` · ${formatearFechaHora(estado.fechaDescarga)}` : ""}${estado.mensaje ? ` · ${estado.mensaje}` : ""}`}
@@ -170,6 +204,16 @@ export default function PanelSire({ onRegistrarFactura }) {
                 );
               })}
             </tbody>
+            {visibles.length > 0 && (
+              <tfoot className="bg-gray-50 font-semibold text-gray-700">
+                <tr>
+                  <td colSpan={5} className="px-3 py-2">Subtotal ({visibles.length} comprobantes)</td>
+                  <td className="px-3 py-2 tabular-nums">{textoMontos(sub.total)}</td>
+                  <td className="px-3 py-2 tabular-nums">{textoMontos(sub.igv)}</td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </TablaScroll>
       </div>
