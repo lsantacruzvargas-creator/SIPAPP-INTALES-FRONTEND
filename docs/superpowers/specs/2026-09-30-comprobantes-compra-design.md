@@ -165,3 +165,7 @@ Menores diferidos (no bloquean el merge):
 - **M6** — en el Excel en S/ la columna TC queda vacía para OC en USD.
 - **M7** — mensajes de la tarjeta: muestra "Sin OT vinculada" mientras carga y ante un 403.
 - **M8** — `ocPorCot` sin orden: agregar `.sort({ createdAt: 1 })`.
+
+## Estado — Fase 2 (2026-10-01)
+
+Implementada en `feature/comprobantes-compra` (plan `docs/superpowers/plans/2026-10-01-tc-comprobantes-usd.md`): el formulario de comprobantes de proveedor en USD trae el TC venta SUNAT de la fecha de emisión y lo deja solo lectura; si la ruta cayó a un respaldo lo propone editable con aviso, y si falla queda vacío para escribirlo. El servidor valida el rango 2–6 y la consulta a apiperu tiene timeout de 8 s (cierra M5). Pendiente de revisión y de correr los tests del backend con MongoDB.

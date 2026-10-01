@@ -1,58 +1,62 @@
-# Traspaso — rama `feature/comprobantes-compra` (2026-09-30)
+# Traspaso — rama `feature/comprobantes-compra` (actualizado 2026-10-01)
 
-Para el agente que continúe. Responder al usuario en español. Backend y Frontend son **repos separados**
+Para el agente que continúe o revise. Responder al usuario en español. Backend y Frontend son **repos separados**
 (`SIPAPP-INTALES-BACKEND` y `SIPAPP-INTALES-FRONTEND`), ambos con la rama `feature/comprobantes-compra`
-creada desde `main`. Spec, plan y registro de avance están copiados en `docs/superpowers/` de **ambos** repos.
+creada desde `main`. Spec, planes y registros de avance están copiados en `docs/superpowers/` de **ambos** repos
+(este archivo también es idéntico en los dos).
+
+**Siguiente paso esperado: revisión del código de las Fases 1 y 2 por el agente del editor de código**
+(ver "Qué revisar" abajo). No mergear a `main` sin el OK del usuario.
 
 ## Documentos
 
-- Spec: `docs/superpowers/specs/2026-09-30-comprobantes-compra-design.md` (aprobado por el usuario).
-- Plan de la Fase 1: `docs/superpowers/plans/2026-09-30-costos-comprometido-consumido.md`.
-- Registro de avance (decisiones `Ruling:` y hallazgos): `docs/superpowers/sdd/2026-09-30-costos-comprometido-consumido/progress.md`.
+- Spec (aprobado por el usuario): `docs/superpowers/specs/2026-09-30-comprobantes-compra-design.md`.
+  Al final tiene las secciones "Estado — Fase 1" (con los menores diferidos M3–M8) y "Estado — Fase 2".
+- Fase 1 — plan: `docs/superpowers/plans/2026-09-30-costos-comprometido-consumido.md`;
+  avance: `docs/superpowers/sdd/2026-09-30-costos-comprometido-consumido/progress.md`.
+- Fase 2 — plan: `docs/superpowers/plans/2026-10-01-tc-comprobantes-usd.md`;
+  avance: `docs/superpowers/sdd/2026-10-01-tc-comprobantes-usd/progress.md`.
 
-## Estado de la Fase 1 (costos comprometido/consumido + TC por fecha + selector de moneda)
+## Fase 1 — costos comprometido/consumido + TC por fecha + selector de moneda (terminada)
 
-Tareas 1–5 del plan **hechas y commiteadas**; Task 6 (verificación) en curso:
+- Backend (147 tests al cerrar la Fase 1): `OrdenCompraProveedor.tipoCambio`; `utils/costosOT.js` (`costosPorOT`,
+  `fraccionPagada`); `GET /reportes/costos-fabricacion` y `/:otId`; `models/TipoCambioDia.js` y `utils/tipoCambioDia.js`
+  (BD antes que apiperu, "hoy" provisional 3 h, respaldo al último guardado y luego al TC vigente, fechas ≥ 2000,
+  una consulta por fecha en curso); `GET /sunat/tipo-cambio?fecha=`.
+- Frontend: `utils/costos.js`, `components/SelectorMonedaTC.jsx`, `pages/Reportes.jsx`, `components/DetalleOrdenCompra.jsx`,
+  `ModalReporteCosto.jsx`, `pages/TipoCambio.jsx`.
+- Revisión final hecha; corregidos C1, I1, I2, I3, M1 y M2 (los cuatro últimos en el commit del frontend
+  `fix(costos): TC sin consulta doble ni por tecla…`). Menores diferidos M3–M8 en el spec (M5 se cerró en la Fase 2).
+- Probado en navegador con backend real (ver progress de la Fase 1).
 
-- Backend (147/147 tests): `OrdenCompraProveedor.tipoCambio`; `utils/costosOT.js` (`costosPorOT`, `fraccionPagada`);
-  `GET /reportes/costos-fabricacion` y `GET /reportes/costos-fabricacion/:otId`; `models/TipoCambioDia.js` y
-  `utils/tipoCambioDia.js` (BD antes que apiperu, "hoy" provisional 3 h, respaldo al último guardado y luego al
-  TC vigente, fechas reales ≥ 2000, una consulta por fecha en curso); `GET /sunat/tipo-cambio?fecha=`.
-- Frontend (38/38 tests): `utils/costos.js` (`convertir`, `costoEn`, filas), `components/SelectorMonedaTC.jsx`,
-  `pages/Reportes.jsx` (resumen + tablas comprometido/consumido + Excel con moneda y TC),
-  `components/DetalleOrdenCompra.jsx` y `ModalReporteCosto.jsx` (tarjeta desde el servidor, en S/ o US$).
-- Probado en navegador (Playwright): OCP sin pagar → comprometido; factura pagada → consumido; US$ al TC de
-  hoy y del 25/09 (segunda consulta desde la BD); tarjeta = reporte; Excel correcto.
-- Revisión final (opus): Critical C1 (doble conteo con SC compradas en parte) e Important I1 (fracción pagada en
-  USD), I2/I3 backend **corregidos con tests** (commit `fix(costos): sin doble conteo…`).
+## Fase 2 — TC automático en comprobantes en USD (implementada, pendiente de revisión)
 
-## Pendiente inmediato (antes de mergear la Fase 1)
+- Backend: `utils/tipoCambioDia.js` (`TC_MIN`/`TC_MAX`/`tcEnRango`, timeout 8 s a apiperu, respuesta fuera de rango =
+  falla); `routes/facturasProveedor.js` (USD fuera de 2–6 → 400). Tests nuevos en `test/tipoCambioDia.test.js` y
+  `test/facturasProveedor.test.js`.
+- Frontend: `utils/tesoreria.js` (`estadoTcComprobante`, `tcValido`, `fechaConsultableTc`, con tests) y
+  `components/tesoreria/ModalFacturaProveedor.jsx` (consulta por fecha de emisión en USD, solo lectura con TC SUNAT,
+  editable con aviso si es respaldo o falla, botón deshabilitado mientras consulta o fuera de rango).
+- Verificado: frontend `npm test` 42/42, eslint sin errores en los archivos tocados, `npm run build` OK; navegador con
+  Playwright contra una **API simulada** (no el backend real).
+- **NO verificado: los tests del backend de la Fase 2 no se ejecutaron** (la sesión en la nube no pudo descargar
+  MongoDB). Correrlos es lo primero de la revisión.
 
-Corregir en el **Frontend**, con test donde haya lógica pura (`npm test`), lint sin errores nuevos (`npx eslint <archivo>`) y `npm run build`:
+## Qué revisar (agente del editor de código)
 
-1. **I2 (consulta doble)** — `components/DetalleOrdenCompra.jsx`: el `useEffect` que pide `/sunat/tipo-cambio`
-   debe correr solo con el desglose cerrado: agregar `reporteOpen` a la condición y a las dependencias
-   (`if (!puedeVerReporte || reporteOpen || vista.tc || vista.error) return;`), porque con el modal abierto ya
-   lo pide `SelectorMonedaTC`.
-2. **I3 (consultas por tecla)** — `components/SelectorMonedaTC.jsx`: en el `onChange` del `<input type="date">`
-   ignorar valores vacíos o `< "2000-01-01"` (no llamar `onCambio`). Esto también resuelve **M1** (borrar la
-   fecha dejaba "Consultando…" para siempre).
-3. **M2 (re-graduado a Important)** — `pages/TipoCambio.jsx` (~líneas 30-110): la ruta `/sunat/tipo-cambio` ahora
-   responde 200 con `fuente: "respaldo" | "vigente"` cuando apiperu falla. Mostrar la fecha real y la fuente
-   ("SUNAT 29/09", "último guardado 26/09", "TC vigente del sistema") y **ocultar el botón "Usar valor SUNAT"**
-   salvo `fuente` `apiperu` o `bd`.
-4. Commit, registrar en `progress.md` (`Final: fixed …`), y anotar en el spec (sección nueva "Estado — Fase 1")
-   los **menores diferidos** de la revisión: M3 flete de líneas de OCP de SC "manual" no llega a la OT; M4
-   `costosPorOT` carga todas las FacturaProveedor (proyección `-archivos` y filtro por OCP/OT; sin índices);
-   M5 validar TC 2–6 y timeout de 8 s a apiperu; M6 columna TC vacía en el Excel en S/ con OC en USD;
-   M7 mensajes de la tarjeta ("Sin OT vinculada" mientras carga / ante 403); M8 `ocPorCot` sin `sort`
-   (`.sort({ createdAt: 1 })`).
-5. Preguntar al usuario si mergea `feature/comprobantes-compra` a `main` (no mergear ni pushear `main` sin su OK;
-   `main` despliega a Railway/Cloudflare, aunque el sistema **aún no está en producción**).
+1. Backend: `MONGO_URI_TEST="mongodb://localhost:27017/sipapp-intales-test?replicaSet=rs0" npm test` — todo verde,
+   incluidos los 3 tests nuevos de la Fase 2. Si alguno falla, corregir antes de seguir.
+2. Frontend: `npm test`, `npx eslint` de los archivos tocados y `npm run build`.
+3. Probar con backend real: comprobante en USD de una OC y sin OC; cambiar la fecha de emisión (TC solo lectura y
+   correcto); simular apiperu caído (respaldo propuesto y editable); TC 37.5 rechazado por el servidor.
+4. Revisar el diff de la rama contra `main` en ambos repos (`git diff main...feature/comprobantes-compra`) buscando
+   bugs; puntos a mirar: el efecto de `ModalFacturaProveedor` al volver de PEN a USD con la misma fecha vuelve a
+   consultar y reemplaza un TC escrito a mano; los `Ruling:` de los progress.
+5. Con todo verde, preguntar al usuario si mergea `feature/comprobantes-compra` a `main` en ambos repos (`main`
+   despliega a Railway/Cloudflare; el sistema **aún no está en producción**).
 
 ## Fases siguientes del spec (cada una con su propio plan, mismo flujo: plan → aprobación → TDD → revisión)
 
-- Fase 2: (el TC por fecha ya se adelantó) — usar el TC automático en el formulario de comprobantes USD.
 - Fase 3: tipos 12 (ticket, casilla "Trae RUC de INTALES e IGV desglosado") y 14; `creditoFiscal` derivado;
   retención 4ta **manual** (8 %, solo tipo 02); "Ya se pagó".
 - Fase 4: notas de crédito/débito aplicadas al origen, saldo a favor y "Aplicar a…"; su efecto en costos.
@@ -63,6 +67,8 @@ Corregir en el **Frontend**, con test donde haya lógica pura (`npm test`), lint
 
 - Tests backend: `MONGO_URI_TEST="mongodb://localhost:27017/sipapp-intales-test?replicaSet=rs0" npm test`
   (requiere MongoDB con replica set; en la nube levantar un `mongod --replSet rs0` e iniciarlo con `rs.initiate()`).
+- Tests frontend: `npm test` (`node --test src/utils/*.test.js`, no vitest). El lint global tiene errores previos en
+  archivos ajenos: lintear solo los archivos tocados.
 - Commits terminan con `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - Nunca `alert/confirm/prompt` (Electron); fechas siempre en hora Lima (`utils/fecha`, `aFechaLima`).
 - Respuestas al usuario: concisas, en español, sin resúmenes largos.

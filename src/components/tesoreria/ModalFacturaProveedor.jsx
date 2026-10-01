@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { fetchAuth, uploadAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
 import { money, round2, nombreEmpresa } from "../../utils/compras";
-import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION } from "../../utils/tesoreria";
+import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION, estadoTcComprobante, tcValido, fechaConsultableTc } from "../../utils/tesoreria";
 import { conBloqueo } from "../../utils/bloqueoApi";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full";
@@ -42,6 +42,30 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   const [error, setError] = useState("");
   // Factura ya registrada cuyo PDF no se pudo subir: el modal pasa a "reintentar PDF".
   const [registrada, setRegistrada] = useState(null);
+  // TC de un comprobante en USD: el venta SUNAT de la fecha de emisión, pedido al cambiar
+  // la fecha o la moneda (solo lectura salvo que la consulta falle).
+  const [tcConsulta, setTcConsulta] = useState(null);
+  const claveTc = form.moneda === "USD" && fechaConsultableTc(form.fechaEmision) ? form.fechaEmision : null;
+  const consultandoTc = claveTc != null && tcConsulta?.clave !== claveTc;
+
+  useEffect(() => {
+    if (!claveTc) return undefined;
+    let vigente = true;
+    fetchAuth(`/sunat/tipo-cambio?fecha=${claveTc}`)
+      .then(async (r) => {
+        const datos = await r.json().catch(() => ({}));
+        return r.ok ? { ok: true, datos } : { ok: false, mensaje: datos.mensaje };
+      })
+      .catch(() => ({ ok: false }))
+      .then((consulta) => {
+        if (!vigente) return;
+        const estado = estadoTcComprobante(consulta);
+        setTcConsulta({ clave: claveTc, ...estado });
+        setForm((f) => ({ ...f, tipoCambio: estado.tc }));
+      });
+    return () => { vigente = false; };
+  }, [claveTc]);
+  const tcSoloLectura = !consultandoTc && tcConsulta?.clave === claveTc && tcConsulta.soloLectura;
 
   useEffect(() => {
     fetchAuth("/tesoreria/por-pagar").then((r) => (r.ok ? r.json() : { ocps: [] })).then((d) => {
@@ -188,7 +212,17 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
             </select>
           </label>
           {form.moneda === "USD" && (
-            <label className="text-xs text-gray-500">Tipo de cambio<input type="number" step="0.001" value={form.tipoCambio} onChange={set("tipoCambio")} className={INP} /></label>
+            <label className="text-xs text-gray-500">Tipo de cambio
+              <input type="number" step="0.001" min="2" max="6" value={consultandoTc ? "" : form.tipoCambio} onChange={set("tipoCambio")}
+                readOnly={tcSoloLectura || consultandoTc} placeholder={consultandoTc ? "Consultando SUNAT…" : ""}
+                className={`${INP} ${tcSoloLectura ? "bg-gray-50 text-gray-600" : ""}`} />
+              {!consultandoTc && tcConsulta?.clave === claveTc && (
+                <span className={`block mt-1 text-[11px] ${tcConsulta.alerta ? "text-amber-600" : "text-gray-400"}`}>{tcConsulta.aviso}</span>
+              )}
+              {!consultandoTc && form.tipoCambio !== "" && !tcValido(form.tipoCambio) && (
+                <span className="block mt-1 text-[11px] text-red-600">Debe estar entre 2 y 6</span>
+              )}
+            </label>
           )}
           <label className="text-xs text-gray-500">Subtotal (sin IGV)<input type="number" step="0.01" min="0" value={form.subtotal} onChange={set("subtotal")} className={INP} /></label>
           {form.modo !== "flete" && (
@@ -260,7 +294,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
           {registrada
             ? <button onClick={() => onGuardada(registrada)} disabled={guardando} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Terminar sin PDF</button>
             : <button onClick={onClose} disabled={guardando} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>}
-          <button onClick={guardar} disabled={guardando || !(subtotal > 0) || (registrada && !archivo)}
+          <button onClick={guardar} disabled={guardando || !(subtotal > 0) || (registrada && !archivo) || (!registrada && form.moneda === "USD" && (consultandoTc || !tcValido(form.tipoCambio)))}
             className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50">
             {guardando ? "Guardando…" : registrada ? "Reintentar subir PDF" : "Registrar factura"}
           </button>
