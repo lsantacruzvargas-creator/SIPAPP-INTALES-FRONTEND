@@ -37,17 +37,16 @@ creada desde `main`. Spec, planes y registros de avance están copiados en `docs
 - Frontend: `utils/tesoreria.js` (`estadoTcComprobante`, `tcValido`, `fechaConsultableTc`, con tests) y
   `components/tesoreria/ModalFacturaProveedor.jsx` (consulta por fecha de emisión en USD, solo lectura con TC SUNAT,
   editable con aviso si es respaldo o falla, botón deshabilitado mientras consulta o fuera de rango).
-- Verificado: frontend `npm test` 42/42, eslint sin errores en los archivos tocados, `npm run build` OK; navegador con
-  Playwright contra una **API simulada** (no el backend real).
-- **NO verificado: los tests del backend de la Fase 2 no se ejecutaron** (la sesión en la nube no pudo descargar
-  MongoDB). Correrlos es lo primero de la revisión.
+- Verificado: backend `npm test` **151/151** (MongoDB 8.0 con replica set, sin omitidos; la primera corrida halló que el
+  rango 2–6 rompía los comprobantes en PEN y se corrigió), frontend `npm test` 42/42, eslint sin errores en los archivos
+  tocados, `npm run build` OK; navegador con Playwright contra una **API simulada** (no el backend real).
 
 ## Qué revisar (agente del editor de código)
 
-1. Backend: `MONGO_URI_TEST="mongodb://localhost:27017/sipapp-intales-test?replicaSet=rs0" npm test` — todo verde,
-   incluidos los 3 tests nuevos de la Fase 2. Si alguno falla, corregir antes de seguir.
+1. Backend: `MONGO_URI_TEST="mongodb://localhost:27017/sipapp-intales-test?replicaSet=rs0" npm test` — ya dio 151/151
+   en la sesión de la nube; confirmar en local.
 2. Frontend: `npm test`, `npx eslint` de los archivos tocados y `npm run build`.
-3. Probar con backend real: comprobante en USD de una OC y sin OC; cambiar la fecha de emisión (TC solo lectura y
+3. Probar con backend real (no se pudo en la nube): comprobante en USD de una OC y sin OC; cambiar la fecha de emisión (TC solo lectura y
    correcto); simular apiperu caído (respaldo propuesto y editable); TC 37.5 rechazado por el servidor.
 4. Revisar el diff de la rama contra `main` en ambos repos (`git diff main...feature/comprobantes-compra`) buscando
    bugs; puntos a mirar: el efecto de `ModalFacturaProveedor` al volver de PEN a USD con la misma fecha vuelve a
