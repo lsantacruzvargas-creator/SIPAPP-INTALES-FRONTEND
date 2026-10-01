@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha, fechaHoyLima } from "../../utils/fecha";
 import { money } from "../../utils/compras";
-import { FILTROS_TESORERIA, filtrarFacturas, semaforo, etiquetaImpuesto } from "../../utils/tesoreria";
+import { FILTROS_TESORERIA, filtrarFacturas, semaforo, etiquetaImpuesto, etiquetaComprobante, creditoFiscalDe } from "../../utils/tesoreria";
 import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
 import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
@@ -57,7 +57,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
       "SALDO IMPUESTO": o.saldoImpuesto, "PRÓX. VENCIMIENTO": fecha(o.proximoVencimiento),
     })), filasSubtotal("OC", { TOTAL: subOc.total, FACTURADO: subOc.facturado, "POR FACTURAR": subOc.porFacturar, "SALDO NETO": subOc.saldoNeto, "SALDO IMPUESTO": subOc.saldoImpuesto }))
     : exportarHoja("por-pagar-facturas.xlsx", "Por factura", facturas.map((f) => ({
-      FP: f.codigo, COMPROBANTE: `${f.serie}-${f.numero}`, PROVEEDOR: f.proveedorRazonSocial,
+      FP: f.codigo, COMPROBANTE: etiquetaComprobante(f), "CRÉDITO FISCAL": creditoFiscalDe(f) ? "Sí" : "No", PROVEEDOR: f.proveedorRazonSocial,
       OC: f.ordenCompraProveedor?.codigo || "", "EMISIÓN": fecha(f.fechaEmision), VENCE: fecha(f.fechaVencimiento),
       MONEDA: f.moneda, TOTAL: f.total, IMPUESTO: hayImpFp(f) ? f.impuesto.monto : 0, NETO: f.netoAPagar,
       "SALDO NETO": f.saldoNeto, "SALDO IMPUESTO": f.saldoImpuesto,
@@ -100,7 +100,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
           </>
         )}
         <button onClick={exportarExcel} className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50" style={{ marginLeft: "auto" }}>Exportar Excel</button>
-        <button onClick={() => onRegistrarFactura({})} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700">+ Factura sin OC</button>
+        <button onClick={() => onRegistrarFactura({})} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700">+ Comprobante sin OC</button>
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
 
@@ -127,7 +127,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
                       <td className="px-3 py-2 tabular-nums">{money(o.saldoImpuesto)}</td>
                       <td className={`px-3 py-2 ${COLOR_VENC[sem] || "text-gray-400"}`}>{fecha(o.proximoVencimiento)}</td>
                       <td className="px-3 py-2 text-right">
-                        {o.saldoPorFacturar > 0.1 && <button onClick={() => onRegistrarFactura({ ocpId: o._id })} className="text-xs text-purple-600 hover:text-purple-800">+ Registrar factura</button>}
+                        {o.saldoPorFacturar > 0.1 && <button onClick={() => onRegistrarFactura({ ocpId: o._id })} className="text-xs text-purple-600 hover:text-purple-800">+ Registrar comprobante</button>}
                       </td>
                     </tr>
                   );
@@ -153,7 +153,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
                 <tr>{["FP", "Comprobante", "Proveedor", "OC", "Emisión", "Vence", "Total", "Impuesto", "☐ Imp.", "Neto", "☐ Neto", "Saldo", ""].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {facturas.length === 0 && <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">Sin facturas</td></tr>}
+                {facturas.length === 0 && <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">Sin comprobantes</td></tr>}
                 {facturas.map((f) => {
                   const pendiente = f.saldoNeto > 0.009 || f.saldoImpuesto > 0.009;
                   const sem = semaforo(f.fechaVencimiento, pendiente, hoyIso);
@@ -161,7 +161,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
                   return (
                     <tr key={f._id}>
                       <td className="px-3 py-2 font-medium">{f.codigo}</td>
-                      <td className="px-3 py-2">{f.serie}-{f.numero}</td>
+                      <td className="px-3 py-2">{etiquetaComprobante(f)}</td>
                       <td className="px-3 py-2">{f.proveedorRazonSocial}</td>
                       <td className="px-3 py-2">{f.ordenCompraProveedor?.codigo || (f.esFleteDe ? `Flete ${f.esFleteDe.codigo || ""}` : "—")}</td>
                       <td className="px-3 py-2">{fecha(f.fechaEmision)}</td>
@@ -183,7 +183,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
               {facturas.length > 0 && (
                 <tfoot className="bg-gray-50 font-semibold text-gray-700">
                   <tr>
-                    <td colSpan={6} className="px-3 py-2">Subtotal ({facturas.length} facturas)</td>
+                    <td colSpan={6} className="px-3 py-2">Subtotal ({facturas.length} comprobantes)</td>
                     <td className="px-3 py-2 tabular-nums">{textoMontos(subFp.total)}</td>
                     <td className="px-3 py-2 text-xs tabular-nums">{textoMontos(subFp.impuesto)}</td>
                     <td />

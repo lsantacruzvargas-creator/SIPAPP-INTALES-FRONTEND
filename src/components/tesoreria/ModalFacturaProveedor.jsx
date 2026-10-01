@@ -107,14 +107,14 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   const igv = form.tipoComprobante === "02" || !form.conIgv ? 0 : round2(subtotal * 0.18);
   const total = round2(subtotal + igv);
   const tipoCambio = form.moneda === "USD" ? Number(form.tipoCambio) : 1;
-  const sugerido = sugerirImpuesto({ total, moneda: form.moneda, tipoCambio, hayServicios: form.hayServicios, esAgenteRetencion: catalogos.esAgenteRetencion, noAplicaRetencion: form.noAplicaRetencion });
+  const ticketConRuc = form.tipoComprobante === "12" && form.ticketConRuc;
+  const conCreditoFiscal = creditoFiscalDe({ tipoComprobante: form.tipoComprobante, igv, ticketConRuc });
+  const sugerido = sugerirImpuesto({ total, moneda: form.moneda, tipoCambio, hayServicios: form.hayServicios, esAgenteRetencion: catalogos.esAgenteRetencion, noAplicaRetencion: form.noAplicaRetencion, conCreditoFiscal });
   // Recibo por honorarios: solo la retención de 4ta, y solo si se marca (decisión del usuario: manual).
   const esRH = form.tipoComprobante === "02";
   const imp = esRH
     ? { tipo: form.retener4ta ? "retencion4ta" : "ninguno", codigoSunat: "" }
     : form.impuestoManual ? { tipo: form.impuestoTipo, codigoSunat: form.codigoSunat } : sugerido;
-  const ticketConRuc = form.tipoComprobante === "12" && form.ticketConRuc;
-  const conCreditoFiscal = creditoFiscalDe({ tipoComprobante: form.tipoComprobante, igv, ticketConRuc });
   const puedeYaPagado = form.condicion === "contado";
   const cuentasPago = cuentasPara({ cuentas, lado: "compra", concepto: "neto", impuesto: { tipo: imp.tipo } }).origen;
   const avisoCuentaPago = form.yaPagado ? avisoMoneda(cuentas.find((c) => c._id === form.pagoCuenta), form.moneda) : null;
@@ -156,7 +156,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
       if (form.modo === "sinOc") body.centroCosto = form.centroCosto;
       const r = await fetchAuth("/facturas-proveedor", { method: "POST", body: JSON.stringify(body) });
       const fp = await r.json().catch(() => ({}));
-      if (!r.ok) return setError(fp.mensaje || "No se pudo registrar la factura.");
+      if (!r.ok) return setError(fp.mensaje || "No se pudo registrar el comprobante.");
       if (archivo) await subirPdf(fp);
       else onGuardada(fp);
     } catch {
@@ -276,7 +276,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
             <label className="text-xs text-gray-500">Impuesto
               <select value={imp.tipo} onChange={elegirImpuesto("impuestoTipo")} className={INP}>
                 <option value="ninguno">Ninguno</option><option value="detraccion">Detracción</option>
-                {catalogos.esAgenteRetencion && <option value="retencion">Retención 3 %</option>}
+                {catalogos.esAgenteRetencion && conCreditoFiscal && <option value="retencion">Retención 3 %</option>}
               </select>
             </label>
             {imp.tipo === "detraccion" && (
@@ -329,7 +329,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
                 </label>
                 <label className="text-xs text-gray-500">N° de operación<input value={form.pagoOperacion} onChange={set("pagoOperacion")} className={INP} /></label>
                 {avisoCuentaPago && <p className="col-span-3 text-[11px] text-amber-700">{avisoCuentaPago}</p>}
-                {imp.tipo !== "ninguno" && <p className="col-span-3 text-[11px] text-gray-500">El impuesto ({money(monto)}) queda pendiente de pago.</p>}
+                {resumen.impuesto > 0 && <p className="col-span-3 text-[11px] text-gray-500">El impuesto ({money(resumen.impuesto)}) queda pendiente de pago.</p>}
               </div>
             )}
           </div>

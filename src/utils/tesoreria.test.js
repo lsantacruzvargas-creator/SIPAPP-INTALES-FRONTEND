@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   calcularImpuesto, partes, tipoMovimientoEsperado, sugerirImpuesto, impuestoVentaPorDefecto, etiquetaImpuesto,
   diasCredito, sumarDias, vencimientoDe, semaforo, filtrarFacturas, FILTROS_TESORERIA, totalesMovimientos, cuentasPara, periodoDeMes, fechaIsoTexto, esPagoAntiguo, avisoMoneda, diasEntre,
-  estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe,
+  estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, etiquetaComprobante,
 } from "./tesoreria.js";
 
 test("calcularImpuesto replica al backend: detracción entera en soles y retención 3 %", () => {
@@ -155,4 +155,15 @@ test("tipos de comprobante de compra y crédito fiscal (espejo del backend)", ()
 test("retención de 4ta: 8 % del total en soles y su etiqueta", () => {
   assert.deepEqual(calcularImpuesto({ tipo: "retencion4ta", total: 2000 }), { tasa: 0.08, monto: 160 });
   assert.equal(etiquetaImpuesto({ tipo: "retencion4ta", tasa: 0.08 }), "Retención 4ta 8%");
+});
+
+test("sugerirImpuesto no sugiere la retención del 3 % si el comprobante no da crédito fiscal", () => {
+  assert.equal(sugerirImpuesto({ total: 1000, esAgenteRetencion: true, conCreditoFiscal: false }).tipo, "ninguno");
+  assert.equal(sugerirImpuesto({ total: 1000, esAgenteRetencion: true, conCreditoFiscal: true }).tipo, "retencion");
+  assert.equal(sugerirImpuesto({ total: 1000, esAgenteRetencion: true }).tipo, "retencion");
+});
+
+test("etiquetaComprobante: tipo + serie-número para distinguir ticket, boleta y factura", () => {
+  assert.equal(etiquetaComprobante({ tipoComprobante: "12", serie: "TK01", numero: "5" }), "Ticket / ticket POS TK01-5");
+  assert.equal(etiquetaComprobante({ tipoComprobante: "01", serie: "F001", numero: "9" }), "Factura F001-9");
 });

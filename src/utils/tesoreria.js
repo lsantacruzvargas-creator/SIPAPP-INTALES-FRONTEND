@@ -41,10 +41,11 @@ export function tipoMovimientoEsperado({ lado, concepto, impuesto }) {
   return impuesto?.quienDeposita === "cliente" ? "ingreso" : "transferencia";
 }
 
-export function sugerirImpuesto({ total, moneda = "PEN", tipoCambio = 1, hayServicios, esAgenteRetencion, noAplicaRetencion = false }) {
+// conCreditoFiscal: la retención del IGV (3 %) solo va en comprobantes con crédito fiscal.
+export function sugerirImpuesto({ total, moneda = "PEN", tipoCambio = 1, hayServicios, esAgenteRetencion, noAplicaRetencion = false, conCreditoFiscal = true }) {
   if (aSoles(total, moneda, tipoCambio) <= UMBRAL_IMPUESTO) return { tipo: "ninguno", codigoSunat: "" };
   if (hayServicios) return { tipo: "detraccion", codigoSunat: CODIGO_SERVICIOS };
-  if (esAgenteRetencion && !noAplicaRetencion) return { tipo: "retencion", codigoSunat: "" };
+  if (esAgenteRetencion && !noAplicaRetencion && conCreditoFiscal) return { tipo: "retencion", codigoSunat: "" };
   return { tipo: "ninguno", codigoSunat: "" };
 }
 
@@ -185,3 +186,7 @@ export function creditoFiscalDe({ tipoComprobante, igv, ticketConRuc }) {
   if (tipoComprobante === "12") return !!ticketConRuc;
   return false;
 }
+
+// "Ticket / ticket POS TK01-5": tipo y serie-número, para distinguirlos en las tablas.
+export const etiquetaComprobante = (f) =>
+  `${TIPOS_COMPROBANTE_COMPRA.find((t) => t.valor === f.tipoComprobante)?.label || "Comprobante"} ${f.serie}-${f.numero}`;
