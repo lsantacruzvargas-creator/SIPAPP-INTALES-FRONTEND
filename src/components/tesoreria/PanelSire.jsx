@@ -69,10 +69,12 @@ function ComparacionCarga({ datos, archivo, onCerrar }) {
                 <tr key={f.clave}>
                   <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full text-xs ${CLS_CARGA[f.estado]}`}>{RESULTADOS_CARGA[f.estado]}</span></td>
                   <td className="px-3 py-2">{f.tipo} {f.serie}-{f.numero}</td>
-                  <td className="px-3 py-2">{f.ruc}</td>
+                  <td className={`px-3 py-2 ${f.diferencias?.includes("ruc") ? "bg-amber-100 font-semibold" : ""}`}>{f.ruc}
+                    {f.diferencias?.includes("ruc") && <span className="block text-[11px] font-normal text-gray-600">SUNAT: {f.rucSire}</span>}
+                  </td>
                   <td className="px-3 py-2">{f.razonSocial || "—"}</td>
-                  <td className={`px-3 py-2 tabular-nums ${f.estado === "difiere" ? "bg-amber-100 font-semibold" : ""}`}>{f.baseSire != null ? money(f.baseSire) : "—"}</td>
-                  <td className={`px-3 py-2 tabular-nums ${f.estado === "difiere" ? "bg-amber-100 font-semibold" : ""}`}>{f.baseCarga != null ? money(f.baseCarga) : "—"}</td>
+                  <td className={`px-3 py-2 tabular-nums ${f.diferencias?.includes("base") ? "bg-amber-100 font-semibold" : ""}`}>{f.baseSire != null ? money(f.baseSire) : "—"}</td>
+                  <td className={`px-3 py-2 tabular-nums ${f.diferencias?.includes("base") ? "bg-amber-100 font-semibold" : ""}`}>{f.baseCarga != null ? money(f.baseCarga) : "—"}</td>
                 </tr>
               ))}
             </tbody>

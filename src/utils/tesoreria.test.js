@@ -293,8 +293,15 @@ test("filasExcelComparacionCarga: resultado legible, comprobante, RUC y bases", 
     { estado: "difiere", tipo: "01", serie: "F001", numero: "123", ruc: "20100000001", razonSocial: "PROV", baseSire: 300, baseCarga: 310 },
     { estado: "solo_carga", tipo: "01", serie: "F001", numero: "777", ruc: "20100000001", razonSocial: "PROV", baseSire: null, baseCarga: 100 },
   ]);
-  assert.deepEqual(a, { RESULTADO: "Difiere", COMPROBANTE: "01 F001-123", RUC: "20100000001", "RAZÓN SOCIAL": "PROV", "BASE SIRE": 300, "BASE CARGA": 310, DIFERENCIA: 10 });
+  assert.deepEqual(a, { RESULTADO: "Difiere", COMPROBANTE: "01 F001-123", RUC: "20100000001", "RUC SUNAT": "", "RAZÓN SOCIAL": "PROV", "BASE SIRE": 300, "BASE CARGA": 310, DIFERENCIA: 10, DIFERENCIAS: "" });
   assert.equal(b.RESULTADO, "Solo en la carga");
   assert.equal(b["BASE SIRE"], "");
   assert.equal(b.DIFERENCIA, "");
+});
+
+test("filasExcelComparacionCarga: con RUC distinto muestra el RUC de SUNAT", async () => {
+  const { filasExcelComparacionCarga } = await import("./tesoreria.js");
+  const [f] = filasExcelComparacionCarga([{ estado: "difiere", diferencias: ["ruc"], tipo: "01", serie: "F001", numero: "1", ruc: "20100000009", rucSire: "20100000001", baseSire: 100, baseCarga: 100 }]);
+  assert.equal(f["RUC SUNAT"], "20100000001");
+  assert.equal(f.DIFERENCIAS, "RUC");
 });
