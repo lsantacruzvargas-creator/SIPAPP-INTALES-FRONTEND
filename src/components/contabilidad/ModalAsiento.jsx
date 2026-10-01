@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
-import { conBloqueo } from "../../utils/bloqueoApi";
+import { avisoDeRespuesta } from "../../utils/bloqueo";
+import useBloqueoEdicion from "../../hooks/useBloqueoEdicion";
+import BarraEdicion from "../BarraEdicion";
 import { fechaHoyLima } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { fechaConsultableTc, estadoTcComprobante } from "../../utils/tesoreria";
@@ -13,7 +15,10 @@ const fechaInput = (d) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/
 
 // Asiento manual: crear o editar (solo los manuales no anulados). Los demás se muestran en lectura.
 export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscribir, onClose, onGuardado }) {
-  const editable = puedeEscribir && (!asiento || (asiento.origen?.tipo === "manual" && asiento.estado !== "anulado"));
+  const editableSegunEstado = puedeEscribir && (!asiento || (asiento.origen?.tipo === "manual" && asiento.estado !== "anulado"));
+  // Abrir = editar: un asiento manual existente se toma al abrirlo; si otro lo tiene, queda en lectura.
+  const bloqueo = useBloqueoEdicion("asiento", asiento?._id, asiento?.updatedAt, { autoEditar: !!asiento && editableSegunEstado });
+  const editable = editableSegunEstado && (!asiento || bloqueo.editando);
   const [form, setForm] = useState(() => ({
     fecha: asiento ? fechaInput(asiento.fecha) : fechaHoyLima(),
     subdiario: asiento?.subdiario || "diario",
@@ -23,6 +28,7 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
   }));
   const [lineas, setLineas] = useState(() => (asiento ? lineasDeAsiento(asiento) : [lineaVacia(), lineaVacia()]));
   const [tcAviso, setTcAviso] = useState("");
+  const [tcSoloLectura, setTcSoloLectura] = useState(false);
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
 
@@ -43,6 +49,7 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
         if (!vigente) return;
         const estado = estadoTcComprobante(consulta);
         setTcAviso(estado.aviso);
+        setTcSoloLectura(estado.soloLectura);
         setForm((f) => ({ ...f, tipoCambio: estado.tc }));
       });
     return () => { vigente = false; };
@@ -61,12 +68,10 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
     const cuerpo = JSON.stringify({ ...form, tipoCambio: Number(form.tipoCambio) || 1, lineas: lineasParaEnviar(lineas, form.moneda) });
     try {
       const r = asiento
-        ? await conBloqueo("asiento", asiento._id, (h) => fetchAuth(`/contabilidad/asientos/${asiento._id}`, {
-            method: "PUT", headers: { ...h, "X-Version": asiento.updatedAt }, body: cuerpo,
-          }))
+        ? await bloqueo.fetch(`/contabilidad/asientos/${asiento._id}`, { method: "PUT", body: cuerpo })
         : await fetchAuth("/contabilidad/asientos", { method: "POST", body: cuerpo });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) return setError(d.mensaje || "No se pudo guardar el asiento.");
+      if (!r.ok) return avisoDeRespuesta(r.status, d) ? undefined : setError(d.mensaje || "No se pudo guardar el asiento.");
       onGuardado(d);
     } catch {
       setError("Error de conexión con el servidor: revisa la lista antes de reintentar.");
@@ -86,6 +91,7 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
           </h3>
           {asiento && <p className="text-xs text-gray-400">Creado por {asiento.creadoPor || "—"}{asiento.modificadoPor ? ` · modificado por ${asiento.modificadoPor}` : ""}</p>}
         </div>
+        {asiento && editableSegunEstado && <BarraEdicion bloqueo={bloqueo} />}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <div>
             <label className="text-xs text-gray-500">Fecha</label>
@@ -111,7 +117,7 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
           {form.moneda === "USD" && (
             <div>
               <label className="text-xs text-gray-500">Tipo de cambio</label>
-              <input value={form.tipoCambio} onChange={set("tipoCambio")} disabled={!editable} inputMode="decimal" className={INP} />
+              <input value={form.tipoCambio} onChange={set("tipoCambio")} disabled={!editable || tcSoloLectura} inputMode="decimal" className={INP} />
               {tcAviso && <p className="text-[11px] text-gray-400">{tcAviso}</p>}
             </div>
           )}

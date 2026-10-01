@@ -12,6 +12,9 @@ export const ELEMENTOS = {
   6: "Gastos por naturaleza", 7: "Ingresos", 8: "Saldos intermediarios y resultado", 9: "Contabilidad analítica",
 };
 
+// Destino propuesto para gastos 62–68 (espejo de Backend/src/data/pcge.js).
+export const destinoPorDefecto = (codigo) => (/^6[2-8]/.test(codigo || "") ? { debe: "941", haber: "791" } : { debe: "", haber: "" });
+
 const num = (v) => (v === "" || v == null ? 0 : Number(v));
 
 // Las líneas del formulario llevan `debe`/`haber` en la moneda del asiento.

@@ -23,7 +23,7 @@ El plan de cuentas debe ser el del contador (se importa desde Excel).
     Asientos (filtros, exportar Excel, modal con cuadre en vivo, USD con TC SUNAT de la fecha, anular con motivo) y
     Plan de cuentas (árbol por elemento, búsqueda sin tildes, crear subcuenta, editar banderas y destino,
     activar/desactivar, **importar plan desde Excel**, exportar).
-  - Tests: backend `test/contabilidad.test.js` (17); frontend `src/utils/contabilidad.test.js` (6). E2E con
+  - Tests: backend `test/contabilidad.test.js` (24); frontend `src/utils/contabilidad.test.js` (7). E2E con
     Playwright: subcuenta, asiento S/ y US$, descuadre bloqueado, anulación, tesorero/jefatura sin botones,
     facturación sin acceso, importación de Excel.
   - Registro y decisiones: `docs/superpowers/sdd/2026-10-01-contabilidad-c1/progress.md`.

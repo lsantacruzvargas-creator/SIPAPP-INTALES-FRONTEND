@@ -77,3 +77,10 @@ test("cuentasDeFilasExcel: reconoce las cabeceras usuales y descarta filas invá
   ]);
   assert.equal(sinTildes("Árbol "), "arbol");
 });
+
+test("destinoPorDefecto: 941/791 solo para gastos 62–68", async () => {
+  const { destinoPorDefecto } = await import("./contabilidad.js");
+  assert.deepEqual(destinoPorDefecto("6341"), { debe: "941", haber: "791" });
+  assert.deepEqual(destinoPorDefecto("602"), { debe: "", haber: "" });
+  assert.deepEqual(destinoPorDefecto(undefined), { debe: "", haber: "" });
+});

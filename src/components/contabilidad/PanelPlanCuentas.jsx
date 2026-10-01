@@ -24,11 +24,15 @@ export default function PanelPlanCuentas({ cuentas, onCambio, puedeEscribir }) {
   );
 
   const cambiarActiva = async (c) => {
-    const r = await conBloqueo("cuentaContable", c._id, (h) => fetchAuth(`/contabilidad/cuentas/${c._id}/activa`, {
-      method: "PATCH", headers: h, body: JSON.stringify({ activa: !c.activa }),
-    }));
-    if (!r.ok) return setAviso((await r.json().catch(() => ({}))).mensaje || "No se pudo cambiar la cuenta.");
-    onCambio();
+    try {
+      const r = await conBloqueo("cuentaContable", c._id, (h) => fetchAuth(`/contabilidad/cuentas/${c._id}/activa`, {
+        method: "PATCH", headers: h, body: JSON.stringify({ activa: !c.activa }),
+      }));
+      if (!r.ok) return setAviso((await r.json().catch(() => ({}))).mensaje || "No se pudo cambiar la cuenta.");
+      onCambio();
+    } catch {
+      setAviso("Error de conexión con el servidor.");
+    }
   };
 
   // Plan del contador en Excel: una hoja con columnas Código y Nombre/Descripción.

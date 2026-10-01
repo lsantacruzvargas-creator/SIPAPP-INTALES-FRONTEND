@@ -23,21 +23,28 @@ export default function PanelAsientos({ cuentas, centrosCosto, puedeEscribir }) 
   const [procesando, setProcesando] = useState(false);
   const [aviso, setAviso] = useState("");
 
-  const cargar = useCallback(() => {
-    const qs = new URLSearchParams(Object.entries({ ...filtros, periodo: filtros.periodo.replace("-", "") }).filter(([, v]) => v));
+  const consulta = useCallback((pagina = 1) => {
+    const qs = new URLSearchParams(Object.entries({ ...filtros, periodo: filtros.periodo.replace("-", ""), pagina }).filter(([, v]) => v));
     return fetchAuth(`/contabilidad/asientos?${qs}`).then(async (r) => {
       const d = await r.json().catch(() => ({}));
-      if (r.ok) setDatos(d); else setAviso(d.mensaje || "No se pudieron cargar los asientos.");
+      if (!r.ok) throw new Error(d.mensaje || "No se pudieron cargar los asientos.");
+      return d;
     });
   }, [filtros]);
+  const cargar = useCallback(() => consulta().then(setDatos).catch((e) => setAviso(e.message || "Error de conexión con el servidor.")), [consulta]);
   useEffect(() => { const t = setTimeout(cargar, 250); return () => clearTimeout(t); }, [cargar]);
 
   const set = (k) => (e) => setFiltros((f) => ({ ...f, [k]: e.target.value }));
   const vigentes = datos.asientos.filter((a) => a.estado !== "anulado");
 
   const abrir = async (a) => {
-    const r = await fetchAuth(`/contabilidad/asientos/${a._id}`);
-    if (r.ok) setModal({ asiento: await r.json() });
+    try {
+      const r = await fetchAuth(`/contabilidad/asientos/${a._id}`);
+      if (r.ok) setModal({ asiento: await r.json() });
+      else setAviso((await r.json().catch(() => ({}))).mensaje || "No se pudo abrir el asiento.");
+    } catch {
+      setAviso("Error de conexión con el servidor.");
+    }
   };
 
   const anular = async (motivo) => {
@@ -49,16 +56,36 @@ export default function PanelAsientos({ cuentas, centrosCosto, puedeEscribir }) 
       if (!r.ok) return setAviso((await r.json().catch(() => ({}))).mensaje || "No se pudo anular el asiento.");
       setAnulando(null);
       cargar();
+    } catch {
+      setAviso("Error de conexión con el servidor.");
     } finally {
       setProcesando(false);
     }
   };
 
-  const exportar = () => exportarHoja("asientos.xlsx", "Asientos", datos.asientos.flatMap((a) => a.lineas.map((l) => ({
+  // Exporta todo lo filtrado (todas las páginas), no solo lo que está en pantalla.
+  const exportar = async () => {
+    try {
+      const todos = [...datos.asientos];
+      for (let p = 2; todos.length < datos.total; p++) {
+        const d = await consulta(p);
+        if (!d.asientos.length) break;
+        todos.push(...d.asientos);
+      }
+      exportarAsientos(todos);
+    } catch (e) {
+      setAviso(e.message || "No se pudo exportar.");
+    }
+  };
+  const exportarAsientos = (lista) => exportarHoja("asientos.xlsx", "Asientos", lista.flatMap((a) => a.lineas.map((l) => ({
     "CUO": a.cuo, "Fecha": fecha(a.fecha), "Subdiario": SUBDIARIOS[a.subdiario], "Glosa": a.glosa, "Estado": ESTADOS[a.estado],
     "Moneda": a.moneda, "TC": a.tipoCambio, "Cuenta": l.cuenta, "Glosa línea": l.glosa, "Debe S/": l.debe, "Haber S/": l.haber,
     "Debe ME": l.debeME, "Haber ME": l.haberME, "Tercero": l.tercero?.numDoc || "",
-  }))), [{ "CUO": "TOTAL (vigentes)", "Debe S/": round2(vigentes.reduce((s, a) => s + total(a, "debe"), 0)), "Haber S/": round2(vigentes.reduce((s, a) => s + total(a, "haber"), 0)) }]);
+  }))), [{
+    "CUO": "TOTAL (vigentes)",
+    "Debe S/": round2(lista.filter((a) => a.estado !== "anulado").reduce((s, a) => s + total(a, "debe"), 0)),
+    "Haber S/": round2(lista.filter((a) => a.estado !== "anulado").reduce((s, a) => s + total(a, "haber"), 0)),
+  }]);
 
   return (
     <div className="space-y-4">
