@@ -7,6 +7,7 @@ import ModalImportarExcel, { COLS_OT } from "../components/ModalImportarExcel";
 import TablaScroll from "../components/TablaScroll";
 import { DotChip, badgeOT, dotOT, badgeGeneral, dotGeneral } from "../components/detalleShared";
 import * as XLSX from "xlsx";
+import { veFacturas, rolDeSesion } from "../utils/roles";
 
 const FILTROS_VACIO = { empresa: "", planta: "", busqueda: "", fechaDesde: "", fechaHasta: "" };
 
@@ -214,7 +215,7 @@ export default function ListaOrdenesTrabajo() {
   const cargar = () =>
     Promise.all([
       fetchAuth("/ordenes-trabajo").then((r) => r.ok ? r.json() : []),
-      fetchAuth("/facturas").then((r) => r.ok ? r.json() : []),
+      (veFacturas(rolDeSesion()) ? fetchAuth("/facturas").then((r) => r.ok ? r.json() : []) : Promise.resolve([])),
       fetchAuth("/ordenes-compra").then((r) => r.ok ? r.json() : []),
     ]).then(([ots, facts, ocs]) => {
       setOrdenes(ots);

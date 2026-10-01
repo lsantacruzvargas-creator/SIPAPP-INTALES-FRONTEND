@@ -162,7 +162,7 @@ export default function EmitirGuia() {
 
   useEffect(() => {
     if (!rucEmisor) { setComprobantes([]); return; }
-    fetchAuth(`/cpe?rucEmisor=${rucEmisor}&estado=ACEPTADO&limit=50`).then(async (r) => {
+    fetchAuth(`/cpe/para-guia?rucEmisor=${rucEmisor}`).then(async (r) => {
       const data = await r.json();
       if (data.ok) setComprobantes(data.data);
     });
@@ -227,7 +227,7 @@ export default function EmitirGuia() {
   const ligarComprobante = async (id) => {
     setComprobanteId(id);
     if (!id) return;
-    const res  = await fetchAuth(`/cpe/${id}`);
+    const res  = await fetchAuth(`/cpe/para-guia/${id}`);
     const data = await res.json();
     if (!data.ok) return;
     const c = data.data;

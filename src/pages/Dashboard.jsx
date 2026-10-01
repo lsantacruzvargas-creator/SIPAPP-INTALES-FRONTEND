@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
+import { veFacturas, rolDeSesion } from "../utils/roles";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
@@ -295,7 +296,7 @@ export default function Dashboard() {
   useEffect(() => {
     Promise.all([
       fetchAuth("/ordenes-trabajo").then((r) => r.ok ? r.json() : []),
-      fetchAuth("/facturas").then((r) => r.ok ? r.json() : []),
+      (veFacturas(rolDeSesion()) ? fetchAuth("/facturas").then((r) => r.ok ? r.json() : []) : Promise.resolve([])),
       fetchAuth("/cotizaciones").then((r) => r.ok ? r.json() : []),
       fetchAuth("/ordenes-compra").then((r) => r.ok ? r.json() : []),
     ]).then(([o, f, c, oc]) => {

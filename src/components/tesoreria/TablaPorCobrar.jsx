@@ -7,6 +7,7 @@ import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../
 import TablaScroll from "../TablaScroll";
 import ModalMovimiento from "./ModalMovimiento";
 import ModalImpuestoVenta from "./ModalImpuestoVenta";
+import { puedeEditarFacturas, rolDeSesion } from "../../utils/roles";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
 const fecha = (d) => (d ? formatearFecha(d, { day: "2-digit", month: "2-digit", year: "numeric" }) : "—");
@@ -80,7 +81,7 @@ export default function TablaPorCobrar() {
                     <td className="px-3 py-2 tabular-nums">{money(f.saldoNeto, f.moneda)}{f.saldoImpuesto > 0.009 ? ` + ${money(f.saldoImpuesto)}` : ""}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
                       {pendiente && <button onClick={() => setCobrando(f)} className="text-xs text-purple-600 hover:text-purple-800">Registrar cobro</button>}
-                      {sinCobros && <button onClick={() => setEditandoImpuesto(f)} className="text-xs text-gray-500 hover:text-gray-700">Impuesto</button>}
+                      {sinCobros && puedeEditarFacturas(rolDeSesion()) && <button onClick={() => setEditandoImpuesto(f)} className="text-xs text-gray-500 hover:text-gray-700">Impuesto</button>}
                     </td>
                   </tr>
                 );

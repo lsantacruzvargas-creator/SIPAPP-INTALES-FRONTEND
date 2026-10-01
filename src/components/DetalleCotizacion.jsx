@@ -21,6 +21,7 @@ import {
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "./BarraEdicion";
 import { conBloqueo } from "../utils/bloqueoApi";
+import { veFacturas, rolDeSesion } from "../utils/roles";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 w-full transition";
 const codigoDeGuia = (g) => `${g.serie}-${String(g.correlativo).padStart(4, "0")}`;
@@ -137,7 +138,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     Promise.all([
       fetchAuth("/ordenes-trabajo").then(r => r.ok ? r.json() : []),
       fetchAuth("/ordenes-compra").then(r => r.ok ? r.json() : []),
-      fetchAuth("/facturas").then(r => r.ok ? r.json() : []),
+      (veFacturas(rolDeSesion()) ? fetchAuth("/facturas").then((r) => r.ok ? r.json() : []) : Promise.resolve([])),
     ]).then(([otsData, ocs, facts]) => {
       const otsFound = otsData.filter(o => (o.cotizacion?._id || o.cotizacion) === cot._id);
       setOts(otsFound);
@@ -497,7 +498,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     { tipo: "ot", activo: ots.length > 0, codigo: ots.length > 1 ? `${ots.length} OTs` : ots[0]?.codigo },
     { tipo: "informe", activo: informes.length > 0, codigo: informes.length ? `${informes.length} av.` : "" },
     { tipo: "oc", activo: !!oc, codigo: oc?.codigo },
-    { tipo: "factura", activo: !!factura, codigo: factura?.codigo },
+    ...(veFacturas(rolDeSesion()) ? [{ tipo: "factura", activo: !!factura, codigo: factura?.codigo }] : []),
   ];
 
   return (
@@ -928,7 +929,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               </TarjetaRelacion>
             )}
 
-            {rolActual !== "coordinadora" && (
+            {rolActual !== "coordinadora" && veFacturas(rolDeSesion()) && (
               <TarjetaRelacion tipo="factura" codigo={factura?.codigo} numero={factura?.numeroFactura} vacio={!factura}
                 onClick={factura ? () => onNavegar?.({ tipo: "factura", data: factura }) : undefined}>
                 {puedeVerPrecios && (factura?.totalAPagar || factura?.total) > 0 && (

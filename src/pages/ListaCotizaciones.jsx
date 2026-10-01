@@ -9,6 +9,7 @@ import ModalNuevaCotizacion from "../components/ModalNuevaCotizacion";
 import { DotChip, badgeGeneral, dotGeneral } from "../components/detalleShared";
 import TablaScroll from "../components/TablaScroll";
 import * as XLSX from "xlsx";
+import { veFacturas, rolDeSesion } from "../utils/roles";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -242,7 +243,7 @@ export default function ListaCotizaciones() {
       fetchAuth("/cotizaciones").then((r) => r.ok ? r.json() : []),
       fetchAuth("/ordenes-trabajo").then((r) => r.ok ? r.json() : []),
       fetchAuth("/ordenes-compra").then((r) => r.ok ? r.json() : []),
-      fetchAuth("/facturas").then((r) => r.ok ? r.json() : []),
+      (veFacturas(rolDeSesion()) ? fetchAuth("/facturas").then((r) => r.ok ? r.json() : []) : Promise.resolve([])),
       fetchAuth("/tipo-cambio").then((r) => r.ok ? r.json() : null),
     ]).then(([cots, ots, ocs, facts, tc]) => {
       setCotizaciones(cots);

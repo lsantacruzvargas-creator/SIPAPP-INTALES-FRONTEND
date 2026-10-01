@@ -8,6 +8,7 @@ import ModalImportarExcel, { COLS_FACTURAS } from "../components/ModalImportarEx
 import { DotChip, badgePago, dotPago } from "../components/detalleShared";
 import TablaScroll from "../components/TablaScroll";
 import * as XLSX from "xlsx";
+import { puedeEditarFacturas, rolDeSesion } from "../utils/roles";
 
 const MESES = [
   "Enero","Febrero","Marzo","Abril","Mayo","Junio",
@@ -359,10 +360,12 @@ export default function ListaFacturas() {
             className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
             Exportar Excel
           </button>
-          <button onClick={() => setCrearOpen(true)}
-            className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-800 transition font-medium">
-            + Nueva Factura
-          </button>
+          {puedeEditarFacturas(rolDeSesion()) && (
+            <button onClick={() => setCrearOpen(true)}
+              className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-800 transition font-medium">
+              + Nueva Factura
+            </button>
+          )}
         </div>
       </div>
 
