@@ -76,12 +76,12 @@ export default function TablaPorCobrar() {
                     <td className="px-3 py-2">{fecha(f.fechaEmision)}</td>
                     <td className={`px-3 py-2 ${COLOR_VENC[sem] || "text-gray-400"}`}>{fecha(venc)}</td>
                     <td className="px-3 py-2 text-xs">{f.cuotas?.length ? `${f.cuotas.filter((c) => c.pagado).length}/${f.cuotas.length}` : "—"}</td>
-                    <td className="px-3 py-2 tabular-nums">{money(f.total)}</td>
+                    <td className="px-3 py-2 tabular-nums">{money(f.total, f.moneda)}{f.moneda === "USD" ? <span className="block text-[11px] text-gray-400">TC {Number(f.tipoCambio).toFixed(3)}</span> : null}</td>
                     <td className="px-3 py-2 text-xs">{hayImpuesto ? `${etiquetaImpuesto(f.impuesto)} ${money(f.impuesto.monto)}${f.impuesto.quienDeposita === "nosotros" ? " (nosotros)" : ""}` : "—"}</td>
                     <td className="px-3 py-2 text-center"><Check ok={f.saldoImpuesto <= 0.009} visible={hayImpuesto} /></td>
-                    <td className="px-3 py-2 tabular-nums">{money(f.totalAPagar)}</td>
+                    <td className="px-3 py-2 tabular-nums">{money(f.totalAPagar, f.moneda)}</td>
                     <td className="px-3 py-2 text-center"><Check ok={f.saldoNeto <= 0.009} /></td>
-                    <td className="px-3 py-2 tabular-nums">{money(f.saldoNeto)}{f.saldoImpuesto > 0.009 ? ` + ${money(f.saldoImpuesto)}` : ""}</td>
+                    <td className="px-3 py-2 tabular-nums">{money(f.saldoNeto, f.moneda)}{f.saldoImpuesto > 0.009 ? ` + ${money(f.saldoImpuesto)}` : ""}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
                       {pendiente && <button onClick={() => setCobrando(f)} className="text-xs text-purple-600 hover:text-purple-800">Registrar cobro</button>}
                       {sinCobros && <button onClick={() => setEditandoImpuesto(f)} className="text-xs text-gray-500 hover:text-gray-700">Impuesto</button>}

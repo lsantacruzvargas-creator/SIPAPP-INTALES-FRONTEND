@@ -229,3 +229,18 @@ test("admiteRetencionIgv: no en recibos de servicios públicos (14) ni en sus no
   assert.equal(admiteRetencionIgv({ tipoComprobante: "01", igv: 18 }), true);
   assert.equal(admiteRetencionIgv({ tipoComprobante: "03", igv: 18 }), false);
 });
+
+test("monedaFactura: la OC manda; sin OC, la elegida; por defecto soles", async () => {
+  const { monedaFactura } = await import("./tesoreria.js");
+  assert.equal(monedaFactura({ oc: { moneda: "USD" }, elegida: "PEN" }), "USD");
+  assert.equal(monedaFactura({ oc: null, elegida: "USD" }), "USD");
+  assert.equal(monedaFactura({ oc: {}, elegida: "" }), "PEN");
+});
+
+test("calculoVenta en dólares: detracción en soles con umbral convertido; neto en dólares", async () => {
+  const { calculoVenta } = await import("./tesoreria.js");
+  const c = calculoVenta({ subtotal: 1000, descuentoPct: 0, moneda: "USD", tipoCambio: 3.51 });
+  assert.deepEqual(c, { base: 1000, igv: 180, total: 1180, detraccion: 497, totalAPagar: 1038.4 });
+  assert.equal(calculoVenta({ subtotal: 150, moneda: "USD", tipoCambio: 3.51 }).detraccion, 0);
+  assert.equal(calculoVenta({ subtotal: 1000 }).totalAPagar, 1038);
+});

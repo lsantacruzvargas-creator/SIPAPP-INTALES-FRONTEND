@@ -50,9 +50,24 @@ export function sugerirImpuesto({ total, moneda = "PEN", tipoCambio = 1, hayServ
   return { tipo: "ninguno", codigoSunat: "" };
 }
 
-export function impuestoVentaPorDefecto(total) {
-  if (Number(total) <= UMBRAL_IMPUESTO) return { tipo: "ninguno", codigoSunat: "", tasa: 0, monto: 0 };
-  return { tipo: "detraccion", codigoSunat: CODIGO_SERVICIOS, ...calcularImpuesto({ tipo: "detraccion", codigoSunat: CODIGO_SERVICIOS, total }) };
+// Espejo del backend: umbral y monto de la detracción en soles (ventas en dólares: total × TC).
+export function impuestoVentaPorDefecto(total, moneda = "PEN", tipoCambio = 1) {
+  if (aSoles(total, moneda, tipoCambio) <= UMBRAL_IMPUESTO) return { tipo: "ninguno", codigoSunat: "", tasa: 0, monto: 0 };
+  return { tipo: "detraccion", codigoSunat: CODIGO_SERVICIOS, ...calcularImpuesto({ tipo: "detraccion", codigoSunat: CODIGO_SERVICIOS, total, moneda, tipoCambio }) };
+}
+
+// La moneda de una venta la manda su OC (que sigue a su cotización); sin OC, la elegida.
+export const monedaFactura = ({ oc, elegida }) => (oc?.moneda === "USD" || oc?.moneda === "PEN" ? oc.moneda : elegida === "USD" ? "USD" : "PEN");
+
+// Vista previa de la factura de venta: detracción en S/, total a pagar en la moneda de la factura.
+export function calculoVenta({ subtotal, descuentoPct = 0, moneda = "PEN", tipoCambio = 1 }) {
+  const sub = round2(Number(subtotal) || 0);
+  const base = round2(sub * (1 - (Number(descuentoPct) || 0) / 100));
+  const igv = round2(base * 0.18);
+  const total = round2(base + igv);
+  const detraccion = impuestoVentaPorDefecto(total, moneda, tipoCambio).monto;
+  const enDoc = moneda === "USD" && tipoCambio > 0 ? detraccion / tipoCambio : detraccion;
+  return { base, igv, total, detraccion, totalAPagar: round2(total - enDoc) };
 }
 
 export function etiquetaImpuesto(impuesto) {

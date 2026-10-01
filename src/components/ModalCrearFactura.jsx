@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
-import { impuestoVentaPorDefecto } from "../utils/tesoreria";
+import { calculoVenta, monedaFactura, tcValido } from "../utils/tesoreria";
+import { origenTC } from "../utils/costos";
+import { fechaHoyLima } from "../utils/fecha";
 
 const INP     = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 const INP_DIS = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full";
@@ -15,15 +17,7 @@ const RUC_EMISOR = "20607650811";
 const NOMBRE_EMISOR = "INTALES";
 const SERIE_FACTURA = "F002";
 
-function calcular(subtotal, descuentoPct) {
-  const sub = Math.round(Number(subtotal) * 100) / 100 || 0;
-  const desc = Number(descuentoPct) || 0;
-  const base = Math.round(sub * (1 - desc / 100) * 100) / 100;
-  const igv = Math.round(base * 0.18 * 100) / 100;
-  const total = Math.round((base + igv) * 100) / 100;
-  const detraccion = impuestoVentaPorDefecto(total).monto;
-  return { base, igv, total, detraccion, totalAPagar: Math.round((total - detraccion) * 100) / 100 };
-}
+const SIMBOLO = { PEN: "S/", USD: "US$" };
 
 function BuscadorOrdenCompra({ onSelect, onClose }) {
   const [lista, setLista] = useState([]);
@@ -53,7 +47,7 @@ function BuscadorOrdenCompra({ onSelect, onClose }) {
                 className="w-full text-left px-4 py-3 rounded-xl hover:bg-blue-50 border border-transparent hover:border-blue-100 transition">
                 <div className="flex justify-between">
                   <span className="font-mono text-xs text-blue-600">{o.codigo}</span>
-                  <span className="text-xs text-gray-400">S/ {Number(o.monto ?? 0).toFixed(2)}</span>
+                  <span className="text-xs text-gray-400">{o.moneda === "USD" ? "US$" : "S/"} {Number(o.monto ?? 0).toFixed(2)}</span>
                 </div>
                 <p className="text-sm text-gray-700 truncate">{o.numeroOrden || "Sin número"} — {o.titulo}</p>
                 {o.empresa && <p className="text-xs text-gray-400">{o.empresa.razonSocial}</p>}
@@ -70,7 +64,7 @@ function BuscadorOrdenCompra({ onSelect, onClose }) {
 // rechazada, crea además el registro interno Factura (POST /facturas) con
 // ese mismo número — igual que ModalFactura.jsx en SIPAPP-IMAQUITEC.
 export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
-  const hoy = new Date().toISOString().split("T")[0];
+  const hoy = fechaHoyLima();
   // Si viene una OC ya conocida (p.ej. al crear la Factura desde la tarjeta
   // vacía de una OC), se precarga como si se hubiera buscado y seleccionado
   // manualmente — sin useEffect, para no disparar un setState en el montaje.
@@ -79,7 +73,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
       numeroOrdenCompra: "",
       fechaEmision: hoy, fechaCancelacion: "",
       empresa: "", subtotal: "", descuentoPorcentaje: "0", descripcion: "",
-      encargado: "", planta: "", numeroGuiaEmision: "", numeroGuiaRemision: "",
+      encargado: "", planta: "", numeroGuiaEmision: "", numeroGuiaRemision: "", moneda: "PEN",
     };
     if (!ocInicial) return base;
     return {
@@ -94,8 +88,25 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
       numeroGuiaRemision: ocInicial.numeroGuiaRemision || "",
     };
   });
-  const [calc, setCalc]           = useState(() => calcular(ocInicial?.subtotal > 0 ? ocInicial.subtotal : 0, 0));
   const [ocVinculada, setOcVinc]  = useState(ocInicial || null);
+  // Moneda de la OC (que sigue a su cotización) o la elegida; en dólares, TC venta SUNAT de la emisión.
+  const moneda = monedaFactura({ oc: ocVinculada, elegida: form.moneda });
+  const sim = SIMBOLO[moneda];
+  const [tcConsulta, setTcConsulta] = useState(null);
+  const claveTc = moneda === "USD" && /^\d{4}-\d{2}-\d{2}$/.test(form.fechaEmision) && form.fechaEmision >= "2000-01-01" ? form.fechaEmision : null;
+  const consultandoTc = claveTc != null && tcConsulta?.clave !== claveTc;
+  const tc = !consultandoTc && tcConsulta?.clave === claveTc ? tcConsulta : null;
+  const tipoCambio = moneda === "USD" ? Number(tc?.datos?.venta) || 0 : 1;
+  useEffect(() => {
+    if (!claveTc) return undefined;
+    let vigente = true;
+    fetchAuth(`/sunat/tipo-cambio?fecha=${claveTc}`)
+      .then(async (r) => { const d = await r.json().catch(() => ({})); return r.ok ? { datos: d } : { error: d.mensaje || "No se pudo obtener el TC SUNAT de esa fecha." }; })
+      .catch(() => ({ error: "Error de conexión al consultar el TC SUNAT." }))
+      .then((res) => { if (vigente) setTcConsulta({ clave: claveTc, ...res }); });
+    return () => { vigente = false; };
+  }, [claveTc]);
+  const calc = calculoVenta({ subtotal: form.subtotal, descuentoPct: form.descuentoPorcentaje, moneda, tipoCambio });
   const [empresas, setEmpresas]   = useState([]);
   const [buscadorOC, setBOC]      = useState(false);
   const [formaPago, setFormaPago] = useState("Contado");
@@ -125,12 +136,6 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === "subtotal" || name === "descuentoPorcentaje") {
-      setCalc(calcular(
-        name === "subtotal" ? value : form.subtotal,
-        name === "descuentoPorcentaje" ? value : form.descuentoPorcentaje,
-      ));
-    }
     setForm(prev => ({
       ...prev,
       [name]: value,
@@ -143,7 +148,6 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
     setBOC(false);
     setForm(prev => {
       const nuevoSub = prev.subtotal || (oc.subtotal > 0 ? String(oc.subtotal) : prev.subtotal);
-      if (!prev.subtotal && oc.subtotal > 0) setCalc(calcular(oc.subtotal, prev.descuentoPorcentaje));
       return {
         ...prev,
         numeroOrdenCompra:  oc.numeroOrden   || prev.numeroOrdenCompra,
@@ -171,6 +175,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
       igv:         calc.igv,
       total:       calc.total,
       monto:       Number(form.subtotal),
+      moneda,
       descripcion: form.descripcion,
       planta:      form.planta,
       encargado:   form.encargado,
@@ -198,9 +203,10 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
         if (!c.fechaVencimiento) return setError("Cada cuota debe tener una fecha de vencimiento.");
       }
       if (Math.abs(sumaCuotas - calc.total) >= 0.01) {
-        return setError(`La suma de las cuotas (S/ ${sumaCuotas.toFixed(2)}) debe ser igual al total (S/ ${calc.total.toFixed(2)}).`);
+        return setError(`La suma de las cuotas (${sim} ${sumaCuotas.toFixed(2)}) debe ser igual al total (${sim} ${calc.total.toFixed(2)}).`);
       }
     }
+    if (moneda === "USD" && !tcValido(tipoCambio)) return setError("Falta el tipo de cambio SUNAT de la fecha de emisión.");
     setError(""); setGuardando(true);
 
     const { ocId, error: errorOC } = await resolverOrdenCompra();
@@ -231,7 +237,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
             fechaVencimiento: c.fechaVencimiento,
           })),
         } : {}),
-        moneda: "PEN",
+        moneda,
         numeroOrdenCompra: form.numeroOrdenCompra || "",
         ordenCompra: ocId,
       }),
@@ -255,6 +261,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
       numeroGuiaRemision: form.numeroGuiaRemision,
       ordenCompra:        ocId,
       empresa:            form.empresa,
+      moneda,
     };
     // Crédito con cuotas reemplaza a "Fecha cancelación": el vencimiento pasa
     // a ser por cuota, no un solo dato suelto — ver Factura.js:cuotaSchema y
@@ -355,6 +362,22 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
                 <input type="date" name="fechaCancelacion" value={form.fechaCancelacion} onChange={handleChange} className={INP} />
               )}
             </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Moneda</label>
+              {ocVinculada?.moneda ? (
+                <input value={moneda === "USD" ? "Dólares (de la OC)" : "Soles (de la OC)"} disabled className={INP_DIS} />
+              ) : (
+                <select name="moneda" value={form.moneda} onChange={handleChange} className={INP}>
+                  <option value="PEN">Soles</option><option value="USD">Dólares</option>
+                </select>
+              )}
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Tipo de cambio</label>
+              <input value={moneda !== "USD" ? "—" : consultandoTc ? "Consultando SUNAT…" : tipoCambio ? tipoCambio.toFixed(3) : ""} disabled className={INP_DIS} />
+              {moneda === "USD" && tc?.datos && <span className="block mt-1 text-[11px] text-gray-400">TC venta ({origenTC(tc.datos)})</span>}
+              {moneda === "USD" && tc?.error && <span className="block mt-1 text-[11px] text-red-600">{tc.error}</span>}
+            </div>
             <div className="col-span-2">
               <label className="text-xs text-gray-500 block mb-1">Empresa (receptor SUNAT) *</label>
               <select name="empresa" value={form.empresa} onChange={handleChange} className={INP}>
@@ -369,7 +392,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
           {/* Cálculos */}
           <div className="bg-gray-50 rounded-xl p-4 grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Valor unitario sin IGV *</label>
+              <label className="text-xs text-gray-500 block mb-1">Valor unitario sin IGV ({sim}) *</label>
               <input type="number" name="subtotal" value={form.subtotal} onChange={handleChange}
                 step="0.01" min="0" placeholder="0.00" className={INP} />
             </div>
@@ -379,19 +402,19 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
                 step="0.01" min="0" max="100" className={INP} />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block mb-1">IGV 18%</label>
+              <label className="text-xs text-gray-500 block mb-1">IGV 18% ({sim})</label>
               <input value={calc.igv.toFixed(2)} disabled className={INP_DIS} />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Total</label>
+              <label className="text-xs text-gray-500 block mb-1">Total ({sim})</label>
               <input value={calc.total.toFixed(2)} disabled className={INP_DIS} />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Detracción (12%)</label>
+              <label className="text-xs text-gray-500 block mb-1">Detracción (12%) en S/</label>
               <input value={calc.detraccion.toFixed(2)} disabled className={INP_DIS} />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Total a pagar</label>
+              <label className="text-xs text-gray-500 block mb-1">Total a pagar ({sim})</label>
               <input value={calc.totalAPagar.toFixed(2)} disabled className={`${INP_DIS} font-semibold`} />
             </div>
           </div>
@@ -421,7 +444,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs text-gray-500">Cuotas de pago</label>
-                <span className="text-xs text-gray-400">Total: S/ {calc.total.toFixed(2)}</span>
+                <span className="text-xs text-gray-400">Total: {sim} {calc.total.toFixed(2)}</span>
               </div>
               <div className="border border-gray-200 rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
@@ -459,7 +482,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
                     + Agregar cuota
                   </button>
                   <span className={`text-xs font-medium ${Math.abs(sumaCuotas - calc.total) < 0.01 ? "text-green-600" : "text-red-500"}`}>
-                    Suma de cuotas: S/ {sumaCuotas.toFixed(2)}
+                    Suma de cuotas: {sim} {sumaCuotas.toFixed(2)}
                   </span>
                 </div>
               </div>
