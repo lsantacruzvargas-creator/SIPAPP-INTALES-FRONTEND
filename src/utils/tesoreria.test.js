@@ -189,3 +189,19 @@ test("creditoFiscalDe de una nota sigue a su origen", () => {
   assert.equal(creditoFiscalDe({ tipoComprobante: "08", origen: { tipoComprobante: "03", igv: 18 } }), false);
   assert.equal(creditoFiscalDe({ tipoComprobante: "07", origen: { creditoFiscal: true } }), true);
 });
+
+test("precargaDesdeSire: NC en negativo da subtotal positivo; ticket del SIRE trae RUC", async () => {
+  const { precargaDesdeSire } = await import("./tesoreria.js");
+  const p = precargaDesdeSire({ rucContraparte: "1", tipo: "07", serie: "FC01", numero: "5", fechaEmision: "2026-09-28", moneda: "PEN", baseImponible: -100, igv: -18, total: -118 }, []);
+  assert.equal(p.subtotal, "100");
+  assert.equal(p.conIgv, true);
+  assert.equal(p.tipoComprobante, "07");
+  assert.equal(precargaDesdeSire({ tipo: "12", total: 59, igv: 9, baseImponible: 50 }, []).ticketConRuc, true);
+  assert.equal(precargaDesdeSire({ tipo: "01", total: 118, igv: 18, baseImponible: 100 }, []).ticketConRuc, false);
+});
+
+test("textoTcSire muestra los tres TC; sin SUNAT lo dice", async () => {
+  const { textoTcSire } = await import("./tesoreria.js");
+  assert.equal(textoTcSire({ sistema: 3.7, sire: 3.75, sunat: 3.72, fechaTc: "2026-09-25" }), "sistema 3.700 · SIRE 3.750 · SUNAT 3.720 (25/09)");
+  assert.equal(textoTcSire({ sistema: 3.7, sire: 3.75, sunat: null }), "sistema 3.700 · SIRE 3.750 · SUNAT no disponible");
+});

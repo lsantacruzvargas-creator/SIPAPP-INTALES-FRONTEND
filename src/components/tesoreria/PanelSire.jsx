@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchAuth, uploadAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima, formatearFechaHora } from "../../utils/fecha";
 import { money } from "../../utils/compras";
-import { periodoDeMes, fechaIsoTexto } from "../../utils/tesoreria";
+import { periodoDeMes, fechaIsoTexto, textoTcSire } from "../../utils/tesoreria";
 import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
 import { plantillaXlsx, xlsxATexto } from "../../utils/sireExcel";
 import TablaScroll from "../TablaScroll";
@@ -14,7 +14,8 @@ const RESULTADOS = {
   solo_sire: { label: "Solo en SIRE", cls: "bg-red-50 text-red-700" },
   solo_sistema: { label: "Solo en el sistema", cls: "bg-blue-50 text-blue-700" },
 };
-const CAMPOS = [["fecha", "fechaEmision"], ["total", "total"], ["igv", "igv"], ["moneda", "moneda"]];
+const CAMPOS = [["fecha", "fechaEmision"], ["total", "total"], ["igv", "igv"], ["moneda", "moneda"], ["tipoCambio", "tipoCambio"]];
+const tcDe = (d) => (d?.moneda === "USD" && Number(d.tipoCambio) > 0 ? Number(d.tipoCambio).toFixed(3) : "—");
 
 const sinTildes = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 // Texto que se ve en cada columna: es lo que se compara con el filtro de esa columna.
@@ -26,8 +27,9 @@ const TEXTO_COL = {
   total: (f) => String((f.sire || f.sistema).total ?? ""),
   igv: (f) => String((f.sire || f.sistema).igv ?? ""),
   moneda: (f) => (f.sire || f.sistema).moneda,
+  tipoCambio: (f) => tcDe(f.sire || f.sistema),
 };
-const COLUMNAS = [["resultado", "Resultado"], ["ruc", "RUC"], ["razon", "Razón social"], ["comprobante", "Comprobante"], ["fecha", "Fecha"], ["total", "Total"], ["igv", "IGV"], ["moneda", "Moneda"]];
+const COLUMNAS = [["resultado", "Resultado"], ["ruc", "RUC"], ["razon", "Razón social"], ["comprobante", "Comprobante"], ["fecha", "Fecha"], ["total", "Total"], ["igv", "IGV"], ["moneda", "Moneda"], ["tipoCambio", "TC"]];
 const INP_COL = "w-full border border-gray-300 rounded px-2 py-1 text-xs font-normal normal-case text-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-300";
 
 export default function PanelSire({ onRegistrarFactura }) {
@@ -112,6 +114,8 @@ export default function PanelSire({ onRegistrarFactura }) {
       RESULTADO: RESULTADOS[f.estado].label, RUC: d.rucContraparte, "RAZÓN SOCIAL": d.razonSocial || "",
       COMPROBANTE: `${d.tipo} ${d.serie}-${d.numero}`, FECHA: fechaIsoTexto(d.fechaEmision),
       TOTAL: d.total, IGV: d.igv, MONEDA: d.moneda, DIFERENCIAS: f.diferencias.join(", "),
+      "TC SISTEMA": f.sistema?.moneda === "USD" ? f.sistema.tipoCambio : "", "TC SIRE": f.sire?.moneda === "USD" ? f.sire.tipoCambio : "",
+      "TC SUNAT": f.tc?.sunat ?? "",
     };
   }), filasSubtotal("RESULTADO", { TOTAL: sub.total, IGV: sub.igv }));
 
@@ -136,7 +140,10 @@ export default function PanelSire({ onRegistrarFactura }) {
     const dato = f.sire?.[campo] ?? f.sistema?.[campo];
     const difiere = f.diferencias.includes(clave);
     const texto = campo === "total" || campo === "igv" ? money(dato || 0, f.sire?.moneda || f.sistema?.moneda || "PEN")
-      : campo === "fechaEmision" ? fechaIsoTexto(dato) : String(dato ?? "—");
+      : campo === "fechaEmision" ? fechaIsoTexto(dato) : campo === "tipoCambio" ? tcDe(f.sire || f.sistema) : String(dato ?? "—");
+    if (clave === "tipoCambio" && difiere && f.tc) {
+      return <td key={clave} className="px-3 py-2 bg-amber-100 font-semibold">{texto}<span className="block text-[11px] font-normal text-gray-600">{textoTcSire(f.tc)}</span></td>;
+    }
     return (
       <td key={clave} className={`px-3 py-2 ${difiere ? "bg-amber-100 font-semibold" : ""}`}>
         {texto}{difiere && f.sistema ? <span className="block text-[11px] text-gray-500">sistema: {campo === "fechaEmision" ? fechaIsoTexto(f.sistema[campo]) : String(f.sistema[campo])}</span> : null}
@@ -198,7 +205,7 @@ export default function PanelSire({ onRegistrarFactura }) {
               )}
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {visibles.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">Sin comprobantes para conciliar</td></tr>}
+              {visibles.length === 0 && <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">Sin comprobantes para conciliar</td></tr>}
               {visibles.map((f) => {
                 const d = f.sire || f.sistema;
                 return (
@@ -210,7 +217,7 @@ export default function PanelSire({ onRegistrarFactura }) {
                     {CAMPOS.map((c) => celda(f, c))}
                     <td className="px-3 py-2 text-right">
                       {f.estado === "solo_sire" && libro === "RCE" && (
-                        <button onClick={() => onRegistrarFactura({ precarga: f.sire })} className="text-xs text-purple-600 hover:text-purple-800">Registrar factura</button>
+                        <button onClick={() => onRegistrarFactura({ precarga: f.sire })} className="text-xs text-purple-600 hover:text-purple-800">Registrar comprobante</button>
                       )}
                     </td>
                   </tr>
@@ -223,7 +230,7 @@ export default function PanelSire({ onRegistrarFactura }) {
                   <td colSpan={5} className="px-3 py-2">Subtotal ({visibles.length} comprobantes)</td>
                   <td className="px-3 py-2 tabular-nums">{textoMontos(sub.total)}</td>
                   <td className="px-3 py-2 tabular-nums">{textoMontos(sub.igv)}</td>
-                  <td colSpan={2} />
+                  <td colSpan={3} />
                 </tr>
               </tfoot>
             )}

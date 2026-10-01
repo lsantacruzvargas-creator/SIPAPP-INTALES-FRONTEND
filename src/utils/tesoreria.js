@@ -1,6 +1,7 @@
 import { DETRACCION_BIENES_SERVICIOS } from "./catalogosSunat.js";
 import { round2 } from "./compras.js";
 import { origenTC, esTcSunat } from "./costos.js";
+import { fechaHoyLima } from "./fecha.js";
 
 // Espejo de Backend/src/utils/impuesto.js: el backend recalcula siempre; esto
 // es solo la vista previa de los formularios.
@@ -205,3 +206,21 @@ export function vistaPreviaNota({ totalNota, saldoOrigen }) {
 export const origenesPosibles = (facturas, { proveedor, moneda }) => facturas.filter((f) =>
   String(f.proveedor?._id || f.proveedor) === String(proveedor) && f.moneda === moneda && !f.anulada
   && f.tipoComprobante !== "07" && f.tipoComprobante !== "08");
+
+// Formulario precargado desde una fila "Solo en SIRE". El SIRE trae las NC en negativo
+// y un ticket que aparece en el RCE es porque trae el RUC de INTALES.
+export function precargaDesdeSire(s, proveedores) {
+  const prov = proveedores.find((p) => p.ruc === s.rucContraparte);
+  const tipos = TIPOS_COMPROBANTE_COMPRA.map((t) => t.valor);
+  const igv = Math.abs(Number(s.igv) || 0);
+  const base = Math.abs(Number(s.baseImponible) || 0) || round2(Math.abs(Number(s.total) || 0) - igv);
+  return {
+    modo: "sinOc", proveedor: prov?._id || "", tipoComprobante: tipos.includes(s.tipo) ? s.tipo : "01",
+    serie: s.serie, numero: s.numero, fechaEmision: String(s.fechaEmision || "").slice(0, 10) || fechaHoyLima(),
+    moneda: s.moneda === "USD" ? "USD" : "PEN", subtotal: String(base), conIgv: igv > 0, ticketConRuc: s.tipo === "12",
+  };
+}
+
+const tc3 = (v) => Number(v).toFixed(3);
+export const textoTcSire = (tc) =>
+  `sistema ${tc3(tc.sistema)} · SIRE ${tc3(tc.sire)} · SUNAT ${tc.sunat > 0 ? `${tc3(tc.sunat)}${tc.fechaTc ? ` (${fechaIsoTexto(tc.fechaTc).slice(0, 5)})` : ""}` : "no disponible"}`;

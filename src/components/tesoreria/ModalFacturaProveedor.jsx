@@ -2,11 +2,10 @@ import { useState, useEffect } from "react";
 import { fetchAuth, uploadAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
 import { money, round2, nombreEmpresa } from "../../utils/compras";
-import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION, estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, cuentasPara, avisoMoneda, vistaPreviaNota, origenesPosibles, etiquetaComprobante } from "../../utils/tesoreria";
+import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION, estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, cuentasPara, avisoMoneda, vistaPreviaNota, origenesPosibles, etiquetaComprobante, precargaDesdeSire } from "../../utils/tesoreria";
 import { conBloqueo } from "../../utils/bloqueoApi";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full";
-const TIPOS_SIRE = TIPOS_COMPROBANTE_COMPRA.map((t) => t.valor);
 const MEDIOS_PAGO = [["transferencia", "Transferencia"], ["deposito", "Depósito"], ["efectivo", "Efectivo"], ["cheque", "Cheque"]];
 
 function desdeOCP(o, fechaEmision) {
@@ -16,15 +15,6 @@ function desdeOCP(o, fechaEmision) {
     subtotal: String(o.saldoPorFacturar), hayServicios: !!o.hayServicios,
     condicion: dias > 0 ? "credito" : "contado", fechaVencimiento: dias > 0 ? sumarDias(fechaEmision, dias) : "",
     plazoDias: dias > 0 ? dias : null,
-  };
-}
-
-function desdeSire(s, proveedores) {
-  const prov = proveedores.find((p) => p.ruc === s.rucContraparte);
-  return {
-    modo: "sinOc", proveedor: prov?._id || "", tipoComprobante: TIPOS_SIRE.includes(s.tipo) ? s.tipo : "01",
-    serie: s.serie, numero: s.numero, fechaEmision: String(s.fechaEmision || "").slice(0, 10) || fechaHoyLima(),
-    moneda: s.moneda === "USD" ? "USD" : "PEN", subtotal: String(s.baseImponible || round2(s.total - s.igv)), conIgv: s.igv > 0,
   };
 }
 
@@ -40,7 +30,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
     impuestoManual: false, impuestoTipo: "ninguno", codigoSunat: "", quienDeposita: "nosotros", noAplicaRetencion: false,
     ticketConRuc: false, retener4ta: false, yaPagado: false, pagoCuenta: "", pagoMedio: "transferencia", pagoOperacion: "",
     documentoOrigen: "",
-    ...(precarga ? desdeSire(precarga, catalogos.proveedores) : {}),
+    ...(precarga ? precargaDesdeSire(precarga, catalogos.proveedores) : {}),
   }));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
