@@ -59,6 +59,7 @@ function HomeRedirect() {
   if (!token || !usuario) return <Navigate to="/login" replace />;
   if (["tecnico", "tecnico_prueba", "tecnico_intervencion", "supervisor", "planner", "asistente", "coordinadora"].includes(usuario.rol)) return <Navigate to="/ordenes-trabajo" replace />;
   if (usuario.rol === "facturacion") return <Navigate to="/facturas" replace />;
+  if (["tesorero", "contador"].includes(usuario.rol)) return <Navigate to="/tesoreria" replace />;
   if (usuario.rol === "almacenero") return <Navigate to="/almacen" replace />;
   return <Navigate to="/dashboard" replace />;
 }
@@ -108,7 +109,7 @@ export default function App() {
       <Route
         path="/facturas"
         element={
-          <ProtectedRoute roles={["admin", "facturacion", "jefatura"]}>
+          <ProtectedRoute roles={["admin", "facturacion", "jefatura", "tesorero", "contador"]}>
             <Layout><ListaFacturas /></Layout>
           </ProtectedRoute>
         }
@@ -171,7 +172,7 @@ export default function App() {
       <Route
         path="/facturacion-electronica"
         element={
-          <ProtectedRoute roles={["admin", "facturacion", "jefatura"]}>
+          <ProtectedRoute roles={["admin", "facturacion", "jefatura", "tesorero", "contador"]}>
             <Layout><ListaComprobantes /></Layout>
           </ProtectedRoute>
         }
@@ -231,7 +232,7 @@ export default function App() {
       <Route
         path="/tesoreria"
         element={
-          <ProtectedRoute roles={["admin", "jefatura", "facturacion"]}>
+          <ProtectedRoute roles={["admin", "jefatura", "facturacion", "tesorero", "contador"]}>
             <Layout><Tesoreria /></Layout>
           </ProtectedRoute>
         }

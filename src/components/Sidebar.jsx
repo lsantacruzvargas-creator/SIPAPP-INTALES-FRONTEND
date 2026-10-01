@@ -111,6 +111,8 @@ export default function Sidebar() {
   const esCoordinadora = usuario?.rol === "coordinadora";
   const esAsistente  = usuario?.rol === "asistente";
   const esVendedor   = usuario?.rol === "vendedor";
+  // Tesorero y contador: Tesorería, Facturas y comprobantes electrónicos (solo ver).
+  const esFinanzas   = ["tesorero", "contador"].includes(usuario?.rol);
 
   const ir = (path) => { navigate(path); setAbierto(false); };
   const inicial = usuario?.nombre?.charAt(0)?.toUpperCase() || "?";
@@ -159,17 +161,18 @@ export default function Sidebar() {
   //   OTs (nivel admin), Cotizaciones y Órdenes de Compra de solo lectura
   //   (sin precios/montos) — ver detalle de permisos en cada página/ruta.
   // - Compras (SC → licitación → OC a proveedor): admin, jefatura y vendedor.
-  // - Tesorería (por pagar/cobrar, movimientos, SIRE): admin, jefatura y facturacion.
+  // - Tesorería (por pagar/cobrar, movimientos, SIRE): admin, jefatura, facturacion, tesorero y contador.
+  // - tesorero y contador: Tesorería, Facturas y Fact. Electrónica (ver y descargar).
   const NAV_ITEMS = [
     { to: "/dashboard", label: "Dashboard", Icon: IconHome, show: esAdmin || esJefatura || esPlanner || esCoordinadora || esAsistente },
     { to: "/ordenes-trabajo", label: "Orden de Trabajo", Icon: IconClipboard, show: esComercial || esTecnico || esSupervisor || esPlanner || esJefatura || esCoordinadora },
     { to: "/cotizaciones", label: "Cotizaciones", Icon: IconDocument, show: esComercial || esPlanner || esJefatura || esCoordinadora },
     { to: "/ordenes-compra", label: "Órdenes de Compra", Icon: IconCart, show: esComercial || esFacturacion || esJefatura || esCoordinadora },
-    { to: "/facturas", label: "Facturas", Icon: IconReceipt, show: esAdmin || esFacturacion || esJefatura },
+    { to: "/facturas", label: "Facturas", Icon: IconReceipt, show: esAdmin || esFacturacion || esJefatura || esFinanzas },
     { to: "/reportes", label: "Reportes", Icon: IconChartBar, show: esAdmin || esFacturacion || esJefatura },
     // Administración (asistente) no ve "Fact. Electrónica" — en su lugar
     // tiene "Guías" directamente (a pedido del usuario, reemplaza esa vista).
-    { to: "/facturacion-electronica", label: "Fact. Electrónica", Icon: IconBolt, show: esAdmin || esFacturacion || esJefatura },
+    { to: "/facturacion-electronica", label: "Fact. Electrónica", Icon: IconBolt, show: esAdmin || esFacturacion || esJefatura || esFinanzas },
     { to: "/facturacion-electronica/guias", label: "Guías", Icon: IconTruck, show: esAdmin || esFacturacion || esAlmacenero || esJefatura || esPlanner || esCoordinadora || esAsistente },
     { to: "/tipo-cambio", label: "Tipo de Cambio", Icon: IconExchange, show: esAdmin || esFacturacion || esAlmacenero || esJefatura },
     { to: "/empresas", label: "Empresas", Icon: IconBuilding, show: esComercial || esJefatura || esAlmacenero || esPlanner || esCoordinadora },
@@ -178,7 +181,7 @@ export default function Sidebar() {
     { to: "/inventario", label: "Inventario", Icon: IconBoxes, show: esAdmin || esAlmacenero || esTecnico || esPlanner || esJefatura || esCoordinadora },
     { to: "/requerimientos", label: "Requerimientos", Icon: IconClipboardList, show: esAdmin || esAlmacenero || esJefatura || esCoordinadora || esVendedor },
     { to: "/compras", label: "Compras", Icon: IconBag, show: esAdmin || esJefatura || esVendedor },
-    { to: "/tesoreria", label: "Tesorería", Icon: IconReceipt, show: esAdmin || esFacturacion || esJefatura },
+    { to: "/tesoreria", label: "Tesorería", Icon: IconReceipt, show: esAdmin || esFacturacion || esJefatura || esFinanzas },
     { to: "/centros-costo", label: "Centros de Costo", Icon: IconTag, show: esAdmin || esJefatura },
     { to: "/maquinas", label: "Máquinas", Icon: IconServer, show: esAdmin || esJefatura },
     { to: "/tarifas-personal", label: "Tarifas de Personal", Icon: IconUsers, show: esAdmin || esJefatura },
@@ -196,7 +199,7 @@ export default function Sidebar() {
       {/* Header móvil (<md): logo + hamburguesa. El sidebar completo se abre como drawer. */}
       <div className="md:hidden sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm h-14 flex items-center justify-between px-4">
         <div className="flex items-center gap-2.5 cursor-pointer"
-          onClick={() => ir(esTecnico || esPlanner ? "/ordenes-trabajo" : esAlmacenero ? "/almacen" : esFacturacion ? "/facturas" : "/dashboard")}>
+          onClick={() => ir(esTecnico || esPlanner ? "/ordenes-trabajo" : esAlmacenero ? "/almacen" : esFacturacion ? "/facturas" : esFinanzas ? "/tesoreria" : "/dashboard")}>
           <img src={`${import.meta.env.BASE_URL}assets/logos/logo_huaquian.jpg`} alt="Intales"
             className="w-8 h-8 rounded-lg object-contain shrink-0" />
           <span className="font-bold text-gray-800 text-base tracking-tight">Metalmecanica</span>
