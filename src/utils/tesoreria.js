@@ -20,6 +20,7 @@ export function calcularImpuesto({ tipo, codigoSunat, total, moneda = "PEN", tip
     const tasa = bien.porcentaje / 100;
     return { tasa, monto: Math.round(round2(soles * tasa)) };
   }
+  if (tipo === "retencion4ta") return { tasa: 0.08, monto: round2(soles * 0.08) };
   return { tasa: TASA_RETENCION, monto: round2(soles * TASA_RETENCION) };
 }
 
@@ -56,6 +57,7 @@ export function etiquetaImpuesto(impuesto) {
   const pct = `${Math.round((impuesto?.tasa || 0) * 100)}%`;
   if (impuesto?.tipo === "detraccion") return `Detracción ${pct}`;
   if (impuesto?.tipo === "retencion") return `Retención ${pct}`;
+  if (impuesto?.tipo === "retencion4ta") return `Retención 4ta ${pct}`;
   return "Sin detracción / retención";
 }
 
@@ -165,4 +167,21 @@ export function estadoTcComprobante(consulta) {
   }
   if (esTcSunat(d)) return { tc: String(d.venta), soloLectura: true, aviso: `TC venta ${origenTC(d)}`, alerta: false };
   return { tc: String(d.venta), soloLectura: false, aviso: `No se pudo consultar SUNAT: se propone el ${origenTC(d)}; revísalo`, alerta: true };
+}
+
+// ── Comprobantes de compra (spec comprobantes-compra, Fase 3) ──
+export const TIPOS_COMPROBANTE_COMPRA = [
+  { valor: "01", label: "Factura" },
+  { valor: "02", label: "Recibo por honorarios" },
+  { valor: "03", label: "Boleta" },
+  { valor: "12", label: "Ticket / ticket POS" },
+  { valor: "14", label: "Recibo de servicios públicos" },
+];
+
+// Espejo de Backend/src/utils/comprobantesCompra.js (el servidor decide; esto es la vista previa).
+export function creditoFiscalDe({ tipoComprobante, igv, ticketConRuc }) {
+  if (!(Number(igv) > 0)) return false;
+  if (tipoComprobante === "01" || tipoComprobante === "14") return true;
+  if (tipoComprobante === "12") return !!ticketConRuc;
+  return false;
 }

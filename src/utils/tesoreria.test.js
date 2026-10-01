@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   calcularImpuesto, partes, tipoMovimientoEsperado, sugerirImpuesto, impuestoVentaPorDefecto, etiquetaImpuesto,
   diasCredito, sumarDias, vencimientoDe, semaforo, filtrarFacturas, FILTROS_TESORERIA, totalesMovimientos, cuentasPara, periodoDeMes, fechaIsoTexto, esPagoAntiguo, avisoMoneda, diasEntre,
-  estadoTcComprobante, tcValido, fechaConsultableTc,
+  estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe,
 } from "./tesoreria.js";
 
 test("calcularImpuesto replica al backend: detracción entera en soles y retención 3 %", () => {
@@ -142,4 +142,17 @@ test("fechaConsultableTc: no consulta fechas vacías ni las que aparecen al tecl
   assert.equal(fechaConsultableTc("2026-09-29"), true);
   assert.equal(fechaConsultableTc(""), false);
   assert.equal(fechaConsultableTc("0002-09-29"), false);
+});
+
+test("tipos de comprobante de compra y crédito fiscal (espejo del backend)", () => {
+  assert.deepEqual(TIPOS_COMPROBANTE_COMPRA.map((t) => t.valor), ["01", "02", "03", "12", "14"]);
+  assert.equal(creditoFiscalDe({ tipoComprobante: "12", igv: 18, ticketConRuc: false }), false);
+  assert.equal(creditoFiscalDe({ tipoComprobante: "12", igv: 18, ticketConRuc: true }), true);
+  assert.equal(creditoFiscalDe({ tipoComprobante: "14", igv: 9 }), true);
+  assert.equal(creditoFiscalDe({ tipoComprobante: "03", igv: 18 }), false);
+});
+
+test("retención de 4ta: 8 % del total en soles y su etiqueta", () => {
+  assert.deepEqual(calcularImpuesto({ tipo: "retencion4ta", total: 2000 }), { tasa: 0.08, monto: 160 });
+  assert.equal(etiquetaImpuesto({ tipo: "retencion4ta", tasa: 0.08 }), "Retención 4ta 8%");
 });
