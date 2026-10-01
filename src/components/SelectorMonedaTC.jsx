@@ -5,6 +5,8 @@ import { fechaHoyLima, formatearFecha } from "../utils/fecha";
 // "S/ | US$" + "Tipo de cambio al: [fecha]". En US$ pide el TC venta SUNAT de esa
 // fecha (el backend lo saca de su histórico o lo consulta una sola vez). Si falla,
 // avisa y la pantalla sigue en soles.
+const FECHA_MINIMA = "2000-01-01";
+
 export default function SelectorMonedaTC({ moneda, fecha, onCambio }) {
   const [info, setInfo] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -40,7 +42,13 @@ export default function SelectorMonedaTC({ moneda, fecha, onCambio }) {
       </div>
       <label className="text-gray-500">Tipo de cambio al</label>
       <input type="date" value={fecha} max={fechaHoyLima()}
-        onChange={(e) => { setCargando(true); onCambio({ moneda, fecha: e.target.value || fechaHoyLima(), tc: null, error: false }); }}
+        onChange={(e) => {
+          // Mientras se teclea el año llegan fechas vacías o como 0002-…: no se consultan.
+          const f = e.target.value;
+          if (!f || f < FECHA_MINIMA) return;
+          setCargando(true);
+          onCambio({ moneda, fecha: f, tc: null, error: false });
+        }}
         className="border border-gray-200 rounded-lg px-2 py-1" />
       <span className={info.startsWith("TC") ? "text-gray-400" : "text-red-500"}>{cargando ? "Consultando…" : info}</span>
     </div>

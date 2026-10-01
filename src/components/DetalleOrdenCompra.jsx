@@ -271,13 +271,14 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
     else { setError("Error al cerrar/abrir la cadena."); }
   };
 
+  // Con el desglose abierto el TC ya lo pide SelectorMonedaTC: aquí solo con el modal cerrado.
   useEffect(() => {
-    if (!puedeVerReporte || vista.tc || vista.error) return;
+    if (!puedeVerReporte || reporteOpen || vista.tc || vista.error) return;
     fetchAuth(`/sunat/tipo-cambio?fecha=${vista.fecha}`)
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null)
       .then((d) => setVista((v) => ({ ...v, tc: d?.venta || null, error: !d })));
-  }, [puedeVerReporte, vista.tc, vista.error, vista.fecha]);
+  }, [puedeVerReporte, reporteOpen, vista.tc, vista.error, vista.fecha]);
 
   const cot     = orden.cotizacion;
   const factura = facturaVinculada;

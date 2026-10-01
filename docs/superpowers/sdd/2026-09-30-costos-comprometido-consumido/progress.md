@@ -13,3 +13,5 @@ Task 5: complete (commits 3750a54..3343fd56, tests: npm test (frontend) → 38/3
 Task 6: E2E encontró que apiperu devuelve fecha_sunat = día hábil anterior siempre, así que "hoy" nunca se guardaba y cada carga en US$ pagaba una consulta — "hoy" se guarda provisional 3 h (test RED→GREEN), commit 1198111
 Task 6: Ruling: vigencia del provisional = 3 h — costo si está mal: más o menos consultas a apiperu
 Task 6: Playwright OK — OCP-0003 (S/ 300, OT 6) en comprometido (679→979); FP-0003 pagada → comprometido 679 y consumido materiales +300; US$ al TC 3.45 y al 25/09 (3.406), segunda consulta del 25/09 fuente bd; tarjeta de la OC 45269411 = reporte en S/ y US$; Excel con 3 hojas en USD con TC.
+Final: fixed I2 (DetalleOrdenCompra no pide el TC con el desglose abierto), I3+M1 (SelectorMonedaTC ignora fechas vacías o < 2000-01-01), M2 (TipoCambio.jsx muestra fuente y fecha real; "Usar valor SUNAT" solo con fuente apiperu/bd; origenTC/esTcSunat en utils/costos.js con test) — tests: npm test (frontend) → 39/39; eslint sin errores; build OK
+Final: menores diferidos M3–M8 anotados en el spec (sección "Estado — Fase 1")

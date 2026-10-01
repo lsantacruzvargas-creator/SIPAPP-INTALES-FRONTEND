@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { convertir, costoEn, filaResumenCosto, filaComprometido, filaConsumido } from "./costos.js";
+import { convertir, costoEn, filaResumenCosto, filaComprometido, filaConsumido, origenTC, esTcSunat } from "./costos.js";
 
 const c = {
   numeroOT: "OT-1", numeroOrdenCompra: "OC-1", titulo: "Eje", empresa: { razonSocial: "CLI" },
@@ -41,4 +41,16 @@ test("filas del reporte y del Excel en la moneda elegida", () => {
   assert.equal(filaResumenCosto(costoEn({ ...c, ocSubtotal: null }, "PEN", 3.8), (e) => e.razonSocial, 3.8)["Margen"], "—");
   assert.deepEqual(Object.keys(filaComprometido(enUSD)), ["N° OT", "Moneda", "Materiales", "Servicios", "Flete", "Otros", "Total comprometido"]);
   assert.equal(filaConsumido(enUSD)["HH"], 20);
+});
+
+test("origenTC: nombra la fuente y la fecha real del TC; solo apiperu/bd cuentan como valor SUNAT", () => {
+  assert.equal(origenTC({ fuente: "apiperu", fecha: "2026-09-29" }), "SUNAT 29/09");
+  assert.equal(origenTC({ fuente: "bd", fecha: "2026-09-29" }), "SUNAT 29/09");
+  assert.equal(origenTC({ fuente: "respaldo", fecha: "2026-09-26" }), "último guardado 26/09");
+  assert.equal(origenTC({ fuente: "vigente", fecha: null }), "TC vigente del sistema");
+  assert.equal(esTcSunat({ fuente: "apiperu" }), true);
+  assert.equal(esTcSunat({ fuente: "bd" }), true);
+  assert.equal(esTcSunat({ fuente: "respaldo" }), false);
+  assert.equal(esTcSunat({ fuente: "vigente" }), false);
+  assert.equal(esTcSunat(null), false);
 });

@@ -58,3 +58,15 @@ export const filaConsumido = (c) => ({
   "Otros": c.consumido.otros,
   "Total consumido": c.consumido.total,
 });
+
+// GET /sunat/tipo-cambio responde 200 aunque apiperu falle (fuente "respaldo" o
+// "vigente"): solo "apiperu" y "bd" son el TC SUNAT publicado para esa fecha.
+export const esTcSunat = (d) => d?.fuente === "apiperu" || d?.fuente === "bd";
+
+const diaMes = (f) => (/^\d{4}-\d{2}-\d{2}/.test(f || "") ? `${f.slice(8, 10)}/${f.slice(5, 7)}` : "");
+
+// "SUNAT 29/09", "último guardado 26/09" o "TC vigente del sistema".
+export function origenTC(d) {
+  if (d?.fuente === "vigente") return "TC vigente del sistema";
+  return `${d?.fuente === "respaldo" ? "último guardado" : "SUNAT"} ${diaMes(d?.fecha)}`.trim();
+}

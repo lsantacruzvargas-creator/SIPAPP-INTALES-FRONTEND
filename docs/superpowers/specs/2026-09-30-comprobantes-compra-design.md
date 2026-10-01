@@ -152,3 +152,16 @@ Tipo inválido; NC/ND sin origen, de otro proveedor o moneda, origen anulado o N
 - Costos: OCP sin facturar → todo comprometido; factura pagada a medias → reparto proporcional; pagada → consumido; NC rebaja; ticket "Ya se pagó" con OT → consumido; flete; ítems antiguos sin OCP; HH/HM en consumido; OC/comprobante anulado no cuenta; OT padre suma sub-OT; la tarjeta de la OC y el reporte dan lo mismo.
 - Frontend: lógica pura en `utils/tesoreria.js` con tests (crédito fiscal, neto con retención 4ta, aplicable de una NC, filas del resumen).
 - Playwright: registrar cada tipo, NC con sobrante y aplicar el saldo a favor, ticket "Ya se pagó", USD con TC automático, exportar el resumen.
+
+## Estado — Fase 1 (2026-10-01)
+
+Implementada en `feature/comprobantes-compra` (backend y frontend): costo comprometido/consumido por OT, TC SUNAT por fecha con histórico en BD y selector de moneda en el reporte y la tarjeta de la OC. Corregidos tras la revisión final: C1 (doble conteo con SC compradas en parte), I1 (fracción pagada en USD), I2 (la tarjeta pedía el TC dos veces con el desglose abierto), I3/M1 (consultas al teclear la fecha; borrarla dejaba "Consultando…") y M2 (la pantalla Tipo de Cambio muestra la fuente y la fecha real del TC y solo ofrece "Usar valor SUNAT" con fuente `apiperu` o `bd`).
+
+Menores diferidos (no bloquean el merge):
+
+- **M3** — el flete de las líneas de OCP que vienen de una SC "manual" no llega a la OT.
+- **M4** — `costosPorOT` carga todas las `FacturaProveedor`: proyectar sin `archivos`, filtrar por OCP/OT y revisar índices.
+- **M5** — validar que el TC esté entre 2 y 6 y poner timeout de 8 s a la consulta a apiperu.
+- **M6** — en el Excel en S/ la columna TC queda vacía para OC en USD.
+- **M7** — mensajes de la tarjeta: muestra "Sin OT vinculada" mientras carga y ante un 403.
+- **M8** — `ocPorCot` sin orden: agregar `.sort({ createdAt: 1 })`.
