@@ -109,6 +109,17 @@ de SUNAT que lo publican responden "Acceso denegado" desde este entorno. **Conse
 5. **Planillas y activos fijos**: ¿dentro del alcance o fuera?
 6. **Cierre de periodo**: quién cierra y si se permite reabrir.
 
+## 5. Decisiones del usuario (2026-10-01)
+
+| # | Decisión |
+|---|---|
+| 1 | Motor contable **completo, como CONCAR** (plan de cuentas, asientos, Diario, Mayor, Caja y Bancos, balance de comprobación, EEFF, exportación PLE). Qué libros se presentan depende del nivel de ingresos de INTALES: **pendiente** saber si es ≤ 300, 300–1700 o > 1700 UIT para priorizar |
+| 2 | Plan de cuentas: se **importa del software del contador** (Excel/TXT) para que los códigos coincidan; si no se puede, PCGE estándar ajustable. **Pendiente** el archivo |
+| 3 | **El sistema genera los asientos automáticamente** (compras, ventas, pagos y cobros) y con ellos exporta los `.txt` del PLE |
+| 4 | Clase 9 (destinos 9x↔79): explicado al usuario; **pendiente** confirmar con el contador si la usa |
+| 5 | **Planillas y activos fijos fuera de alcance**: sus asientos (planilla, depreciación) se registran como asientos manuales |
+| 6 | El **cierre de mes lo hace el tesorero**. Hoy no existe ese rol (Tesorería = facturacion, jefatura, admin): **pendiente** decidir si se crea el rol "tesorero" (y quizá "contador") o se usa uno existente |
+
 ## Fuentes
 
 Oficiales (SUNAT):
