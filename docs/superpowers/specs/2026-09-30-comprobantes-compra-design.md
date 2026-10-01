@@ -153,19 +153,9 @@ Tipo inválido; NC/ND sin origen, de otro proveedor o moneda, origen anulado o N
 - Frontend: lógica pura en `utils/tesoreria.js` con tests (crédito fiscal, neto con retención 4ta, aplicable de una NC, filas del resumen).
 - Playwright: registrar cada tipo, NC con sobrante y aplicar el saldo a favor, ticket "Ya se pagó", USD con TC automático, exportar el resumen.
 
-## Estado — Fase 1 (2026-10-01)
+## Estado — Fase 3 (2026-10-01)
 
-Implementada en `feature/comprobantes-compra` (backend y frontend): costo comprometido/consumido por OT, TC SUNAT por fecha con histórico en BD y selector de moneda en el reporte y la tarjeta de la OC. Corregidos tras la revisión final: C1 (doble conteo con SC compradas en parte), I1 (fracción pagada en USD), I2 (la tarjeta pedía el TC dos veces con el desglose abierto), I3/M1 (consultas al teclear la fecha; borrarla dejaba "Consultando…") y M2 (la pantalla Tipo de Cambio muestra la fuente y la fecha real del TC y solo ofrece "Usar valor SUNAT" con fuente `apiperu` o `bd`).
+Implementada en `feature/comprobantes-compra`: tipos 12 (ticket, casilla "Trae RUC de INTALES e IGV desglosado") y 14; `creditoFiscal` derivado en el servidor (sin default: los antiguos se derivan al leerse con `creditoFiscalDe`); retención de 4ta manual solo en RH (8 % en S/, el RH no admite otro impuesto); la retención del 3 % solo en comprobantes con crédito fiscal (también en la sugerencia del formulario); "Ya se pagó" registra el pago del neto en la misma transacción; Por pagar muestra el tipo y el Excel el crédito fiscal. Backend 163/163, frontend 49/49, Playwright OK, revisión final con 2 Important corregidos.
 
-Menores diferidos (no bloquean el merge):
-
-- **M3** — el flete de las líneas de OCP que vienen de una SC "manual" no llega a la OT.
-- **M4** — `costosPorOT` carga todas las `FacturaProveedor`: proyectar sin `archivos`, filtrar por OCP/OT y revisar índices.
-- **M5** — validar que el TC esté entre 2 y 6 y poner timeout de 8 s a la consulta a apiperu.
-- **M6** — en el Excel en S/ la columna TC queda vacía para OC en USD.
-- **M7** — mensajes de la tarjeta: muestra "Sin OT vinculada" mientras carga y ante un 403.
-- **M8** — `ocPorCot` sin orden: agregar `.sort({ createdAt: 1 })`.
-
-## Estado — Fase 2 (2026-10-01)
-
-Implementada en `feature/comprobantes-compra` (plan `docs/superpowers/plans/2026-10-01-tc-comprobantes-usd.md`): el formulario de comprobantes de proveedor en USD trae el TC venta SUNAT de la fecha de emisión y lo deja solo lectura; si la ruta cayó a un respaldo lo propone editable con aviso, y si falla queda vacío para escribirlo. El servidor valida el rango 2–6 y la consulta a apiperu tiene timeout de 8 s (cierra M5). Pendiente de revisión y de correr los tests del backend con MongoDB.
+Menores diferidos: `pago.fecha` sin validar por API; falta test de reversión de "Ya se pagó" con cuenta inactiva; cuenta malformada da mensaje genérico; falla silenciosa al cargar cuentas; precarga SIRE de ticket 12 sin `ticketConRuc`; RH y tickets sin RUC aparecen "solo en el sistema" en SIRE (Fase 5); el formulario "Sin OC" no permite ligar una OT; `ticketConRuc: "false"` (texto) por API se toma como verdadero; duplicado previo responde 400.
+Pendiente de confirmar con el contador: si la retención del 3 % aplica a recibos de servicios públicos (14).
