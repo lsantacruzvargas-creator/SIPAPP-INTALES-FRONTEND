@@ -146,7 +146,12 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, vacioMsg }) {
                         {Number(f.igv ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
                       </td>
                       <td className={`${TD_NUM} text-gray-600`}>
-                        {Number(f.total ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                        {f.moneda === "USD" ? "US$ " : ""}{Number(f.total ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                        {f.aplicadoNC > 0 && (
+                          <span className="block text-[11px] text-red-600" title={(f.notasCredito || []).map((n) => n.serieNumero).join(", ")}>
+                            NC −{Number(f.aplicadoNC).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                          </span>
+                        )}
                       </td>
                       <td className={`${TD_NUM} text-gray-400`}>
                         <div className="flex flex-col items-end gap-0.5">

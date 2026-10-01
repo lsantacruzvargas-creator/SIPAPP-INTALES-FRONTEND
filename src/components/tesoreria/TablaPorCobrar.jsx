@@ -76,7 +76,8 @@ export default function TablaPorCobrar() {
                     <td className="px-3 py-2">{fecha(f.fechaEmision)}</td>
                     <td className={`px-3 py-2 ${COLOR_VENC[sem] || "text-gray-400"}`}>{fecha(venc)}</td>
                     <td className="px-3 py-2 text-xs">{f.cuotas?.length ? `${f.cuotas.filter((c) => c.pagado).length}/${f.cuotas.length}` : "—"}</td>
-                    <td className="px-3 py-2 tabular-nums">{money(f.total, f.moneda)}{f.moneda === "USD" ? <span className="block text-[11px] text-gray-400">TC {Number(f.tipoCambio).toFixed(3)}</span> : null}</td>
+                    <td className="px-3 py-2 tabular-nums">{money(f.total, f.moneda)}{f.moneda === "USD" ? <span className="block text-[11px] text-gray-400">TC {Number(f.tipoCambio).toFixed(3)}</span> : null}
+                      {f.aplicadoNC > 0 && <span className="block text-[11px] text-red-600" title={(f.notasCredito || []).map((n) => n.serieNumero).join(", ")}>NC aplicadas −{money(f.aplicadoNC, f.moneda)}</span>}</td>
                     <td className="px-3 py-2 text-xs">{hayImpuesto ? `${etiquetaImpuesto(f.impuesto)} ${money(f.impuesto.monto)}${f.impuesto.quienDeposita === "nosotros" ? " (nosotros)" : ""}` : "—"}</td>
                     <td className="px-3 py-2 text-center"><Check ok={f.saldoImpuesto <= 0.009} visible={hayImpuesto} /></td>
                     <td className="px-3 py-2 tabular-nums">{money(f.totalAPagar, f.moneda)}</td>
