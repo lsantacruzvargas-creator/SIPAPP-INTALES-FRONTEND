@@ -5,19 +5,19 @@ estos docs están idénticos en `docs/contabilidad/` de ambos.
 
 ## Estado
 
-- Investigación: `docs/contabilidad/2026-10-01-investigacion-libros-electronicos.md` (SUNAT, ERP, qué hay en INTALES,
-  decisiones del usuario).
-- Diseño: `docs/contabilidad/2026-10-01-motor-contable-design.md` — **borrador, pendiente de aprobación del usuario**.
+- Investigación: `docs/contabilidad/2026-10-01-investigacion-libros-electronicos.md`.
+- Diseño **aprobado** (2026-10-01): `docs/contabilidad/2026-10-01-motor-contable-design.md`. Cierre y reapertura de
+  mes: solo `tesorero`. Ingresos entre 300 y 1700 UIT y nunca > 1500 UIT (no aplica inventario permanente).
+- Plan de la Fase C1: `docs/superpowers/plans/2026-10-01-contabilidad-c1-base.md` — **pendiente de aprobación**.
 - Código: nada implementado todavía.
 
 ## Siguiente paso
 
-1. Que el usuario apruebe (o corrija) el diseño. Puntos a confirmar explícitamente: quién **reabre** un mes cerrado
-   (propuesto: solo admin/contador, con motivo), y el riesgo de las 1500 UIT (inventario permanente 12.1).
+1. Con el plan C1 aprobado: crear `feature/contabilidad` desde `main` en ambos repos e implementar con TDD.
 2. Conseguir el **Anexo 2 consolidado** (estructuras 5.1, 5.3, 6.1, 1.x, 3.x) antes de la Fase C4; las páginas de
    orientación de SUNAT responden "Acceso denegado" desde la nube (sí descargan los PDF de
    `www.sunat.gob.pe/legislacion/...` con un User-Agent de navegador).
-3. Fase C1 con su plan (`docs/superpowers/plans/…`), TDD y revisión, igual que las fases de comprobantes-compra.
+3. Mergear `feature/comprobantes-compra` antes de la Fase C2 (TC por fecha y tipos de comprobante).
 
 ## Convenciones
 

@@ -1,6 +1,6 @@
 # Motor contable con libros electrónicos (PLE) — Diseño
 
-**Fecha:** 2026-10-01 · **Proyecto:** SIPAPP-INTALES · **Estado:** borrador para revisión del usuario (no aprobado)
+**Fecha:** 2026-10-01 · **Proyecto:** SIPAPP-INTALES · **Estado:** aprobado por el usuario (2026-10-01)
 **Base:** `docs/contabilidad/2026-10-01-investigacion-libros-electronicos.md` (marco SUNAT, benchmark de ERP y
 decisiones del usuario).
 
@@ -23,6 +23,8 @@ Registro de Compras y de Ventas siguen por el SIRE (ya implementado).
 | Planillas y activos fijos | **Fuera de alcance**; sus asientos (planilla, depreciación) se registran como **asientos manuales** |
 | Roles | Se crean **`tesorero`** y **`contador`** |
 | Cierre de mes | Lo hace el **tesorero** |
+| Reapertura de un mes cerrado | **Solo el tesorero**, con motivo obligatorio que queda registrado |
+| Ingresos > 1500 UIT | **No** se superan: el Registro de Inventario Permanente (12.1) no aplica |
 
 ## Libros que corresponden (300–1700 UIT, régimen general / MYPE Tributario)
 
@@ -31,21 +33,19 @@ Registro de Compras y de Ventas siguen por el SIRE (ya implementado).
 | > 300 hasta 500 UIT | Registro de Compras, Registro de Ventas, **Libro Diario (5.1)**, **Libro Mayor (6.1)** | RC/RV en SIRE; Diario y Mayor en PLE |
 | > 500 hasta 1700 UIT | Los anteriores + **Libro de Inventarios y Balances (3.x)** | PLE |
 
-Con el plan de cuentas (5.3) se informa en enero, la primera vez y cuando cambia. **Riesgo a confirmar con el
-contador:** si los ingresos superan 1500 UIT, SUNAT exige además el Registro de Inventario Permanente en Unidades
-Físicas (12.1); queda fuera de este spec.
+Con el plan de cuentas (5.3) se informa en enero, la primera vez y cuando cambia. Los ingresos no superan 1500 UIT,
+así que no aplica el Registro de Inventario Permanente en Unidades Físicas (12.1).
 
 ## Roles
 
 | Rol | Puede |
 |---|---|
-| `tesorero` (nuevo) | Todo Tesorería (se agrega a `ROLES_TESORERIA`), revisar y contabilizar asientos automáticos, **cerrar el mes** |
+| `tesorero` (nuevo) | Todo Tesorería (se agrega a `ROLES_TESORERIA`), revisar y contabilizar asientos automáticos, **cerrar y reabrir el mes** |
 | `contador` (nuevo) | Plan de cuentas, configuración contable, asientos manuales, revisar/editar asientos de periodos abiertos, reportes y exportación PLE; Tesorería en lectura |
-| `admin` | Todo, incluida la **reapertura** de un mes cerrado |
+| `admin` | Todo lo contable salvo cerrar y reabrir el mes (exclusivo del tesorero) |
 | `jefatura` | Reportes contables en lectura |
 
-Supuesto a validar: **reabrir** un mes cerrado lo hace solo `admin` (o `contador`), con motivo obligatorio que queda
-registrado; el tesorero cierra pero no reabre.
+Cerrar y **reabrir** un mes es exclusivo del `tesorero`; la reapertura exige motivo y queda registrada.
 
 ## Modelo de datos (nuevo)
 
@@ -124,14 +124,14 @@ filtros, exportación a Excel y en S/.
 |---|---|
 | **C1 — Base** | Roles `tesorero` y `contador`; `CuentaContable` con seed PCGE y mantenimiento; `PeriodoContable`; `Asiento` con asientos **manuales** (crear, editar, anular, cuadre, correlativo, CUO); pantalla Contabilidad |
 | **C2 — Asientos automáticos** | `ConfiguracionContable`; generación desde compras, ventas, pagos, cobros, detracciones, retenciones y diferencia de cambio al pagar; destinos automáticos editables; bandeja de revisión y contabilización |
-| **C3 — Reportes y cierre** | Diario, Mayor, balance de comprobación, análisis de cuentas; cierre de mes del tesorero con diferencia de cambio de cierre; bloqueo de periodos cerrados en todo el sistema; reapertura con motivo |
+| **C3 — Reportes y cierre** | Diario, Mayor, balance de comprobación, análisis de cuentas; cierre de mes del tesorero con diferencia de cambio de cierre; bloqueo de periodos cerrados en todo el sistema; reapertura por el tesorero con motivo |
 | **C4 — Exportación PLE** | `.txt` de 5.1, 5.3 y 6.1 (y 1.1/1.2 opcional) con validaciones del Anexo 2/3 |
 | **C5 — Inventarios y Balances y EEFF** | Estructuras 3.x anuales, estado de situación y de resultados; cierre y apertura del ejercicio |
 
 ## Fuera de alcance
 
 - Planillas (PLAME) y su cálculo; activos fijos y depreciación (solo como asientos manuales).
-- Registro de Inventario Permanente (12.x/13.x), salvo que el contador confirme que se supera 1500 UIT.
+- Registro de Inventario Permanente (12.x/13.x): no aplica (ingresos ≤ 1500 UIT).
 - Presupuestos, consolidación de varias empresas, NIIF avanzadas (impuesto diferido, deterioro).
 - Enviar los libros al PLE: el sistema genera los `.txt`; el contador los valida y presenta en el PLE.
 
