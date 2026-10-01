@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
-import { fechaHoyLima, formatearFecha } from "../utils/fecha";
+import { fechaHoyLima } from "../utils/fecha";
+import { origenTC } from "../utils/costos";
 
 // "S/ | US$" + "Tipo de cambio al: [fecha]". En US$ pide el TC venta SUNAT de esa
 // fecha (el backend lo saca de su histórico o lo consulta una sola vez). Si falla,
@@ -18,9 +19,7 @@ export default function SelectorMonedaTC({ moneda, fecha, onCambio }) {
         const d = await r.json().catch(() => ({}));
         if (!vigente) return;
         if (!r.ok) { setInfo(d.mensaje || "No se pudo obtener el tipo de cambio"); onCambio({ moneda, fecha, tc: null, error: true }); return; }
-        const origen = d.fuente === "vigente" ? "TC vigente del sistema"
-          : `${d.fuente === "respaldo" ? "último guardado" : "SUNAT"}, ${formatearFecha(`${d.fecha}T12:00:00-05:00`)}`;
-        setInfo(`TC venta ${d.venta} (${origen})`);
+        setInfo(`TC venta ${d.venta} (${origenTC(d)})`);
         onCambio({ moneda, fecha, tc: d.venta, error: false });
       })
       .catch(() => { if (vigente) { setInfo("Sin conexión con el servidor"); onCambio({ moneda, fecha, tc: null, error: true }); } })

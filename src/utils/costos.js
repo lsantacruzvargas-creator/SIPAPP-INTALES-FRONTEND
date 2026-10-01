@@ -65,8 +65,11 @@ export const esTcSunat = (d) => d?.fuente === "apiperu" || d?.fuente === "bd";
 
 const diaMes = (f) => (/^\d{4}-\d{2}-\d{2}/.test(f || "") ? `${f.slice(8, 10)}/${f.slice(5, 7)}` : "");
 
-// "SUNAT 29/09", "último guardado 26/09" o "TC vigente del sistema".
+// "SUNAT para el 25/09", "último guardado, para el 26/09" o "TC vigente del sistema":
+// se nombra la fecha PARA la que vale el TC (fechaTc), no la del cierre que usa apiperu.
 export function origenTC(d) {
   if (d?.fuente === "vigente") return "TC vigente del sistema";
-  return `${d?.fuente === "respaldo" ? "último guardado" : "SUNAT"} ${diaMes(d?.fecha)}`.trim();
+  const dia = diaMes(d?.fechaTc || d?.fechaConsulta || d?.fecha);
+  const para = dia ? `para el ${dia}` : "";
+  return d?.fuente === "respaldo" ? `último guardado${para ? `, ${para}` : ""}` : `SUNAT ${para}`.trim();
 }

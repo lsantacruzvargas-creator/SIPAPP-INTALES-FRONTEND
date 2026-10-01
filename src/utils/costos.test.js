@@ -44,9 +44,10 @@ test("filas del reporte y del Excel en la moneda elegida", () => {
 });
 
 test("origenTC: nombra la fuente y la fecha real del TC; solo apiperu/bd cuentan como valor SUNAT", () => {
-  assert.equal(origenTC({ fuente: "apiperu", fecha: "2026-09-29" }), "SUNAT 29/09");
-  assert.equal(origenTC({ fuente: "bd", fecha: "2026-09-29" }), "SUNAT 29/09");
-  assert.equal(origenTC({ fuente: "respaldo", fecha: "2026-09-26" }), "último guardado 26/09");
+  // Se nombra la fecha PARA la que vale el TC (apiperu rotula con el cierre del día hábil anterior).
+  assert.equal(origenTC({ fuente: "apiperu", fecha: "2026-09-24", fechaTc: "2026-09-25" }), "SUNAT para el 25/09");
+  assert.equal(origenTC({ fuente: "bd", fecha: "2026-09-24", fechaTc: "2026-09-25" }), "SUNAT para el 25/09");
+  assert.equal(origenTC({ fuente: "respaldo", fecha: "2026-09-25", fechaTc: "2026-09-26" }), "último guardado, para el 26/09");
   assert.equal(origenTC({ fuente: "vigente", fecha: null }), "TC vigente del sistema");
   assert.equal(esTcSunat({ fuente: "apiperu" }), true);
   assert.equal(esTcSunat({ fuente: "bd" }), true);

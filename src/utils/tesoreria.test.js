@@ -119,11 +119,11 @@ test("diasEntre cuenta días calendario entre dos fechas YYYY-MM-DD", () => {
 });
 
 test("estadoTcComprobante: TC SUNAT de la fecha queda solo lectura; respaldo editable con aviso; falla vacío y editable", () => {
-  assert.deepEqual(estadoTcComprobante({ ok: true, datos: { venta: 3.756, fuente: "apiperu", fecha: "2026-09-29" } }),
-    { tc: "3.756", soloLectura: true, aviso: "TC venta SUNAT 29/09", alerta: false });
+  assert.deepEqual(estadoTcComprobante({ ok: true, datos: { venta: 3.756, fuente: "apiperu", fecha: "2026-09-28", fechaTc: "2026-09-29" } }),
+    { tc: "3.756", soloLectura: true, aviso: "TC venta SUNAT para el 29/09", alerta: false });
   assert.equal(estadoTcComprobante({ ok: true, datos: { venta: 3.7, fuente: "bd", fecha: "2026-09-29" } }).soloLectura, true);
-  assert.deepEqual(estadoTcComprobante({ ok: true, datos: { venta: 3.73, fuente: "respaldo", fecha: "2026-09-25" } }),
-    { tc: "3.73", soloLectura: false, aviso: "No se pudo consultar SUNAT: se propone el último guardado 25/09; revísalo", alerta: true });
+  assert.deepEqual(estadoTcComprobante({ ok: true, datos: { venta: 3.73, fuente: "respaldo", fecha: "2026-09-24", fechaTc: "2026-09-25" } }),
+    { tc: "3.73", soloLectura: false, aviso: "No se pudo consultar SUNAT: se propone el último guardado, para el 25/09; revísalo", alerta: true });
   assert.equal(estadoTcComprobante({ ok: true, datos: { venta: 3.8, fuente: "vigente", fecha: null } }).aviso,
     "No se pudo consultar SUNAT: se propone el TC vigente del sistema; revísalo");
   assert.deepEqual(estadoTcComprobante({ ok: false }),
