@@ -53,7 +53,9 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   // TC de un comprobante en USD: el venta SUNAT de la fecha de emisión, pedido al cambiar
   // la fecha o la moneda (solo lectura salvo que la consulta falle).
   const [tcConsulta, setTcConsulta] = useState(null);
-  const claveTc = form.moneda === "USD" && fechaConsultableTc(form.fechaEmision) ? form.fechaEmision : null;
+  // Las notas (07/08) van al TC de su comprobante: no se consulta SUNAT.
+  const notaConTcDeOrigen = form.tipoComprobante === "07" || form.tipoComprobante === "08";
+  const claveTc = form.moneda === "USD" && !notaConTcDeOrigen && fechaConsultableTc(form.fechaEmision) ? form.fechaEmision : null;
   const consultandoTc = claveTc != null && tcConsulta?.clave !== claveTc;
 
   useEffect(() => {
@@ -251,7 +253,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
           {previaNota && (
             <p className="col-span-3 text-xs text-gray-600 bg-green-50 rounded-lg p-2">
               Se aplicará {money(previaNota.aplicar, form.moneda)} al comprobante{previaNota.aFavor > 0.009 ? `; quedará ${money(previaNota.aFavor, form.moneda)} a favor del proveedor` : ""}.
-              {origen?.impuesto?.tipo === "detraccion" && <span className="block text-amber-700">La detracción del comprobante no se recalcula: ajústala a mano si corresponde.</span>}
+              {origen?.impuesto?.tipo === "detraccion" && <span className="block text-amber-700">Si su detracción aún no se deposita, se recalcula sobre el importe que queda.</span>}
             </p>
           )}
           {form.tipoComprobante === "12" && (
@@ -270,8 +272,9 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
           {form.moneda === "USD" && (
             <label className="text-xs text-gray-500">Tipo de cambio
               <input type="number" step="0.001" min="2" max="6" value={consultandoTc ? "" : form.tipoCambio} onChange={set("tipoCambio")}
-                readOnly={tcSoloLectura || consultandoTc} placeholder={consultandoTc ? "Consultando SUNAT…" : ""}
-                className={`${INP} ${tcSoloLectura ? "bg-gray-50 text-gray-600" : ""}`} />
+                readOnly={tcSoloLectura || consultandoTc || notaConTcDeOrigen} placeholder={consultandoTc ? "Consultando SUNAT…" : ""}
+                className={`${INP} ${tcSoloLectura || notaConTcDeOrigen ? "bg-gray-50 text-gray-600" : ""}`} />
+              {notaConTcDeOrigen && <span className="block mt-1 text-[11px] text-gray-400">TC del comprobante que modifica</span>}
               {!consultandoTc && tcConsulta?.clave === claveTc && (
                 <span className={`block mt-1 text-[11px] ${tcConsulta.alerta ? "text-amber-600" : "text-gray-400"}`}>{tcConsulta.aviso}</span>
               )}
