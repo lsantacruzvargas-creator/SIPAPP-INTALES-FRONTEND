@@ -7,6 +7,7 @@ import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../
 import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
 import ModalMovimiento from "./ModalMovimiento";
+import ModalAplicarNota from "./ModalAplicarNota";
 import { conBloqueo } from "../../utils/bloqueoApi";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
@@ -19,6 +20,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
   const [vista, setVista] = useState("oc");
   const [filtros, setFiltros] = useState(FILTROS_TESORERIA);
   const [pagando, setPagando] = useState(null);
+  const [aplicando, setAplicando] = useState(null);
   const [anulando, setAnulando] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState("");
@@ -43,11 +45,13 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
   };
   const monedaFp = (f) => f.moneda;
   const hayImpFp = (f) => f.impuesto?.tipo !== "ninguno";
+  // Las notas de crédito no son deuda: no suman a los subtotales.
+  const deudas = facturas.filter((f) => f.tipoComprobante !== "07");
   const subFp = {
-    total: sumarPorMoneda(facturas, (f) => f.total, monedaFp),
-    impuesto: sumarPorMoneda(facturas.filter(hayImpFp), (f) => f.impuesto.monto),
-    neto: sumarPorMoneda(facturas, (f) => f.netoAPagar, monedaFp),
-    saldoNeto: sumarPorMoneda(facturas, (f) => f.saldoNeto, monedaFp),
+    total: sumarPorMoneda(deudas, (f) => f.total, monedaFp),
+    impuesto: sumarPorMoneda(deudas.filter(hayImpFp), (f) => f.impuesto.monto),
+    neto: sumarPorMoneda(deudas, (f) => f.netoAPagar, monedaFp),
+    saldoNeto: sumarPorMoneda(deudas, (f) => f.saldoNeto, monedaFp),
     saldoImpuesto: sumarPorMoneda(facturas, (f) => f.saldoImpuesto),
   };
   const exportarExcel = () => (vista === "oc"
@@ -171,9 +175,15 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
                       <td className="px-3 py-2 text-center"><Check ok={f.saldoImpuesto <= 0.009} visible={hayImpuesto} /></td>
                       <td className="px-3 py-2 tabular-nums">{money(f.netoAPagar, f.moneda)}</td>
                       <td className="px-3 py-2 text-center"><Check ok={f.saldoNeto <= 0.009} /></td>
-                      <td className="px-3 py-2 tabular-nums">{money(f.saldoNeto, f.moneda)}{f.saldoImpuesto > 0.009 ? ` + ${money(f.saldoImpuesto)}` : ""}</td>
+                      <td className="px-3 py-2 tabular-nums">
+                        {f.tipoComprobante === "07"
+                          ? <span className="text-green-700">A favor {money(f.saldoAFavor, f.moneda)}</span>
+                          : <>{money(f.saldoNeto, f.moneda)}{f.saldoImpuesto > 0.009 ? ` + ${money(f.saldoImpuesto)}` : ""}</>}
+                        {f.aplicadoNC > 0.009 && <span className="block text-[11px] text-gray-400">NC aplicadas {money(f.aplicadoNC, f.moneda)}</span>}
+                      </td>
                       <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
                         {pendiente && <button onClick={() => setPagando(f)} className="text-xs text-purple-600 hover:text-purple-800">Registrar pago</button>}
+                        {f.tipoComprobante === "07" && f.saldoAFavor > 0.009 && <button onClick={() => setAplicando(f)} className="text-xs text-green-700 hover:text-green-900">Aplicar a…</button>}
                         {f.pagadoNeto + f.pagadoImpuesto === 0 && <button onClick={() => setAnulando(f)} className="text-xs text-red-500 hover:text-red-700">Anular</button>}
                       </td>
                     </tr>
@@ -199,6 +209,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
         </TablaScroll>
       </div>
 
+      {aplicando && <ModalAplicarNota nota={aplicando} facturas={datos.facturas} onClose={() => setAplicando(null)} onAplicada={() => { setAplicando(null); cargar(); }} />}
       {pagando && <ModalMovimiento lado="compra" documento={pagando} onClose={() => setPagando(null)} onGuardado={() => { setPagando(null); cargar(); }} />}
       {anulando && (
         <PromptAccion titulo={`Anular ${anulando.codigo}`} placeholder="Motivo de la anulación"

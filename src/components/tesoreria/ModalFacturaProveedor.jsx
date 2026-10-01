@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { fetchAuth, uploadAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
 import { money, round2, nombreEmpresa } from "../../utils/compras";
-import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION, estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, cuentasPara, avisoMoneda } from "../../utils/tesoreria";
+import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION, estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, cuentasPara, avisoMoneda, vistaPreviaNota, origenesPosibles, etiquetaComprobante } from "../../utils/tesoreria";
 import { conBloqueo } from "../../utils/bloqueoApi";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full";
@@ -31,6 +31,7 @@ function desdeSire(s, proveedores) {
 export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onClose, onGuardada }) {
   const hoy = fechaHoyLima();
   const [ocps, setOcps] = useState([]);
+  const [comprobantes, setComprobantes] = useState([]);
   const [archivo, setArchivo] = useState(null);
   const [form, setForm] = useState(() => ({
     modo: "sinOc", ordenCompraProveedor: "", esFleteDe: "", proveedor: "", tipoComprobante: "01", serie: "", numero: "",
@@ -38,6 +39,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
     condicion: "contado", fechaVencimiento: "", centroCosto: "", hayServicios: false,
     impuestoManual: false, impuestoTipo: "ninguno", codigoSunat: "", quienDeposita: "nosotros", noAplicaRetencion: false,
     ticketConRuc: false, retener4ta: false, yaPagado: false, pagoCuenta: "", pagoMedio: "transferencia", pagoOperacion: "",
+    documentoOrigen: "",
     ...(precarga ? desdeSire(precarga, catalogos.proveedores) : {}),
   }));
   const [guardando, setGuardando] = useState(false);
@@ -76,6 +78,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   useEffect(() => {
     fetchAuth("/tesoreria/por-pagar").then((r) => (r.ok ? r.json() : { ocps: [] })).then((d) => {
       setOcps(d.ocps);
+      setComprobantes(d.facturas || []);
       const o = ocpId && d.ocps.find((x) => x._id === ocpId);
       if (o) setForm((f) => ({ ...f, ...desdeOCP(o, f.fechaEmision) }));
     });
@@ -108,14 +111,27 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   const total = round2(subtotal + igv);
   const tipoCambio = form.moneda === "USD" ? Number(form.tipoCambio) : 1;
   const ticketConRuc = form.tipoComprobante === "12" && form.ticketConRuc;
-  const conCreditoFiscal = creditoFiscalDe({ tipoComprobante: form.tipoComprobante, igv, ticketConRuc });
+  const conCreditoFiscal = creditoFiscalDe({ tipoComprobante: form.tipoComprobante, igv, ticketConRuc, origen });
   const sugerido = sugerirImpuesto({ total, moneda: form.moneda, tipoCambio, hayServicios: form.hayServicios, esAgenteRetencion: catalogos.esAgenteRetencion, noAplicaRetencion: form.noAplicaRetencion, conCreditoFiscal });
+  // Notas (07/08): se ligan a un comprobante vigente del proveedor, del que toman la moneda.
+  const esNota = form.tipoComprobante === "07" || form.tipoComprobante === "08";
+  const esNC = form.tipoComprobante === "07";
+  // Se listan los de ambas monedas: al elegir el origen, la nota toma su moneda.
+  const origenesNota = esNota && form.proveedor
+    ? ["PEN", "USD"].flatMap((moneda) => origenesPosibles(comprobantes, { proveedor: form.proveedor, moneda }))
+    : [];
+  const origen = esNota ? comprobantes.find((c) => c._id === form.documentoOrigen) || null : null;
+  const elegirOrigen = (e) => {
+    const o = comprobantes.find((c) => c._id === e.target.value);
+    setForm((f) => ({ ...f, documentoOrigen: e.target.value, ...(o ? { moneda: o.moneda, tipoCambio: String(o.tipoCambio || f.tipoCambio) } : {}) }));
+  };
   // Recibo por honorarios: solo la retención de 4ta, y solo si se marca (decisión del usuario: manual).
   const esRH = form.tipoComprobante === "02";
-  const imp = esRH
+  const imp = esNC ? { tipo: "ninguno", codigoSunat: "" } : esRH
     ? { tipo: form.retener4ta ? "retencion4ta" : "ninguno", codigoSunat: "" }
     : form.impuestoManual ? { tipo: form.impuestoTipo, codigoSunat: form.codigoSunat } : sugerido;
-  const puedeYaPagado = form.condicion === "contado";
+  const puedeYaPagado = form.condicion === "contado" && !esNC;
+  const previaNota = esNC && origen ? vistaPreviaNota({ totalNota: total, saldoOrigen: origen.saldoNeto }) : null;
   const cuentasPago = cuentasPara({ cuentas, lado: "compra", concepto: "neto", impuesto: { tipo: imp.tipo } }).origen;
   const avisoCuentaPago = form.yaPagado ? avisoMoneda(cuentas.find((c) => c._id === form.pagoCuenta), form.moneda) : null;
   const { tasa, monto } = calcularImpuesto({ ...imp, total, moneda: form.moneda, tipoCambio });
@@ -149,6 +165,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
         impuesto: { tipo: imp.tipo, codigoSunat: imp.codigoSunat, quienDeposita },
         ticketConRuc,
       };
+      if (esNota) body.documentoOrigen = form.documentoOrigen;
       if (puedeYaPagado && form.yaPagado) body.pago = { cuenta: form.pagoCuenta, medio: form.pagoMedio, numeroOperacion: form.pagoOperacion };
       if (form.modo === "oc") body.ordenCompraProveedor = form.ordenCompraProveedor;
       else body.proveedor = form.proveedor;
@@ -216,10 +233,27 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
             </label>
           )}
           <label className="text-xs text-gray-500">Comprobante
-            <select value={form.tipoComprobante} onChange={set("tipoComprobante")} className={INP}>
+            <select value={form.tipoComprobante} onChange={(e) => {
+              const v = e.target.value;
+              setForm((f) => ({ ...f, tipoComprobante: v, documentoOrigen: "", ...(v === "07" || v === "08" ? { modo: "sinOc" } : {}) }));
+            }} className={INP}>
               {TIPOS_COMPROBANTE_COMPRA.map((t) => <option key={t.valor} value={t.valor}>{t.label}</option>)}
             </select>
           </label>
+          {esNota && (
+            <label className="text-xs text-gray-500 col-span-3">Comprobante que modifica
+              <select value={form.documentoOrigen} onChange={elegirOrigen} className={INP} disabled={!form.proveedor}>
+                <option value="">{form.proveedor ? "Elegir…" : "Primero elige el proveedor"}</option>
+                {origenesNota.map((c) => <option key={c._id} value={c._id}>{etiquetaComprobante(c)} — saldo {money(c.saldoNeto, c.moneda)}</option>)}
+              </select>
+            </label>
+          )}
+          {previaNota && (
+            <p className="col-span-3 text-xs text-gray-600 bg-green-50 rounded-lg p-2">
+              Se aplicará {money(previaNota.aplicar, form.moneda)} al comprobante{previaNota.aFavor > 0.009 ? `; quedará ${money(previaNota.aFavor, form.moneda)} a favor del proveedor` : ""}.
+              {origen?.impuesto?.tipo === "detraccion" && <span className="block text-amber-700">La detracción del comprobante no se recalcula: ajústala a mano si corresponde.</span>}
+            </p>
+          )}
           {form.tipoComprobante === "12" && (
             <label className="text-xs text-gray-500 col-span-3 flex items-center gap-1.5" title="Sin RUC de INTALES e IGV desglosado el ticket no da crédito fiscal">
               <input type="checkbox" checked={form.ticketConRuc} onChange={set("ticketConRuc")} />Trae RUC de INTALES e IGV desglosado
@@ -272,7 +306,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
               <input type="checkbox" checked={form.retener4ta} onChange={set("retener4ta")} />Retener 4ta categoría (8 %)
             </label>
           )}
-          <div className={`grid grid-cols-3 gap-3 ${esRH ? "hidden" : ""}`}>
+          <div className={`grid grid-cols-3 gap-3 ${esRH || esNC ? "hidden" : ""}`}>
             <label className="text-xs text-gray-500">Impuesto
               <select value={imp.tipo} onChange={elegirImpuesto("impuestoTipo")} className={INP}>
                 <option value="ninguno">Ninguno</option><option value="detraccion">Detracción</option>
@@ -350,7 +384,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
           {registrada
             ? <button onClick={() => onGuardada(registrada)} disabled={guardando} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Terminar sin PDF</button>
             : <button onClick={onClose} disabled={guardando} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>}
-          <button onClick={guardar} disabled={guardando || !(subtotal > 0) || (registrada && !archivo) || (!registrada && form.moneda === "USD" && (consultandoTc || !tcValido(form.tipoCambio))) || (!registrada && puedeYaPagado && form.yaPagado && !form.pagoCuenta)}
+          <button onClick={guardar} disabled={guardando || !(subtotal > 0) || (registrada && !archivo) || (!registrada && form.moneda === "USD" && (consultandoTc || !tcValido(form.tipoCambio))) || (!registrada && puedeYaPagado && form.yaPagado && !form.pagoCuenta) || (!registrada && esNota && !form.documentoOrigen)}
             className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50">
             {guardando ? "Guardando…" : registrada ? "Reintentar subir PDF" : "Registrar comprobante"}
           </button>

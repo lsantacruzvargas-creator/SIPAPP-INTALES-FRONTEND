@@ -175,12 +175,15 @@ export const TIPOS_COMPROBANTE_COMPRA = [
   { valor: "01", label: "Factura" },
   { valor: "02", label: "Recibo por honorarios" },
   { valor: "03", label: "Boleta" },
+  { valor: "07", label: "Nota de crédito" },
+  { valor: "08", label: "Nota de débito" },
   { valor: "12", label: "Ticket / ticket POS" },
   { valor: "14", label: "Recibo de servicios públicos" },
 ];
 
 // Espejo de Backend/src/utils/comprobantesCompra.js (el servidor decide; esto es la vista previa).
-export function creditoFiscalDe({ tipoComprobante, igv, ticketConRuc }) {
+export function creditoFiscalDe({ tipoComprobante, igv, ticketConRuc, origen }) {
+  if (tipoComprobante === "07" || tipoComprobante === "08") return origen ? origen.creditoFiscal ?? creditoFiscalDe(origen) : false;
   if (!(Number(igv) > 0)) return false;
   if (tipoComprobante === "01" || tipoComprobante === "14") return true;
   if (tipoComprobante === "12") return !!ticketConRuc;
@@ -190,3 +193,15 @@ export function creditoFiscalDe({ tipoComprobante, igv, ticketConRuc }) {
 // "Ticket / ticket POS TK01-5": tipo y serie-número, para distinguirlos en las tablas.
 export const etiquetaComprobante = (f) =>
   `${TIPOS_COMPROBANTE_COMPRA.find((t) => t.valor === f.tipoComprobante)?.label || "Comprobante"} ${f.serie}-${f.numero}`;
+
+// NC: se aplica al comprobante hasta su saldo; lo que sobra queda a favor (espejo del backend).
+export function vistaPreviaNota({ totalNota, saldoOrigen }) {
+  const aplicar = round2(Math.max(0, Math.min(totalNota, saldoOrigen)));
+  return { aplicar, aFavor: round2(totalNota - aplicar) };
+}
+
+// Comprobantes a los que se puede ligar una nota o aplicar un saldo a favor:
+// mismo proveedor y moneda, vigentes y que no sean notas.
+export const origenesPosibles = (facturas, { proveedor, moneda }) => facturas.filter((f) =>
+  String(f.proveedor?._id || f.proveedor) === String(proveedor) && f.moneda === moneda && !f.anulada
+  && f.tipoComprobante !== "07" && f.tipoComprobante !== "08");
