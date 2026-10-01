@@ -102,22 +102,19 @@ export default function PanelSire({ onRegistrarFactura }) {
     };
   }), filasSubtotal("RESULTADO", { TOTAL: sub.total, IGV: sub.igv }));
 
-  // Plantilla con lo que el sistema tiene y el SIRE no (o con datos distintos), para cargarlo al SIRE.
-  // OJO: las columnas siguen los nombres de la propuesta SIRE; conviene contrastarlas con la
-  // plantilla de importación vigente en el portal SUNAT antes de subirla.
-  const tipoDocId = (ruc) => (String(ruc || "").length === 11 ? "6" : String(ruc || "").length === 8 ? "1" : "0");
-  const descargarPlantilla = () => {
-    const aSubir = filas.filter((f) => f.sistema && (f.estado === "solo_sistema" || f.estado === "difiere"));
-    const fechaSire = (v) => fechaIsoTexto(v);
-    exportarHoja(`plantilla-sire-${libro.toLowerCase()}-${periodoDeMes(mes)}.xlsx`, "Plantilla SIRE", aSubir.map(({ sistema: d }) => {
-      const base = Math.round(((d.total || 0) - (d.igv || 0)) * 100) / 100;
-      return {
-        "Fecha de emisión": fechaSire(d.fechaEmision), "Tipo CP/Doc.": d.tipo, "Serie del CDP": d.serie, "Nro CP o Doc. Nro Inicial (Rango)": d.numero,
-        "Tipo Doc Identidad": tipoDocId(d.rucContraparte), "Nro Doc Identidad": d.rucContraparte, "Apellidos Nombres/ Razón Social": d.razonSocial || "",
-        "BI Gravado DG": base, "IGV / IPM DG": d.igv || 0, "Total CP": d.total || 0, Moneda: d.moneda || "PEN",
-      };
-    }));
-  };
+  // Plantilla .txt para "Subir archivo": mismas columnas y formato que exporta el SIRE
+  // (la arma el servidor copiando la propuesta descargada del periodo, si la hay).
+  const descargarPlantilla = () => accion(async () => {
+    const r = await fetchAuth(`${base}/plantilla`);
+    if (!r.ok) return r;
+    const url = URL.createObjectURL(await r.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `plantilla-sire-${libro.toLowerCase()}-${periodoDeMes(mes)}.txt`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    return { ok: true };
+  });
 
   const celda = (f, [clave, campo]) => {
     const dato = f.sire?.[campo] ?? f.sistema?.[campo];
@@ -144,7 +141,7 @@ export default function PanelSire({ onRegistrarFactura }) {
           Subir archivo<input type="file" accept=".zip,.txt" className="hidden" onChange={subir} disabled={ocupado} />
         </label>
         <button onClick={exportarExcel} disabled={!visibles.length} className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Exportar Excel</button>
-        <button onClick={descargarPlantilla} disabled={!filas.length} title="Comprobantes del sistema que faltan o difieren en el SIRE" className="border border-purple-300 text-purple-700 px-4 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50">Descargar plantilla SIRE</button>
+        <button onClick={descargarPlantilla} disabled={ocupado} title="Archivo .txt con las columnas del SIRE para llenar y cargarlo con «Subir archivo»" className="border border-purple-300 text-purple-700 px-4 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50">Descargar plantilla</button>
         <span className="text-xs text-gray-500">
           {!estado || estado.estado === "sin_datos" ? "Sin propuesta descargada"
             : `${estado.estado === "lista" ? "Lista" : estado.estado === "error" ? "Error" : "Descargando"} · ${estado.origen === "archivo" ? "archivo" : "API"} · ${estado.totalComprobantes} comprobantes${estado.fechaDescarga ? ` · ${formatearFechaHora(estado.fechaDescarga)}` : ""}${estado.mensaje ? ` · ${estado.mensaje}` : ""}`}
