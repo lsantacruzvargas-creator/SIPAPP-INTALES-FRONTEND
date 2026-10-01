@@ -61,6 +61,16 @@ Respuestas: anotarlas aquí mismo (debajo de cada pregunta) o en un archivo apar
 24. **Pago a cuenta de renta**: ¿coeficiente o 1.5 %? (hoy configurable, 1.5 % por defecto).
 25. **D. Leg. 1669** (plazos de anotación en el Registro de Compras): ¿ya aplica a INTALES?
 
+## D. Alcance (surgieron al revisar otros ERP)
+
+26. ¿Quiere los asientos **uno por comprobante** (con RUC, serie y número en cada línea) o **resumidos** por día/mes
+    y subdiario?
+27. ¿El **costo de ventas** (69 contra 21/23) lo calcula su software o debe venir de INTALES?
+28. Como él lleva el Mayor, el cierre anual y los EEFF en su software: ¿necesita de INTALES algún reporte contable
+    además de la exportación (Diario/Mayor de control, conciliación bancaria)?
+29. Si no tiene un plan de cuentas propio en Excel: ¿le sirve partir de un PCGE completo (≈1 800 cuentas) y
+    revisarlo?
+
 ## Ya decidido (no hace falta preguntar)
 
 - INTALES exporta asientos al software del contador; no genera los libros del PLE como contabilidad oficial.

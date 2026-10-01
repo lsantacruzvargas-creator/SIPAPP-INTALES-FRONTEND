@@ -148,7 +148,7 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
 
 ## 6. Índice de documentos
 
-- `docs/contabilidad/`: **preguntas al contador para C2**, investigación de libros electrónicos, diseño del motor contable (aprobado, cuentas corregidas),
+- `docs/contabilidad/`: **preguntas al contador para C2**, **referencias de otros ERP para C2–C5**, investigación de libros electrónicos, diseño del motor contable (aprobado, cuentas corregidas),
   spec de implementación C1, **guía contable** y **casos de prueba** (agente contador), `HANDOFF-contabilidad.md`.
 - `docs/superpowers/specs/`: todos los specs (cotización, centro de costo, compras, Tesorería B1, bloqueo de edición,
   comprobantes de compra, ventas US$/tributario).

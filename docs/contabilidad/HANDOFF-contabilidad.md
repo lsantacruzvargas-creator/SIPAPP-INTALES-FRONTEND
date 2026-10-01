@@ -34,12 +34,16 @@ El plan de cuentas debe ser el del contador (se importa desde Excel).
   (`2026-10-01-motor-contable-design.md`, con el cambio de alcance arriba), spec C1, guía contable y casos de prueba
   (23 casos, brechas B1–B25; B1–B5 y B9 resueltas en `main`; B8 resuelta: exportar).
 
+- **Referencias de otros ERP** (ERP C# dominicano, FacturaScripts, prototipo Java): diseño adoptado para C2, B7 y el
+  re-dimensionamiento de C3–C5 en `2026-10-01-referencias-erp-C2-C5.md`.
+
 ## Siguiente paso
 
 1. El usuario envía `2026-10-01-preguntas-contador-C2.md` al contador y trae: plantilla de importación de ejemplo,
    plan de cuentas en Excel, códigos de anexos/subdiarios/centros de costo y las respuestas.
-2. Con eso: spec de C2 (`ConfiguracionContable` con las cuentas del contador, cuenta por tipo de artículo y por
-   comprobante, asientos automáticos en borrador, bandeja de revisión) y rediseño de C4 como exportación a su plantilla.
+2. Con eso: spec de C2 (siguiendo `2026-10-01-referencias-erp-C2-C5.md`: (`ConfiguracionContable` con las cuentas del contador, cuenta por tipo de artículo y por
+   comprobante, asientos automáticos en borrador, bandeja de revisión) y rediseño de C4 como exportación a su plantilla. Recomendado: B7 (banco y conciliación)
+   antes de C3; C5 en suspenso.
 3. Pendiente menor de C1 para C4: correlativo de línea (B19) si la plantilla del contador lo pide.
 
 ## Convenciones
