@@ -42,6 +42,8 @@ export default function ModalNuevaOT({ cotizacion, onClose, onCreada }) {
   const [empresasOpen, setEmpresasOpen] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  // Creado, pero con adjuntos que no se pudieron subir: se avisa y "Continuar" cierra.
+  const [creada, setCreada] = useState(null);
   const [busquedaEmpresa, setBusquedaEmpresa] = useState(() => {
     const e = cotizacion?.empresa;
     if (!e) return "";
@@ -148,14 +150,22 @@ export default function ModalNuevaOT({ cotizacion, onClose, onCreada }) {
       // documento). Best-effort: si alguno falla, la OT ya quedó creada
       // igual, no se bloquea la creación por esto.
       if (archivosPendientes.length) {
+        const fallas = [];
         await conBloqueo("ordenTrabajo", nueva._id, async (h) => {
           for (const pendiente of archivosPendientes) {
             const fd = new FormData();
             fd.append("archivo", pendiente.file);
-            await uploadAuth(`/ordenes-trabajo/${nueva._id}/archivos`, fd, h);
+            const r = await uploadAuth(`/ordenes-trabajo/${nueva._id}/archivos`, fd, h).catch(() => null);
+            if (!r?.ok) fallas.push(`${pendiente.file.name} (${(r && (await r.json().catch(() => ({}))).mensaje) || "error de conexión"})`);
           }
           return new Response(null, { status: 204 });
         });
+        if (fallas.length) {
+          setError(`La Orden de Trabajo se creó, pero no se pudieron subir: ${fallas.join("; ")}. Adjúntalos desde su detalle.`);
+          setCreada(nueva);
+          setGuardando(false);
+          return;
+        }
       }
       onCreada?.(nueva);
     } else {
@@ -358,11 +368,11 @@ export default function ModalNuevaOT({ cotizacion, onClose, onCreada }) {
           </button>
           <button
             type="button"
-            onClick={guardar}
+            onClick={creada ? () => onCreada?.(creada) : guardar}
             disabled={guardando}
             className="text-sm bg-emerald-600 text-white px-5 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition font-medium"
           >
-            {guardando ? "Creando…" : "Crear Orden de Trabajo"}
+            {creada ? "Continuar" : guardando ? "Creando…" : "Crear Orden de Trabajo"}
           </button>
         </div>
       </div>

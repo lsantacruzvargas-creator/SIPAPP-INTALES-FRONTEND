@@ -430,11 +430,9 @@ export default function ListaOrdenesCompra() {
     const fd = new FormData();
     fd.append("documento", file);
     const res = await conBloqueo("ordenCompra", id, (h) => uploadAuth(`/ordenes-compra/${id}/documento`, fd, h));
-    if (res.status === 423) { setAviso((await res.json().catch(() => ({}))).mensaje); return; }
-    if (res.ok) {
-      const actualizada = await res.json();
-      setOrdenes((prev) => prev.map((o) => o._id === id ? { ...o, documento: actualizada.documento } : o));
-    }
+    if (!res.ok) { setAviso((await res.json().catch(() => ({}))).mensaje || "No se pudo subir el documento."); return; }
+    const actualizada = await res.json();
+    setOrdenes((prev) => prev.map((o) => o._id === id ? { ...o, documento: actualizada.documento } : o));
   };
 
   return (

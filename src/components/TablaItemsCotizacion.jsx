@@ -23,6 +23,7 @@ export default function TablaItemsCotizacion({
   puedeVerPrecios = true,
 }) {
   const [catalogoOpen, setCatalogoOpen] = useState(false);
+  const [errorImagen, setErrorImagen] = useState("");
   const [catalogoTarget, setCatalogoTarget] = useState(null); // null = "+ Agregar ítem de plantilla" (fusiona/crea fila); _key = agregar descripción a esa fila puntual
   const [confirmandoQuitarOT, setConfirmandoQuitarOT] = useState(null);
 
@@ -45,8 +46,12 @@ export default function TablaItemsCotizacion({
     if (!archivo) return;
     const fd = new FormData();
     fd.append("imagen", archivo);
-    const res = await uploadAuth("/cotizaciones/subir-imagen", fd);
-    if (!res.ok) return;
+    setErrorImagen("");
+    const res = await uploadAuth("/cotizaciones/subir-imagen", fd).catch(() => null);
+    if (!res?.ok) {
+      setErrorImagen((res && (await res.json().catch(() => ({}))).mensaje) || "No se pudo subir la imagen.");
+      return;
+    }
     const { url } = await res.json();
     handleItem(key, "imagenes", [url]);
   };
@@ -131,6 +136,7 @@ export default function TablaItemsCotizacion({
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {errorImagen && <p className="px-6 pt-3 text-xs text-red-500">{errorImagen}</p>}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-5 rounded-full bg-sky-500" />
