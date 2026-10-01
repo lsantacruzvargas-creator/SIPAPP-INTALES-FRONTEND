@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   calcularImpuesto, partes, tipoMovimientoEsperado, sugerirImpuesto, impuestoVentaPorDefecto, etiquetaImpuesto,
   diasCredito, sumarDias, vencimientoDe, semaforo, filtrarFacturas, FILTROS_TESORERIA, totalesMovimientos, cuentasPara, periodoDeMes, fechaIsoTexto, esPagoAntiguo, avisoMoneda, diasEntre,
+  estadoTcComprobante, tcValido, fechaConsultableTc,
 } from "./tesoreria.js";
 
 test("calcularImpuesto replica al backend: detracción entera en soles y retención 3 %", () => {
@@ -115,4 +116,30 @@ test("diasEntre cuenta días calendario entre dos fechas YYYY-MM-DD", () => {
   assert.equal(diasEntre("2026-09-28", "2026-10-28"), 30);
   assert.equal(diasEntre("2026-09-28", "2026-09-28"), 0);
   assert.equal(diasEntre("2026-09-28", ""), null);
+});
+
+test("estadoTcComprobante: TC SUNAT de la fecha queda solo lectura; respaldo editable con aviso; falla vacío y editable", () => {
+  assert.deepEqual(estadoTcComprobante({ ok: true, datos: { venta: 3.756, fuente: "apiperu", fecha: "2026-09-28", fechaTc: "2026-09-29" } }),
+    { tc: "3.756", soloLectura: true, aviso: "TC venta SUNAT para el 29/09", alerta: false });
+  assert.equal(estadoTcComprobante({ ok: true, datos: { venta: 3.7, fuente: "bd", fecha: "2026-09-29" } }).soloLectura, true);
+  assert.deepEqual(estadoTcComprobante({ ok: true, datos: { venta: 3.73, fuente: "respaldo", fecha: "2026-09-24", fechaTc: "2026-09-25" } }),
+    { tc: "3.73", soloLectura: false, aviso: "No se pudo consultar SUNAT: se propone el último guardado, para el 25/09; revísalo", alerta: true });
+  assert.equal(estadoTcComprobante({ ok: true, datos: { venta: 3.8, fuente: "vigente", fecha: null } }).aviso,
+    "No se pudo consultar SUNAT: se propone el TC vigente del sistema; revísalo");
+  assert.deepEqual(estadoTcComprobante({ ok: false }),
+    { tc: "", soloLectura: false, aviso: "No se pudo obtener el TC SUNAT de esa fecha: escríbelo", alerta: true });
+  assert.equal(estadoTcComprobante({ ok: false, mensaje: "No hay tipo de cambio de una fecha futura" }).aviso, "No hay tipo de cambio de una fecha futura: escríbelo");
+});
+
+test("tcValido: 2–6 como el servidor", () => {
+  assert.equal(tcValido("3.75"), true);
+  assert.equal(tcValido(""), false);
+  assert.equal(tcValido("37.5"), false);
+  assert.equal(tcValido("1.9"), false);
+});
+
+test("fechaConsultableTc: no consulta fechas vacías ni las que aparecen al teclear el año", () => {
+  assert.equal(fechaConsultableTc("2026-09-29"), true);
+  assert.equal(fechaConsultableTc(""), false);
+  assert.equal(fechaConsultableTc("0002-09-29"), false);
 });

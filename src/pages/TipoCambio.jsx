@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { formatearFechaHora } from "../utils/fecha";
 import TablaScroll from "../components/TablaScroll";
+import { origenTC, esTcSunat } from "../utils/costos";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white";
 
@@ -100,14 +101,15 @@ export default function TipoCambio() {
                 <p className="text-sky-600">Consultando tipo de cambio SUNAT…</p>
               ) : tcSunat ? (
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <span className="text-sky-700">
-                    SUNAT hoy — Compra S/ {Number(tcSunat.compra).toFixed(3)} · Venta S/ {Number(tcSunat.venta).toFixed(3)}
+                  <span className={esTcSunat(tcSunat) ? "text-sky-700" : "text-amber-700"}>
+                    {origenTC(tcSunat)} — Compra S/ {Number(tcSunat.compra).toFixed(3)} · Venta S/ {Number(tcSunat.venta).toFixed(3)}
+                    {!esTcSunat(tcSunat) && <span className="block text-xs">No se pudo consultar SUNAT; no es el valor publicado de hoy.</span>}
                   </span>
-                  <button type="button"
+                  {esTcSunat(tcSunat) && <button type="button"
                     onClick={() => { setValor(String(tcSunat.venta)); setOk(false); }}
                     className="text-xs text-sky-700 border border-sky-300 px-2.5 py-1 rounded-lg hover:bg-sky-100 transition font-medium">
                     Usar valor SUNAT (venta)
-                  </button>
+                  </button>}
                 </div>
               ) : (
                 <div className="flex items-center justify-between">

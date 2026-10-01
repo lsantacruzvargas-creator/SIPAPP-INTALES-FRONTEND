@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
-import { formatearFecha } from "../utils/fecha";
+import { formatearFecha, fechaHoyLima } from "../utils/fecha";
+import { costoEn } from "../utils/costos";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
 import ModalDetalleGuia from "./ModalDetalleGuia";
 import ModalReporteCosto from "./ModalReporteCosto";
@@ -50,10 +51,9 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   const [informes, setInformes]   = useState([]);
   const [gres, setGres]           = useState([]);
   const [guiaDetalle, setGuiaDetalle] = useState(null);
-  const [requerimientos, setRequerimientos] = useState([]);
-  const [servicios, setServicios] = useState([]);
-  const [notificacionesTrabajo, setNotificacionesTrabajo] = useState([]);
-  const [tipoCambio, setTipoCambio] = useState(null);
+  const [costos, setCostos] = useState(null);
+  // La tarjeta abre en la moneda de la OC; el desglose permite cambiarla y la fecha del TC.
+  const [vista, setVista] = useState({ moneda: orden.moneda || "PEN", fecha: fechaHoyLima(), tc: null, error: false });
   const [reporteOpen, setReporteOpen] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState("");
@@ -189,16 +189,9 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
         if (puedeVerReporte) {
           // Agregado (propia OT + todas sus sub-OTs) — mismo patrón
           // `?ordenTrabajoPadre=` ya usado en DetalleOrdenTrabajo.jsx.
-          fetchAuth(`/requerimientos?ordenTrabajoPadre=${found._id}`)
-            .then(r => r.ok && r.json())
-            .then(reqs => setRequerimientos(reqs || []));
-          fetchAuth(`/servicios-externos?ordenTrabajoPadre=${found._id}`)
-            .then(r => r.ok && r.json())
-            .then(servs => setServicios(servs || []));
-          fetchAuth(`/notificaciones-trabajo?ordenTrabajoPadre=${found._id}`)
-            .then(r => r.ok && r.json())
-            .then(nots => setNotificacionesTrabajo(nots || []));
-          fetchAuth("/tipo-cambio").then(r => r.ok && r.json()).then(d => d && setTipoCambio(d.valor));
+          fetchAuth(`/reportes/costos-fabricacion/${found._id}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then(setCostos);
         }
       }
     });
@@ -278,32 +271,28 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
     else { setError("Error al cerrar/abrir la cadena."); }
   };
 
+  // Con el desglose abierto el TC ya lo pide SelectorMonedaTC: aquí solo con el modal cerrado.
+  useEffect(() => {
+    if (!puedeVerReporte || reporteOpen || vista.tc || vista.error) return;
+    fetchAuth(`/sunat/tipo-cambio?fecha=${vista.fecha}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+      .then((d) => setVista((v) => ({ ...v, tc: d?.venta || null, error: !d })));
+  }, [puedeVerReporte, reporteOpen, vista.tc, vista.error, vista.fecha]);
+
   const cot     = orden.cotizacion;
   const factura = facturaVinculada;
   const ultimo  = informes[informes.length - 1];
 
-  // Costo de fabricación (OC vs costo real de la OT) — HH/HM cuentan apenas
-  // se notifican; materiales/servicios solo cuando llegan a "pagado" (ver
-  // spec 2026-09-22). Cálculo 100% client-side, mismo criterio que
-  // ListaOrdenesCompra.jsx/Dashboard.jsx usan para totales derivados.
-  const costoHH = notificacionesTrabajo.flatMap(n => n.items)
-    .filter(it => it.tipo === "hombre" && !it.anulado)
-    .reduce((s, it) => s + it.costoTotal, 0);
-  const costoHM = notificacionesTrabajo.flatMap(n => n.items)
-    .filter(it => it.tipo === "maquina" && !it.anulado)
-    .reduce((s, it) => s + it.costoTotal, 0);
-  const costoMateriales = requerimientos.flatMap(r => r.items)
-    .filter(it => it.esSolicitudCompra && it.estadoPago === "pagado")
-    .reduce((s, it) => s + (Number(it.montoUnitario) || 0) * (Number(it.cantidad) || 0) + (Number(it.costoTransporte) || 0), 0);
-  const costoServicios = servicios.filter(s => s.estadoPago === "pagado" && !s.anulado)
-    .reduce((s, v) => s + (Number(v.costo) || 0) * (Number(v.cantidad) || 0) + (Number(v.costoTransporte) || 0), 0);
-  const costoFabricacionPEN = costoHH + costoHM + costoMateriales + costoServicios;
-  const costoFabricacion = orden.moneda === "USD" && tipoCambio > 0
-    ? costoFabricacionPEN / tipoCambio
-    : costoFabricacionPEN;
-  const ocSubtotal = Number(orden.subtotal ?? orden.monto) || 0;
-  const margen = ocSubtotal - costoFabricacion;
-  const margenPct = ocSubtotal > 0 ? (margen / ocSubtotal) * 100 : null;
+  // Costo de fabricación (spec 2026-09-30): lo calcula el servidor en soles
+  // (comprometido + consumido) y se muestra en la moneda elegida al TC de una fecha.
+  // Se compara contra ESTA OC (una cotización puede tener más de una).
+  const monedaVista = vista.moneda === "USD" && !vista.tc ? "PEN" : vista.moneda;
+  const costoVista = costos
+    ? costoEn({ ...costos, ocSubtotal: Number(orden.subtotal ?? orden.monto) || 0, ocMoneda: orden.moneda || "PEN" }, monedaVista, vista.tc)
+    : null;
+  const margen = costoVista?.margen ?? null;
+  const margenPct = margen != null && costoVista.ocSubtotal > 0 ? (margen / costoVista.ocSubtotal) * 100 : null;
 
   const pasos = [
     { tipo: "cotizacion", activo: !!cot,             codigo: cot?.codigo },
@@ -626,12 +615,17 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
               <div onClick={() => setReporteOpen(true)} role="button"
                 className="border border-gray-100 bg-white rounded-2xl p-5 min-h-[112px] cursor-pointer hover:shadow-md transition">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Costo de fabricación</p>
-                <p className={`text-xl font-extrabold ${margen >= 0 ? "text-green-600" : "text-red-600"}`}>
-                  {money(margen, orden.moneda)}
+                <p className={`text-xl font-extrabold ${margen == null ? "text-gray-400" : margen >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {margen != null ? money(margen, monedaVista) : "—"}
                 </p>
                 <p className="text-xs text-gray-400">
-                  {margenPct != null ? `${margenPct.toFixed(1)}% de margen` : "Sin OT vinculada para comparar"}
+                  {!costos ? "Sin OT vinculada para comparar" : margenPct != null ? `${margenPct.toFixed(1)}% de margen` : "Sin tipo de cambio para comparar"}
                 </p>
+                {costoVista && (
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Consumido {money(costoVista.consumido.total, monedaVista)} · Comprometido {money(costoVista.comprometido.total, monedaVista)}
+                  </p>
+                )}
               </div>
             )}
           </section>
@@ -644,15 +638,10 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
 
       {reporteOpen && (
         <ModalReporteCosto
-          moneda={orden.moneda}
-          ocSubtotal={ocSubtotal}
-          costoHH={costoHH}
-          costoHM={costoHM}
-          costoMateriales={costoMateriales}
-          costoServicios={costoServicios}
-          costoFabricacion={costoFabricacion}
-          margen={margen}
-          margenPct={margenPct}
+          costos={costos}
+          orden={orden}
+          vista={vista}
+          onCambioVista={setVista}
           onClose={() => setReporteOpen(false)}
         />
       )}

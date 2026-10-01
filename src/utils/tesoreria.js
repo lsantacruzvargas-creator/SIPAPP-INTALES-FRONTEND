@@ -1,5 +1,6 @@
 import { DETRACCION_BIENES_SERVICIOS } from "./catalogosSunat.js";
 import { round2 } from "./compras.js";
+import { origenTC, esTcSunat } from "./costos.js";
 
 // Espejo de Backend/src/utils/impuesto.js: el backend recalcula siempre; esto
 // es solo la vista previa de los formularios.
@@ -147,4 +148,21 @@ export function avisoMoneda(cuenta, monedaParte) {
 export function diasEntre(desdeIso, hastaIso) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(desdeIso || "") || !/^\d{4}-\d{2}-\d{2}$/.test(hastaIso || "")) return null;
   return Math.round((Date.parse(hastaIso) - Date.parse(desdeIso)) / 86400000);
+}
+
+// ── TC de un comprobante en USD (spec comprobantes-compra, regla 7) ──
+// Mismo rango que valida el servidor.
+export const tcValido = (v) => Number(v) >= 2 && Number(v) <= 6;
+export const fechaConsultableTc = (f) => /^\d{4}-\d{2}-\d{2}$/.test(f || "") && f >= "2000-01-01";
+
+// `consulta` = { ok, datos?, mensaje? } de GET /sunat/tipo-cambio?fecha=. El TC SUNAT de
+// esa fecha queda solo lectura; si la ruta cayó a un respaldo se propone pero se puede
+// corregir; si falló, el campo queda vacío para escribirlo.
+export function estadoTcComprobante(consulta) {
+  const d = consulta?.ok ? consulta.datos : null;
+  if (!d?.venta) {
+    return { tc: "", soloLectura: false, aviso: `${consulta?.mensaje || "No se pudo obtener el TC SUNAT de esa fecha"}: escríbelo`, alerta: true };
+  }
+  if (esTcSunat(d)) return { tc: String(d.venta), soloLectura: true, aviso: `TC venta ${origenTC(d)}`, alerta: false };
+  return { tc: String(d.venta), soloLectura: false, aviso: `No se pudo consultar SUNAT: se propone el ${origenTC(d)}; revísalo`, alerta: true };
 }
