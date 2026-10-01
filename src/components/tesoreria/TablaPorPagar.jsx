@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha, fechaHoyLima } from "../../utils/fecha";
 import { money } from "../../utils/compras";
-import { FILTROS_TESORERIA, filtrarFacturas, semaforo, etiquetaImpuesto } from "../../utils/tesoreria";
+import { FILTROS_TESORERIA, filtrarFacturas, semaforo, etiquetaImpuesto, etiquetaComprobante, creditoFiscalDe } from "../../utils/tesoreria";
 import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
 import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
 import ModalMovimiento from "./ModalMovimiento";
+import ModalAplicarNota from "./ModalAplicarNota";
 import { conBloqueo } from "../../utils/bloqueoApi";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
@@ -19,6 +20,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
   const [vista, setVista] = useState("oc");
   const [filtros, setFiltros] = useState(FILTROS_TESORERIA);
   const [pagando, setPagando] = useState(null);
+  const [aplicando, setAplicando] = useState(null);
   const [anulando, setAnulando] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState("");
@@ -43,11 +45,13 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
   };
   const monedaFp = (f) => f.moneda;
   const hayImpFp = (f) => f.impuesto?.tipo !== "ninguno";
+  // Las notas de crédito no son deuda: no suman a los subtotales.
+  const deudas = facturas.filter((f) => f.tipoComprobante !== "07");
   const subFp = {
-    total: sumarPorMoneda(facturas, (f) => f.total, monedaFp),
-    impuesto: sumarPorMoneda(facturas.filter(hayImpFp), (f) => f.impuesto.monto),
-    neto: sumarPorMoneda(facturas, (f) => f.netoAPagar, monedaFp),
-    saldoNeto: sumarPorMoneda(facturas, (f) => f.saldoNeto, monedaFp),
+    total: sumarPorMoneda(deudas, (f) => f.total, monedaFp),
+    impuesto: sumarPorMoneda(deudas.filter(hayImpFp), (f) => f.impuesto.monto),
+    neto: sumarPorMoneda(deudas, (f) => f.netoAPagar, monedaFp),
+    saldoNeto: sumarPorMoneda(deudas, (f) => f.saldoNeto, monedaFp),
     saldoImpuesto: sumarPorMoneda(facturas, (f) => f.saldoImpuesto),
   };
   const exportarExcel = () => (vista === "oc"
@@ -57,7 +61,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
       "SALDO IMPUESTO": o.saldoImpuesto, "PRÓX. VENCIMIENTO": fecha(o.proximoVencimiento),
     })), filasSubtotal("OC", { TOTAL: subOc.total, FACTURADO: subOc.facturado, "POR FACTURAR": subOc.porFacturar, "SALDO NETO": subOc.saldoNeto, "SALDO IMPUESTO": subOc.saldoImpuesto }))
     : exportarHoja("por-pagar-facturas.xlsx", "Por factura", facturas.map((f) => ({
-      FP: f.codigo, COMPROBANTE: `${f.serie}-${f.numero}`, PROVEEDOR: f.proveedorRazonSocial,
+      FP: f.codigo, COMPROBANTE: etiquetaComprobante(f), "CRÉDITO FISCAL": creditoFiscalDe(f) ? "Sí" : "No", PROVEEDOR: f.proveedorRazonSocial,
       OC: f.ordenCompraProveedor?.codigo || "", "EMISIÓN": fecha(f.fechaEmision), VENCE: fecha(f.fechaVencimiento),
       MONEDA: f.moneda, TOTAL: f.total, IMPUESTO: hayImpFp(f) ? f.impuesto.monto : 0, NETO: f.netoAPagar,
       "SALDO NETO": f.saldoNeto, "SALDO IMPUESTO": f.saldoImpuesto,
@@ -100,7 +104,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
           </>
         )}
         <button onClick={exportarExcel} className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50" style={{ marginLeft: "auto" }}>Exportar Excel</button>
-        <button onClick={() => onRegistrarFactura({})} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700">+ Factura sin OC</button>
+        <button onClick={() => onRegistrarFactura({})} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700">+ Comprobante sin OC</button>
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
 
@@ -127,7 +131,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
                       <td className="px-3 py-2 tabular-nums">{money(o.saldoImpuesto)}</td>
                       <td className={`px-3 py-2 ${COLOR_VENC[sem] || "text-gray-400"}`}>{fecha(o.proximoVencimiento)}</td>
                       <td className="px-3 py-2 text-right">
-                        {o.saldoPorFacturar > 0.1 && <button onClick={() => onRegistrarFactura({ ocpId: o._id })} className="text-xs text-purple-600 hover:text-purple-800">+ Registrar factura</button>}
+                        {o.saldoPorFacturar > 0.1 && <button onClick={() => onRegistrarFactura({ ocpId: o._id })} className="text-xs text-purple-600 hover:text-purple-800">+ Registrar comprobante</button>}
                       </td>
                     </tr>
                   );
@@ -153,7 +157,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
                 <tr>{["FP", "Comprobante", "Proveedor", "OC", "Emisión", "Vence", "Total", "Impuesto", "☐ Imp.", "Neto", "☐ Neto", "Saldo", ""].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {facturas.length === 0 && <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">Sin facturas</td></tr>}
+                {facturas.length === 0 && <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">Sin comprobantes</td></tr>}
                 {facturas.map((f) => {
                   const pendiente = f.saldoNeto > 0.009 || f.saldoImpuesto > 0.009;
                   const sem = semaforo(f.fechaVencimiento, pendiente, hoyIso);
@@ -161,7 +165,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
                   return (
                     <tr key={f._id}>
                       <td className="px-3 py-2 font-medium">{f.codigo}</td>
-                      <td className="px-3 py-2">{f.serie}-{f.numero}</td>
+                      <td className="px-3 py-2">{etiquetaComprobante(f)}</td>
                       <td className="px-3 py-2">{f.proveedorRazonSocial}</td>
                       <td className="px-3 py-2">{f.ordenCompraProveedor?.codigo || (f.esFleteDe ? `Flete ${f.esFleteDe.codigo || ""}` : "—")}</td>
                       <td className="px-3 py-2">{fecha(f.fechaEmision)}</td>
@@ -171,9 +175,15 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
                       <td className="px-3 py-2 text-center"><Check ok={f.saldoImpuesto <= 0.009} visible={hayImpuesto} /></td>
                       <td className="px-3 py-2 tabular-nums">{money(f.netoAPagar, f.moneda)}</td>
                       <td className="px-3 py-2 text-center"><Check ok={f.saldoNeto <= 0.009} /></td>
-                      <td className="px-3 py-2 tabular-nums">{money(f.saldoNeto, f.moneda)}{f.saldoImpuesto > 0.009 ? ` + ${money(f.saldoImpuesto)}` : ""}</td>
+                      <td className="px-3 py-2 tabular-nums">
+                        {f.tipoComprobante === "07"
+                          ? <span className="text-green-700">A favor {money(f.saldoAFavor, f.moneda)}</span>
+                          : <>{money(f.saldoNeto, f.moneda)}{f.saldoImpuesto > 0.009 ? ` + ${money(f.saldoImpuesto)}` : ""}</>}
+                        {f.aplicadoNC > 0.009 && <span className="block text-[11px] text-gray-400">NC aplicadas {money(f.aplicadoNC, f.moneda)}</span>}
+                      </td>
                       <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
                         {pendiente && <button onClick={() => setPagando(f)} className="text-xs text-purple-600 hover:text-purple-800">Registrar pago</button>}
+                        {f.tipoComprobante === "07" && f.saldoAFavor > 0.009 && <button onClick={() => setAplicando(f)} className="text-xs text-green-700 hover:text-green-900">Aplicar a…</button>}
                         {f.pagadoNeto + f.pagadoImpuesto === 0 && <button onClick={() => setAnulando(f)} className="text-xs text-red-500 hover:text-red-700">Anular</button>}
                       </td>
                     </tr>
@@ -183,7 +193,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
               {facturas.length > 0 && (
                 <tfoot className="bg-gray-50 font-semibold text-gray-700">
                   <tr>
-                    <td colSpan={6} className="px-3 py-2">Subtotal ({facturas.length} facturas)</td>
+                    <td colSpan={6} className="px-3 py-2">Subtotal ({facturas.length} comprobantes)</td>
                     <td className="px-3 py-2 tabular-nums">{textoMontos(subFp.total)}</td>
                     <td className="px-3 py-2 text-xs tabular-nums">{textoMontos(subFp.impuesto)}</td>
                     <td />
@@ -199,6 +209,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
         </TablaScroll>
       </div>
 
+      {aplicando && <ModalAplicarNota nota={aplicando} facturas={datos.facturas} onClose={() => setAplicando(null)} onAplicada={() => { setAplicando(null); cargar(); }} />}
       {pagando && <ModalMovimiento lado="compra" documento={pagando} onClose={() => setPagando(null)} onGuardado={() => { setPagando(null); cargar(); }} />}
       {anulando && (
         <PromptAccion titulo={`Anular ${anulando.codigo}`} placeholder="Motivo de la anulación"

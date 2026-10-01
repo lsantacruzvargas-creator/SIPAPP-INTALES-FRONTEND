@@ -153,19 +153,31 @@ Tipo inválido; NC/ND sin origen, de otro proveedor o moneda, origen anulado o N
 - Frontend: lógica pura en `utils/tesoreria.js` con tests (crédito fiscal, neto con retención 4ta, aplicable de una NC, filas del resumen).
 - Playwright: registrar cada tipo, NC con sobrante y aplicar el saldo a favor, ticket "Ya se pagó", USD con TC automático, exportar el resumen.
 
-## Estado — Fase 1 (2026-10-01)
+## Estado — Fase 3 (2026-10-01)
 
-Implementada en `feature/comprobantes-compra` (backend y frontend): costo comprometido/consumido por OT, TC SUNAT por fecha con histórico en BD y selector de moneda en el reporte y la tarjeta de la OC. Corregidos tras la revisión final: C1 (doble conteo con SC compradas en parte), I1 (fracción pagada en USD), I2 (la tarjeta pedía el TC dos veces con el desglose abierto), I3/M1 (consultas al teclear la fecha; borrarla dejaba "Consultando…") y M2 (la pantalla Tipo de Cambio muestra la fuente y la fecha real del TC y solo ofrece "Usar valor SUNAT" con fuente `apiperu` o `bd`).
+Implementada en `feature/comprobantes-compra`: tipos 12 (ticket, casilla "Trae RUC de INTALES e IGV desglosado") y 14; `creditoFiscal` derivado en el servidor (sin default: los antiguos se derivan al leerse con `creditoFiscalDe`); retención de 4ta manual solo en RH (8 % en S/, el RH no admite otro impuesto); la retención del 3 % solo en comprobantes con crédito fiscal (también en la sugerencia del formulario); "Ya se pagó" registra el pago del neto en la misma transacción; Por pagar muestra el tipo y el Excel el crédito fiscal. Backend 163/163, frontend 49/49, Playwright OK, revisión final con 2 Important corregidos.
 
-Menores diferidos (no bloquean el merge):
+Menores diferidos: `pago.fecha` sin validar por API; falta test de reversión de "Ya se pagó" con cuenta inactiva; cuenta malformada da mensaje genérico; falla silenciosa al cargar cuentas; precarga SIRE de ticket 12 sin `ticketConRuc`; RH y tickets sin RUC aparecen "solo en el sistema" en SIRE (Fase 5); el formulario "Sin OC" no permite ligar una OT; `ticketConRuc: "false"` (texto) por API se toma como verdadero; duplicado previo responde 400.
+Pendiente de confirmar con el contador: si la retención del 3 % aplica a recibos de servicios públicos (14).
 
-- **M3** — el flete de las líneas de OCP que vienen de una SC "manual" no llega a la OT.
-- **M4** — `costosPorOT` carga todas las `FacturaProveedor`: proyectar sin `archivos`, filtrar por OCP/OT y revisar índices.
-- **M5** — validar que el TC esté entre 2 y 6 y poner timeout de 8 s a la consulta a apiperu.
-- **M6** — en el Excel en S/ la columna TC queda vacía para OC en USD.
-- **M7** — mensajes de la tarjeta: muestra "Sin OT vinculada" mientras carga y ante un 403.
-- **M8** — `ocPorCot` sin orden: agregar `.sort({ createdAt: 1 })`.
+## Estado — Fase 4 (2026-10-01)
 
-## Estado — Fase 2 (2026-10-01)
+Implementada en `feature/comprobantes-compra` (backend dabc5c6..ba5ad8f, frontend 8946d6ac..faeb94b5). NC/ND ligadas a su comprobante; la NC se aplica sola hasta el saldo y el excedente queda a favor ("Aplicar a…"); anular el origen exige anular antes sus notas.
 
-Implementada en `feature/comprobantes-compra` (plan `docs/superpowers/plans/2026-10-01-tc-comprobantes-usd.md`): el formulario de comprobantes de proveedor en USD trae el TC venta SUNAT de la fecha de emisión y lo deja solo lectura; si la ruta cayó a un respaldo lo propone editable con aviso, y si falla queda vacío para escribirlo. El servidor valida el rango 2–6 y la consulta a apiperu tiene timeout de 8 s (cierra M5). Pendiente de revisión y de correr los tests del backend con MongoDB.
+Decisiones tomadas en la revisión:
+- La suma de NC vigentes de un comprobante no puede superar su total.
+- La detracción/retención del comprobante se recalcula sobre su total menos las NC vigentes mientras no se haya depositado; anular la NC la restaura. Si ya se depositó, se regulariza fuera del sistema.
+- Una nota en USD usa el TC del comprobante que modifica (sin consulta SUNAT). **Confirmar con el contador.**
+- Costos: una ND sobre factura con OC o de flete sube ese costo (con su propio pago); una NC de flete reduce el flete repartido.
+
+Pendientes menores: Excel de Por pagar con crédito fiscal derivado del origen; etiqueta "aplicación" en Movimientos (sin botón Anular); fecha de la aplicación manual = hoy; formulario de nota (moneda bloqueada tras elegir origen, limpiar origen al cambiar proveedor, ocultar flete/condición en NC); NC fuera del filtro "Pendiente" y del Excel, columna de saldo a favor, resumen neto de NC; índice {notaCredito, anulado}.
+
+## Estado — Fase 5 (2026-10-01)
+
+Implementada en `feature/comprobantes-compra` (backend fdd5d6a..de05e49, frontend d43d0475..97dc9eb6).
+- SIRE RCE: sin recibos por honorarios; NC comparadas en valor absoluto; TC comparado en USD con el detalle "sistema · SIRE · SUNAT (dd/mm)". En notas, el TC SUNAT de referencia es el de la fecha del comprobante que modifican. Un TC de respaldo no se muestra como SUNAT. Un ticket registrado sin «Trae RUC» que aparece en el SIRE sale "difiere" con aviso.
+- Resumen tributario: pestaña nueva con totales (con crédito, sin crédito, retención 4ta), detalle y Excel. `GET /tesoreria/resumen-tributario?periodo=YYYY-MM`.
+- Corregido de paso: los subtotales de todos los Excel de Tesorería caían en columnas equivocadas.
+
+Pendientes menores: TC vacío del SIRE tratado como 1; total en S/ = base + IGV redondeados; Excel del resumen con pagado/pendiente de 4ta y signo en moneda original; reintentar el mismo mes tras error.
+Por confirmar con el contador: si el RCE trae los montos USD en dólares o en soles (probar con un archivo real), retención 4ta por mes de emisión o de pago, retención 3 % en recibos 14, TC de NC/ND en USD.

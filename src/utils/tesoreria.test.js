@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   calcularImpuesto, partes, tipoMovimientoEsperado, sugerirImpuesto, impuestoVentaPorDefecto, etiquetaImpuesto,
   diasCredito, sumarDias, vencimientoDe, semaforo, filtrarFacturas, FILTROS_TESORERIA, totalesMovimientos, cuentasPara, periodoDeMes, fechaIsoTexto, esPagoAntiguo, avisoMoneda, diasEntre,
-  estadoTcComprobante, tcValido, fechaConsultableTc,
+  estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, etiquetaComprobante, vistaPreviaNota, origenesPosibles,
 } from "./tesoreria.js";
 
 test("calcularImpuesto replica al backend: detracción entera en soles y retención 3 %", () => {
@@ -142,4 +142,82 @@ test("fechaConsultableTc: no consulta fechas vacías ni las que aparecen al tecl
   assert.equal(fechaConsultableTc("2026-09-29"), true);
   assert.equal(fechaConsultableTc(""), false);
   assert.equal(fechaConsultableTc("0002-09-29"), false);
+});
+
+test("tipos de comprobante de compra y crédito fiscal (espejo del backend)", () => {
+  assert.deepEqual(TIPOS_COMPROBANTE_COMPRA.map((t) => t.valor), ["01", "02", "03", "07", "08", "12", "14"]);
+  assert.equal(creditoFiscalDe({ tipoComprobante: "12", igv: 18, ticketConRuc: false }), false);
+  assert.equal(creditoFiscalDe({ tipoComprobante: "12", igv: 18, ticketConRuc: true }), true);
+  assert.equal(creditoFiscalDe({ tipoComprobante: "14", igv: 9 }), true);
+  assert.equal(creditoFiscalDe({ tipoComprobante: "03", igv: 18 }), false);
+});
+
+test("retención de 4ta: 8 % del total en soles y su etiqueta", () => {
+  assert.deepEqual(calcularImpuesto({ tipo: "retencion4ta", total: 2000 }), { tasa: 0.08, monto: 160 });
+  assert.equal(etiquetaImpuesto({ tipo: "retencion4ta", tasa: 0.08 }), "Retención 4ta 8%");
+});
+
+test("sugerirImpuesto no sugiere la retención del 3 % si el comprobante no da crédito fiscal", () => {
+  assert.equal(sugerirImpuesto({ total: 1000, esAgenteRetencion: true, conCreditoFiscal: false }).tipo, "ninguno");
+  assert.equal(sugerirImpuesto({ total: 1000, esAgenteRetencion: true, conCreditoFiscal: true }).tipo, "retencion");
+  assert.equal(sugerirImpuesto({ total: 1000, esAgenteRetencion: true }).tipo, "retencion");
+});
+
+test("etiquetaComprobante: tipo + serie-número para distinguir ticket, boleta y factura", () => {
+  assert.equal(etiquetaComprobante({ tipoComprobante: "12", serie: "TK01", numero: "5" }), "Ticket / ticket POS TK01-5");
+  assert.equal(etiquetaComprobante({ tipoComprobante: "01", serie: "F001", numero: "9" }), "Factura F001-9");
+});
+
+test("vistaPreviaNota: aplica hasta el saldo del origen y el resto queda a favor", () => {
+  assert.deepEqual(vistaPreviaNota({ totalNota: 118, saldoOrigen: 354 }), { aplicar: 118, aFavor: 0 });
+  assert.deepEqual(vistaPreviaNota({ totalNota: 118, saldoOrigen: 18 }), { aplicar: 18, aFavor: 100 });
+});
+
+test("origenesPosibles: mismo proveedor y moneda, vigentes, sin notas", () => {
+  const fs = [
+    { _id: "a", proveedor: { _id: "p1" }, moneda: "PEN", tipoComprobante: "01", anulada: false },
+    { _id: "b", proveedor: { _id: "p1" }, moneda: "USD", tipoComprobante: "01", anulada: false },
+    { _id: "c", proveedor: { _id: "p2" }, moneda: "PEN", tipoComprobante: "01", anulada: false },
+    { _id: "d", proveedor: { _id: "p1" }, moneda: "PEN", tipoComprobante: "07", anulada: false },
+    { _id: "e", proveedor: "p1", moneda: "PEN", tipoComprobante: "03", anulada: true },
+  ];
+  assert.deepEqual(origenesPosibles(fs, { proveedor: "p1", moneda: "PEN" }).map((f) => f._id), ["a"]);
+});
+
+test("creditoFiscalDe de una nota sigue a su origen", () => {
+  assert.equal(creditoFiscalDe({ tipoComprobante: "07", origen: { tipoComprobante: "01", igv: 18 } }), true);
+  assert.equal(creditoFiscalDe({ tipoComprobante: "08", origen: { tipoComprobante: "03", igv: 18 } }), false);
+  assert.equal(creditoFiscalDe({ tipoComprobante: "07", origen: { creditoFiscal: true } }), true);
+});
+
+test("precargaDesdeSire: NC en negativo da subtotal positivo; ticket del SIRE trae RUC", async () => {
+  const { precargaDesdeSire } = await import("./tesoreria.js");
+  const p = precargaDesdeSire({ rucContraparte: "1", tipo: "07", serie: "FC01", numero: "5", fechaEmision: "2026-09-28", moneda: "PEN", baseImponible: -100, igv: -18, total: -118 }, []);
+  assert.equal(p.subtotal, "100");
+  assert.equal(p.conIgv, true);
+  assert.equal(p.tipoComprobante, "07");
+  assert.equal(precargaDesdeSire({ tipo: "12", total: 59, igv: 9, baseImponible: 50 }, []).ticketConRuc, true);
+  assert.equal(precargaDesdeSire({ tipo: "01", total: 118, igv: 18, baseImponible: 100 }, []).ticketConRuc, false);
+});
+
+test("textoTcSire muestra los tres TC; sin SUNAT lo dice", async () => {
+  const { textoTcSire } = await import("./tesoreria.js");
+  assert.equal(textoTcSire({ sistema: 3.7, sire: 3.75, sunat: 3.72, fechaTc: "2026-09-25" }), "sistema 3.700 · SIRE 3.750 · SUNAT 3.720 (25/09)");
+  assert.equal(textoTcSire({ sistema: 3.7, sire: 3.75, sunat: null }), "sistema 3.700 · SIRE 3.750 · SUNAT no disponible");
+});
+
+test("filasExcelResumen: una fila por comprobante, NC en negativo, crédito Sí/No", async () => {
+  const { filasExcelResumen } = await import("./tesoreria.js");
+  const [f] = filasExcelResumen([{ fechaEmision: "2026-09-28T05:00:00.000Z", tipoComprobante: "07", serie: "FC01", numero: "5", proveedorRuc: "1", proveedorRazonSocial: "P",
+    moneda: "PEN", tipoCambio: 1, base: 100, igv: 18, total: 118, baseSoles: -100, igvSoles: -18, totalSoles: -118, creditoFiscal: true, retencion4ta: 0 }]);
+  assert.equal(f["TOTAL S/"], -118);
+  assert.equal(f["CRÉDITO FISCAL"], "Sí");
+  assert.equal(f.FECHA, "28/09/2026");
+  assert.equal(f.TIPO, "Nota de crédito");
+  assert.equal(f.COMPROBANTE, "FC01-5");
+});
+
+test("textoTcSire: en una nota el TC SUNAT es el de la fecha de su comprobante", async () => {
+  const { textoTcSire } = await import("./tesoreria.js");
+  assert.equal(textoTcSire({ sistema: 3.7, sire: 3.75, sunat: 3.7, fechaTc: "2026-09-20", deOrigen: true }), "sistema 3.700 · SIRE 3.750 · SUNAT 3.700 (20/09, fecha del comprobante que modifica)");
 });

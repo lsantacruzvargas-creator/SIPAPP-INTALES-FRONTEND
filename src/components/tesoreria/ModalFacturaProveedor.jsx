@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import { fetchAuth, uploadAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
 import { money, round2, nombreEmpresa } from "../../utils/compras";
-import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION, estadoTcComprobante, tcValido, fechaConsultableTc } from "../../utils/tesoreria";
+import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION, estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, cuentasPara, avisoMoneda, vistaPreviaNota, origenesPosibles, etiquetaComprobante, precargaDesdeSire } from "../../utils/tesoreria";
 import { conBloqueo } from "../../utils/bloqueoApi";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full";
-const TIPOS = [{ valor: "01", label: "Factura" }, { valor: "02", label: "Recibo por honorarios" }, { valor: "03", label: "Boleta" }];
+const MEDIOS_PAGO = [["transferencia", "Transferencia"], ["deposito", "Depósito"], ["efectivo", "Efectivo"], ["cheque", "Cheque"]];
 
 function desdeOCP(o, fechaEmision) {
   const dias = diasCredito(o.formaPago);
@@ -18,34 +18,34 @@ function desdeOCP(o, fechaEmision) {
   };
 }
 
-function desdeSire(s, proveedores) {
-  const prov = proveedores.find((p) => p.ruc === s.rucContraparte);
-  return {
-    modo: "sinOc", proveedor: prov?._id || "", tipoComprobante: ["01", "02", "03"].includes(s.tipo) ? s.tipo : "01",
-    serie: s.serie, numero: s.numero, fechaEmision: String(s.fechaEmision || "").slice(0, 10) || fechaHoyLima(),
-    moneda: s.moneda === "USD" ? "USD" : "PEN", subtotal: String(s.baseImponible || round2(s.total - s.igv)), conIgv: s.igv > 0,
-  };
-}
-
 export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onClose, onGuardada }) {
   const hoy = fechaHoyLima();
   const [ocps, setOcps] = useState([]);
+  const [comprobantes, setComprobantes] = useState([]);
   const [archivo, setArchivo] = useState(null);
   const [form, setForm] = useState(() => ({
     modo: "sinOc", ordenCompraProveedor: "", esFleteDe: "", proveedor: "", tipoComprobante: "01", serie: "", numero: "",
     fechaEmision: hoy, moneda: "PEN", tipoCambio: String(catalogos.tipoCambio || ""), subtotal: "", conIgv: true, flete: "0",
     condicion: "contado", fechaVencimiento: "", centroCosto: "", hayServicios: false,
     impuestoManual: false, impuestoTipo: "ninguno", codigoSunat: "", quienDeposita: "nosotros", noAplicaRetencion: false,
-    ...(precarga ? desdeSire(precarga, catalogos.proveedores) : {}),
+    ticketConRuc: false, retener4ta: false, yaPagado: false, pagoCuenta: "", pagoMedio: "transferencia", pagoOperacion: "",
+    documentoOrigen: "",
+    ...(precarga ? precargaDesdeSire(precarga, catalogos.proveedores) : {}),
   }));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   // Factura ya registrada cuyo PDF no se pudo subir: el modal pasa a "reintentar PDF".
   const [registrada, setRegistrada] = useState(null);
+  const [cuentas, setCuentas] = useState([]);
+  useEffect(() => {
+    fetchAuth("/cuentas-tesoreria").then(async (r) => { if (r.ok) setCuentas(await r.json()); }).catch(() => {});
+  }, []);
   // TC de un comprobante en USD: el venta SUNAT de la fecha de emisión, pedido al cambiar
   // la fecha o la moneda (solo lectura salvo que la consulta falle).
   const [tcConsulta, setTcConsulta] = useState(null);
-  const claveTc = form.moneda === "USD" && fechaConsultableTc(form.fechaEmision) ? form.fechaEmision : null;
+  // Las notas (07/08) van al TC de su comprobante: no se consulta SUNAT.
+  const notaConTcDeOrigen = form.tipoComprobante === "07" || form.tipoComprobante === "08";
+  const claveTc = form.moneda === "USD" && !notaConTcDeOrigen && fechaConsultableTc(form.fechaEmision) ? form.fechaEmision : null;
   const consultandoTc = claveTc != null && tcConsulta?.clave !== claveTc;
 
   useEffect(() => {
@@ -70,6 +70,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   useEffect(() => {
     fetchAuth("/tesoreria/por-pagar").then((r) => (r.ok ? r.json() : { ocps: [] })).then((d) => {
       setOcps(d.ocps);
+      setComprobantes(d.facturas || []);
       const o = ocpId && d.ocps.find((x) => x._id === ocpId);
       if (o) setForm((f) => ({ ...f, ...desdeOCP(o, f.fechaEmision) }));
     });
@@ -101,8 +102,30 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   const igv = form.tipoComprobante === "02" || !form.conIgv ? 0 : round2(subtotal * 0.18);
   const total = round2(subtotal + igv);
   const tipoCambio = form.moneda === "USD" ? Number(form.tipoCambio) : 1;
-  const sugerido = sugerirImpuesto({ total, moneda: form.moneda, tipoCambio, hayServicios: form.hayServicios, esAgenteRetencion: catalogos.esAgenteRetencion, noAplicaRetencion: form.noAplicaRetencion });
-  const imp = form.impuestoManual ? { tipo: form.impuestoTipo, codigoSunat: form.codigoSunat } : sugerido;
+  // Notas (07/08): se ligan a un comprobante vigente del proveedor, del que toman la moneda.
+  const esNota = form.tipoComprobante === "07" || form.tipoComprobante === "08";
+  const esNC = form.tipoComprobante === "07";
+  // Se listan los de ambas monedas: al elegir el origen, la nota toma su moneda.
+  const origenesNota = esNota && form.proveedor
+    ? ["PEN", "USD"].flatMap((moneda) => origenesPosibles(comprobantes, { proveedor: form.proveedor, moneda }))
+    : [];
+  const origen = esNota ? comprobantes.find((c) => c._id === form.documentoOrigen) || null : null;
+  const elegirOrigen = (e) => {
+    const o = comprobantes.find((c) => c._id === e.target.value);
+    setForm((f) => ({ ...f, documentoOrigen: e.target.value, ...(o ? { moneda: o.moneda, tipoCambio: String(o.tipoCambio || f.tipoCambio) } : {}) }));
+  };
+  const ticketConRuc = form.tipoComprobante === "12" && form.ticketConRuc;
+  const conCreditoFiscal = creditoFiscalDe({ tipoComprobante: form.tipoComprobante, igv, ticketConRuc, origen });
+  const sugerido = sugerirImpuesto({ total, moneda: form.moneda, tipoCambio, hayServicios: form.hayServicios, esAgenteRetencion: catalogos.esAgenteRetencion, noAplicaRetencion: form.noAplicaRetencion, conCreditoFiscal });
+  // Recibo por honorarios: solo la retención de 4ta, y solo si se marca (decisión del usuario: manual).
+  const esRH = form.tipoComprobante === "02";
+  const imp = esNC ? { tipo: "ninguno", codigoSunat: "" } : esRH
+    ? { tipo: form.retener4ta ? "retencion4ta" : "ninguno", codigoSunat: "" }
+    : form.impuestoManual ? { tipo: form.impuestoTipo, codigoSunat: form.codigoSunat } : sugerido;
+  const puedeYaPagado = form.condicion === "contado" && !esNC;
+  const previaNota = esNC && origen ? vistaPreviaNota({ totalNota: total, saldoOrigen: origen.saldoNeto }) : null;
+  const cuentasPago = cuentasPara({ cuentas, lado: "compra", concepto: "neto", impuesto: { tipo: imp.tipo } }).origen;
+  const avisoCuentaPago = form.yaPagado ? avisoMoneda(cuentas.find((c) => c._id === form.pagoCuenta), form.moneda) : null;
   const { tasa, monto } = calcularImpuesto({ ...imp, total, moneda: form.moneda, tipoCambio });
   const quienDeposita = imp.tipo === "detraccion" ? form.quienDeposita : "nosotros";
   const resumen = partes({ lado: "compra", total, moneda: form.moneda, tipoCambio, impuesto: { tipo: imp.tipo, monto, quienDeposita } });
@@ -132,14 +155,17 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
         moneda: form.moneda, tipoCambio, subtotal, igv, flete: Number(form.flete) || 0,
         condicion: form.condicion, fechaVencimiento: form.fechaVencimiento,
         impuesto: { tipo: imp.tipo, codigoSunat: imp.codigoSunat, quienDeposita },
+        ticketConRuc,
       };
+      if (esNota) body.documentoOrigen = form.documentoOrigen;
+      if (puedeYaPagado && form.yaPagado) body.pago = { cuenta: form.pagoCuenta, medio: form.pagoMedio, numeroOperacion: form.pagoOperacion };
       if (form.modo === "oc") body.ordenCompraProveedor = form.ordenCompraProveedor;
       else body.proveedor = form.proveedor;
       if (form.modo === "flete") body.esFleteDe = form.esFleteDe;
       if (form.modo === "sinOc") body.centroCosto = form.centroCosto;
       const r = await fetchAuth("/facturas-proveedor", { method: "POST", body: JSON.stringify(body) });
       const fp = await r.json().catch(() => ({}));
-      if (!r.ok) return setError(fp.mensaje || "No se pudo registrar la factura.");
+      if (!r.ok) return setError(fp.mensaje || "No se pudo registrar el comprobante.");
       if (archivo) await subirPdf(fp);
       else onGuardada(fp);
     } catch {
@@ -153,7 +179,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4" style={{ zIndex: 50 }}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-6 space-y-4">
-        <h3 className="text-lg font-bold text-gray-800">Registrar factura de proveedor</h3>
+        <h3 className="text-lg font-bold text-gray-800">Registrar comprobante de compra</h3>
         <fieldset disabled={!!registrada} className="space-y-4 disabled:opacity-60">
         <div className="flex gap-4 text-sm">
           {[["oc", "De una OC"], ["sinOc", "Sin OC"], ["flete", "Flete de transportista"]].map(([valor, label]) => (
@@ -199,10 +225,32 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
             </label>
           )}
           <label className="text-xs text-gray-500">Comprobante
-            <select value={form.tipoComprobante} onChange={set("tipoComprobante")} className={INP}>
-              {TIPOS.map((t) => <option key={t.valor} value={t.valor}>{t.label}</option>)}
+            <select value={form.tipoComprobante} onChange={(e) => {
+              const v = e.target.value;
+              setForm((f) => ({ ...f, tipoComprobante: v, documentoOrigen: "", ...(v === "07" || v === "08" ? { modo: "sinOc" } : {}) }));
+            }} className={INP}>
+              {TIPOS_COMPROBANTE_COMPRA.map((t) => <option key={t.valor} value={t.valor}>{t.label}</option>)}
             </select>
           </label>
+          {esNota && (
+            <label className="text-xs text-gray-500 col-span-3">Comprobante que modifica
+              <select value={form.documentoOrigen} onChange={elegirOrigen} className={INP} disabled={!form.proveedor}>
+                <option value="">{form.proveedor ? "Elegir…" : "Primero elige el proveedor"}</option>
+                {origenesNota.map((c) => <option key={c._id} value={c._id}>{etiquetaComprobante(c)} — saldo {money(c.saldoNeto, c.moneda)}</option>)}
+              </select>
+            </label>
+          )}
+          {previaNota && (
+            <p className="col-span-3 text-xs text-gray-600 bg-green-50 rounded-lg p-2">
+              Se aplicará {money(previaNota.aplicar, form.moneda)} al comprobante{previaNota.aFavor > 0.009 ? `; quedará ${money(previaNota.aFavor, form.moneda)} a favor del proveedor` : ""}.
+              {origen?.impuesto?.tipo === "detraccion" && <span className="block text-amber-700">Si su detracción aún no se deposita, se recalcula sobre el importe que queda.</span>}
+            </p>
+          )}
+          {form.tipoComprobante === "12" && (
+            <label className="text-xs text-gray-500 col-span-3 flex items-center gap-1.5" title="Sin RUC de INTALES e IGV desglosado el ticket no da crédito fiscal">
+              <input type="checkbox" checked={form.ticketConRuc} onChange={set("ticketConRuc")} />Trae RUC de INTALES e IGV desglosado
+            </label>
+          )}
           <label className="text-xs text-gray-500">Serie<input value={form.serie} onChange={set("serie")} className={INP} /></label>
           <label className="text-xs text-gray-500">Número<input value={form.numero} onChange={set("numero")} className={INP} /></label>
           <label className="text-xs text-gray-500">Emisión<input type="date" value={form.fechaEmision} onChange={cambiarEmision} className={INP} /></label>
@@ -214,8 +262,9 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
           {form.moneda === "USD" && (
             <label className="text-xs text-gray-500">Tipo de cambio
               <input type="number" step="0.001" min="2" max="6" value={consultandoTc ? "" : form.tipoCambio} onChange={set("tipoCambio")}
-                readOnly={tcSoloLectura || consultandoTc} placeholder={consultandoTc ? "Consultando SUNAT…" : ""}
-                className={`${INP} ${tcSoloLectura ? "bg-gray-50 text-gray-600" : ""}`} />
+                readOnly={tcSoloLectura || consultandoTc || notaConTcDeOrigen} placeholder={consultandoTc ? "Consultando SUNAT…" : ""}
+                className={`${INP} ${tcSoloLectura || notaConTcDeOrigen ? "bg-gray-50 text-gray-600" : ""}`} />
+              {notaConTcDeOrigen && <span className="block mt-1 text-[11px] text-gray-400">TC del comprobante que modifica</span>}
               {!consultandoTc && tcConsulta?.clave === claveTc && (
                 <span className={`block mt-1 text-[11px] ${tcConsulta.alerta ? "text-amber-600" : "text-gray-400"}`}>{tcConsulta.aviso}</span>
               )}
@@ -239,14 +288,22 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
           {form.condicion === "credito" && (
             <label className="text-xs text-gray-500">Vencimiento<input type="date" value={form.fechaVencimiento} onChange={cambiarVencimiento} className={INP} /></label>
           )}
+          <p className="text-xs text-gray-500 col-span-3">
+            Crédito fiscal de IGV: <span className={conCreditoFiscal ? "font-semibold text-green-700" : "font-semibold text-gray-600"}>{conCreditoFiscal ? "Sí" : "No"}</span>
+          </p>
         </div>
 
         <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-3">
-          <div className="grid grid-cols-3 gap-3">
+          {esRH && (
+            <label className="text-xs text-gray-600 flex items-center gap-1.5">
+              <input type="checkbox" checked={form.retener4ta} onChange={set("retener4ta")} />Retener 4ta categoría (8 %)
+            </label>
+          )}
+          <div className={`grid grid-cols-3 gap-3 ${esRH || esNC ? "hidden" : ""}`}>
             <label className="text-xs text-gray-500">Impuesto
               <select value={imp.tipo} onChange={elegirImpuesto("impuestoTipo")} className={INP}>
                 <option value="ninguno">Ninguno</option><option value="detraccion">Detracción</option>
-                {catalogos.esAgenteRetencion && <option value="retencion">Retención 3 %</option>}
+                {catalogos.esAgenteRetencion && conCreditoFiscal && <option value="retencion">Retención 3 %</option>}
               </select>
             </label>
             {imp.tipo === "detraccion" && (
@@ -271,13 +328,39 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
               </label>
             )}
           </div>
-          {!form.impuestoManual && sugerido.tipo !== "ninguno" && <p className="text-[11px] text-gray-400">Sugerido según el total y el tipo de compra.</p>}
+          {!esRH && !form.impuestoManual && sugerido.tipo !== "ninguno" && <p className="text-[11px] text-gray-400">Sugerido según el total y el tipo de compra.</p>}
           <div className="flex justify-between text-sm pt-2 border-t border-gray-200">
             <span>Total {money(total, form.moneda)}</span>
             <span>Impuesto {money(monto)} ({Math.round(tasa * 100)} %)</span>
             <span className="font-bold text-purple-700">Neto a pagar {money(resumen.neto, form.moneda)}</span>
           </div>
         </div>
+
+        {puedeYaPagado && (
+          <div className="rounded-xl border border-gray-100 p-4 space-y-3">
+            <label className="text-xs text-gray-600 flex items-center gap-1.5">
+              <input type="checkbox" checked={form.yaPagado} onChange={set("yaPagado")} />Ya se pagó (registra también el pago del neto)
+            </label>
+            {form.yaPagado && (
+              <div className="grid grid-cols-3 gap-3">
+                <label className="text-xs text-gray-500">Cuenta
+                  <select value={form.pagoCuenta} onChange={set("pagoCuenta")} className={INP}>
+                    <option value="">Elegir…</option>
+                    {cuentasPago.map((c) => <option key={c._id} value={c._id}>{c.nombre} ({c.moneda})</option>)}
+                  </select>
+                </label>
+                <label className="text-xs text-gray-500">Medio
+                  <select value={form.pagoMedio} onChange={set("pagoMedio")} className={INP}>
+                    {MEDIOS_PAGO.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </label>
+                <label className="text-xs text-gray-500">N° de operación<input value={form.pagoOperacion} onChange={set("pagoOperacion")} className={INP} /></label>
+                {avisoCuentaPago && <p className="col-span-3 text-[11px] text-amber-700">{avisoCuentaPago}</p>}
+                {resumen.impuesto > 0 && <p className="col-span-3 text-[11px] text-gray-500">El impuesto ({money(resumen.impuesto)}) queda pendiente de pago.</p>}
+              </div>
+            )}
+          </div>
+        )}
 
         </fieldset>
 
@@ -294,9 +377,9 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
           {registrada
             ? <button onClick={() => onGuardada(registrada)} disabled={guardando} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Terminar sin PDF</button>
             : <button onClick={onClose} disabled={guardando} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>}
-          <button onClick={guardar} disabled={guardando || !(subtotal > 0) || (registrada && !archivo) || (!registrada && form.moneda === "USD" && (consultandoTc || !tcValido(form.tipoCambio)))}
+          <button onClick={guardar} disabled={guardando || !(subtotal > 0) || (registrada && !archivo) || (!registrada && form.moneda === "USD" && (consultandoTc || !tcValido(form.tipoCambio))) || (!registrada && puedeYaPagado && form.yaPagado && !form.pagoCuenta) || (!registrada && esNota && !form.documentoOrigen)}
             className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50">
-            {guardando ? "Guardando…" : registrada ? "Reintentar subir PDF" : "Registrar factura"}
+            {guardando ? "Guardando…" : registrada ? "Reintentar subir PDF" : "Registrar comprobante"}
           </button>
         </div>
       </div>
