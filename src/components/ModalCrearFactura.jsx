@@ -262,6 +262,8 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
       ordenCompra:        ocId,
       empresa:            form.empresa,
       moneda,
+      // El servidor liga la factura con el comprobante recién emitido (antes quedaban sin ligar).
+      comprobante:        dataCpe.id,
     };
     // Crédito con cuotas reemplaza a "Fecha cancelación": el vencimiento pasa
     // a ser por cuota, no un solo dato suelto — ver Factura.js:cuotaSchema y
@@ -282,7 +284,8 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
       body: JSON.stringify(factPayload),
     });
     if (!resF.ok) {
-      setError(`La factura SUNAT ${dataCpe.serie} se emitió correctamente, pero no se pudo crear el registro interno. Verifica manualmente.`);
+      const det = (await resF.json().catch(() => ({}))).mensaje;
+      setError(`La factura SUNAT ${dataCpe.serie} se emitió correctamente, pero no se pudo crear el registro interno${det ? `: ${det}` : ""}. Verifica manualmente.`);
       setGuardando(false);
       return;
     }
