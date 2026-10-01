@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { fetchAuth, uploadAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
 import { money, round2, nombreEmpresa } from "../../utils/compras";
-import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION, estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, cuentasPara, avisoMoneda, vistaPreviaNota, origenesPosibles, etiquetaComprobante, precargaDesdeSire } from "../../utils/tesoreria";
+import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION, estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, cuentasPara, avisoMoneda, vistaPreviaNota, origenesPosibles, etiquetaComprobante, precargaDesdeSire, admiteRetencionIgv } from "../../utils/tesoreria";
 import { conBloqueo } from "../../utils/bloqueoApi";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full";
@@ -116,7 +116,8 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   };
   const ticketConRuc = form.tipoComprobante === "12" && form.ticketConRuc;
   const conCreditoFiscal = creditoFiscalDe({ tipoComprobante: form.tipoComprobante, igv, ticketConRuc, origen });
-  const sugerido = sugerirImpuesto({ total, moneda: form.moneda, tipoCambio, hayServicios: form.hayServicios, esAgenteRetencion: catalogos.esAgenteRetencion, noAplicaRetencion: form.noAplicaRetencion, conCreditoFiscal });
+  const admiteRetencion = admiteRetencionIgv({ tipoComprobante: form.tipoComprobante, igv, ticketConRuc, origen });
+  const sugerido = sugerirImpuesto({ total, moneda: form.moneda, tipoCambio, hayServicios: form.hayServicios, esAgenteRetencion: catalogos.esAgenteRetencion, noAplicaRetencion: form.noAplicaRetencion, conCreditoFiscal: admiteRetencion });
   // Recibo por honorarios: solo la retención de 4ta, y solo si se marca (decisión del usuario: manual).
   const esRH = form.tipoComprobante === "02";
   const imp = esNC ? { tipo: "ninguno", codigoSunat: "" } : esRH
@@ -303,7 +304,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
             <label className="text-xs text-gray-500">Impuesto
               <select value={imp.tipo} onChange={elegirImpuesto("impuestoTipo")} className={INP}>
                 <option value="ninguno">Ninguno</option><option value="detraccion">Detracción</option>
-                {catalogos.esAgenteRetencion && conCreditoFiscal && <option value="retencion">Retención 3 %</option>}
+                {catalogos.esAgenteRetencion && admiteRetencion && <option value="retencion">Retención 3 %</option>}
               </select>
             </label>
             {imp.tipo === "detraccion" && (

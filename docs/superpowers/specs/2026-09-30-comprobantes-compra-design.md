@@ -181,3 +181,8 @@ Implementada en `feature/comprobantes-compra` (backend fdd5d6a..de05e49, fronten
 
 Pendientes menores: TC vacío del SIRE tratado como 1; total en S/ = base + IGV redondeados; Excel del resumen con pagado/pendiente de 4ta y signo en moneda original; reintentar el mismo mes tras error.
 Por confirmar con el contador: si el RCE trae los montos USD en dólares o en soles (probar con un archivo real), retención 4ta por mes de emisión o de pago, retención 3 % en recibos 14, TC de NC/ND en USD.
+
+## Ajustes confirmados por el usuario (2026-10-01)
+
+- **Retención 4ta por mes de pago:** el resumen tributario suma en cada mes la retención que corresponde al neto del recibo pagado en ese mes (proporcional si el pago es parcial). "Pagado a SUNAT" son los pagos del impuesto hechos en el mes y "pendiente hoy" es lo retenido en el mes que aún no se paga. Lista de recibos pagados en el mes debajo de las tarjetas.
+- **Retención 3 % no aplica a recibos de servicios públicos (14)** ni a sus notas: el servidor lo rechaza y el formulario no la ofrece ni la sugiere.
