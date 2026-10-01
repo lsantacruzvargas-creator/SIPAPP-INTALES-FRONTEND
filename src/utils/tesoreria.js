@@ -298,3 +298,11 @@ export function subtotalesPorCobrar(facturas) {
     saldo,
   };
 }
+
+// Comparación de la carga manual del SIRE contra la propuesta descargada de SUNAT.
+export const RESULTADOS_CARGA = { coincide: "Coincide", difiere: "Difiere", solo_carga: "Solo en la carga", solo_sire: "Solo en SUNAT" };
+export const filasExcelComparacionCarga = (filas) => filas.map((f) => ({
+  RESULTADO: RESULTADOS_CARGA[f.estado] || f.estado, COMPROBANTE: `${f.tipo} ${f.serie}-${f.numero}`, RUC: f.ruc, "RAZÓN SOCIAL": f.razonSocial || "",
+  "BASE SIRE": f.baseSire ?? "", "BASE CARGA": f.baseCarga ?? "",
+  DIFERENCIA: f.baseSire != null && f.baseCarga != null ? round2(f.baseCarga - f.baseSire) : "",
+}));

@@ -286,3 +286,15 @@ test("cuentasPara: el neto solo se cobra/paga desde cuentas en la moneda del doc
   assert.deepEqual(cuentasPara({ cuentas, lado: "venta", concepto: "neto", impuesto: { tipo: "ninguno" }, moneda: "USD" }).origen.map((c) => c._id), ["b"]);
   assert.deepEqual(cuentasPara({ cuentas, lado: "venta", concepto: "neto", impuesto: { tipo: "ninguno" } }).origen.map((c) => c._id), ["a"]);
 });
+
+test("filasExcelComparacionCarga: resultado legible, comprobante, RUC y bases", async () => {
+  const { filasExcelComparacionCarga } = await import("./tesoreria.js");
+  const [a, b] = filasExcelComparacionCarga([
+    { estado: "difiere", tipo: "01", serie: "F001", numero: "123", ruc: "20100000001", razonSocial: "PROV", baseSire: 300, baseCarga: 310 },
+    { estado: "solo_carga", tipo: "01", serie: "F001", numero: "777", ruc: "20100000001", razonSocial: "PROV", baseSire: null, baseCarga: 100 },
+  ]);
+  assert.deepEqual(a, { RESULTADO: "Difiere", COMPROBANTE: "01 F001-123", RUC: "20100000001", "RAZÓN SOCIAL": "PROV", "BASE SIRE": 300, "BASE CARGA": 310, DIFERENCIA: 10 });
+  assert.equal(b.RESULTADO, "Solo en la carga");
+  assert.equal(b["BASE SIRE"], "");
+  assert.equal(b.DIFERENCIA, "");
+});
