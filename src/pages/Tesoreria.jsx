@@ -4,6 +4,7 @@ import TablaPorPagar from "../components/tesoreria/TablaPorPagar";
 import TablaPorCobrar from "../components/tesoreria/TablaPorCobrar";
 import TablaMovimientos from "../components/tesoreria/TablaMovimientos";
 import PanelSire from "../components/tesoreria/PanelSire";
+import PanelResumenTributario from "../components/tesoreria/PanelResumenTributario";
 import PanelConfiguracion from "../components/tesoreria/PanelConfiguracion";
 import ModalFacturaProveedor from "../components/tesoreria/ModalFacturaProveedor";
 
@@ -12,6 +13,7 @@ const TABS = [
   { id: "por-cobrar", label: "Por cobrar" },
   { id: "movimientos", label: "Movimientos" },
   { id: "sire", label: "SIRE" },
+  { id: "resumen-tributario", label: "Resumen tributario" },
   { id: "configuracion", label: "Configuración", soloJefatura: true },
 ];
 
@@ -61,6 +63,7 @@ export default function Tesoreria() {
       {tab === "por-cobrar" && <TablaPorCobrar />}
       {tab === "movimientos" && <TablaMovimientos />}
       {tab === "sire" && <PanelSire onRegistrarFactura={setModalFactura} />}
+      {tab === "resumen-tributario" && <PanelResumenTributario />}
       {tab === "configuracion" && puedeConfigurar && <PanelConfiguracion onCambio={cargarCatalogos} />}
       {modalFactura && (
         <ModalFacturaProveedor ocpId={modalFactura.ocpId} precarga={modalFactura.precarga} catalogos={catalogos}

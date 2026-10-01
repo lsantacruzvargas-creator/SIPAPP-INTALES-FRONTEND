@@ -1,7 +1,7 @@
 import { DETRACCION_BIENES_SERVICIOS } from "./catalogosSunat.js";
 import { round2 } from "./compras.js";
 import { origenTC, esTcSunat } from "./costos.js";
-import { fechaHoyLima } from "./fecha.js";
+import { fechaHoyLima, formatearFecha } from "./fecha.js";
 
 // Espejo de Backend/src/utils/impuesto.js: el backend recalcula siempre; esto
 // es solo la vista previa de los formularios.
@@ -224,3 +224,13 @@ export function precargaDesdeSire(s, proveedores) {
 const tc3 = (v) => Number(v).toFixed(3);
 export const textoTcSire = (tc) =>
   `sistema ${tc3(tc.sistema)} · SIRE ${tc3(tc.sire)} · SUNAT ${tc.sunat > 0 ? `${tc3(tc.sunat)}${tc.fechaTc ? ` (${fechaIsoTexto(tc.fechaTc).slice(0, 5)})` : ""}` : "no disponible"}`;
+
+// Excel del resumen tributario: una fila por comprobante (montos en S/ con signo; las NC restan).
+export const filasExcelResumen = (detalle) => detalle.map((d) => ({
+  FECHA: formatearFecha(d.fechaEmision, { day: "2-digit", month: "2-digit", year: "numeric" }),
+  TIPO: TIPOS_COMPROBANTE_COMPRA.find((t) => t.valor === d.tipoComprobante)?.label || d.tipoComprobante,
+  COMPROBANTE: `${d.serie}-${d.numero}`, RUC: d.proveedorRuc, "RAZÓN SOCIAL": d.proveedorRazonSocial,
+  MONEDA: d.moneda, TC: d.tipoCambio, BASE: d.base, IGV: d.igv, TOTAL: d.total,
+  "BASE S/": d.baseSoles, "IGV S/": d.igvSoles, "TOTAL S/": d.totalSoles,
+  "CRÉDITO FISCAL": d.creditoFiscal ? "Sí" : "No", "RETENCIÓN 4TA S/": d.retencion4ta,
+}));

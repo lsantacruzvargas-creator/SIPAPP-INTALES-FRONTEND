@@ -205,3 +205,14 @@ test("textoTcSire muestra los tres TC; sin SUNAT lo dice", async () => {
   assert.equal(textoTcSire({ sistema: 3.7, sire: 3.75, sunat: 3.72, fechaTc: "2026-09-25" }), "sistema 3.700 · SIRE 3.750 · SUNAT 3.720 (25/09)");
   assert.equal(textoTcSire({ sistema: 3.7, sire: 3.75, sunat: null }), "sistema 3.700 · SIRE 3.750 · SUNAT no disponible");
 });
+
+test("filasExcelResumen: una fila por comprobante, NC en negativo, crédito Sí/No", async () => {
+  const { filasExcelResumen } = await import("./tesoreria.js");
+  const [f] = filasExcelResumen([{ fechaEmision: "2026-09-28T05:00:00.000Z", tipoComprobante: "07", serie: "FC01", numero: "5", proveedorRuc: "1", proveedorRazonSocial: "P",
+    moneda: "PEN", tipoCambio: 1, base: 100, igv: 18, total: 118, baseSoles: -100, igvSoles: -18, totalSoles: -118, creditoFiscal: true, retencion4ta: 0 }]);
+  assert.equal(f["TOTAL S/"], -118);
+  assert.equal(f["CRÉDITO FISCAL"], "Sí");
+  assert.equal(f.FECHA, "28/09/2026");
+  assert.equal(f.TIPO, "Nota de crédito");
+  assert.equal(f.COMPROBANTE, "FC01-5");
+});
