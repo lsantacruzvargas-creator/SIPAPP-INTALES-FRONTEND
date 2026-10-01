@@ -171,3 +171,13 @@ Decisiones tomadas en la revisión:
 - Costos: una ND sobre factura con OC o de flete sube ese costo (con su propio pago); una NC de flete reduce el flete repartido.
 
 Pendientes menores: Excel de Por pagar con crédito fiscal derivado del origen; etiqueta "aplicación" en Movimientos (sin botón Anular); fecha de la aplicación manual = hoy; formulario de nota (moneda bloqueada tras elegir origen, limpiar origen al cambiar proveedor, ocultar flete/condición en NC); NC fuera del filtro "Pendiente" y del Excel, columna de saldo a favor, resumen neto de NC; índice {notaCredito, anulado}.
+
+## Estado — Fase 5 (2026-10-01)
+
+Implementada en `feature/comprobantes-compra` (backend fdd5d6a..de05e49, frontend d43d0475..97dc9eb6).
+- SIRE RCE: sin recibos por honorarios; NC comparadas en valor absoluto; TC comparado en USD con el detalle "sistema · SIRE · SUNAT (dd/mm)". En notas, el TC SUNAT de referencia es el de la fecha del comprobante que modifican. Un TC de respaldo no se muestra como SUNAT. Un ticket registrado sin «Trae RUC» que aparece en el SIRE sale "difiere" con aviso.
+- Resumen tributario: pestaña nueva con totales (con crédito, sin crédito, retención 4ta), detalle y Excel. `GET /tesoreria/resumen-tributario?periodo=YYYY-MM`.
+- Corregido de paso: los subtotales de todos los Excel de Tesorería caían en columnas equivocadas.
+
+Pendientes menores: TC vacío del SIRE tratado como 1; total en S/ = base + IGV redondeados; Excel del resumen con pagado/pendiente de 4ta y signo en moneda original; reintentar el mismo mes tras error.
+Por confirmar con el contador: si el RCE trae los montos USD en dólares o en soles (probar con un archivo real), retención 4ta por mes de emisión o de pago, retención 3 % en recibos 14, TC de NC/ND en USD.
