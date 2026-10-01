@@ -120,6 +120,11 @@ de SUNAT que lo publican responden "Acceso denegado" desde este entorno. **Conse
 | 5 | **Planillas y activos fijos fuera de alcance**: sus asientos (planilla, depreciación) se registran como asientos manuales |
 | 6 | El **cierre de mes lo hace el tesorero**. Hoy no existe ese rol (Tesorería = facturacion, jefatura, admin): **pendiente** decidir si se crea el rol "tesorero" (y quizá "contador") o se usa uno existente |
 
+**Respuestas finales del usuario (2026-10-01):** 1) completo, como CONCAR; 2) PCGE estándar; 3) el sistema genera
+los asientos; 4) destinos clase 9 automáticos pero editables; 5) planillas y activos fuera; 6) crear roles `tesorero`
+y `contador`, el tesorero cierra el mes; nivel de ingresos: entre 300 y 1700 UIT. El diseño está en
+`docs/contabilidad/2026-10-01-motor-contable-design.md`.
+
 ## Fuentes
 
 Oficiales (SUNAT):
