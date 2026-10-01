@@ -191,6 +191,13 @@ export function creditoFiscalDe({ tipoComprobante, igv, ticketConRuc, origen }) 
   return false;
 }
 
+// Retención del IGV (3 %): con crédito fiscal y nunca en recibos de servicios públicos
+// (14) ni en sus notas (espejo del backend).
+export function admiteRetencionIgv(datos) {
+  const tipoBase = datos.tipoComprobante === "07" || datos.tipoComprobante === "08" ? datos.origen?.tipoComprobante : datos.tipoComprobante;
+  return tipoBase !== "14" && creditoFiscalDe(datos);
+}
+
 // "Ticket / ticket POS TK01-5": tipo y serie-número, para distinguirlos en las tablas.
 export const etiquetaComprobante = (f) =>
   `${TIPOS_COMPROBANTE_COMPRA.find((t) => t.valor === f.tipoComprobante)?.label || "Comprobante"} ${f.serie}-${f.numero}`;
@@ -234,5 +241,5 @@ export const filasExcelResumen = (detalle) => detalle.map((d) => ({
   COMPROBANTE: `${d.serie}-${d.numero}`, RUC: d.proveedorRuc, "RAZÓN SOCIAL": d.proveedorRazonSocial,
   MONEDA: d.moneda, TC: d.tipoCambio, BASE: d.base, IGV: d.igv, TOTAL: d.total,
   "BASE S/": d.baseSoles, "IGV S/": d.igvSoles, "TOTAL S/": d.totalSoles,
-  "CRÉDITO FISCAL": d.creditoFiscal ? "Sí" : "No", "RETENCIÓN 4TA S/": d.retencion4ta,
+  "CRÉDITO FISCAL": d.creditoFiscal ? "Sí" : "No", "4TA DEL RECIBO S/": d.retencion4ta,
 }));

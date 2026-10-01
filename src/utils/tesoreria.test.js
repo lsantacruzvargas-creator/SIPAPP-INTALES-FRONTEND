@@ -221,3 +221,11 @@ test("textoTcSire: en una nota el TC SUNAT es el de la fecha de su comprobante",
   const { textoTcSire } = await import("./tesoreria.js");
   assert.equal(textoTcSire({ sistema: 3.7, sire: 3.75, sunat: 3.7, fechaTc: "2026-09-20", deOrigen: true }), "sistema 3.700 · SIRE 3.750 · SUNAT 3.700 (20/09, fecha del comprobante que modifica)");
 });
+
+test("admiteRetencionIgv: no en recibos de servicios públicos (14) ni en sus notas; sí en factura", async () => {
+  const { admiteRetencionIgv } = await import("./tesoreria.js");
+  assert.equal(admiteRetencionIgv({ tipoComprobante: "14", igv: 18 }), false);
+  assert.equal(admiteRetencionIgv({ tipoComprobante: "08", igv: 18, origen: { tipoComprobante: "14", igv: 18 } }), false);
+  assert.equal(admiteRetencionIgv({ tipoComprobante: "01", igv: 18 }), true);
+  assert.equal(admiteRetencionIgv({ tipoComprobante: "03", igv: 18 }), false);
+});
