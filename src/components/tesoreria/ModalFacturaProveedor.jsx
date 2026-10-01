@@ -110,9 +110,6 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   const igv = form.tipoComprobante === "02" || !form.conIgv ? 0 : round2(subtotal * 0.18);
   const total = round2(subtotal + igv);
   const tipoCambio = form.moneda === "USD" ? Number(form.tipoCambio) : 1;
-  const ticketConRuc = form.tipoComprobante === "12" && form.ticketConRuc;
-  const conCreditoFiscal = creditoFiscalDe({ tipoComprobante: form.tipoComprobante, igv, ticketConRuc, origen });
-  const sugerido = sugerirImpuesto({ total, moneda: form.moneda, tipoCambio, hayServicios: form.hayServicios, esAgenteRetencion: catalogos.esAgenteRetencion, noAplicaRetencion: form.noAplicaRetencion, conCreditoFiscal });
   // Notas (07/08): se ligan a un comprobante vigente del proveedor, del que toman la moneda.
   const esNota = form.tipoComprobante === "07" || form.tipoComprobante === "08";
   const esNC = form.tipoComprobante === "07";
@@ -125,6 +122,9 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
     const o = comprobantes.find((c) => c._id === e.target.value);
     setForm((f) => ({ ...f, documentoOrigen: e.target.value, ...(o ? { moneda: o.moneda, tipoCambio: String(o.tipoCambio || f.tipoCambio) } : {}) }));
   };
+  const ticketConRuc = form.tipoComprobante === "12" && form.ticketConRuc;
+  const conCreditoFiscal = creditoFiscalDe({ tipoComprobante: form.tipoComprobante, igv, ticketConRuc, origen });
+  const sugerido = sugerirImpuesto({ total, moneda: form.moneda, tipoCambio, hayServicios: form.hayServicios, esAgenteRetencion: catalogos.esAgenteRetencion, noAplicaRetencion: form.noAplicaRetencion, conCreditoFiscal });
   // Recibo por honorarios: solo la retención de 4ta, y solo si se marca (decisión del usuario: manual).
   const esRH = form.tipoComprobante === "02";
   const imp = esNC ? { tipo: "ninguno", codigoSunat: "" } : esRH
