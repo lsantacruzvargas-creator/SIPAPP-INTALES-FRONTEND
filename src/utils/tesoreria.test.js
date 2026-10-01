@@ -257,3 +257,13 @@ test("filasExcelDiferenciaCambio: partida legible con saldos y diferencia con si
   assert.equal(filas[1]["TC DOC."], "");
   assert.equal(filas[1].RESULTADO, "Ganancia");
 });
+
+test("filasExcelVentas: una fila por comprobante de venta; NC en negativo y tipo legible", async () => {
+  const { filasExcelVentas } = await import("./tesoreria.js");
+  const [f] = filasExcelVentas([{ fechaEmision: "2026-09-10T00:00:00.000Z", tipoDoc: "07", serie: "FC01", correlativo: 1, clienteRuc: "20100000003",
+    clienteRazonSocial: "CLIENTE SA", moneda: "PEN", tipoCambio: 1, base: 1000, igv: 180, total: 1180, baseSoles: -1000, igvSoles: -180, totalSoles: -1180 }]);
+  assert.equal(f.TIPO, "Nota de crédito");
+  assert.equal(f.COMPROBANTE, "FC01-1");
+  assert.equal(f.FECHA, "10/09/2026");
+  assert.equal(f["TOTAL S/"], -1180);
+});

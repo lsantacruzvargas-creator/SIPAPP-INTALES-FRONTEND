@@ -267,3 +267,11 @@ export const filasExcelDiferenciaCambio = (partidas) => partidas.map((p) => ({
   "TC DOC.": p.tcDoc ?? "", "SALDO US$": p.saldoMe, "LIBROS S/": p.librosSoles, "AL CIERRE S/": p.cierreSoles,
   "DIFERENCIA S/": p.diferencia, RESULTADO: p.diferencia > 0 ? "Ganancia" : p.diferencia < 0 ? "Pérdida" : "—",
 }));
+
+// Excel del resumen tributario, hoja Ventas (montos en S/ con signo: las NC restan).
+const TIPOS_VENTA = { "01": "Factura", "03": "Boleta", "07": "Nota de crédito", "08": "Nota de débito" };
+export const filasExcelVentas = (ventas) => ventas.map((v) => ({
+  FECHA: fechaIsoTexto(String(v.fechaEmision).slice(0, 10)),
+  TIPO: TIPOS_VENTA[v.tipoDoc] || v.tipoDoc, COMPROBANTE: `${v.serie}-${v.correlativo}`, RUC: v.clienteRuc, "RAZÓN SOCIAL": v.clienteRazonSocial,
+  MONEDA: v.moneda, TC: v.tipoCambio, BASE: v.base, IGV: v.igv, TOTAL: v.total, "BASE S/": v.baseSoles, "IGV S/": v.igvSoles, "TOTAL S/": v.totalSoles,
+}));
