@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
-import { formatearFecha } from "../utils/fecha";
+import { formatearFecha, fechaHoyLima } from "../utils/fecha";
 import { money } from "../components/detalleShared";
 import TablaScroll from "../components/TablaScroll";
+import SelectorMonedaTC from "../components/SelectorMonedaTC";
+import { costoEn, filaResumenCosto, filaComprometido, filaConsumido } from "../utils/costos";
 import * as XLSX from "xlsx";
 
 const TH = "px-4 py-3 font-semibold text-gray-500 whitespace-nowrap";
@@ -26,13 +28,15 @@ function PillFalta({ falta, label }) {
   );
 }
 
-function Seccion({ titulo, acento, count, children }) {
+function Seccion({ titulo, acento, count, ayuda, extra, children }) {
   return (
     <div className="mb-6">
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
         <span className={`w-1.5 h-5 rounded-full ${acento}`} />
         <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">{titulo}</h3>
         <span className="text-xs text-gray-400">({count})</span>
+        {ayuda && <span className="text-xs text-gray-400">— {ayuda}</span>}
+        {extra && <div className="ml-auto">{extra}</div>}
       </div>
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <TablaScroll className="overflow-x-auto">
@@ -46,6 +50,12 @@ function Seccion({ titulo, acento, count, children }) {
 export default function Reportes() {
   const [data, setData]         = useState(VACIO);
   const [cargando, setCargando] = useState(true);
+  // Costos de fabricación en S/ o US$ al TC SUNAT de una fecha (spec 2026-09-30).
+  const [vista, setVista] = useState({ moneda: "PEN", fecha: fechaHoyLima(), tc: null, error: false });
+  const monedaVista = vista.moneda === "USD" && vista.tc ? "USD" : "PEN";
+  const costos = data.costosFabricacion.map((c) => costoEn(c, monedaVista, vista.tc));
+  const costosComprometidos = costos.filter((c) => c.comprometido.total > 0);
+  const costosConsumidos = costos.filter((c) => c.consumido.total > 0);
 
   useEffect(() => {
     Promise.all([
@@ -79,19 +89,6 @@ export default function Reportes() {
       "Stock":      m.stock,
       "Valorizado": m.valorizado,
     });
-    const filaCostoFabricacion = (c) => ({
-      "N° OT":              c.numeroOT,
-      "N° Orden de Compra": c.numeroOrdenCompra || "—",
-      "Titulo":             c.titulo,
-      "Empresa":            nombreEmpresa(c.empresa),
-      "OC sin IGV":         c.ocSubtotal ?? "—",
-      "HH":                 c.costoHH,
-      "HM":                 c.costoHM,
-      "Materiales":         c.costoMateriales,
-      "Servicios":          c.costoServicios,
-      "Costo de Fabricacion": c.costoFabricacion,
-      "Margen":             c.margen ?? "—",
-    });
     const filaOCsinHesActa = (o) => ({
       "N° Orden":   o.numeroOrden,
       "Codigo":     o.codigo,
@@ -117,7 +114,9 @@ export default function Reportes() {
     [
       ["Facturacion x Empresa", data.facturacion.map(filaFacturacion)],
       ["Valorizado Almacen",    data.valorizado.materiales.map(filaMaterial)],
-      ["Costos de Fabricacion", data.costosFabricacion.map(filaCostoFabricacion)],
+      ["Costos de Fabricacion", costos.map((c) => filaResumenCosto(c, nombreEmpresa, vista.tc))],
+      ["Costo comprometido",    costosComprometidos.map(filaComprometido)],
+      ["Costo consumido",       costosConsumidos.map(filaConsumido)],
       ["OC sin HES-Acta",       data.ocSinHesActa.map(filaOCsinHesActa)],
       ["Ranking OT Cliente",    data.ranking.map(filaRanking)],
       ["Mora de Pago",          data.mora.map(filaMora)],
@@ -219,8 +218,9 @@ export default function Reportes() {
         </div>
       </div>
 
-      {/* 3. Costos de Fabricación por OT */}
-      <Seccion titulo="Costos de Fabricación" acento="bg-indigo-500" count={data.costosFabricacion.length}>
+      {/* 3. Costos de Fabricación por OT: comprometido (comprado, por pagar) y consumido (pagado + HH/HM) */}
+      <Seccion titulo="Costos de Fabricación" acento="bg-indigo-500" count={costos.length}
+        extra={<SelectorMonedaTC moneda={vista.moneda} fecha={vista.fecha} onCambio={setVista} />}>
         <thead className="bg-gray-50 text-xs uppercase tracking-wide border-b-2 border-gray-200">
           <tr>
             <th className={`${TH} text-left`}>N° OT</th>
@@ -228,34 +228,86 @@ export default function Reportes() {
             <th className={`${TH} text-left`}>Título</th>
             <th className={`${TH} text-left`}>Empresa</th>
             <th className={`${TH} text-right`}>OC sin IGV</th>
-            <th className={`${TH} text-right`}>HH</th>
-            <th className={`${TH} text-right`}>HM</th>
-            <th className={`${TH} text-right`}>Materiales</th>
-            <th className={`${TH} text-right`}>Servicios</th>
-            <th className={`${TH} text-right`}>Costo de Fabricación</th>
+            <th className={`${TH} text-right`}>Comprometido</th>
+            <th className={`${TH} text-right`}>Consumido</th>
+            <th className={`${TH} text-right`}>Costo total</th>
             <th className={`${TH} text-right`}>Margen</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {data.costosFabricacion.length === 0 ? (
-            <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">Sin datos</td></tr>
-          ) : data.costosFabricacion.map((c) => (
+          {costos.length === 0 ? (
+            <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">Sin datos</td></tr>
+          ) : costos.map((c) => (
             <tr key={c.otId} className="hover:bg-gray-50 transition-colors">
               <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{c.numeroOT}</td>
               <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{c.numeroOrdenCompra || "—"}</td>
               <td className="px-4 py-3.5 text-gray-600">{c.titulo}</td>
               <td className="px-4 py-3.5 text-gray-700">{nombreEmpresa(c.empresa)}</td>
               <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">
-                {c.ocSubtotal != null ? money(c.ocSubtotal) : "—"}
+                {c.ocSubtotal != null ? money(c.ocSubtotal, monedaVista) : "—"}
               </td>
-              <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{money(c.costoHH)}</td>
-              <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{money(c.costoHM)}</td>
-              <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{money(c.costoMateriales)}</td>
-              <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{money(c.costoServicios)}</td>
-              <td className="px-4 py-3.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">{money(c.costoFabricacion)}</td>
+              <td className="px-4 py-3.5 text-right font-semibold text-amber-700 tabular-nums whitespace-nowrap">{money(c.comprometido.total, monedaVista)}</td>
+              <td className="px-4 py-3.5 text-right font-semibold text-emerald-700 tabular-nums whitespace-nowrap">{money(c.consumido.total, monedaVista)}</td>
+              <td className="px-4 py-3.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">{money(c.costoTotal, monedaVista)}</td>
               <td className={`px-4 py-3.5 text-right font-bold tabular-nums whitespace-nowrap ${c.margen == null ? "text-gray-400" : c.margen >= 0 ? "text-green-600" : "text-red-600"}`}>
-                {c.margen != null ? money(c.margen) : "—"}
+                {c.margen != null ? money(c.margen, monedaVista) : "—"}
               </td>
+            </tr>
+          ))}
+        </tbody>
+      </Seccion>
+
+      <Seccion titulo="Costo comprometido" acento="bg-amber-500" count={costosComprometidos.length}
+        ayuda="Comprado con OC y aún no pagado por Tesorería">
+        <thead className="bg-gray-50 text-xs uppercase tracking-wide border-b-2 border-gray-200">
+          <tr>
+            <th className={`${TH} text-left`}>N° OT</th>
+            <th className={`${TH} text-right`}>Materiales</th>
+            <th className={`${TH} text-right`}>Servicios</th>
+            <th className={`${TH} text-right`}>Flete</th>
+            <th className={`${TH} text-right`}>Otros</th>
+            <th className={`${TH} text-right`}>Total comprometido</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {costosComprometidos.length === 0 ? (
+            <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Sin costos comprometidos</td></tr>
+          ) : costosComprometidos.map((c) => (
+            <tr key={c.otId} className="hover:bg-gray-50 transition-colors">
+              <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{c.numeroOT}</td>
+              {["materiales", "servicios", "flete", "otros"].map((k) => (
+                <td key={k} className="px-4 py-3.5 text-right text-gray-700 tabular-nums whitespace-nowrap">{money(c.comprometido[k], monedaVista)}</td>
+              ))}
+              <td className="px-4 py-3.5 text-right font-bold text-amber-700 tabular-nums whitespace-nowrap">{money(c.comprometido.total, monedaVista)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </Seccion>
+
+      <Seccion titulo="Costo consumido" acento="bg-emerald-500" count={costosConsumidos.length}
+        ayuda="Pagado por Tesorería + horas hombre y máquina">
+        <thead className="bg-gray-50 text-xs uppercase tracking-wide border-b-2 border-gray-200">
+          <tr>
+            <th className={`${TH} text-left`}>N° OT</th>
+            <th className={`${TH} text-right`}>HH</th>
+            <th className={`${TH} text-right`}>HM</th>
+            <th className={`${TH} text-right`}>Materiales</th>
+            <th className={`${TH} text-right`}>Servicios</th>
+            <th className={`${TH} text-right`}>Flete</th>
+            <th className={`${TH} text-right`}>Otros</th>
+            <th className={`${TH} text-right`}>Total consumido</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {costosConsumidos.length === 0 ? (
+            <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Sin costos consumidos</td></tr>
+          ) : costosConsumidos.map((c) => (
+            <tr key={c.otId} className="hover:bg-gray-50 transition-colors">
+              <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{c.numeroOT}</td>
+              {["hh", "hm", "materiales", "servicios", "flete", "otros"].map((k) => (
+                <td key={k} className="px-4 py-3.5 text-right text-gray-700 tabular-nums whitespace-nowrap">{money(c.consumido[k], monedaVista)}</td>
+              ))}
+              <td className="px-4 py-3.5 text-right font-bold text-emerald-700 tabular-nums whitespace-nowrap">{money(c.consumido.total, monedaVista)}</td>
             </tr>
           ))}
         </tbody>
