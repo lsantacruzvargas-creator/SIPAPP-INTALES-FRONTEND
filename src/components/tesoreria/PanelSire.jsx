@@ -4,6 +4,7 @@ import { fechaHoyLima, formatearFechaHora } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { periodoDeMes, fechaIsoTexto } from "../../utils/tesoreria";
 import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
+import { plantillaXlsx, xlsxATexto } from "../../utils/sireExcel";
 import TablaScroll from "../TablaScroll";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
@@ -74,13 +75,25 @@ export default function PanelSire({ onRegistrarFactura }) {
     }
   };
   const descargar = () => accion(() => fetchAuth(`${base}/descargar`, { method: "POST" }));
+  // El Excel de la plantilla se convierte aquí al formato del SIRE (texto con "|"); el
+  // ZIP o TXT descargado de SUNAT se sube tal cual.
   const subir = (e) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    const fd = new FormData();
-    fd.append("archivo", file);
-    accion(() => uploadAuth(`${base}/archivo`, fd));
+    accion(async () => {
+      let archivo = file;
+      if (/\.xlsx$/i.test(file.name)) {
+        try {
+          archivo = new File([await xlsxATexto(await file.arrayBuffer())], "sire.txt", { type: "text/plain" });
+        } catch (err) {
+          return { ok: false, json: async () => ({ mensaje: `No se pudo leer el Excel: ${err.message}` }) };
+        }
+      }
+      const fd = new FormData();
+      fd.append("archivo", archivo);
+      return uploadAuth(`${base}/archivo`, fd);
+    });
   };
 
   const visibles = filas.filter((f) => (!filtro || f.estado === filtro)
@@ -102,22 +115,22 @@ export default function PanelSire({ onRegistrarFactura }) {
     };
   }), filasSubtotal("RESULTADO", { TOTAL: sub.total, IGV: sub.igv }));
 
-  // Plantilla con lo que el sistema tiene y el SIRE no (o con datos distintos), para cargarlo al SIRE.
-  // OJO: las columnas siguen los nombres de la propuesta SIRE; conviene contrastarlas con la
-  // plantilla de importación vigente en el portal SUNAT antes de subirla.
-  const tipoDocId = (ruc) => (String(ruc || "").length === 11 ? "6" : String(ruc || "").length === 8 ? "1" : "0");
-  const descargarPlantilla = () => {
-    const aSubir = filas.filter((f) => f.sistema && (f.estado === "solo_sistema" || f.estado === "difiere"));
-    const fechaSire = (v) => fechaIsoTexto(v);
-    exportarHoja(`plantilla-sire-${libro.toLowerCase()}-${periodoDeMes(mes)}.xlsx`, "Plantilla SIRE", aSubir.map(({ sistema: d }) => {
-      const base = Math.round(((d.total || 0) - (d.igv || 0)) * 100) / 100;
-      return {
-        "Fecha de emisión": fechaSire(d.fechaEmision), "Tipo CP/Doc.": d.tipo, "Serie del CDP": d.serie, "Nro CP o Doc. Nro Inicial (Rango)": d.numero,
-        "Tipo Doc Identidad": tipoDocId(d.rucContraparte), "Nro Doc Identidad": d.rucContraparte, "Apellidos Nombres/ Razón Social": d.razonSocial || "",
-        "BI Gravado DG": base, "IGV / IPM DG": d.igv || 0, "Total CP": d.total || 0, Moneda: d.moneda || "PEN",
-      };
-    }));
-  };
+  // Plantilla Excel para llenar y cargar con "Subir archivo": columnas y orden del SIRE
+  // (el servidor las copia de la propuesta descargada del periodo, si la hay).
+  const descargarPlantilla = () => accion(async () => {
+    const r = await fetchAuth(`${base}/plantilla`);
+    if (!r.ok) return r;
+    const charset = /charset=([^;]+)/i.exec(r.headers.get("content-type") || "")?.[1] || "utf-8";
+    const cabecera = new TextDecoder(charset).decode(await r.arrayBuffer()).split(/\r?\n/)[0];
+    const blob = new Blob([await plantillaXlsx(cabecera)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `plantilla-sire-${libro.toLowerCase()}-${periodoDeMes(mes)}.xlsx`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    return { ok: true };
+  });
 
   const celda = (f, [clave, campo]) => {
     const dato = f.sire?.[campo] ?? f.sistema?.[campo];
@@ -141,10 +154,10 @@ export default function PanelSire({ onRegistrarFactura }) {
         <button onClick={descargar} disabled={ocupado} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50">Descargar de SUNAT</button>
         {estado?.estado === "descargando" && <button onClick={() => accion(() => fetchAuth(`${base}/estado`))} disabled={ocupado} className="border border-gray-300 px-4 py-2 rounded-lg text-sm">Actualizar estado</button>}
         <label className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 cursor-pointer">
-          Subir archivo<input type="file" accept=".zip,.txt" className="hidden" onChange={subir} disabled={ocupado} />
+          Subir archivo<input type="file" accept=".zip,.txt,.xlsx" className="hidden" onChange={subir} disabled={ocupado} />
         </label>
         <button onClick={exportarExcel} disabled={!visibles.length} className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Exportar Excel</button>
-        <button onClick={descargarPlantilla} disabled={!filas.length} title="Comprobantes del sistema que faltan o difieren en el SIRE" className="border border-purple-300 text-purple-700 px-4 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50">Descargar plantilla SIRE</button>
+        <button onClick={descargarPlantilla} disabled={ocupado} title="Excel con las columnas del SIRE para llenar y cargarlo con «Subir archivo»" className="border border-purple-300 text-purple-700 px-4 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50">Descargar plantilla</button>
         <span className="text-xs text-gray-500">
           {!estado || estado.estado === "sin_datos" ? "Sin propuesta descargada"
             : `${estado.estado === "lista" ? "Lista" : estado.estado === "error" ? "Error" : "Descargando"} · ${estado.origen === "archivo" ? "archivo" : "API"} · ${estado.totalComprobantes} comprobantes${estado.fechaDescarga ? ` · ${formatearFechaHora(estado.fechaDescarga)}` : ""}${estado.mensaje ? ` · ${estado.mensaje}` : ""}`}
