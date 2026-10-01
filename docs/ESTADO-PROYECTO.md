@@ -71,7 +71,8 @@ El tope de apiperu y el candado de emisión de NC viven **en memoria**: asumen u
 | Ventas en US$, TC del día y diferencia de cambio en cobros/pagos, reporte de diferencia de cambio al cierre, NC de venta parcial, resumen tributario completo (ventas, IGV del mes, renta) | En main | `docs/superpowers/specs/2026-10-01-ventas-usd-tributario-design.md` |
 | Auditoría de seguridad y manejo de errores | En main | `docs/superpowers/sdd/2026-10-01-seguridad-auditoria-progress.md` |
 | Factura de venta ligada a su comprobante SUNAT al crearla | En main | ver §4 |
-| Motor contable (C1–C5) | **Diseñado, sin código** | `docs/contabilidad/HANDOFF-contabilidad.md` |
+| Motor contable C1 (plan de cuentas PCGE + importación desde Excel, periodos, asientos manuales, pantalla Contabilidad) | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/contabilidad/HANDOFF-contabilidad.md` |
+| Motor contable C2–C5 | Diseñado; C2 espera las respuestas del contador | `docs/contabilidad/2026-10-01-preguntas-contador-C2.md` |
 
 Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide): `bloqueo-edicion`,
 `comprobantes-compra`, `ajustes-tributarios`, `ventas-usd-tributario`, `seguridad-auditoria`, `ligar-cpe-factura`.
@@ -79,6 +80,9 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 ## 4. Decisiones del usuario vigentes (no re-preguntar)
 
 **Tributario / contable**
+- **INTALES no será la contabilidad oficial** (2026-10-01): genera los asientos y los **exporta al software del
+  contador** (CONCAR/StarSoft, plantilla por confirmar). La fase C4 pasa de "exportación PLE" a "exportación al
+  software del contador"; el plan de cuentas se importa del contador para que los códigos coincidan.
 - Retención de 4ta: se declara en el **mes de pago** del recibo (el resumen la prorratea por neto pagado).
 - Retención IGV 3 %: solo comprobantes con crédito fiscal; **no aplica a recibos de servicios públicos (14)** ni a sus notas.
 - NC/ND en dólares: TC del **comprobante que modifican** (Oficio SUNAT 024-2000).
@@ -119,8 +123,8 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 - Preguntas del documento `docs/contabilidad/2026-10-01-casos-prueba-contables.md` (sección final): costeo de OT y
   CIF, cuentas de NC de compra (60x vs 7311) y de venta (7411 vs 7032x), cuenta BN (1042 vs 107), 4ta al provisionar o
   al pagar, boletas en el Registro de Compras, coeficiente de renta, vigencia del D. Leg. 1669.
-- **Decisión de fondo**: ¿INTALES será la contabilidad oficial (PLE) o exportará asientos al software del contador
-  (plantilla de CONCAR/StarSoft)?
+- **Todo lo necesario para C2** está reunido en `docs/contabilidad/2026-10-01-preguntas-contador-C2.md` (software y
+  plantilla de importación, plan de cuentas, cuentas por operación, criterios tributarios).
 
 **Brechas contables aún abiertas** (de `casos-prueba-contables.md` §4; B1–B5 y B9 ya resueltas): B6 cuenta de gasto por
 comprobante de compra; B7 movimientos de tesorería sin documento y conciliación bancaria; B10 periodo de anotación y
@@ -144,7 +148,7 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
 
 ## 6. Índice de documentos
 
-- `docs/contabilidad/`: investigación de libros electrónicos, diseño del motor contable (aprobado, cuentas corregidas),
+- `docs/contabilidad/`: **preguntas al contador para C2**, investigación de libros electrónicos, diseño del motor contable (aprobado, cuentas corregidas),
   spec de implementación C1, **guía contable** y **casos de prueba** (agente contador), `HANDOFF-contabilidad.md`.
 - `docs/superpowers/specs/`: todos los specs (cotización, centro de costo, compras, Tesorería B1, bloqueo de edición,
   comprobantes de compra, ventas US$/tributario).

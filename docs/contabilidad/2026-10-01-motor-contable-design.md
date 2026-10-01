@@ -4,6 +4,13 @@
 **Base:** `docs/contabilidad/2026-10-01-investigacion-libros-electronicos.md` (marco SUNAT, benchmark de ERP y
 decisiones del usuario).
 
+> **Cambio de alcance (2026-10-01, decisión del usuario):** INTALES **no** será la contabilidad oficial. Genera los
+> asientos y los **exporta al software del contador** (CONCAR/StarSoft) para que él los importe. Consecuencias: la
+> fase C4 pasa a ser "exportación de asientos en la plantilla del software del contador" (el `.txt` del PLE queda
+> opcional); el plan de cuentas se **importa del contador** para que los códigos coincidan; C5 (Inventarios y
+> Balances, EEFF oficiales) queda en suspenso. C1–C3 siguen igual. Preguntas pendientes para C2:
+> `2026-10-01-preguntas-contador-C2.md`.
+
 ## Objetivo
 
 Que INTALES lleve su **contabilidad completa dentro del sistema**, como CONCAR o STARSOFT: plan de cuentas, asientos
