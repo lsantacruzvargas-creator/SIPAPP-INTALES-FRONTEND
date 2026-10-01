@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { fetchAuth } from "../utils/fetchAuth";
+import { fechaHoyLima } from "../utils/fecha";
 import { precioConDescuento } from "../utils/cotizacionItems";
 import TablaScroll from "../components/TablaScroll";
 import {
@@ -437,7 +438,10 @@ export default function EmitirComprobante() {
   const crearFacturaInterna = async (dataCpe) => {
     const factPayload = {
       numeroFactura:      dataCpe.serie,
-      fechaEmision:       new Date().toISOString().split("T")[0],
+      fechaEmision:       fechaHoyLima(),
+      moneda,
+      // El servidor liga la factura con este comprobante (mismo número, cliente, moneda y total).
+      comprobante:        dataCpe.id,
       subtotal:           totales.base,
       descripcion:        ocOrigen.descripcion || ocOrigen.titulo || "",
       encargado:          ocOrigen.encargado || "",
@@ -454,18 +458,11 @@ export default function EmitirComprobante() {
     }
     const resF = await fetchAuth("/facturas", { method: "POST", body: JSON.stringify(factPayload) });
     if (!resF.ok) {
-      setError(`El comprobante ${dataCpe.serie} se emitió correctamente, pero no se pudo crear el registro interno de Factura. Verifica manualmente.`);
+      const det = (await resF.json().catch(() => ({}))).mensaje;
+      setError(`El comprobante ${dataCpe.serie} se emitió correctamente, pero no se pudo crear el registro interno de Factura${det ? `: ${det}` : ""}. Verifica manualmente.`);
       return;
     }
-    const factura = await resF.json();
-    setFacturaInterna(factura);
-    // Enlaza el Comprobante ya emitido con esta Factura recién creada — la Factura no podía
-    // existir antes (necesita el número ya emitido en SUNAT), así que el vínculo se completa acá,
-    // no en el POST /cpe/factura de arriba (ver vincularFactura en comprobante.controller.js).
-    await fetchAuth(`/cpe/${dataCpe.id}/vincular-factura`, {
-      method: "PATCH",
-      body: JSON.stringify({ facturaInterna: factura._id }),
-    });
+    setFacturaInterna(await resF.json());
   };
 
   const nuevo = () => {
