@@ -133,8 +133,10 @@ export function totalesMovimientos(movs) {
 }
 
 // Mismas reglas que valida registrarMovimiento en el backend.
-export function cuentasPara({ cuentas, lado, concepto, impuesto }) {
-  const activas = cuentas.filter((c) => c.activo);
+// El neto se mueve en la moneda del documento; el impuesto siempre en soles (espejo del backend).
+export function cuentasPara({ cuentas, lado, concepto, impuesto, moneda = "PEN" }) {
+  const monedaMov = concepto === "neto" ? moneda : "PEN";
+  const activas = cuentas.filter((c) => c.activo && (c.moneda || "PEN") === monedaMov);
   const noBN = activas.filter((c) => c.tipo !== "detracciones");
   const bn = activas.filter((c) => c.tipo === "detracciones");
   const tipo = tipoMovimientoEsperado({ lado, concepto, impuesto });

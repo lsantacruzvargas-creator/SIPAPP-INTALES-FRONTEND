@@ -253,9 +253,10 @@ export default function EmitirComprobante() {
   // usuario cambia ítems/porcentaje después de haberlo tipeado a mano). El depósito en el Banco
   // de la Nación va en soles enteros, no en céntimos — mismo redondeo (Math.round, .5 sube al
   // entero superior) que ya usa DetalleOrdenCompra.jsx para la detracción de compra.
-  const detraccionMontoNeto = detraccionAplica
-    ? Math.round(totalGeneral * (Number(detraccionPorcentaje) || 0) / 100).toFixed(2)
-    : "";
+  // En dólares el servidor calcula el depósito en soles; aquí queda el neto en dólares con decimales.
+  const detraccionMontoNeto = !detraccionAplica ? ""
+    : moneda === "USD" ? (Math.round(totalGeneral * (Number(detraccionPorcentaje) || 0)) / 100).toFixed(2)
+    : Math.round(totalGeneral * (Number(detraccionPorcentaje) || 0) / 100).toFixed(2);
 
   const ro = !!resultado?.ok;
 
@@ -485,7 +486,6 @@ export default function EmitirComprobante() {
     setDetraccionAplica(false);
     setDetraccionCodigoBien("");
     setDetraccionPorcentaje("");
-    setDetraccionMontoNeto("");
     setDetraccionCuentaBancaria("");
     setNumeroOrdenCompra("");
     setOrdenCompraId("");

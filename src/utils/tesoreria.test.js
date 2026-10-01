@@ -279,3 +279,10 @@ test("subtotalesPorCobrar: no mezcla dólares con soles; el impuesto siempre en 
   assert.deepEqual(s.neto, { USD: 2076.82, PEN: 1038 });
   assert.deepEqual(s.saldo, { USD: 2076.82, PEN: 1996 });
 });
+
+test("cuentasPara: el neto solo se cobra/paga desde cuentas en la moneda del documento", async () => {
+  const { cuentasPara } = await import("./tesoreria.js");
+  const cuentas = [{ _id: "a", activo: true, tipo: "banco", moneda: "PEN" }, { _id: "b", activo: true, tipo: "banco", moneda: "USD" }, { _id: "c", activo: true, tipo: "detracciones", moneda: "PEN" }];
+  assert.deepEqual(cuentasPara({ cuentas, lado: "venta", concepto: "neto", impuesto: { tipo: "ninguno" }, moneda: "USD" }).origen.map((c) => c._id), ["b"]);
+  assert.deepEqual(cuentasPara({ cuentas, lado: "venta", concepto: "neto", impuesto: { tipo: "ninguno" } }).origen.map((c) => c._id), ["a"]);
+});
