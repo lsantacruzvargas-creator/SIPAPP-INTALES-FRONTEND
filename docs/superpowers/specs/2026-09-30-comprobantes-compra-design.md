@@ -159,3 +159,15 @@ Implementada en `feature/comprobantes-compra`: tipos 12 (ticket, casilla "Trae R
 
 Menores diferidos: `pago.fecha` sin validar por API; falta test de reversión de "Ya se pagó" con cuenta inactiva; cuenta malformada da mensaje genérico; falla silenciosa al cargar cuentas; precarga SIRE de ticket 12 sin `ticketConRuc`; RH y tickets sin RUC aparecen "solo en el sistema" en SIRE (Fase 5); el formulario "Sin OC" no permite ligar una OT; `ticketConRuc: "false"` (texto) por API se toma como verdadero; duplicado previo responde 400.
 Pendiente de confirmar con el contador: si la retención del 3 % aplica a recibos de servicios públicos (14).
+
+## Estado — Fase 4 (2026-10-01)
+
+Implementada en `feature/comprobantes-compra` (backend dabc5c6..ba5ad8f, frontend 8946d6ac..faeb94b5). NC/ND ligadas a su comprobante; la NC se aplica sola hasta el saldo y el excedente queda a favor ("Aplicar a…"); anular el origen exige anular antes sus notas.
+
+Decisiones tomadas en la revisión:
+- La suma de NC vigentes de un comprobante no puede superar su total.
+- La detracción/retención del comprobante se recalcula sobre su total menos las NC vigentes mientras no se haya depositado; anular la NC la restaura. Si ya se depositó, se regulariza fuera del sistema.
+- Una nota en USD usa el TC del comprobante que modifica (sin consulta SUNAT). **Confirmar con el contador.**
+- Costos: una ND sobre factura con OC o de flete sube ese costo (con su propio pago); una NC de flete reduce el flete repartido.
+
+Pendientes menores: Excel de Por pagar con crédito fiscal derivado del origen; etiqueta "aplicación" en Movimientos (sin botón Anular); fecha de la aplicación manual = hoy; formulario de nota (moneda bloqueada tras elegir origen, limpiar origen al cambiar proveedor, ocultar flete/condición en NC); NC fuera del filtro "Pendiente" y del Excel, columna de saldo a favor, resumen neto de NC; índice {notaCredito, anulado}.
