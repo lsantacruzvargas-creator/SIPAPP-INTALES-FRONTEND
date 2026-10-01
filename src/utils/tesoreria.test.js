@@ -229,3 +229,60 @@ test("admiteRetencionIgv: no en recibos de servicios públicos (14) ni en sus no
   assert.equal(admiteRetencionIgv({ tipoComprobante: "01", igv: 18 }), true);
   assert.equal(admiteRetencionIgv({ tipoComprobante: "03", igv: 18 }), false);
 });
+
+test("monedaFactura: la OC manda; sin OC, la elegida; por defecto soles", async () => {
+  const { monedaFactura } = await import("./tesoreria.js");
+  assert.equal(monedaFactura({ oc: { moneda: "USD" }, elegida: "PEN" }), "USD");
+  assert.equal(monedaFactura({ oc: null, elegida: "USD" }), "USD");
+  assert.equal(monedaFactura({ oc: {}, elegida: "" }), "PEN");
+});
+
+test("calculoVenta en dólares: detracción en soles con umbral convertido; neto en dólares", async () => {
+  const { calculoVenta } = await import("./tesoreria.js");
+  const c = calculoVenta({ subtotal: 1000, descuentoPct: 0, moneda: "USD", tipoCambio: 3.51 });
+  assert.deepEqual(c, { base: 1000, igv: 180, total: 1180, detraccion: 497, totalAPagar: 1038.4 });
+  assert.equal(calculoVenta({ subtotal: 150, moneda: "USD", tipoCambio: 3.51 }).detraccion, 0);
+  assert.equal(calculoVenta({ subtotal: 1000 }).totalAPagar, 1038);
+});
+
+test("filasExcelDiferenciaCambio: partida legible con saldos y diferencia con signo", async () => {
+  const { filasExcelDiferenciaCambio } = await import("./tesoreria.js");
+  const filas = filasExcelDiferenciaCambio([
+    { tipo: "porPagar", documento: { numero: "F002-460", tercero: "PROV" }, moneda: "USD", tcDoc: 3.53, saldoMe: 1180, librosSoles: 4165.4, cierreSoles: 4212.6, diferencia: -47.2 },
+    { tipo: "cuenta", cuenta: { nombre: "BCP Dólares" }, moneda: "USD", saldoMe: 3540, librosSoles: 12295.6, cierreSoles: 12602.4, diferencia: 306.8 },
+  ]);
+  assert.deepEqual(filas[0], { PARTIDA: "Por pagar", DETALLE: "F002-460 · PROV", "TC DOC.": 3.53, "SALDO US$": 1180, "LIBROS S/": 4165.4, "AL CIERRE S/": 4212.6, "DIFERENCIA S/": -47.2, RESULTADO: "Pérdida" });
+  assert.equal(filas[1].PARTIDA, "Cuenta en dólares");
+  assert.equal(filas[1].DETALLE, "BCP Dólares");
+  assert.equal(filas[1]["TC DOC."], "");
+  assert.equal(filas[1].RESULTADO, "Ganancia");
+});
+
+test("filasExcelVentas: una fila por comprobante de venta; NC en negativo y tipo legible", async () => {
+  const { filasExcelVentas } = await import("./tesoreria.js");
+  const [f] = filasExcelVentas([{ fechaEmision: "2026-09-10T00:00:00.000Z", tipoDoc: "07", serie: "FC01", correlativo: 1, clienteRuc: "20100000003",
+    clienteRazonSocial: "CLIENTE SA", moneda: "PEN", tipoCambio: 1, base: 1000, igv: 180, total: 1180, baseSoles: -1000, igvSoles: -180, totalSoles: -1180 }]);
+  assert.equal(f.TIPO, "Nota de crédito");
+  assert.equal(f.COMPROBANTE, "FC01-1");
+  assert.equal(f.FECHA, "10/09/2026");
+  assert.equal(f["TOTAL S/"], -1180);
+});
+
+test("subtotalesPorCobrar: no mezcla dólares con soles; el impuesto siempre en soles", async () => {
+  const { subtotalesPorCobrar } = await import("./tesoreria.js");
+  const s = subtotalesPorCobrar([
+    { moneda: "USD", total: 2360, totalAPagar: 2076.82, saldoNeto: 2076.82, saldoImpuesto: 958, impuesto: { tipo: "detraccion", monto: 958 } },
+    { total: 1180, totalAPagar: 1038, saldoNeto: 1038, saldoImpuesto: 0, impuesto: { tipo: "detraccion", monto: 142 } },
+  ]);
+  assert.deepEqual(s.total, { USD: 2360, PEN: 1180 });
+  assert.deepEqual(s.impuesto, { PEN: 1100 });
+  assert.deepEqual(s.neto, { USD: 2076.82, PEN: 1038 });
+  assert.deepEqual(s.saldo, { USD: 2076.82, PEN: 1996 });
+});
+
+test("cuentasPara: el neto solo se cobra/paga desde cuentas en la moneda del documento", async () => {
+  const { cuentasPara } = await import("./tesoreria.js");
+  const cuentas = [{ _id: "a", activo: true, tipo: "banco", moneda: "PEN" }, { _id: "b", activo: true, tipo: "banco", moneda: "USD" }, { _id: "c", activo: true, tipo: "detracciones", moneda: "PEN" }];
+  assert.deepEqual(cuentasPara({ cuentas, lado: "venta", concepto: "neto", impuesto: { tipo: "ninguno" }, moneda: "USD" }).origen.map((c) => c._id), ["b"]);
+  assert.deepEqual(cuentasPara({ cuentas, lado: "venta", concepto: "neto", impuesto: { tipo: "ninguno" } }).origen.map((c) => c._id), ["a"]);
+});

@@ -34,7 +34,7 @@ export default function ModalMovimiento({ lado, documento, onClose, onGuardado }
   }));
 
   const tipo = tipoMovimientoEsperado({ lado, concepto: form.concepto, impuesto: d.impuesto });
-  const { origen, destino } = cuentasPara({ cuentas, lado, concepto: form.concepto, impuesto: d.impuesto });
+  const { origen, destino } = cuentasPara({ cuentas, lado, concepto: form.concepto, impuesto: d.impuesto, moneda });
   const esDetraccion = form.concepto === "impuesto" && d.impuesto?.tipo === "detraccion";
   const etiquetaOperacion = tipo === "retencion" ? "N° de comprobante de retención"
     : esDetraccion ? "N° de constancia de depósito" : "N° de operación";

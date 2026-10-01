@@ -24,6 +24,15 @@ export function hojaConSubtotales(filas, subtotales = []) {
   return ws;
 }
 
+// Libro con varias hojas: [{ hoja, filas, subtotales }].
+export function libroConHojas(hojas) {
+  const wb = XLSX.utils.book_new();
+  for (const h of hojas) XLSX.utils.book_append_sheet(wb, hojaConSubtotales(h.filas, h.subtotales), h.hoja);
+  return wb;
+}
+
+export const exportarLibro = (archivo, hojas) => XLSX.writeFile(libroConHojas(hojas), archivo);
+
 // Descarga un .xlsx con `filas` (objetos) y, debajo, las filas de subtotales ya armadas.
 export function exportarHoja(archivo, hoja, filas, subtotales = []) {
   const ws = hojaConSubtotales(filas, subtotales);

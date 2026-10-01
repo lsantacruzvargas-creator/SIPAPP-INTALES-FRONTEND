@@ -125,7 +125,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
     : form.impuestoManual ? { tipo: form.impuestoTipo, codigoSunat: form.codigoSunat } : sugerido;
   const puedeYaPagado = form.condicion === "contado" && !esNC;
   const previaNota = esNC && origen ? vistaPreviaNota({ totalNota: total, saldoOrigen: origen.saldoNeto }) : null;
-  const cuentasPago = cuentasPara({ cuentas, lado: "compra", concepto: "neto", impuesto: { tipo: imp.tipo } }).origen;
+  const cuentasPago = cuentasPara({ cuentas, lado: "compra", concepto: "neto", impuesto: { tipo: imp.tipo }, moneda: form.moneda }).origen;
   const avisoCuentaPago = form.yaPagado ? avisoMoneda(cuentas.find((c) => c._id === form.pagoCuenta), form.moneda) : null;
   const { tasa, monto } = calcularImpuesto({ ...imp, total, moneda: form.moneda, tipoCambio });
   const quienDeposita = imp.tipo === "detraccion" ? form.quienDeposita : "nosotros";

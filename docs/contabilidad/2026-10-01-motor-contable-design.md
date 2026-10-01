@@ -62,10 +62,15 @@ Cerrar y **reabrir** un mes es exclusivo del `tesorero`; la reapertura exige mot
   `{ cuenta, debe, haber (en S/), debeME, haberME (si USD), centroCosto?, ordenTrabajo?, tercero? (tipo/número doc),
   documento? (tipo, serie, número, fecha) }`. Regla: **Σ debe = Σ haber** en soles (y en ME cuando aplique).
 - **`ConfiguracionContable`** (una por empresa, editable por el contador): cuentas por defecto para cada operación:
-  proveedores (4212, 4241 honorarios), clientes (1212), IGV (40111), retención 4.ª (40172), detracciones por pagar
-  (4011x según uso), compras por tipo de artículo/servicio (60x, 63x, 65x), ventas (7041 servicios / 7011 mercaderías),
-  cuentas de banco/caja por `CuentaTesoreria` (104x/101x; la de detracciones en BN), diferencia de cambio (676/776),
-  destinos (OT → 92/90x, centro de costo administrativo → 94, ventas → 95, 79 como contrapartida).
+  proveedores (4212; honorarios en 424, que en el PCGE 2019 no tiene divisionarias), clientes (1212), IGV (40111),
+  retención 4.ª (40172), compras por tipo de artículo/servicio (60x, 63x, 65x; materias primas en 602, sin
+  divisionarias), ventas (70321 servicios – local – terceros, 70221 productos terminados – local, 70121 mercaderías –
+  local; **7041 es Subproductos y 7011 es venta de exportación: no usar para ventas locales**), cuentas de banco/caja
+  por `CuentaTesoreria` (1041xx operativas, 101x caja; la de detracciones en el Banco de la Nación en 1042 o 107
+  **[Confirmar con el contador]**), diferencia de cambio (676/776), destinos (OT → 92/90x, centro de costo
+  administrativo → 94, ventas → 95, 79 como contrapartida; 921/941/951/971 son divisionarias de libre definición,
+  solo ejemplos configurables). La detracción de compras **no** tiene cuenta propia (4011x): es parte del saldo de
+  4212 y se cancela con fondos de la cuenta operativa. *(Correcciones de la brecha B5, 2026-10-01.)*
 
 ## Asientos automáticos (regla de negocio central)
 
@@ -76,12 +81,12 @@ solo: si el origen cambia, se avisa y se ofrece regenerarlo.
 | Origen | Asiento (resumen, cuentas configurables) |
 |---|---|
 | Factura de proveedor (01) | Debe 6x (o 20/25 según tipo de artículo) base · Debe 40111 IGV · Haber 4212 total. **Destino**: Debe 9x (según OT o centro de costo) / Haber 79, editable |
-| Recibo por honorarios (02) | Debe 6321/6329 · Haber 4241 neto · Haber 40172 retención 4.ª (si aplica) |
+| Recibo por honorarios (02) | Debe 6321/6329 · Haber 424 neto · Haber 40172 retención 4.ª (si aplica; **[Confirmar con el contador]** si se registra al provisionar o al pagar) |
 | Boleta / ticket sin crédito fiscal | Debe 6x total (IGV al costo) · Haber 4212 |
 | Nota de crédito / débito de compra | Inverso / igual a la factura de origen |
-| Comprobante de venta (CPE) | Debe 1212 total · Haber 40111 IGV · Haber 70x base |
-| Pago a proveedor | Debe 4212 · Haber 104x (cuenta de tesorería). Detracción: Debe 4212 · Haber 104x (cuenta BN) |
-| Cobro a cliente | Debe 104x · Haber 1212; detracción del cliente a la cuenta BN |
+| Comprobante de venta (CPE) | Debe 1212 total · Haber 40111 IGV · Haber 70321 (servicios) / 70221 (productos fabricados) base |
+| Pago a proveedor | Debe 4212 · Haber 1041xx (cuenta de tesorería). Detracción: Debe 4212 · Haber 1041xx (se deposita con fondos de la cuenta **operativa** en la cuenta BN del proveedor) |
+| Cobro a cliente | Debe 1041xx · Haber 1212; detracción del cliente: Debe 1042 (BN de INTALES) · Haber 1212 |
 | Diferencia de cambio al pagar/cobrar (USD) | Debe 676 / Haber 776 por la diferencia entre el TC del documento y el del pago |
 | Anulación del documento | Asiento anulado (si su periodo está abierto) o asiento de reversión en el periodo actual |
 

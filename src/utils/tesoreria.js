@@ -50,9 +50,24 @@ export function sugerirImpuesto({ total, moneda = "PEN", tipoCambio = 1, hayServ
   return { tipo: "ninguno", codigoSunat: "" };
 }
 
-export function impuestoVentaPorDefecto(total) {
-  if (Number(total) <= UMBRAL_IMPUESTO) return { tipo: "ninguno", codigoSunat: "", tasa: 0, monto: 0 };
-  return { tipo: "detraccion", codigoSunat: CODIGO_SERVICIOS, ...calcularImpuesto({ tipo: "detraccion", codigoSunat: CODIGO_SERVICIOS, total }) };
+// Espejo del backend: umbral y monto de la detracción en soles (ventas en dólares: total × TC).
+export function impuestoVentaPorDefecto(total, moneda = "PEN", tipoCambio = 1) {
+  if (aSoles(total, moneda, tipoCambio) <= UMBRAL_IMPUESTO) return { tipo: "ninguno", codigoSunat: "", tasa: 0, monto: 0 };
+  return { tipo: "detraccion", codigoSunat: CODIGO_SERVICIOS, ...calcularImpuesto({ tipo: "detraccion", codigoSunat: CODIGO_SERVICIOS, total, moneda, tipoCambio }) };
+}
+
+// La moneda de una venta la manda su OC (que sigue a su cotización); sin OC, la elegida.
+export const monedaFactura = ({ oc, elegida }) => (oc?.moneda === "USD" || oc?.moneda === "PEN" ? oc.moneda : elegida === "USD" ? "USD" : "PEN");
+
+// Vista previa de la factura de venta: detracción en S/, total a pagar en la moneda de la factura.
+export function calculoVenta({ subtotal, descuentoPct = 0, moneda = "PEN", tipoCambio = 1 }) {
+  const sub = round2(Number(subtotal) || 0);
+  const base = round2(sub * (1 - (Number(descuentoPct) || 0) / 100));
+  const igv = round2(base * 0.18);
+  const total = round2(base + igv);
+  const detraccion = impuestoVentaPorDefecto(total, moneda, tipoCambio).monto;
+  const enDoc = moneda === "USD" && tipoCambio > 0 ? detraccion / tipoCambio : detraccion;
+  return { base, igv, total, detraccion, totalAPagar: round2(total - enDoc) };
 }
 
 export function etiquetaImpuesto(impuesto) {
@@ -118,8 +133,10 @@ export function totalesMovimientos(movs) {
 }
 
 // Mismas reglas que valida registrarMovimiento en el backend.
-export function cuentasPara({ cuentas, lado, concepto, impuesto }) {
-  const activas = cuentas.filter((c) => c.activo);
+// El neto se mueve en la moneda del documento; el impuesto siempre en soles (espejo del backend).
+export function cuentasPara({ cuentas, lado, concepto, impuesto, moneda = "PEN" }) {
+  const monedaMov = concepto === "neto" ? moneda : "PEN";
+  const activas = cuentas.filter((c) => c.activo && (c.moneda || "PEN") === monedaMov);
   const noBN = activas.filter((c) => c.tipo !== "detracciones");
   const bn = activas.filter((c) => c.tipo === "detracciones");
   const tipo = tipoMovimientoEsperado({ lado, concepto, impuesto });
@@ -243,3 +260,41 @@ export const filasExcelResumen = (detalle) => detalle.map((d) => ({
   "BASE S/": d.baseSoles, "IGV S/": d.igvSoles, "TOTAL S/": d.totalSoles,
   "CRÉDITO FISCAL": d.creditoFiscal ? "Sí" : "No", "4TA DEL RECIBO S/": d.retencion4ta,
 }));
+
+// Excel del reporte de diferencia de cambio al cierre (+ ganancia, − pérdida, en S/).
+const PARTIDAS_DC = { porCobrar: "Por cobrar", porPagar: "Por pagar", cuenta: "Cuenta en dólares" };
+export const filasExcelDiferenciaCambio = (partidas) => partidas.map((p) => ({
+  PARTIDA: PARTIDAS_DC[p.tipo] || p.tipo,
+  DETALLE: p.cuenta ? p.cuenta.nombre : [p.documento?.numero, p.documento?.tercero].filter(Boolean).join(" · "),
+  "TC DOC.": p.tcDoc ?? "", "SALDO US$": p.saldoMe, "LIBROS S/": p.librosSoles, "AL CIERRE S/": p.cierreSoles,
+  "DIFERENCIA S/": p.diferencia, RESULTADO: p.diferencia > 0 ? "Ganancia" : p.diferencia < 0 ? "Pérdida" : "—",
+}));
+
+// Excel del resumen tributario, hoja Ventas (montos en S/ con signo: las NC restan).
+const TIPOS_VENTA = { "01": "Factura", "03": "Boleta", "07": "Nota de crédito", "08": "Nota de débito" };
+export const filasExcelVentas = (ventas) => ventas.map((v) => ({
+  FECHA: fechaIsoTexto(String(v.fechaEmision).slice(0, 10)),
+  TIPO: TIPOS_VENTA[v.tipoDoc] || v.tipoDoc, COMPROBANTE: `${v.serie}-${v.correlativo}`, RUC: v.clienteRuc, "RAZÓN SOCIAL": v.clienteRazonSocial,
+  MONEDA: v.moneda, TC: v.tipoCambio, BASE: v.base, IGV: v.igv, TOTAL: v.total, "BASE S/": v.baseSoles, "IGV S/": v.igvSoles, "TOTAL S/": v.totalSoles,
+}));
+
+// Subtotales de Por cobrar por moneda: total, neto y saldo neto en la moneda de cada factura;
+// la detracción/retención (y su saldo) siempre en soles.
+export function subtotalesPorCobrar(facturas) {
+  const sumar = (lista, monto, moneda) => lista.reduce((t, x) => {
+    const m = moneda(x);
+    t[m] = round2((t[m] || 0) + Number(monto(x) || 0));
+    return t;
+  }, {});
+  const mon = (f) => f.moneda || "PEN";
+  const conImpuesto = facturas.filter((f) => f.impuesto?.tipo && f.impuesto.tipo !== "ninguno");
+  const saldo = sumar(facturas, (f) => f.saldoNeto, mon);
+  const saldoImp = facturas.reduce((s, f) => s + (Number(f.saldoImpuesto) || 0), 0);
+  if (saldoImp) saldo.PEN = round2((saldo.PEN || 0) + saldoImp);
+  return {
+    total: sumar(facturas, (f) => f.total, mon),
+    impuesto: sumar(conImpuesto, (f) => f.impuesto.monto, () => "PEN"),
+    neto: sumar(facturas, (f) => f.totalAPagar, mon),
+    saldo,
+  };
+}

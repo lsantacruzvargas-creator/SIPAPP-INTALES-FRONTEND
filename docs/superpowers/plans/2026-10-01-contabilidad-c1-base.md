@@ -24,7 +24,7 @@ reportes (C3) y sin exportación (C4).
 - Modelo `CuentaContable` (`codigo` único 2–10 dígitos, `nombre`, `nivel`, `padre`, `naturaleza`, `deMovimiento`,
   `exigeCentroCosto`, `exigeTercero`, `destino {debe9x, haber79}`, `activa`, `fechaModificacion`).
 - Seed `src/data/pcge.js`: PCGE 2019 a 2 y 3 dígitos completo + subcuentas de 4–5 dígitos que INTALES usará
-  (101/104x, 1212, 40111, 40172, 4212, 4241, 60x, 63x, 65x, 70x, 676/776, 79, 90–97). Script idempotente
+  (101/104x, 1212, 40111, 40172, 4212, 424, 60x, 63x, 65x, 70321/70221/70121, 676/776, 79, 90–97). Script idempotente
   `node scripts/seedPcge.js` y carga automática si la colección está vacía.
 - Rutas `GET /contabilidad/cuentas` (árbol y búsqueda), `POST` (subcuenta bajo un padre), `PUT /:id` (nombre,
   banderas, destino), `PATCH /:id/activa`. Reglas: el padre debe existir y el código empezar por el del padre; una

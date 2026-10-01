@@ -7,7 +7,8 @@ const TIPOS = { banco: "Banco", caja: "Caja", detracciones: "Detracciones (Banco
 
 export default function PanelConfiguracion({ onCambio }) {
   const [cuentas, setCuentas] = useState([]);
-  const [config, setConfig] = useState({ esAgenteRetencion: false });
+  const [config, setConfig] = useState({ esAgenteRetencion: false, tcCobros: "compra", tcPagos: "venta", coeficienteRenta: 0.015 });
+  const [coeficiente, setCoeficiente] = useState(null);
   const [nueva, setNueva] = useState(VACIA);
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -46,6 +47,26 @@ export default function PanelConfiguracion({ onCambio }) {
         <input type="checkbox" disabled={guardando} checked={!!config.esAgenteRetencion} onChange={(e) => guardar("/configuracion", "PUT", { esAgenteRetencion: e.target.checked })} />
         INTALES es agente de retención (habilita la retención del 3 % en compras)
       </label>
+      <div className="flex flex-wrap gap-4 items-end text-sm">
+        <label className="text-xs text-gray-500">TC SUNAT en cobros en dólares
+          <select value={config.tcCobros} disabled={guardando} onChange={(e) => guardar("/configuracion", "PUT", { tcCobros: e.target.value })} className={`${INP} block`}>
+            <option value="compra">Compra</option><option value="venta">Venta</option>
+          </select>
+        </label>
+        <label className="text-xs text-gray-500">TC SUNAT en pagos en dólares
+          <select value={config.tcPagos} disabled={guardando} onChange={(e) => guardar("/configuracion", "PUT", { tcPagos: e.target.value })} className={`${INP} block`}>
+            <option value="compra">Compra</option><option value="venta">Venta</option>
+          </select>
+        </label>
+        <label className="text-xs text-gray-500">Coeficiente de pago a cuenta de renta (%)
+          <input type="number" step="0.01" min="0" max="10" disabled={guardando}
+            value={coeficiente ?? String(Math.round((config.coeficienteRenta ?? 0.015) * 10000) / 100)}
+            onChange={(e) => setCoeficiente(e.target.value)}
+            onBlur={async () => { if (coeficiente != null && (await guardar("/configuracion", "PUT", { coeficienteRenta: Number(coeficiente) / 100 }))) setCoeficiente(null); }}
+            className={`${INP} block w-32`} />
+        </label>
+      </div>
+      <p className="text-[11px] text-gray-400 -mt-4">Por defecto, cobros al TC compra y pagos al TC venta (práctica de CONCAR/StarSoft); confirmar con el contador.</p>
       <div className="space-y-2">
         <h3 className="text-sm font-bold text-gray-700 uppercase">Cuentas de tesorería</h3>
         <table className="w-full text-sm bg-white rounded-xl border border-gray-100">

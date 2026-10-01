@@ -73,11 +73,14 @@ Responder al usuario en español, conciso. No mergear a `main` sin su OK.
   PCGE 2019** antes de cargarlo (los de servicios son ejemplos):
   `1011` Caja, `1041` Cuentas corrientes operativas (una divisionaria por cuenta de Tesorería: `104101`, …; la de
   detracciones en el Banco de la Nación aparte), `1212` Emitidas en cartera (facturas por cobrar), `40111` IGV – Cuenta
-  propia, `40172` Renta de cuarta categoría (retenciones), `4212` Emitidas (facturas por pagar), `4241` Honorarios por
-  pagar, `6011`/`6021`/`6031` compras (según tipo de artículo), `6321`/`6343`/`6351`… servicios de terceros más usados,
-  `7011`/`7041` ventas, `676` y `776` diferencia de cambio, `79` (`791` cargas imputables a cuentas de costos y gastos),
-  `90`–`97` destinos (al menos `921` costo de producción, `941` gastos administrativos, `951` gastos de ventas, `971`
-  gastos financieros). Cuentas de clase 6 con `destino` por defecto (`debe: "941"`, `haber: "791"`), editable.
+  propia, `40172` Renta de cuarta categoría (retenciones), `4212` Emitidas (facturas por pagar), `424` Honorarios por
+  pagar (sin divisionarias en el PCGE 2019; **no existe 4241**), `6011`/`602`/`6031` compras (según tipo de artículo;
+  **no existe 6021**), `6321`/`6343`/`6351`… servicios de terceros más usados, ventas locales `70321` servicios,
+  `70221` productos terminados y `70121` mercaderías (**no `7041`, que es Subproductos, ni `7011`, que es
+  exportación**), `1042`/`107` para la cuenta de detracciones del Banco de la Nación **[Confirmar con el contador]**,
+  `676` y `776` diferencia de cambio, `79` (`791` cargas imputables a cuentas de costos y gastos), `90`–`97` destinos
+  (por ejemplo `921` costo de producción, `941` gastos administrativos, `951` gastos de ventas, `971` gastos
+  financieros: son divisionarias de libre definición, se cargan como ejemplo configurable). *(Brecha B5, 2026-10-01.)* Cuentas de clase 6 con `destino` por defecto (`debe: "941"`, `haber: "791"`), editable.
 - `scripts/seedPcge.js`: idempotente (upsert por `codigo`, no pisa cambios del usuario en `nombre`/banderas si la
   cuenta ya existe). Además, al arrancar el servidor, si la colección está vacía se carga el seed.
 

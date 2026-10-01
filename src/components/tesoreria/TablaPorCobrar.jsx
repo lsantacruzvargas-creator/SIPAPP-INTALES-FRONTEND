@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha, fechaHoyLima } from "../../utils/fecha";
 import { money } from "../../utils/compras";
-import { FILTROS_TESORERIA, filtrarFacturas, semaforo, vencimientoDe, etiquetaImpuesto } from "../../utils/tesoreria";
+import { FILTROS_TESORERIA, filtrarFacturas, semaforo, vencimientoDe, etiquetaImpuesto, subtotalesPorCobrar } from "../../utils/tesoreria";
 import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
 import TablaScroll from "../TablaScroll";
 import ModalMovimiento from "./ModalMovimiento";
@@ -29,17 +29,12 @@ export default function TablaPorCobrar() {
   const filtradas = filtrarFacturas(facturas, filtros, { lado: "venta", hoyIso });
 
   const hayImp = (f) => f.impuesto?.tipo && f.impuesto.tipo !== "ninguno";
-  const sub = {
-    total: sumarPorMoneda(filtradas, (f) => f.total),
-    impuesto: sumarPorMoneda(filtradas.filter(hayImp), (f) => f.impuesto.monto),
-    neto: sumarPorMoneda(filtradas, (f) => f.totalAPagar),
-    saldo: sumarPorMoneda(filtradas, (f) => (f.saldoNeto || 0) + (f.saldoImpuesto || 0)),
-  };
+  const sub = subtotalesPorCobrar(filtradas);
   const exportarExcel = () => exportarHoja("por-cobrar.xlsx", "Por cobrar", filtradas.map((f) => ({
     FACTURA: f.numeroFactura || f.codigo, CLIENTE: f.empresa?.razonSocial || "", "EMISIÓN": fecha(f.fechaEmision),
     VENCE: fecha(vencimientoDe(f, "venta")), TOTAL: f.total, IMPUESTO: hayImp(f) ? f.impuesto.monto : 0,
     NETO: f.totalAPagar, "SALDO NETO": f.saldoNeto, "SALDO IMPUESTO": f.saldoImpuesto,
-  })), filasSubtotal("FACTURA", { TOTAL: sub.total, IMPUESTO: sub.impuesto, NETO: sub.neto, "SALDO NETO": sumarPorMoneda(filtradas, (f) => f.saldoNeto), "SALDO IMPUESTO": sumarPorMoneda(filtradas, (f) => f.saldoImpuesto) }));
+  })), filasSubtotal("FACTURA", { TOTAL: sub.total, IMPUESTO: sub.impuesto, NETO: sub.neto, "SALDO NETO": sumarPorMoneda(filtradas, (f) => f.saldoNeto, (f) => f.moneda || "PEN"), "SALDO IMPUESTO": sumarPorMoneda(filtradas, (f) => f.saldoImpuesto) }));
 
   return (
     <div className="space-y-4">
@@ -76,12 +71,13 @@ export default function TablaPorCobrar() {
                     <td className="px-3 py-2">{fecha(f.fechaEmision)}</td>
                     <td className={`px-3 py-2 ${COLOR_VENC[sem] || "text-gray-400"}`}>{fecha(venc)}</td>
                     <td className="px-3 py-2 text-xs">{f.cuotas?.length ? `${f.cuotas.filter((c) => c.pagado).length}/${f.cuotas.length}` : "—"}</td>
-                    <td className="px-3 py-2 tabular-nums">{money(f.total)}</td>
+                    <td className="px-3 py-2 tabular-nums">{money(f.total, f.moneda)}{f.moneda === "USD" ? <span className="block text-[11px] text-gray-400">TC {Number(f.tipoCambio).toFixed(3)}</span> : null}
+                      {f.aplicadoNC > 0 && <span className="block text-[11px] text-red-600" title={(f.notasCredito || []).map((n) => n.serieNumero).join(", ")}>NC aplicadas −{money(f.aplicadoNC, f.moneda)}</span>}</td>
                     <td className="px-3 py-2 text-xs">{hayImpuesto ? `${etiquetaImpuesto(f.impuesto)} ${money(f.impuesto.monto)}${f.impuesto.quienDeposita === "nosotros" ? " (nosotros)" : ""}` : "—"}</td>
                     <td className="px-3 py-2 text-center"><Check ok={f.saldoImpuesto <= 0.009} visible={hayImpuesto} /></td>
-                    <td className="px-3 py-2 tabular-nums">{money(f.totalAPagar)}</td>
+                    <td className="px-3 py-2 tabular-nums">{money(f.totalAPagar, f.moneda)}</td>
                     <td className="px-3 py-2 text-center"><Check ok={f.saldoNeto <= 0.009} /></td>
-                    <td className="px-3 py-2 tabular-nums">{money(f.saldoNeto)}{f.saldoImpuesto > 0.009 ? ` + ${money(f.saldoImpuesto)}` : ""}</td>
+                    <td className="px-3 py-2 tabular-nums">{money(f.saldoNeto, f.moneda)}{f.saldoImpuesto > 0.009 ? ` + ${money(f.saldoImpuesto)}` : ""}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
                       {pendiente && <button onClick={() => setCobrando(f)} className="text-xs text-purple-600 hover:text-purple-800">Registrar cobro</button>}
                       {sinCobros && <button onClick={() => setEditandoImpuesto(f)} className="text-xs text-gray-500 hover:text-gray-700">Impuesto</button>}
