@@ -22,11 +22,11 @@ T5 frontend: página Contabilidad, `BuscadorCuenta`, `ModalCuenta`, `ModalAsient
 T6 verificación: backend 278 tests (277 ok, 1 omitido a propósito); frontend 76 tests, lint de tocados y build OK;
 Playwright con backend real (ver HANDOFF), incluida la edición de un asiento con bloqueo "abrir = editar".
 Final (revisión independiente de la rama): 0 Critical; 7 Important corregidos con test: (1) carrera asiento ↔ crear
-subcuenta (el asiento escribe  de sus cuentas para chocar en la transacción; test RED→GREEN), (2)
+subcuenta (el asiento escribe `ultimoUso` de sus cuentas para chocar en la transacción; test RED→GREEN), (2)
 desactivar en transacción, (3) cuenta intermedia nace de agrupación y adopta a las hijas, (4) fecha AAAA-MM-DD real
 entre 2000 y hoy + 1 año, (5) centro de costo (activo) y OT deben existir, (6) destino heredado o 941/791 en 62–68
 y solo 9x/79, (7) modales con useBloqueoEdicion y PUT de cuenta con versión. Minor corregidos: banderas e importes
 con tipo estricto, tercero (tabla 2, RUC 11/DNI 8) y largos de texto, asiento toca el periodo (para el cierre de C3),
 subcuenta revisa también asientos anulados, destino activo y se puede quitar, subcuenta hereda exigeCentroCosto,
 errores de red con aviso, TC SUNAT en solo lectura, exportación de todas las páginas, falla del seed sin tumbar el
-servidor. Minor diferido:  no se valida contra la tabla 10 (se definirá con la plantilla del contador).
+servidor. Minor diferido: `documento.tipo` no se valida contra la tabla 10 (se definirá con la plantilla del contador).
