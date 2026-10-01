@@ -8,12 +8,15 @@ estos docs están idénticos en `docs/contabilidad/` de ambos.
 - Investigación: `docs/contabilidad/2026-10-01-investigacion-libros-electronicos.md`.
 - Diseño **aprobado** (2026-10-01): `docs/contabilidad/2026-10-01-motor-contable-design.md`. Cierre y reapertura de
   mes: solo `tesorero`. Ingresos entre 300 y 1700 UIT y nunca > 1500 UIT (no aplica inventario permanente).
-- Plan de la Fase C1: `docs/superpowers/plans/2026-10-01-contabilidad-c1-base.md` — **pendiente de aprobación**.
+- Plan de la Fase C1: `docs/superpowers/plans/2026-10-01-contabilidad-c1-base.md`.
+- **Spec de implementación de C1 (para el agente del editor de código):**
+  `docs/contabilidad/2026-10-01-c1-spec-implementacion.md` — modelos, rutas, permisos, validaciones, pantallas,
+  tests y criterios de aceptación.
 - Código: nada implementado todavía.
 
 ## Siguiente paso
 
-1. Con el plan C1 aprobado: crear `feature/contabilidad` desde `main` en ambos repos e implementar con TDD.
+1. Implementar C1 siguiendo el spec de implementación: `feature/contabilidad` desde `main` en ambos repos, TDD, revisión.
 2. Conseguir el **Anexo 2 consolidado** (estructuras 5.1, 5.3, 6.1, 1.x, 3.x) antes de la Fase C4; las páginas de
    orientación de SUNAT responden "Acceso denegado" desde la nube (sí descargan los PDF de
    `www.sunat.gob.pe/legislacion/...` con un User-Agent de navegador).
