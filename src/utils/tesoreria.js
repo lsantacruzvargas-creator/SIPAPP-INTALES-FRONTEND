@@ -258,3 +258,12 @@ export const filasExcelResumen = (detalle) => detalle.map((d) => ({
   "BASE S/": d.baseSoles, "IGV S/": d.igvSoles, "TOTAL S/": d.totalSoles,
   "CRÉDITO FISCAL": d.creditoFiscal ? "Sí" : "No", "4TA DEL RECIBO S/": d.retencion4ta,
 }));
+
+// Excel del reporte de diferencia de cambio al cierre (+ ganancia, − pérdida, en S/).
+const PARTIDAS_DC = { porCobrar: "Por cobrar", porPagar: "Por pagar", cuenta: "Cuenta en dólares" };
+export const filasExcelDiferenciaCambio = (partidas) => partidas.map((p) => ({
+  PARTIDA: PARTIDAS_DC[p.tipo] || p.tipo,
+  DETALLE: p.cuenta ? p.cuenta.nombre : [p.documento?.numero, p.documento?.tercero].filter(Boolean).join(" · "),
+  "TC DOC.": p.tcDoc ?? "", "SALDO US$": p.saldoMe, "LIBROS S/": p.librosSoles, "AL CIERRE S/": p.cierreSoles,
+  "DIFERENCIA S/": p.diferencia, RESULTADO: p.diferencia > 0 ? "Ganancia" : p.diferencia < 0 ? "Pérdida" : "—",
+}));

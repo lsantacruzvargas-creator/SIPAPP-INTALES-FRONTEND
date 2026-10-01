@@ -244,3 +244,16 @@ test("calculoVenta en dólares: detracción en soles con umbral convertido; neto
   assert.equal(calculoVenta({ subtotal: 150, moneda: "USD", tipoCambio: 3.51 }).detraccion, 0);
   assert.equal(calculoVenta({ subtotal: 1000 }).totalAPagar, 1038);
 });
+
+test("filasExcelDiferenciaCambio: partida legible con saldos y diferencia con signo", async () => {
+  const { filasExcelDiferenciaCambio } = await import("./tesoreria.js");
+  const filas = filasExcelDiferenciaCambio([
+    { tipo: "porPagar", documento: { numero: "F002-460", tercero: "PROV" }, moneda: "USD", tcDoc: 3.53, saldoMe: 1180, librosSoles: 4165.4, cierreSoles: 4212.6, diferencia: -47.2 },
+    { tipo: "cuenta", cuenta: { nombre: "BCP Dólares" }, moneda: "USD", saldoMe: 3540, librosSoles: 12295.6, cierreSoles: 12602.4, diferencia: 306.8 },
+  ]);
+  assert.deepEqual(filas[0], { PARTIDA: "Por pagar", DETALLE: "F002-460 · PROV", "TC DOC.": 3.53, "SALDO US$": 1180, "LIBROS S/": 4165.4, "AL CIERRE S/": 4212.6, "DIFERENCIA S/": -47.2, RESULTADO: "Pérdida" });
+  assert.equal(filas[1].PARTIDA, "Cuenta en dólares");
+  assert.equal(filas[1].DETALLE, "BCP Dólares");
+  assert.equal(filas[1]["TC DOC."], "");
+  assert.equal(filas[1].RESULTADO, "Ganancia");
+});

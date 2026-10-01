@@ -56,7 +56,9 @@ export default function TablaMovimientos() {
       "CÓDIGO": m.codigo, FECHA: fecha(m.fecha), TIPO: TIPOS[m.tipo], CONCEPTO: m.concepto,
       DOCUMENTO: m.documentoRef?.comprobante || "", TERCERO: m.documentoRef?.tercero || "",
       CUENTA: m.cuenta?.nombre || "", DESTINO: m.cuentaDestino?.nombre || "", MEDIO: m.medio,
-      "N° OPERACIÓN": m.numeroOperacion, MONEDA: m.moneda, MONTO: m.monto, ESTADO: m.anulado ? "Anulado" : "Vigente",
+      "N° OPERACIÓN": m.numeroOperacion, MONEDA: m.moneda, MONTO: m.monto,
+      TC: m.moneda === "USD" ? m.tipoCambio : "", "TC DOC.": m.moneda === "USD" ? m.tipoCambioDoc ?? m.tipoCambio : "",
+      "DIF. CAMBIO S/": m.difCambio || 0, ESTADO: m.anulado ? "Anulado" : "Vigente",
     }));
     exportarHoja("movimientos-tesoreria.xlsx", "Movimientos", filas, [
       ...filasSubtotal("CÓDIGO", { MONTO: subIngresos }).map((r) => ({ ...r, "CÓDIGO": r["CÓDIGO"].replace("SUBTOTAL", "INGRESOS") })),
@@ -96,7 +98,13 @@ export default function TablaMovimientos() {
                   <td className="px-3 py-2">{m.concepto === "neto" ? "Neto" : "Impuesto"}</td>
                   <td className="px-3 py-2">{m.cuenta?.nombre || "—"}{m.cuentaDestino ? ` → ${m.cuentaDestino.nombre}` : ""}</td>
                   <td className="px-3 py-2">{m.numeroOperacion || "—"}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{money(m.monto, m.moneda)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{money(m.monto, m.moneda)}
+                    {m.moneda === "USD" && (
+                      <span className="block text-[11px] text-gray-400">
+                        TC {Number(m.tipoCambio).toFixed(3)}{m.difCambio ? <> · dif. <span className={m.difCambio > 0 ? "text-emerald-700" : "text-red-600"}>{money(m.difCambio)}</span></> : null}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right">
                     {!m.anulado && <button onClick={() => setAnulando(m)} className="text-xs text-red-500 hover:text-red-700">Anular</button>}
                   </td>
