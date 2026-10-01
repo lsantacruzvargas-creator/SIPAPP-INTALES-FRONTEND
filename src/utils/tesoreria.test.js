@@ -267,3 +267,15 @@ test("filasExcelVentas: una fila por comprobante de venta; NC en negativo y tipo
   assert.equal(f.FECHA, "10/09/2026");
   assert.equal(f["TOTAL S/"], -1180);
 });
+
+test("subtotalesPorCobrar: no mezcla dólares con soles; el impuesto siempre en soles", async () => {
+  const { subtotalesPorCobrar } = await import("./tesoreria.js");
+  const s = subtotalesPorCobrar([
+    { moneda: "USD", total: 2360, totalAPagar: 2076.82, saldoNeto: 2076.82, saldoImpuesto: 958, impuesto: { tipo: "detraccion", monto: 958 } },
+    { total: 1180, totalAPagar: 1038, saldoNeto: 1038, saldoImpuesto: 0, impuesto: { tipo: "detraccion", monto: 142 } },
+  ]);
+  assert.deepEqual(s.total, { USD: 2360, PEN: 1180 });
+  assert.deepEqual(s.impuesto, { PEN: 1100 });
+  assert.deepEqual(s.neto, { USD: 2076.82, PEN: 1038 });
+  assert.deepEqual(s.saldo, { USD: 2076.82, PEN: 1996 });
+});

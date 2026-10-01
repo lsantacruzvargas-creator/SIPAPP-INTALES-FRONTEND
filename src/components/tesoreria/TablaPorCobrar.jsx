@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha, fechaHoyLima } from "../../utils/fecha";
 import { money } from "../../utils/compras";
-import { FILTROS_TESORERIA, filtrarFacturas, semaforo, vencimientoDe, etiquetaImpuesto } from "../../utils/tesoreria";
+import { FILTROS_TESORERIA, filtrarFacturas, semaforo, vencimientoDe, etiquetaImpuesto, subtotalesPorCobrar } from "../../utils/tesoreria";
 import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
 import TablaScroll from "../TablaScroll";
 import ModalMovimiento from "./ModalMovimiento";
@@ -29,17 +29,12 @@ export default function TablaPorCobrar() {
   const filtradas = filtrarFacturas(facturas, filtros, { lado: "venta", hoyIso });
 
   const hayImp = (f) => f.impuesto?.tipo && f.impuesto.tipo !== "ninguno";
-  const sub = {
-    total: sumarPorMoneda(filtradas, (f) => f.total),
-    impuesto: sumarPorMoneda(filtradas.filter(hayImp), (f) => f.impuesto.monto),
-    neto: sumarPorMoneda(filtradas, (f) => f.totalAPagar),
-    saldo: sumarPorMoneda(filtradas, (f) => (f.saldoNeto || 0) + (f.saldoImpuesto || 0)),
-  };
+  const sub = subtotalesPorCobrar(filtradas);
   const exportarExcel = () => exportarHoja("por-cobrar.xlsx", "Por cobrar", filtradas.map((f) => ({
     FACTURA: f.numeroFactura || f.codigo, CLIENTE: f.empresa?.razonSocial || "", "EMISIÓN": fecha(f.fechaEmision),
     VENCE: fecha(vencimientoDe(f, "venta")), TOTAL: f.total, IMPUESTO: hayImp(f) ? f.impuesto.monto : 0,
     NETO: f.totalAPagar, "SALDO NETO": f.saldoNeto, "SALDO IMPUESTO": f.saldoImpuesto,
-  })), filasSubtotal("FACTURA", { TOTAL: sub.total, IMPUESTO: sub.impuesto, NETO: sub.neto, "SALDO NETO": sumarPorMoneda(filtradas, (f) => f.saldoNeto), "SALDO IMPUESTO": sumarPorMoneda(filtradas, (f) => f.saldoImpuesto) }));
+  })), filasSubtotal("FACTURA", { TOTAL: sub.total, IMPUESTO: sub.impuesto, NETO: sub.neto, "SALDO NETO": sumarPorMoneda(filtradas, (f) => f.saldoNeto, (f) => f.moneda || "PEN"), "SALDO IMPUESTO": sumarPorMoneda(filtradas, (f) => f.saldoImpuesto) }));
 
   return (
     <div className="space-y-4">

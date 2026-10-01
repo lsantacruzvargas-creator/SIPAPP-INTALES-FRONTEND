@@ -275,3 +275,24 @@ export const filasExcelVentas = (ventas) => ventas.map((v) => ({
   TIPO: TIPOS_VENTA[v.tipoDoc] || v.tipoDoc, COMPROBANTE: `${v.serie}-${v.correlativo}`, RUC: v.clienteRuc, "RAZÓN SOCIAL": v.clienteRazonSocial,
   MONEDA: v.moneda, TC: v.tipoCambio, BASE: v.base, IGV: v.igv, TOTAL: v.total, "BASE S/": v.baseSoles, "IGV S/": v.igvSoles, "TOTAL S/": v.totalSoles,
 }));
+
+// Subtotales de Por cobrar por moneda: total, neto y saldo neto en la moneda de cada factura;
+// la detracción/retención (y su saldo) siempre en soles.
+export function subtotalesPorCobrar(facturas) {
+  const sumar = (lista, monto, moneda) => lista.reduce((t, x) => {
+    const m = moneda(x);
+    t[m] = round2((t[m] || 0) + Number(monto(x) || 0));
+    return t;
+  }, {});
+  const mon = (f) => f.moneda || "PEN";
+  const conImpuesto = facturas.filter((f) => f.impuesto?.tipo && f.impuesto.tipo !== "ninguno");
+  const saldo = sumar(facturas, (f) => f.saldoNeto, mon);
+  const saldoImp = facturas.reduce((s, f) => s + (Number(f.saldoImpuesto) || 0), 0);
+  if (saldoImp) saldo.PEN = round2((saldo.PEN || 0) + saldoImp);
+  return {
+    total: sumar(facturas, (f) => f.total, mon),
+    impuesto: sumar(conImpuesto, (f) => f.impuesto.monto, () => "PEN"),
+    neto: sumar(facturas, (f) => f.totalAPagar, mon),
+    saldo,
+  };
+}
