@@ -213,7 +213,9 @@ export default function PanelSire({ onRegistrarFactura }) {
                     <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full text-xs ${RESULTADOS[f.estado].cls}`}>{RESULTADOS[f.estado].label}</span></td>
                     <td className="px-3 py-2">{d.rucContraparte}</td>
                     <td className="px-3 py-2">{d.razonSocial || "—"}</td>
-                    <td className="px-3 py-2">{d.tipo} {d.serie}-{d.numero}</td>
+                    <td className="px-3 py-2">{d.tipo} {d.serie}-{d.numero}
+                      {f.diferencias.includes("ticketConRuc") && <span className="block text-[11px] text-amber-700">Registrado sin «Trae RUC de INTALES»: corrígelo para tomar el crédito fiscal</span>}
+                    </td>
                     {CAMPOS.map((c) => celda(f, c))}
                     <td className="px-3 py-2 text-right">
                       {f.estado === "solo_sire" && libro === "RCE" && (

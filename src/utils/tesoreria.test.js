@@ -216,3 +216,8 @@ test("filasExcelResumen: una fila por comprobante, NC en negativo, crédito Sí/
   assert.equal(f.TIPO, "Nota de crédito");
   assert.equal(f.COMPROBANTE, "FC01-5");
 });
+
+test("textoTcSire: en una nota el TC SUNAT es el de la fecha de su comprobante", async () => {
+  const { textoTcSire } = await import("./tesoreria.js");
+  assert.equal(textoTcSire({ sistema: 3.7, sire: 3.75, sunat: 3.7, fechaTc: "2026-09-20", deOrigen: true }), "sistema 3.700 · SIRE 3.750 · SUNAT 3.700 (20/09, fecha del comprobante que modifica)");
+});

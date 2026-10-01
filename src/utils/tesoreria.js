@@ -223,7 +223,9 @@ export function precargaDesdeSire(s, proveedores) {
 
 const tc3 = (v) => Number(v).toFixed(3);
 export const textoTcSire = (tc) =>
-  `sistema ${tc3(tc.sistema)} · SIRE ${tc3(tc.sire)} · SUNAT ${tc.sunat > 0 ? `${tc3(tc.sunat)}${tc.fechaTc ? ` (${fechaIsoTexto(tc.fechaTc).slice(0, 5)})` : ""}` : "no disponible"}`;
+  `sistema ${tc3(tc.sistema)} · SIRE ${tc3(tc.sire)} · SUNAT ${tc.sunat > 0
+    ? `${tc3(tc.sunat)}${tc.fechaTc ? ` (${fechaIsoTexto(tc.fechaTc).slice(0, 5)}${tc.deOrigen ? ", fecha del comprobante que modifica" : ""})` : ""}`
+    : "no disponible"}`;
 
 // Excel del resumen tributario: una fila por comprobante (montos en S/ con signo; las NC restan).
 export const filasExcelResumen = (detalle) => detalle.map((d) => ({

@@ -16,10 +16,17 @@ export const textoMontos = (porMoneda) => {
   return e.length ? e.map(([m, v]) => money(v, m)).join(" · ") : money(0);
 };
 
+// Hoja con `filas` y, debajo, los subtotales. `header` fija el orden de columnas de la
+// cabecera: sin él, sheet_add_json ubica cada subtotal por el orden de SUS claves.
+export function hojaConSubtotales(filas, subtotales = []) {
+  const ws = XLSX.utils.json_to_sheet(filas);
+  if (subtotales.length) XLSX.utils.sheet_add_json(ws, subtotales, { skipHeader: true, origin: -1, header: Object.keys(filas[0] || {}) });
+  return ws;
+}
+
 // Descarga un .xlsx con `filas` (objetos) y, debajo, las filas de subtotales ya armadas.
 export function exportarHoja(archivo, hoja, filas, subtotales = []) {
-  const ws = XLSX.utils.json_to_sheet(filas);
-  if (subtotales.length) XLSX.utils.sheet_add_json(ws, subtotales, { skipHeader: true, origin: -1 });
+  const ws = hojaConSubtotales(filas, subtotales);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, hoja);
   XLSX.writeFile(wb, archivo);
