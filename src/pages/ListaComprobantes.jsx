@@ -23,6 +23,8 @@ const TIPO_DOC_CLASE = {
 const tipoDocTexto = (v) => TIPO_DOC_CPE.find((t) => t.valor === v)?.label.split(" — ")[1] ?? v;
 
 export default function ListaComprobantes() {
+  // Tesorero y contador solo ven y descargan: emitir es de admin, facturación y jefatura.
+  const puedeEmitir = ["admin", "facturacion", "jefatura"].includes(JSON.parse(sessionStorage.getItem("usuario") || "{}")?.rol);
   const navigate = useNavigate();
   const [comprobantes, setComprobantes] = useState([]);
   const [filtros, setFiltros] = useState(FILTROS_VACIO);
@@ -89,7 +91,7 @@ export default function ListaComprobantes() {
     setConsultando(true);
     setErrorDescarga("");
     try {
-      const res  = await fetchAuth(`/cpe/${seleccionado._id}/consultar`);
+      const res  = await fetchAuth(`/cpe/${seleccionado._id}/consultar`, { method: "POST" });
       const data = await res.json();
       if (!data.ok) { setErrorDescarga(data.error || "No se pudo consultar el estado en SUNAT."); return; }
       setSeleccionado((prev) => ({ ...prev, estado: data.estado, sunat: { ...prev.sunat, mensaje: data.mensaje } }));
@@ -113,9 +115,11 @@ export default function ListaComprobantes() {
             className="text-sm text-blue-600 hover:text-blue-800 underline">
             Ver Guías de Remisión
           </button>
-          <button onClick={() => navigate("/facturacion-electronica/emitir")} className="btn-primary">
-            + Emitir comprobante
-          </button>
+          {puedeEmitir && (
+            <button onClick={() => navigate("/facturacion-electronica/emitir")} className="btn-primary">
+              + Emitir comprobante
+            </button>
+          )}
         </div>
       </div>
 
@@ -303,7 +307,7 @@ export default function ListaComprobantes() {
                   {consultando ? "Consultando…" : "Consultar estado en SUNAT"}
                 </button>
               )}
-              {seleccionado.estado === "ACEPTADO" && (seleccionado.tipoDoc === "01" || seleccionado.tipoDoc === "03") && (
+              {puedeEmitir && seleccionado.estado === "ACEPTADO" && (seleccionado.tipoDoc === "01" || seleccionado.tipoDoc === "03") && (
                 <button
                   onClick={() => navigate("/facturacion-electronica/emitir", { state: { comprobante: seleccionado } })}
                   className="border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm hover:bg-amber-50 transition"

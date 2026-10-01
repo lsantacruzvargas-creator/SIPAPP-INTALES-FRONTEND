@@ -22,6 +22,7 @@ import {
 } from "./detalleShared";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "./BarraEdicion";
+import { veFacturas, rolDeSesion } from "../utils/roles";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 w-full transition";
 const RO = "bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm text-gray-600 w-full";
@@ -150,7 +151,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     Promise.all([
       fetchAuth("/cotizaciones").then(r => r.ok ? r.json() : []),
       fetchAuth("/ordenes-compra").then(r => r.ok ? r.json() : []),
-      fetchAuth("/facturas").then(r => r.ok ? r.json() : []),
+      (veFacturas(rolDeSesion()) ? fetchAuth("/facturas").then((r) => r.ok ? r.json() : []) : Promise.resolve([])),
     ]).then(([cots, ocs, facts]) => {
       const cotId = ot.cotizacion?._id || ot.cotizacion;
       const cotResuelta =
@@ -448,7 +449,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     { tipo: "ot", activo: true, codigo: ot.codigo },
     { tipo: "informe", activo: informes.length > 0, codigo: informes.length ? `${informes.length} av.` : "" },
     { tipo: "oc", activo: !!oc, codigo: oc?.codigo },
-    { tipo: "factura", activo: !!factura, codigo: factura?.codigo },
+    ...(veFacturas(rolDeSesion()) ? [{ tipo: "factura", activo: !!factura, codigo: factura?.codigo }] : []),
   ];
 
   return (
@@ -803,6 +804,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                   {puedeVerPrecios && oc?.monto > 0 && <p className="text-xs text-gray-500">{money(oc.monto, cot?.moneda)}</p>}
                 </TarjetaRelacion>
 
+                {veFacturas(rolDeSesion()) && (
                 <TarjetaRelacion tipo="factura" codigo={factura?.codigo} numero={factura?.numeroFactura} vacio={!factura}
                   onClick={factura ? () => onNavegar?.({ tipo: "factura", data: factura }) : undefined}>
                   {puedeVerPrecios && (factura?.totalAPagar || factura?.total) > 0 && (
@@ -810,6 +812,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                   )}
                   {factura?.estadoPago && <Chip className={badgePago(factura.estadoPago)}>{factura.estadoPago}</Chip>}
                 </TarjetaRelacion>
+                )}
               </>
             )}
 

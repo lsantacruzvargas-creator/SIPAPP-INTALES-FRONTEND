@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchAuth, uploadAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima, formatearFechaHora } from "../../utils/fecha";
 import { money } from "../../utils/compras";
-import { periodoDeMes, fechaIsoTexto, textoTcSire } from "../../utils/tesoreria";
+import { periodoDeMes, fechaIsoTexto, textoTcSire, filasExcelComparacionCarga, RESULTADOS_CARGA } from "../../utils/tesoreria";
 import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
 import { plantillaXlsx, xlsxATexto } from "../../utils/sireExcel";
 import TablaScroll from "../TablaScroll";
@@ -32,6 +32,59 @@ const TEXTO_COL = {
 const COLUMNAS = [["resultado", "Resultado"], ["ruc", "RUC"], ["razon", "Razón social"], ["comprobante", "Comprobante"], ["fecha", "Fecha"], ["total", "Total"], ["igv", "IGV"], ["moneda", "Moneda"], ["tipoCambio", "TC"]];
 const INP_COL = "w-full border border-gray-300 rounded px-2 py-1 text-xs font-normal normal-case text-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-300";
 
+const CLS_CARGA = { coincide: "bg-emerald-50 text-emerald-700", difiere: "bg-amber-50 text-amber-700", solo_carga: "bg-red-50 text-red-700", solo_sire: "bg-blue-50 text-blue-700" };
+
+// Carga manual vs propuesta descargada de SUNAT: la carga no reemplaza a la propuesta; aquí se
+// ve qué comprobantes difieren en base imponible o están solo en uno de los dos.
+function ComparacionCarga({ datos, archivo, onCerrar }) {
+  const [filtro, setFiltro] = useState("");
+  const filas = datos.filas.filter((f) => !filtro || f.estado === filtro);
+  const cuenta = (e) => datos.filas.filter((f) => f.estado === e).length;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h3 className="font-semibold text-gray-800">Carga manual vs propuesta descargada de SUNAT</h3>
+            <p className="text-xs text-gray-500">La carga no reemplazó a la propuesta de SUNAT. Comparación por comprobante, RUC y base imponible.</p>
+          </div>
+          <button onClick={onCerrar} className="text-gray-400 hover:text-gray-700 text-xl" aria-label="Cerrar">✕</button>
+        </div>
+        <div className="px-6 pt-3 flex flex-wrap gap-2 items-center">
+          <button onClick={() => setFiltro("")} className={`px-3 py-1 rounded-full text-xs ${!filtro ? "bg-gray-800 text-white" : "bg-gray-100"}`}>Todos ({datos.filas.length})</button>
+          {Object.entries(RESULTADOS_CARGA).map(([k, l]) => (
+            <button key={k} onClick={() => setFiltro(k)} className={`px-3 py-1 rounded-full text-xs ${filtro === k ? "ring-2 ring-gray-800" : ""} ${CLS_CARGA[k]}`}>{l} ({cuenta(k)})</button>
+          ))}
+          <button onClick={() => exportarHoja(archivo, "Carga vs SUNAT", filasExcelComparacionCarga(filas))} disabled={!filas.length}
+            className="ml-auto border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50 disabled:opacity-50">Exportar Excel</button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 pt-3">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <tr>{["Resultado", "Comprobante", "RUC", "Razón social", "Base SUNAT", "Base carga"].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {!filas.length && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400">Sin comprobantes</td></tr>}
+              {filas.map((f) => (
+                <tr key={f.clave}>
+                  <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full text-xs ${CLS_CARGA[f.estado]}`}>{RESULTADOS_CARGA[f.estado]}</span></td>
+                  <td className="px-3 py-2">{f.tipo} {f.serie}-{f.numero}</td>
+                  <td className={`px-3 py-2 ${f.diferencias?.includes("ruc") ? "bg-amber-100 font-semibold" : ""}`}>{f.ruc}
+                    {f.diferencias?.includes("ruc") && <span className="block text-[11px] font-normal text-gray-600">SUNAT: {f.rucSire}</span>}
+                  </td>
+                  <td className="px-3 py-2">{f.razonSocial || "—"}</td>
+                  <td className={`px-3 py-2 tabular-nums ${f.diferencias?.includes("base") ? "bg-amber-100 font-semibold" : ""}`}>{f.baseSire != null ? money(f.baseSire) : "—"}</td>
+                  <td className={`px-3 py-2 tabular-nums ${f.diferencias?.includes("base") ? "bg-amber-100 font-semibold" : ""}`}>{f.baseCarga != null ? money(f.baseCarga) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PanelSire({ onRegistrarFactura }) {
   const [libro, setLibro] = useState("RCE");
   const [mes, setMes] = useState(fechaHoyLima().slice(0, 7));
@@ -43,7 +96,18 @@ export default function PanelSire({ onRegistrarFactura }) {
   const setCol = (k, v) => setColFiltros((p) => ({ ...p, [k]: v }));
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState("");
+  const [comparacion, setComparacion] = useState(null);
   const base = `/sire/${libro}/${periodoDeMes(mes)}`;
+  const abrirComparacion = async () => {
+    try {
+      const r = await fetchAuth(`${base}/comparar-carga`);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setError(d.mensaje || "No se pudo comparar la carga manual."); return; }
+      setComparacion(d);
+    } catch {
+      setError("Error de conexión con el servidor, intenta de nuevo.");
+    }
+  };
 
   const cargar = useCallback(() => fetchAuth(`${base}/estado`).then(async (r) => {
     const est = await r.json().catch(() => null);
@@ -83,6 +147,7 @@ export default function PanelSire({ onRegistrarFactura }) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    let comparar = false;
     accion(async () => {
       let archivo = file;
       if (/\.xlsx$/i.test(file.name)) {
@@ -94,8 +159,14 @@ export default function PanelSire({ onRegistrarFactura }) {
       }
       const fd = new FormData();
       fd.append("archivo", archivo);
-      return uploadAuth(`${base}/archivo`, fd);
-    });
+      const r = await uploadAuth(`${base}/archivo`, fd);
+      // Con propuesta de SUNAT ya descargada, la carga queda aparte: se abre la comparación.
+      if (r.ok) {
+        const d = await r.clone().json().catch(() => null);
+        comparar = d?.origen === "api" && d.cargaManual > 0;
+      }
+      return r;
+    }).then(() => { if (comparar) abrirComparacion(); });
   };
 
   const visibles = filas.filter((f) => (!filtro || f.estado === filtro)
@@ -153,6 +224,7 @@ export default function PanelSire({ onRegistrarFactura }) {
 
   return (
     <div className="space-y-4">
+      {comparacion && <ComparacionCarga datos={comparacion} archivo={`carga-vs-sunat-${libro.toLowerCase()}-${periodoDeMes(mes)}.xlsx`} onCerrar={() => setComparacion(null)} />}
       <div className="flex flex-wrap gap-3 items-center">
         <select value={libro} onChange={(e) => { setLibro(e.target.value); limpiarFiltros(); }} className={INP}>
           <option value="RCE">Compras (RCE)</option><option value="RVIE">Ventas (RVIE)</option>
@@ -163,6 +235,9 @@ export default function PanelSire({ onRegistrarFactura }) {
         <label className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 cursor-pointer">
           Subir archivo<input type="file" accept=".zip,.txt,.xlsx" className="hidden" onChange={subir} disabled={ocupado} />
         </label>
+        {estado?.cargaManual > 0 && estado.origen === "api" && (
+          <button onClick={abrirComparacion} className="border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm hover:bg-amber-50">Comparar carga manual ({estado.cargaManual})</button>
+        )}
         <button onClick={exportarExcel} disabled={!visibles.length} className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Exportar Excel</button>
         <button onClick={descargarPlantilla} disabled={ocupado} title="Excel con las columnas del SIRE para llenar y cargarlo con «Subir archivo»" className="border border-purple-300 text-purple-700 px-4 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50">Descargar plantilla</button>
         <span className="text-xs text-gray-500">

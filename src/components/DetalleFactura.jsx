@@ -69,6 +69,8 @@ function BuscadorOC({ onSelect, onClose }) {
 export default function DetalleFactura({ factura: inicial, onClose, onGuardada, onNavegar }) {
   const subtotalInicial = inicial.subtotal ?? 0;
 
+  // Con comprobante aceptado por SUNAT, monto, número y cliente solo cambian con NC/ND (el servidor lo exige).
+  const emitida = !!inicial.comprobanteEmitido;
   const [form, setForm] = useState({
     numeroFactura:      inicial.numeroFactura      || "",
     fechaCancelacion:   inicial.fechaCancelacion
@@ -334,8 +336,8 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs text-gray-500 block mb-1">N° de factura</label>
-                <input name="numeroFactura" value={form.numeroFactura} onChange={handleChange}
-                  placeholder="Ej. F001-00123" className={INP} />
+                <input name="numeroFactura" value={form.numeroFactura} onChange={handleChange} disabled={emitida} title={emitida ? "Comprobante aceptado por SUNAT: se corrige con nota de crédito o débito" : undefined}
+                  placeholder="Ej. F001-00123" className={emitida ? INP_RO : INP} />
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">N° Orden de Compra</label>
@@ -360,7 +362,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
 
             <div>
               <label className="text-xs text-gray-500 block mb-1">Empresa</label>
-              <select name="empresa" value={form.empresa} onChange={handleChange} className={INP}>
+              <select name="empresa" value={form.empresa} onChange={handleChange} disabled={emitida} title={emitida ? "Comprobante aceptado por SUNAT: se corrige con nota de crédito o débito" : undefined} className={emitida ? INP_RO : INP}>
                 <option value="">— Sin empresa —</option>
                 {empresas.map(e => (
                   <option key={e._id} value={e._id}>
@@ -438,8 +440,9 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
             <div className="rounded-xl bg-gradient-to-br from-gray-50 to-emerald-50/40 border border-gray-100 p-4 space-y-4">
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Subtotal sin IGV</label>
-                <input type="number" name="subtotal" value={form.subtotal} onChange={handleChange}
-                  step="0.01" min="0" placeholder="0.00" className={`${INP} text-lg font-semibold`} />
+                <input type="number" name="subtotal" value={form.subtotal} onChange={handleChange} disabled={emitida} title={emitida ? "Comprobante aceptado por SUNAT: se corrige con nota de crédito o débito" : undefined}
+                  step="0.01" min="0" placeholder="0.00" className={`${emitida ? INP_RO : INP} text-lg font-semibold`} />
+                {emitida && <p className="text-[11px] text-amber-700 mt-1">Comprobante aceptado por SUNAT: el monto, el número y el cliente se corrigen con una nota de crédito o débito.</p>}
               </div>
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div className="text-center">

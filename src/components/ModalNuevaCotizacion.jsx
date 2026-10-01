@@ -65,6 +65,8 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
   const [guardando, setGuardando] = useState(false);
   const [intentoGuardar, setIntentoGuardar] = useState(false);
   const [error, setError] = useState("");
+  // Creado, pero con adjuntos que no se pudieron subir: se avisa y "Continuar" cierra.
+  const [creada, setCreada] = useState(null);
   // Precios: información sensible, solo Admin/Facturación/Jefatura los ven —
   // ni Asistente ni Planner, aunque puedan crear la cotización.
   const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(getUsuario()?.rol);
@@ -174,14 +176,22 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
       // documento). Best-effort: si alguno falla, la cotización ya quedó
       // creada igual, no se bloquea la creación por esto.
       if (archivosPendientes.length) {
+        const fallas = [];
         await conBloqueo("cotizacion", nueva._id, async (h) => {
           for (const pendiente of archivosPendientes) {
             const fd = new FormData();
             fd.append("archivo", pendiente.file);
-            await uploadAuth(`/cotizaciones/${nueva._id}/archivos`, fd, h);
+            const r = await uploadAuth(`/cotizaciones/${nueva._id}/archivos`, fd, h).catch(() => null);
+            if (!r?.ok) fallas.push(`${pendiente.file.name} (${(r && (await r.json().catch(() => ({}))).mensaje) || "error de conexión"})`);
           }
           return new Response(null, { status: 204 });
         });
+        if (fallas.length) {
+          setError(`La cotización se creó, pero no se pudieron subir: ${fallas.join("; ")}. Adjúntalos desde su detalle.`);
+          setCreada(nueva);
+          setGuardando(false);
+          return;
+        }
       }
       onCreada?.(nueva);
     } else {
@@ -217,9 +227,9 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
                 <p className="text-lg font-bold leading-tight">{money(totalesMostrados.total, form.moneda)}</p>
               </div>
             )}
-            <button onClick={guardar} disabled={guardando}
+            <button onClick={creada ? () => onCreada?.(creada) : guardar} disabled={guardando}
               className="bg-white text-sky-700 text-sm px-5 py-2 rounded-lg hover:bg-sky-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">
-              {guardando ? "Creando…" : "Crear Cotización"}
+              {creada ? "Continuar" : guardando ? "Creando…" : "Crear Cotización"}
             </button>
           </div>
         </div>

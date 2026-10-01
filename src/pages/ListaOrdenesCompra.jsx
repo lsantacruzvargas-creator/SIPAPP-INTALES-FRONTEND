@@ -9,6 +9,7 @@ import TablaScroll from "../components/TablaScroll";
 import * as XLSX from "xlsx";
 import AvisoAccion from "../components/AvisoAccion";
 import { conBloqueo } from "../utils/bloqueoApi";
+import { veFacturas, rolDeSesion } from "../utils/roles";
 
 const ESTADOS_OT = ["", "pendiente", "en progreso", "completado"];
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -268,7 +269,7 @@ export default function ListaOrdenesCompra() {
     Promise.all([
       fetchAuth("/ordenes-compra").then((r) => r.ok ? r.json() : []),
       fetchAuth("/ordenes-trabajo").then((r) => r.ok ? r.json() : []),
-      fetchAuth("/facturas").then((r) => r.ok ? r.json() : []),
+      (veFacturas(rolDeSesion()) ? fetchAuth("/facturas").then((r) => r.ok ? r.json() : []) : Promise.resolve([])),
       fetchAuth("/tipo-cambio").then((r) => r.ok ? r.json() : null),
     ]).then(([ocs, ots, facts, tc]) => {
       setOrdenes(ocs);
@@ -382,6 +383,7 @@ export default function ListaOrdenesCompra() {
   // esconda una tabla donde SÍ cae el resultado — mismo criterio que
   // ListaCotizaciones.jsx.
   const vistaEfectiva = busqueda ? "todasLasOC" : vista;
+  const veFact = veFacturas(rolDeSesion());
 
   const tieneFactura = (o) => !!(factByOCMap[o._id] || factMap[o.cotizacion?._id || o.cotizacion]);
   const cerradas   = filtradas.filter((o) => o.estadoCadena === "cerrado");
@@ -416,8 +418,7 @@ export default function ListaOrdenesCompra() {
   const exportarExcel = () => {
     const wb = XLSX.utils.book_new();
     [
-      ["Sin factura", sinFactura],
-      ["Con factura", conFactura],
+      ...(veFact ? [["Sin factura", sinFactura], ["Con factura", conFactura]] : [["Abiertas", abiertas]]),
       ["Cerradas", cerradas],
     ].forEach(([nombre, lista]) => {
       const ws = XLSX.utils.json_to_sheet(lista.map(filaOC));
@@ -430,11 +431,9 @@ export default function ListaOrdenesCompra() {
     const fd = new FormData();
     fd.append("documento", file);
     const res = await conBloqueo("ordenCompra", id, (h) => uploadAuth(`/ordenes-compra/${id}/documento`, fd, h));
-    if (res.status === 423) { setAviso((await res.json().catch(() => ({}))).mensaje); return; }
-    if (res.ok) {
-      const actualizada = await res.json();
-      setOrdenes((prev) => prev.map((o) => o._id === id ? { ...o, documento: actualizada.documento } : o));
-    }
+    if (!res.ok) { setAviso((await res.json().catch(() => ({}))).mensaje || "No se pudo subir el documento."); return; }
+    const actualizada = await res.json();
+    setOrdenes((prev) => prev.map((o) => o._id === id ? { ...o, documento: actualizada.documento } : o));
   };
 
   return (
@@ -524,7 +523,7 @@ export default function ListaOrdenesCompra() {
           onChange={(e) => setVista(e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
         >
-          {VISTAS.map(({ valor, label }) => (
+          {VISTAS.filter((v) => veFact || !["sinFactura", "conFactura"].includes(v.valor)).map(({ valor, label }) => (
             <option key={valor} value={valor}>{label}</option>
           ))}
         </select>
@@ -552,6 +551,7 @@ export default function ListaOrdenesCompra() {
           titulo="Todas las Órdenes de Compra"
           acento="bg-blue-500"
           ordenes={filtradas}
+          mostrarFactura={veFact}
           otGroupMap={otGroupMap} factMap={factMap} factByOCMap={factByOCMap} greMap={greMap} tipoCambio={tipoCambio} puedeVerPrecios={puedeVerPrecios}
           onSelect={setOrdenSeleccionada}
           subirDocumento={subirDocumento}
@@ -559,7 +559,20 @@ export default function ListaOrdenesCompra() {
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "sinFactura") && (
+      {!veFact && vistaEfectiva === "todas" && (
+        <TablaOC
+          titulo="Órdenes de Compra abiertas"
+          acento="bg-amber-500"
+          ordenes={abiertas}
+          otGroupMap={otGroupMap} factMap={factMap} factByOCMap={factByOCMap} greMap={greMap} tipoCambio={tipoCambio} puedeVerPrecios={puedeVerPrecios}
+          onSelect={setOrdenSeleccionada}
+          subirDocumento={subirDocumento}
+          mostrarFactura={false}
+          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de compra abiertas"}
+        />
+      )}
+
+      {veFact && (vistaEfectiva === "todas" || vistaEfectiva === "sinFactura") && (
         <TablaOC
           titulo="Órdenes de Compra sin factura"
           acento="bg-amber-500"
@@ -575,7 +588,7 @@ export default function ListaOrdenesCompra() {
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "conFactura") && (
+      {veFact && (vistaEfectiva === "todas" || vistaEfectiva === "conFactura") && (
         <TablaOC
           titulo="Órdenes de Compra con factura"
           acento="bg-emerald-500"
@@ -592,6 +605,7 @@ export default function ListaOrdenesCompra() {
           titulo="Órdenes de Compra cerradas"
           acento="bg-gray-500"
           ordenes={cerradas}
+          mostrarFactura={veFact}
           otGroupMap={otGroupMap} factMap={factMap} factByOCMap={factByOCMap} greMap={greMap} tipoCambio={tipoCambio} puedeVerPrecios={puedeVerPrecios}
           onSelect={setOrdenSeleccionada}
           subirDocumento={subirDocumento}
