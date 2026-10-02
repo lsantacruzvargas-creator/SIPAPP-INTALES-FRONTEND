@@ -31,7 +31,7 @@ El plan de cuentas debe ser el del contador (se importa desde Excel).
   `docs/superpowers/specs/2026-10-02-c2-asientos-concar-design.md`, ledger `docs/superpowers/sdd/2026-10-02-c2-concar/progress.md`.
   Backend `src/utils/asientosAutomaticos.js`, `src/utils/concar.js`, rutas `/api/contabilidad/{automaticos,
   configuracion,exportaciones}`; frontend pestañas Automáticos, Exportar CONCAR y Configuración. Las respuestas
-  del contador (`2026-10-01-preguntas-contador-C2.md`) ahora solo ajustan la configuración.
+  del contador (`Preguntas al contador.md`) ahora solo ajustan la configuración.
 - Documentos previos: investigación (`2026-10-01-investigacion-libros-electronicos.md`), diseño
   (`2026-10-01-motor-contable-design.md`, con el cambio de alcance arriba), spec C1, guía contable y casos de prueba
   (23 casos, brechas B1–B25; B1–B5 y B9 resueltas en `main`; B8 resuelta: exportar).

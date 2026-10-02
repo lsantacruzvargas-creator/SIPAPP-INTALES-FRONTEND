@@ -7,6 +7,7 @@ import PanelExportarConcar from "../components/contabilidad/PanelExportarConcar"
 import PanelConfiguracionContable from "../components/contabilidad/PanelConfiguracionContable";
 import PanelReportesContables from "../components/contabilidad/PanelReportesContables";
 import PanelCierreMes from "../components/contabilidad/PanelCierreMes";
+import PanelAyuda from "../components/contabilidad/PanelAyuda";
 
 const TABS = [
   { id: "asientos", label: "Asientos" },
@@ -25,6 +26,8 @@ export default function Contabilidad() {
   const puedeEscribir = ["admin", "contador"].includes(rol);
   const puedeGenerar = ["admin", "contador", "tesorero"].includes(rol);
   const [tab, setTab] = useState("asientos");
+  const [ayuda, setAyuda] = useState(false);
+  const cerrarAyuda = useCallback(() => setAyuda(false), []);
   const [cuentas, setCuentas] = useState([]);
   const [centrosCosto, setCentrosCosto] = useState([]);
 
@@ -38,9 +41,16 @@ export default function Contabilidad() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
-      <div>
+      <div className="flex items-start gap-3">
+       <div className="flex-1">
         <h1 className="text-xl font-bold text-gray-800">Contabilidad</h1>
         <p className="text-sm text-gray-400 mt-0.5">Plan de cuentas (PCGE 2019), asientos y exportación a CONCAR{puedeEscribir ? "" : " — solo lectura"}</p>
+       </div>
+        <button onClick={() => setAyuda(true)} title="Qué significa cada término de esta pantalla"
+          className="flex items-center gap-1.5 border border-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-sm hover:bg-purple-50">
+          <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center">?</span>
+          Ayuda
+        </button>
       </div>
       <div className="flex border-b border-gray-200 gap-1 flex-wrap">
         {TABS.map((t) => (
@@ -59,6 +69,7 @@ export default function Contabilidad() {
       {tab === "reportes" && <PanelReportesContables centrosCosto={centrosCosto} />}
       {tab === "configuracion" && <PanelConfiguracionContable cuentas={cuentas} puedeEscribir={puedeEscribir} />}
       {tab === "plan" && <PanelPlanCuentas cuentas={cuentas} onCambio={cargarCuentas} puedeEscribir={puedeEscribir} />}
+      {ayuda && <PanelAyuda key={tab} seccionInicial={tab} onCerrar={cerrarAyuda} />}
     </div>
   );
 }

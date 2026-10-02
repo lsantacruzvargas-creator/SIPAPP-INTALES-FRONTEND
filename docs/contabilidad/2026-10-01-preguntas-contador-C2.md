@@ -1,5 +1,8 @@
 # Preguntas al contador para continuar con C2 (asientos automáticos)
 
+> **Reemplazado** por `Preguntas al contador.md` (2026-10-02), que junta estas preguntas con las que surgieron al
+> implementar C2 y C3. Se conserva como historial.
+
 **Fecha:** 2026-10-01 · **Contexto:** INTALES **no** será la contabilidad oficial: generará los asientos de compras,
 ventas, cobros y pagos y los **exportará al software del contador** para importarlos (decisión del usuario,
 2026-10-01). Por eso lo primero es saber exactamente qué software y qué plantilla usa.

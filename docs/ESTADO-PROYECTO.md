@@ -129,7 +129,7 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 - Preguntas del documento `docs/contabilidad/2026-10-01-casos-prueba-contables.md` (sección final): costeo de OT y
   CIF, cuentas de NC de compra (60x vs 7311) y de venta (7411 vs 7032x), cuenta BN (1042 vs 107), 4ta al provisionar o
   al pagar, boletas en el Registro de Compras, coeficiente de renta, vigencia del D. Leg. 1669.
-- C2 está hecha con defaults; queda **validar con el contador** (`docs/contabilidad/2026-10-01-preguntas-contador-C2.md`):
+- C2 está hecha con defaults; queda **validar con el contador** (`docs/contabilidad/Preguntas al contador.md`):
   subdiario de caja-bancos (21 por defecto), flag `N` en caja-bancos US$ (primera importación real), divisionarias a
   6 dígitos, maestro de anexos en CONCAR (RUC), destinos 9x/79 (apagados), cuenta de detracción BN (1042/107).
 
@@ -155,7 +155,7 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
 
 ## 6. Índice de documentos
 
-- `docs/contabilidad/`: **preguntas al contador para C2**, **referencias de otros ERP para C2–C5**, investigación de libros electrónicos, diseño del motor contable (aprobado, cuentas corregidas),
+- `docs/contabilidad/`: **`Preguntas al contador.md`** (todas las preguntas abiertas, consolidadas 2026-10-02), **referencias de otros ERP para C2–C5**, investigación de libros electrónicos, diseño del motor contable (aprobado, cuentas corregidas),
   spec de implementación C1, **guía contable** y **casos de prueba** (agente contador), `HANDOFF-contabilidad.md`.
 - `docs/superpowers/specs/`: todos los specs (cotización, centro de costo, compras, Tesorería B1, bloqueo de edición,
   comprobantes de compra, ventas US$/tributario).
