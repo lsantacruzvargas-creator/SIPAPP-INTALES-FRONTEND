@@ -1,6 +1,6 @@
 # Estado del proyecto SIPAPP-INTALES — punto de entrada para agentes
 
-**Actualizado:** 2026-10-01 · **Idéntico en** `docs/` de los repos Backend y Frontend (y en `docs/` de la carpeta raíz).
+**Actualizado:** 2026-10-02 · **Idéntico en** `docs/` de los repos Backend y Frontend (y en `docs/` de la carpeta raíz).
 
 Léelo antes de tocar código. Responde al usuario **en español, conciso**; él decide lo de negocio y pide el merge a
 `main` explícitamente (nunca mergear ni subir `main` sin su OK).
@@ -112,6 +112,20 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
   la URL directa (nombres aleatorios).
 
 ## 5. Pendientes
+
+**⚠ Mencionar al usuario al abrir el proyecto — tarea "saldos de tesorería" (aprobada, sin código):** saldo inicial y
+saldo por cuenta, ingreso/egreso manual sin documento (brecha B7) y la regla de saldo insuficiente (caja y detracciones
+bloquean; banco pide confirmar sobregiro). Al implementarla, aplicar desde el inicio lo aprendido en Micronegocios:
+- "Ya se pagó" desde un banco: el reintento del panel manda `confirmarSobregiro` en la raíz del body; pasarlo al pago.
+- Egreso con fecha pasada: exigir saldo contra el **mínimo del saldo acumulado** desde esa fecha, no solo el saldo a
+  esa fecha (si no, la caja puede quedar en negativo más adelante).
+- El saldo inicial no cuenta para movimientos anteriores a su fecha.
+- La diferencia de cambio al cierre (`utils/diferenciaCambioCierre.js`) debe sumar el saldo inicial con su TC.
+- Rama sugerida `feature/movimientos-manuales` en ambos repos; merge solo con OK del usuario.
+
+**Rama sin mergear:** `feature/revision-compras` (Backend y Frontend, 2026-10-02) — correcciones de compras traídas de
+la revisión de Micronegocios (línea de SC condicionada, anular OC libera solo sus líneas, fecha de entrega real,
+retención de 4ta > S/ 1,500, notas simultáneas sobre el mismo origen). Suite verde; espera el OK del usuario.
 
 **Por confirmar con el contador** (no implementar sin respuesta):
 - Si el RCE del SIRE trae los montos de comprobantes en US$ en dólares o en soles (probar con un archivo real).
