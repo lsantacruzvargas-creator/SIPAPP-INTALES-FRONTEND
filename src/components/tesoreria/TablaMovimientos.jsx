@@ -3,6 +3,7 @@ import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { totalesMovimientos } from "../../utils/tesoreria";
+import { CONCEPTOS_MOVIMIENTO } from "../../utils/bancos";
 import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
 import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
@@ -53,8 +54,8 @@ export default function TablaMovimientos() {
 
   const exportarExcel = () => {
     const filas = filtrados.map((m) => ({
-      "CÓDIGO": m.codigo, FECHA: fecha(m.fecha), TIPO: TIPOS[m.tipo], CONCEPTO: m.concepto,
-      DOCUMENTO: m.documentoRef?.comprobante || "", TERCERO: m.documentoRef?.tercero || "",
+      "CÓDIGO": m.codigo, FECHA: fecha(m.fecha), TIPO: TIPOS[m.tipo], CONCEPTO: CONCEPTOS_MOVIMIENTO[m.concepto] || m.concepto,
+      DOCUMENTO: m.documentoRef?.comprobante || m.tipoMovimiento?.nombre || "", TERCERO: m.documentoRef?.tercero || m.glosa || "",
       CUENTA: m.cuenta?.nombre || "", DESTINO: m.cuentaDestino?.nombre || "", MEDIO: m.medio,
       "N° OPERACIÓN": m.numeroOperacion, MONEDA: m.moneda, MONTO: m.monto,
       TC: m.moneda === "USD" ? m.tipoCambio : "", "TC DOC.": m.moneda === "USD" ? m.tipoCambioDoc ?? m.tipoCambio : "",
@@ -93,9 +94,9 @@ export default function TablaMovimientos() {
                   <td className="px-3 py-2 font-medium">{m.codigo}</td>
                   <td className="px-3 py-2">{fecha(m.fecha)}</td>
                   <td className={`px-3 py-2 ${COLOR[m.tipo]}`}>{TIPOS[m.tipo]}</td>
-                  <td className="px-3 py-2">{m.documentoRef?.comprobante || "—"}</td>
-                  <td className="px-3 py-2">{m.documentoRef?.tercero || "—"}</td>
-                  <td className="px-3 py-2">{m.concepto === "neto" ? "Neto" : "Impuesto"}</td>
+                  <td className="px-3 py-2">{m.documentoRef?.comprobante || m.tipoMovimiento?.nombre || "—"}</td>
+                  <td className="px-3 py-2">{m.documentoRef?.tercero || m.glosa || "—"}</td>
+                  <td className="px-3 py-2">{CONCEPTOS_MOVIMIENTO[m.concepto] || m.concepto}</td>
                   <td className="px-3 py-2">{m.cuenta?.nombre || "—"}{m.cuentaDestino ? ` → ${m.cuentaDestino.nombre}` : ""}</td>
                   <td className="px-3 py-2">{m.numeroOperacion || "—"}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{money(m.monto, m.moneda)}
