@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { fetchAuth, uploadAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
 import { money, round2, nombreEmpresa } from "../../utils/compras";
-import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION, estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, cuentasPara, avisoMoneda, vistaPreviaNota, origenesPosibles, etiquetaComprobante, precargaDesdeSire, admiteRetencionIgv } from "../../utils/tesoreria";
+import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, diasEntre, CODIGOS_DETRACCION, estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, cuentasPara, avisoMoneda, vistaPreviaNota, origenesPosibles, etiquetaComprobante, precargaDesdeSire, admiteRetencionIgv, textoCuenta } from "../../utils/tesoreria";
 import { conBloqueo } from "../../utils/bloqueoApi";
+import { enviarConSobregiro } from "../../utils/sobregiro";
+import useConfirmar from "../../hooks/useConfirmar";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full";
 const MEDIOS_PAGO = [["transferencia", "Transferencia"], ["deposito", "Depósito"], ["efectivo", "Efectivo"], ["cheque", "Cheque"]];
@@ -37,6 +39,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   // Factura ya registrada cuyo PDF no se pudo subir: el modal pasa a "reintentar PDF".
   const [registrada, setRegistrada] = useState(null);
   const [cuentas, setCuentas] = useState([]);
+  const { confirmar, dialogo } = useConfirmar();
   useEffect(() => {
     fetchAuth("/cuentas-tesoreria").then(async (r) => { if (r.ok) setCuentas(await r.json()); }).catch(() => {});
   }, []);
@@ -164,7 +167,8 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
       else body.proveedor = form.proveedor;
       if (form.modo === "flete") body.esFleteDe = form.esFleteDe;
       if (form.modo === "sinOc") body.centroCosto = form.centroCosto;
-      const r = await fetchAuth("/facturas-proveedor", { method: "POST", body: JSON.stringify(body) });
+      // "Ya se pagó" desde un banco sin saldo: el reintento confirma el sobregiro en la raíz del body.
+      const r = await enviarConSobregiro((b) => fetchAuth("/facturas-proveedor", { method: "POST", body: JSON.stringify(b) }), body, confirmar);
       const fp = await r.json().catch(() => ({}));
       if (!r.ok) return setError(fp.mensaje || "No se pudo registrar el comprobante.");
       if (archivo) await subirPdf(fp);
@@ -349,7 +353,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
                 <label className="text-xs text-gray-500">Cuenta
                   <select value={form.pagoCuenta} onChange={set("pagoCuenta")} className={INP}>
                     <option value="">Elegir…</option>
-                    {cuentasPago.map((c) => <option key={c._id} value={c._id}>{c.nombre} ({c.moneda})</option>)}
+                    {cuentasPago.map((c) => <option key={c._id} value={c._id}>{textoCuenta(c)}</option>)}
                   </select>
                 </label>
                 <label className="text-xs text-gray-500">Medio
@@ -386,6 +390,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
           </button>
         </div>
       </div>
+      {dialogo}
     </div>
   );
 }

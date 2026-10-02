@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
 import { money } from "../../utils/compras";
-import { cuentasPara, tipoMovimientoEsperado, etiquetaImpuesto, avisoMoneda } from "../../utils/tesoreria";
+import { cuentasPara, tipoMovimientoEsperado, etiquetaImpuesto, avisoMoneda, textoCuenta } from "../../utils/tesoreria";
+import { enviarConSobregiro } from "../../utils/sobregiro";
+import useConfirmar from "../../hooks/useConfirmar";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full";
 const MEDIOS = [
@@ -23,6 +25,7 @@ export default function ModalMovimiento({ lado, documento, onClose, onGuardado }
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  const { confirmar, dialogo } = useConfirmar();
 
   useEffect(() => {
     fetchAuth("/cuentas-tesoreria").then(async (r) => { if (r.ok) setCuentas(await r.json()); });
@@ -52,7 +55,7 @@ export default function ModalMovimiento({ lado, documento, onClose, onGuardado }
     if (tipo !== "retencion") body.cuenta = form.cuenta;
     if (tipo === "transferencia") body.cuentaDestino = form.cuentaDestino;
     try {
-      const r = await fetchAuth("/movimientos-tesoreria", { method: "POST", body: JSON.stringify(body) });
+      const r = await enviarConSobregiro((b) => fetchAuth("/movimientos-tesoreria", { method: "POST", body: JSON.stringify(b) }), body, confirmar);
       const data = await r.json().catch(() => ({}));
       if (!r.ok) return setError(data.mensaje || `No se pudo registrar el ${verbo}.`);
       onGuardado(data);
@@ -98,7 +101,7 @@ export default function ModalMovimiento({ lado, documento, onClose, onGuardado }
               <label className="text-xs text-gray-500">{tipo === "transferencia" ? "Cuenta de origen" : "Cuenta"}
                 <select value={form.cuenta} onChange={set("cuenta")} className={INP}>
                   <option value="">Elegir…</option>
-                  {origen.map((c) => <option key={c._id} value={c._id}>{c.nombre} ({c.moneda})</option>)}
+                  {origen.map((c) => <option key={c._id} value={c._id}>{textoCuenta(c)}</option>)}
                 </select>
               </label>
               <label className="text-xs text-gray-500">Medio
@@ -112,7 +115,7 @@ export default function ModalMovimiento({ lado, documento, onClose, onGuardado }
             <label className="text-xs text-gray-500">Cuenta de detracciones
               <select value={form.cuentaDestino} onChange={set("cuentaDestino")} className={INP}>
                 <option value="">Elegir…</option>
-                {destino.map((c) => <option key={c._id} value={c._id}>{c.nombre}</option>)}
+                {destino.map((c) => <option key={c._id} value={c._id}>{textoCuenta(c)}</option>)}
               </select>
             </label>
           )}
@@ -130,6 +133,7 @@ export default function ModalMovimiento({ lado, documento, onClose, onGuardado }
           </button>
         </div>
       </div>
+      {dialogo}
     </div>
   );
 }

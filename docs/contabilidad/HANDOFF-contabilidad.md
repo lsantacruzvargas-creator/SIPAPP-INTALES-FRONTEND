@@ -27,6 +27,15 @@ estos docs están idénticos en `docs/contabilidad/` de ambos.
   del diseño queda para `tesorero`.
 - Factura de venta y comprobante SUNAT se ligan en el servidor al crear la factura (`Comprobante.facturaInterna`).
 - Código del motor contable: nada implementado todavía.
+- **Movimientos de tesorería sin documento** (rama `feature/movimientos-manuales`, 2026-10-02; brecha B7):
+  `MovimientoTesoreria.conceptoManual` (`aporte`, `prestamo`, `retiro`, `gasto_bancario`, `otros`, y `transferencia`
+  entre cuentas propias) con `descripcion`, sin `documento`; saldo inicial por cuenta en
+  `CuentaTesoreria.saldoInicial/fechaSaldoInicial/tipoCambioSaldoInicial`. **Para C1, cada concepto manual necesita su
+  cuenta PCGE** (contrapartida de la 10x), a confirmar con el contador: aporte → 50 (capital) o 52 (capital adicional);
+  préstamo recibido → 45 (obligaciones financieras) o 46/14 si es de un socio; retiro → 14 (cuentas por cobrar a
+  accionistas) o 50/59 según el caso; gasto bancario → 6391 (gastos bancarios); otros → la elige quien registra (falta
+  un campo de cuenta o un mapeo); transferencia → 10x contra 10x (sin resultado; en US$, la diferencia de TC entre
+  libros va a 676/776). El saldo inicial es el asiento de apertura (10x contra 59/50). Solo nota: sin código contable.
 
 ## Siguiente paso
 

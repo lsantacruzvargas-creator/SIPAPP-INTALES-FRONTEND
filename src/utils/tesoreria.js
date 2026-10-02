@@ -1,5 +1,5 @@
 import { DETRACCION_BIENES_SERVICIOS } from "./catalogosSunat.js";
-import { round2 } from "./compras.js";
+import { round2, money } from "./compras.js";
 import { origenTC, esTcSunat } from "./costos.js";
 import { fechaHoyLima, formatearFecha } from "./fecha.js";
 
@@ -121,6 +121,23 @@ export function filtrarFacturas(lista, f, { lado, hoyIso }) {
       && (!f.desde || emision >= f.desde)
       && (!f.hasta || emision <= f.hasta);
   });
+}
+
+// Dinero sin comprobante (espejo de MovimientoTesoreria.conceptoManual en el backend).
+export const CONCEPTOS_MANUALES = [
+  { valor: "aporte", label: "Aporte" }, { valor: "prestamo", label: "Préstamo" }, { valor: "retiro", label: "Retiro" },
+  { valor: "gasto_bancario", label: "Gasto bancario" }, { valor: "otros", label: "Otros" },
+];
+export const etiquetaConceptoManual = (valor) =>
+  valor === "transferencia" ? "Transferencia entre cuentas" : CONCEPTOS_MANUALES.find((c) => c.valor === valor)?.label || valor;
+
+export const textoCuenta = (c) =>
+  `${c.nombre} (${c.moneda || "PEN"})${c.saldo != null ? ` · saldo ${money(c.saldo, c.moneda || "PEN")}` : ""}`;
+
+// Columnas Documento / Tercero / Parte del libro de movimientos.
+export function referenciaMovimiento(m) {
+  if (m.conceptoManual) return { documento: etiquetaConceptoManual(m.conceptoManual), tercero: m.descripcion || "", parte: "Manual" };
+  return { documento: m.documentoRef?.comprobante || "", tercero: m.documentoRef?.tercero || "", parte: m.concepto === "neto" ? "Neto" : "Impuesto" };
 }
 
 export function totalesMovimientos(movs) {
