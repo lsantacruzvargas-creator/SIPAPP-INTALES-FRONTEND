@@ -66,3 +66,10 @@ Reglas añadidas tras la revisión:
   desactivada no recibe gastos; el saldo inicial de una caja con gastos o rendiciones no se cambia.
 
 Menores diferidos: adjuntar la foto del comprobante; la OT del gasto no se valida como abierta.
+
+## Integración con `main` (2026-10-02)
+
+La apertura y la reposición usan la transferencia de `main` (`/movimientos-tesoreria/transferencia`; la reposición
+pregunta el sobregiro del banco con el diálogo propio). El saldo y la regla de no quedar en negativo son los de
+`main` (`utils/saldosCuentas.js`, 409). Ya no se rechazan fechas anteriores al saldo inicial. Un faltante de arqueo
+se registra como egreso manual (concepto «otros»).

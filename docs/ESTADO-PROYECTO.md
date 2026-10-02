@@ -153,6 +153,13 @@ arreglos de `feature/revision-compras` y el del selector de detracción (especif
 `docs/PORT-fixes-revision-compras.md`). **Los saldos de tesorería NO se portaron**: esa rama se sigue avanzando y se
 mergeará con `main`, que ya los trae.
 
+**Integración de la rama contable con `main` (2026-10-02, decisión del usuario «trabaja sobre main»):** la rama
+`claude/affectionate-ride-1ql646` trae `main` (saldos y movimientos manuales) y adapta encima Bancos B7 (libro y
+conciliación), caja chica, C1–C3 y CONCAR. Se retiró el catálogo de tipos de movimiento de B7 y sus rutas; los
+manuales de `main` admiten cuenta contable y centro de costo opcionales y C2 usa la cuenta por concepto de
+Contabilidad → Configuración (semilla: gasto bancario 6391). Backend 369 tests (368 ok, 1 omitido), frontend 94,
+E2E del flujo integrado OK. Detalle en las secciones «Integración con main» de los specs de B7 y caja chica.
+
 **Decisiones por confirmar con el usuario** (tomadas al implementar los saldos; el usuario pidió dejarlas anotadas):
 1. El saldo inicial lo editan jefatura y admin (como el resto de Configuración); el tesorero no.
 2. Se agregaron transferencias entre cuentas propias de la misma moneda (el diseño no las pedía).

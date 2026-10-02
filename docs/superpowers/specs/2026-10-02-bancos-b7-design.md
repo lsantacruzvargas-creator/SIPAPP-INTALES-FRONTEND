@@ -68,3 +68,19 @@ diferencia de cambio de cierre de cuentas en US$ parte de él; las cuentas de de
 Menores diferidos: en el libro y la conciliación los pagos/cobros de facturas se describen sin número de comprobante
 ni tercero; transferencias entre monedas distintas se registran como dos movimientos; caja chica, importación del
 extracto (CSV) y chequera quedan fuera.
+
+## Integración con `main` (2026-10-02)
+
+`main` recibió en paralelo `feature/movimientos-manuales` (saldos de tesorería, ingresos/egresos manuales y
+transferencias). Decisión del usuario: «trabaja sobre main». Se adoptó el diseño de `main` y B7 quedó encima:
+- Saldo inicial plano de `main` (`saldoInicial`, `fechaSaldoInicial`, `tipoCambioSaldoInicial`), editable en
+  Configuración solo sin movimientos. Los movimientos anteriores a su fecha se permiten (regla de `main`).
+- Movimientos sin documento = manuales de `main` (`conceptoManual`: aporte, préstamo, retiro, gasto bancario, otros)
+  y transferencias de `main`. Se retiraron el catálogo `TipoMovimientoBanco` y las rutas `/bancos/movimientos`,
+  `/bancos/transferencias`, `/bancos/tipos-movimiento` y `/bancos/cuentas/:id/saldo-inicial`. Los manuales admiten
+  `cuentaContable` y `centroCosto` opcionales para el asiento.
+- Saldo insuficiente de `main` (`verificarSaldo`): caja y detracciones nunca en negativo; banco con confirmación.
+  Reemplaza la regla propia de la caja chica.
+- Se mantienen de B7: libro por cuenta (con la fila del saldo inicial en su fecha) y conciliación bancaria, cuyo
+  bloqueo (`exigirNoConciliado`) y el del mes contable cerrado (`exigirAbierto`) se agregaron a los manuales y
+  transferencias de `main`.
