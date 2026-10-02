@@ -9,6 +9,7 @@ import PanelDiferenciaCambio from "../components/tesoreria/PanelDiferenciaCambio
 import PanelConfiguracion from "../components/tesoreria/PanelConfiguracion";
 import PanelBancos from "../components/tesoreria/PanelBancos";
 import PanelConciliacion from "../components/tesoreria/PanelConciliacion";
+import PanelCajaChica from "../components/tesoreria/PanelCajaChica";
 import ModalFacturaProveedor from "../components/tesoreria/ModalFacturaProveedor";
 
 const TABS = [
@@ -17,6 +18,7 @@ const TABS = [
   { id: "movimientos", label: "Movimientos" },
   { id: "bancos", label: "Bancos" },
   { id: "conciliacion", label: "Conciliación" },
+  { id: "caja-chica", label: "Caja chica" },
   { id: "sire", label: "SIRE" },
   { id: "resumen-tributario", label: "Resumen tributario" },
   { id: "diferencia-cambio", label: "Dif. de cambio" },
@@ -53,7 +55,7 @@ export default function Tesoreria() {
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
       <div>
         <h1 className="text-xl font-bold text-gray-800">Tesorería</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Cuentas por pagar y por cobrar, pagos, detracciones y retenciones, bancos y conciliación bancaria, conciliación con el SIRE</p>
+        <p className="text-sm text-gray-400 mt-0.5">Cuentas por pagar y por cobrar, pagos, detracciones y retenciones, bancos, conciliación bancaria y caja chica, conciliación con el SIRE</p>
       </div>
       <div className="flex border-b border-gray-200 gap-1 flex-wrap">
         {TABS.filter((t) => !t.soloJefatura || puedeConfigurar).map((t) => (
@@ -70,6 +72,7 @@ export default function Tesoreria() {
       {tab === "movimientos" && <TablaMovimientos />}
       {tab === "bancos" && <PanelBancos centrosCosto={catalogos.centrosCosto} />}
       {tab === "conciliacion" && <PanelConciliacion />}
+      {tab === "caja-chica" && <PanelCajaChica centrosCosto={catalogos.centrosCosto} />}
       {tab === "sire" && <PanelSire onRegistrarFactura={setModalFactura} />}
       {tab === "resumen-tributario" && <PanelResumenTributario />}
       {tab === "diferencia-cambio" && <PanelDiferenciaCambio />}
