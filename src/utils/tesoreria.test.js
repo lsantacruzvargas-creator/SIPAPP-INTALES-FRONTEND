@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   calcularImpuesto, partes, tipoMovimientoEsperado, sugerirImpuesto, impuestoVentaPorDefecto, etiquetaImpuesto,
   diasCredito, sumarDias, vencimientoDe, semaforo, filtrarFacturas, FILTROS_TESORERIA, totalesMovimientos, cuentasPara, periodoDeMes, fechaIsoTexto, esPagoAntiguo, avisoMoneda, diasEntre,
+  CONCEPTOS_MANUALES, etiquetaConceptoManual, textoCuenta, referenciaMovimiento,
   estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, etiquetaComprobante, vistaPreviaNota, origenesPosibles,
 } from "./tesoreria.js";
 
@@ -304,4 +305,26 @@ test("filasExcelComparacionCarga: con RUC distinto muestra el RUC de SUNAT", asy
   const [f] = filasExcelComparacionCarga([{ estado: "difiere", diferencias: ["ruc"], tipo: "01", serie: "F001", numero: "1", ruc: "20100000009", rucSire: "20100000001", baseSire: 100, baseCarga: 100 }]);
   assert.equal(f["RUC SUNAT"], "20100000001");
   assert.equal(f.DIFERENCIAS, "RUC");
+});
+
+test("conceptos manuales: los cinco del diseño y su etiqueta (también la transferencia entre cuentas)", () => {
+  assert.deepEqual(CONCEPTOS_MANUALES.map((c) => c.valor), ["aporte", "prestamo", "retiro", "gasto_bancario", "otros"]);
+  assert.equal(etiquetaConceptoManual("gasto_bancario"), "Gasto bancario");
+  assert.equal(etiquetaConceptoManual("prestamo"), "Préstamo");
+  assert.equal(etiquetaConceptoManual("transferencia"), "Transferencia entre cuentas");
+  assert.equal(etiquetaConceptoManual("x"), "x");
+});
+
+test("textoCuenta: nombre, moneda y saldo en la moneda de la cuenta", () => {
+  assert.equal(textoCuenta({ nombre: "BCP Soles", moneda: "PEN", saldo: 1200 }), "BCP Soles (PEN) · saldo S/ 1,200.00");
+  assert.equal(textoCuenta({ nombre: "BCP $", moneda: "USD", saldo: -12.5 }), "BCP $ (USD) · saldo US$ -12.50");
+  assert.equal(textoCuenta({ nombre: "Caja", moneda: "PEN" }), "Caja (PEN)");
+});
+
+test("referenciaMovimiento: documento y tercero; los manuales muestran su concepto y descripción", () => {
+  assert.deepEqual(referenciaMovimiento({ documentoRef: { comprobante: "F001-1", tercero: "PROV SAC" }, concepto: "neto" }),
+    { documento: "F001-1", tercero: "PROV SAC", parte: "Neto" });
+  assert.deepEqual(referenciaMovimiento({ documentoRef: null, conceptoManual: "aporte", descripcion: "Aporte del socio" }),
+    { documento: "Aporte", tercero: "Aporte del socio", parte: "Manual" });
+  assert.deepEqual(referenciaMovimiento({ documentoRef: null, concepto: "impuesto" }), { documento: "", tercero: "", parte: "Impuesto" });
 });
