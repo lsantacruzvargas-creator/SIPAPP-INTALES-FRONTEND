@@ -43,7 +43,9 @@ export const TIPO_DOC_RECEPTOR = [
   { valor: "1", label: "1 — DNI" },
   { valor: "4", label: "4 — Carné de Extranjería" },
   { valor: "7", label: "7 — Pasaporte" },
-  { valor: "0", label: "0 — Sin documento (varios)" },
+  // Boleta de hasta S/ 700 sin identificar al cliente: tipo y número "-" (aceptado por SUNAT). No "0" (no domiciliado
+  // sin RUC), que el RVIE no acepta para una boleta menor a S/ 700.
+  { valor: "-", label: "Clientes varios (boletas hasta S/ 700)" },
 ];
 
 export const ESTADO_COMPROBANTE = [
@@ -189,6 +191,7 @@ export function documentoValido(schemeID, numDoc) {
   const v = (numDoc || "").trim();
   if (schemeID === "6") return /^\d{11}$/.test(v);
   if (schemeID === "1") return /^\d{8}$/.test(v);
+  if (schemeID === "-") return v === "-";
   return v.length > 0;
 }
 
