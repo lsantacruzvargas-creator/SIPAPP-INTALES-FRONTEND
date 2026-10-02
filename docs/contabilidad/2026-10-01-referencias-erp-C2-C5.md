@@ -10,6 +10,10 @@ Se revisaron tres repos (solo lectura) para completar el diseño de C2 en adelan
 
 | `sistemacontable` (revisado 2026-10-02) | App Django/SQLite peruana de curso (PCGE a 2 dígitos) | **Baja**: confirma el mapeo de EEFF por cuenta de 2 dígitos; no resuelve ninguna pregunta al contador |
 
+| `contaperu` (revisado 2026-10-02) | Motor peruano MIT (Python) que arma asientos de compras/ventas desde CPE y exporta a CONCAR, StarSoft, CONTASIS, SIRE y PLE | **Muy alta** para C4 y C2 (compras/ventas): formato CONCAR validado en producción, reglas con su fuente, **PCGE 2026 oficial** (1 615 cuentas con página) |
+| `conta_pro_odoo` (revisado 2026-10-02) | Módulos Odoo 18 (l10n_pe_accounting_pro OPL-1 de pago; pe_edi_sunat LGPL-3) | **Baja**: varias reglas erradas; solo confirma que la detracción va por catálogo del bien/servicio. No se puede copiar su código ni sus datos (OPL-1) |
+| `contabilidad_guesaa` (revisado 2026-10-02) | Sistema comercial Laravel con asientos simples sobre PCGE 2026 | **Baja**: confirma que el PCGE 2026 ya se usa |
+
 Ningún repo trae normativa peruana completa (IGV, detracción, retención, SIRE, destinos automáticos, diferencia de
 cambio): eso sigue saliendo de la guía contable y los casos de prueba de `docs/contabilidad/`.
 
@@ -103,3 +107,52 @@ FacturaScripts (LGPL-3.0) es la mejor base disponible para cargarlo completo, re
 Todas las preguntas A1–A9 (software, plantilla, anexos, subdiarios, destinos, diferencia de cambio, correcciones),
 B10–B18 (cuenta por tipo de compra, costeo de OT, cuentas de ventas, NC, bancos, 1673, 4.ª, anticipos, movimientos de
 banco) y C19–C25 (criterios tributarios) de `2026-10-01-preguntas-contador-C2.md`, más las nuevas D26–D29.
+
+
+## contaperu (MIT) — lo que aporta a C2 y C4
+
+Ruta revisada: `lsantacruzvargas-creator/contaperu` (versión 5.2.0, 2026-10-02). Solo compras y ventas desde comprobantes;
+**no** hace cobros/pagos, caja-bancos, destinos 9x/79, diferencia de cambio, retención IGV 3 %, anticipos ni
+detracción de ventas.
+
+**Formato CONCAR (validado en producción, `drivers/concar/datos.py`, 52 casos en `tests/fixtures/snapshot`)**:
+Excel `.xlsx`, hoja `CONCAR`, 3 filas de cabecera (títulos, notas, formatos), datos desde la fila 4; **un archivo por
+libro y mes** (`CONCAR_COMPRAS_AAAAMM_RUC.xlsx`) con los subdiarios mezclados; 41 columnas A…AO: subdiario,
+comprobante `MMNNNN`, fecha, moneda `MN`/`US` (no `ME`), glosa (40), TC (solo US$), tipo de conversión `C`/`V`, flag
+`S`, fecha TC, cuenta, anexo (RUC en la línea del tercero), centro de costo (cuentas 62/63/65/70), D/H, importe
+original / US$ / S/, tipo de documento (sigla T.G.06: FT, BV, NC, ND, RH…), número `F001-123`, fechas de documento y
+vencimiento, área (detracción), glosa detalle (30), anexo auxiliar (centro de costo en la línea del tercero), doc. de
+referencia (NC/ND), datos de detracción (tipo de tasa, tasa, bases), tasa IGV. En US$ el asiento va en dólares y
+CONCAR convierte. Un asiento por comprobante.
+
+**Formato StarSoft Desktop** (`drivers/starsoft/`, “en pruebas”): TXT `|` sin cabecera, CRLF; compras 35 campos,
+ventas 27; subdiarios 04 compras / 03 ventas; la detracción va en campos de la fila del proveedor; exige que
+proveedores y cuentas ya existan; el manual pide ANSI.
+
+**Reglas de asiento (con fuente en `contaperu/asiento/__init__.py`)**: factura D gasto · D 40111 · H 4212 (US$ en
+otra divisionaria); boleta y RH sin línea de IGV (IGV al gasto); RH D gasto por el total · H 40172 retención · H 424
+neto (**retención registrada al provisionar**); NC invierte las mismas cuentas; detracción de compras: D 4212 · H
+421203 por lo detraído (dentro de la 42, sin 1673) en soles enteros; extemporáneos al día 1 del periodo; ventas D
+1212 · H 40111 · H ingreso. Subdiarios por defecto CONCAR: 05 ventas, 11 compras, 10 compras con detracción, 13
+boletas, 15 honorarios. Anexo = RUC/DNI. Cuenta de gasto/ingreso: **por comprobante (imputación), sin default**.
+Huella por comprobante para no duplicar al reimportar.
+
+**Reutilizable (MIT, conservando el aviso de copyright)**: catálogo PCGE 2026 (`contaperu/pcge/catalogo2026.json`),
+catálogos SUNAT (`contaperu/datos/sunat/*.json`: tipos de comprobante, documentos de identidad, monedas, medios de
+pago, motivos NC/ND, tributos, detracciones, campos PLE 5.1/5.3 y SIRE) y el estándar
+`estandar/open-accounting.schema.json` como forma de la línea de asiento.
+
+**Recomendación**: portar a Node las reglas y la proyección CONCAR/StarSoft (no depender del motor Python), modelar
+nuestras líneas con la forma de `open-accounting` (más roles de tesorería) y usar sus snapshots como prueba de oro.
+Lo propio de INTALES (tesorería, diferencia de cambio, destinos por OT, retención 3 %, detracción de ventas, IGV sin
+crédito) se diseña aquí.
+
+## PCGE 2026 (hallazgo)
+
+El catálogo oficial del **PCGE 2026** (Consejo Normativo de Contabilidad) cambia respecto del 2019 que usa nuestro
+semilla: elemento 9 = **91 Gastos de operación, 92 Gastos de inversión, 93 Gastos de financiamiento** (no existen
+94/95/97 que usa nuestro destino por defecto 941/791); desaparecen 73, 74 y 87; aparece 86; 36 nombres cambian
+(“inventarios”, “impuesto a las ganancias”, “servicios prestados”, 1212 “En cartera”, 122/422 “Anticipos
+recibidos/otorgados”, 19 “Deterioro por pérdida crediticia”). Antes de cambiar el semilla hay que saber **qué versión
+usa el contador** (pregunta A0). El catálogo de contaperu permite cargar el PCGE completo (1 615 cuentas) con la página
+de la norma de cada una.
