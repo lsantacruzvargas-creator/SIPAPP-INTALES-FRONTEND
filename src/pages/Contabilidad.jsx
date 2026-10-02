@@ -5,11 +5,15 @@ import PanelAsientos from "../components/contabilidad/PanelAsientos";
 import PanelAutomaticos from "../components/contabilidad/PanelAutomaticos";
 import PanelExportarConcar from "../components/contabilidad/PanelExportarConcar";
 import PanelConfiguracionContable from "../components/contabilidad/PanelConfiguracionContable";
+import PanelReportesContables from "../components/contabilidad/PanelReportesContables";
+import PanelCierreMes from "../components/contabilidad/PanelCierreMes";
 
 const TABS = [
   { id: "asientos", label: "Asientos" },
   { id: "automaticos", label: "Automáticos" },
   { id: "concar", label: "Exportar CONCAR" },
+  { id: "cierre", label: "Cierre de mes" },
+  { id: "reportes", label: "Reportes" },
   { id: "plan", label: "Plan de cuentas" },
   { id: "configuracion", label: "Configuración" },
 ];
@@ -51,6 +55,8 @@ export default function Contabilidad() {
       {tab === "asientos" && <PanelAsientos cuentas={cuentas} centrosCosto={centrosCosto} puedeEscribir={puedeEscribir} />}
       {tab === "automaticos" && <PanelAutomaticos cuentas={cuentas} puedeGenerar={puedeGenerar} puedeEscribir={puedeEscribir} />}
       {tab === "concar" && <PanelExportarConcar puedeEscribir={puedeEscribir} />}
+      {tab === "cierre" && <PanelCierreMes puedeCerrar={rol === "tesorero"} />}
+      {tab === "reportes" && <PanelReportesContables centrosCosto={centrosCosto} />}
       {tab === "configuracion" && <PanelConfiguracionContable cuentas={cuentas} puedeEscribir={puedeEscribir} />}
       {tab === "plan" && <PanelPlanCuentas cuentas={cuentas} onCambio={cargarCuentas} puedeEscribir={puedeEscribir} />}
     </div>
