@@ -114,8 +114,21 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 ## 5. Pendientes
 
 **Rama `ventas/produccion/contabilidadoficial` (2026-10-02):** tiene los arreglos de `feature/revision-compras` de
-INTALES (ver `docs/PORT-fixes-revision-compras.md`). **Los saldos de tesorería (saldo inicial, movimientos manuales,
-saldo insuficiente) están en `main` y llegarán con el merge de `main` a esta rama**; no se portaron por separado.
+INTALES (ver `docs/PORT-fixes-revision-compras.md`) y **los saldos de tesorería**, traídos con cherry-pick desde
+`feature/movimientos-manuales` (la misma tarea que está en `main`, con E2E OK). Plan y ledger:
+`docs/superpowers/plans/2026-10-02-intales-saldos-tesoreria.md` y
+`docs/superpowers/sdd/2026-10-02-intales-saldos-tesoreria-progress.md`. Incluye:
+- Saldo inicial por cuenta (monto, fecha y TC compra SUNAT si es USD; editable solo sin movimientos, jefatura/admin) y
+  saldo calculado por agregación (`utils/saldosCuentas.js`), visible en Movimientos, Configuración y en los selectores
+  de cuenta de pagos, cobros y "Ya se pagó".
+- Ingreso/egreso manual (aporte, préstamo, retiro, gasto bancario, otros) y transferencia entre cuentas propias de la
+  misma moneda: `POST /movimientos-tesoreria/manual` y `/transferencia`; registran y anulan admin, jefatura y tesorero
+  (el contador y facturación solo leen); en USD con el TC SUNAT del día.
+- Saldo insuficiente en pagos, autodetracción, egresos manuales y transferencias: caja y detracciones → 409; banco →
+  409 `codigo: "SOBREGIRO"` y se registra con `confirmarSobregiro: true` (diálogo propio en el panel; en "Ya se pagó"
+  va en la raíz del body). Mide el **mínimo del saldo acumulado** desde la fecha; el saldo inicial no cuenta antes de su
+  fecha. La diferencia de cambio al cierre suma el saldo inicial con su TC.
+- Decisiones por confirmar y menores de esta tarea: ver `docs/ESTADO-PROYECTO.md` §5 de `main`.
 
 **Por confirmar con el contador** (no implementar sin respuesta):
 - Si el RCE del SIRE trae los montos de comprobantes en US$ en dólares o en soles (probar con un archivo real).
@@ -127,7 +140,7 @@ saldo insuficiente) están en `main` y llegarán con el merge de `main` a esta r
   (plantilla de CONCAR/StarSoft)?
 
 **Brechas contables aún abiertas** (de `casos-prueba-contables.md` §4; B1–B5 y B9 ya resueltas): B6 cuenta de gasto por
-comprobante de compra; B7 movimientos de tesorería sin documento y conciliación bancaria; B10 periodo de anotación y
+comprobante de compra; B7 conciliación bancaria (los movimientos sin documento ya están en `feature/movimientos-manuales`); B10 periodo de anotación y
 crédito diferido (1673); B11–B13 costo de OT por devengo, salidas de almacén y IGV sin crédito al costo; B14 bases no
 gravadas/exoneradas; B15 retención 3 % al pagar y CRE/PDT 626; B16 detracción solo para servicios; B17 fecha de
 aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
