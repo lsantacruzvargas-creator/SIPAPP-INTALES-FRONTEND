@@ -181,7 +181,12 @@ export default function EmitirComprobante() {
     }
   };
 
-  const handleReceptor = (e) => setReceptor({ ...receptor, [e.target.name]: e.target.value });
+  const handleReceptor = (e) => {
+    const { name, value } = e.target;
+    if (name === "schemeID" && value === "-") return setReceptor({ schemeID: "-", numDoc: "-", nombre: "CLIENTES VARIOS" });
+    if (name === "schemeID" && receptor.schemeID === "-") return setReceptor({ schemeID: value, numDoc: "", nombre: "" });
+    setReceptor({ ...receptor, [name]: value });
+  };
 
   const buscarReceptorRuc = async (numDoc) => {
     if (receptor.schemeID !== "6" || numDoc.length !== 11) return;
@@ -310,12 +315,13 @@ export default function EmitirComprobante() {
         if (!c.monto || Number(c.monto) <= 0) return "Cada cuota debe tener un monto mayor a 0.";
         if (!c.fechaVencimiento) return "Cada cuota debe tener una fecha de vencimiento.";
       }
-      if (Math.abs(sumaCuotas - totalGeneral) > 0.01) {
+      // Exacto: SUNAT rechaza (3319) un crédito cuyas cuotas no suman el monto neto pendiente.
+      if (Math.abs(sumaCuotas - totalGeneral) >= 0.005) {
         return `La suma de las cuotas (${moneda} ${sumaCuotas.toFixed(2)}) debe ser igual al monto neto pendiente (${moneda} ${totalGeneral.toFixed(2)}).`;
       }
     }
-    if (tipoDoc === "03" && totalGeneral >= 700 && receptor.schemeID === "0") {
-      return "Una Boleta desde S/ 700 requiere un receptor identificado (RUC, DNI, Carné o Pasaporte), no 'Sin documento'.";
+    if (tipoDoc === "03" && receptor.schemeID === "-" && (totalGeneral > 700 || moneda !== "PEN")) {
+      return "Una boleta mayor a S/ 700 (o en dólares) requiere un cliente identificado (RUC, DNI, Carné o Pasaporte), no 'Clientes varios'.";
     }
     if (!esNota && detraccionAplica) {
       if (!detraccionCodigoBien) return "Selecciona el bien o servicio sujeto a detracción.";
@@ -709,12 +715,12 @@ export default function EmitirComprobante() {
                 {buscandoDoc && <span className="ml-2 text-gray-400 font-normal">Consultando SUNAT…</span>}
               </label>
               <input name="numDoc" value={receptor.numDoc} onChange={handleReceptor}
-                onBlur={(e) => buscarReceptorRuc(e.target.value)} disabled={ro} required
+                onBlur={(e) => buscarReceptorRuc(e.target.value)} disabled={ro || receptor.schemeID === "-"} required
                 className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Nombre / Razón social<Oblig /></label>
-              <input name="nombre" value={receptor.nombre} onChange={handleReceptor} disabled={ro} required
+              <input name="nombre" value={receptor.nombre} onChange={handleReceptor} disabled={ro || receptor.schemeID === "-"} required
                 className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
             </div>
           </div>
