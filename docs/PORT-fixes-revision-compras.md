@@ -89,6 +89,10 @@ No hay funcionalidades nuevas en esa rama: todo lo que no se porta es documentac
   la segunda transacción choca (WriteConflict), `conTransaccion` la reintenta y ya ve la primera nota.
 - **Prueba:** «NC simultáneas sobre un comprobante pagado no pasan su total» (3 NC de 59 sobre un total de 118 en
   paralelo: exactamente 2 → 201 y la suma vigente ≤ 118). Necesita Mongo en replica set.
+  **Ojo:** esta prueba pasa también sin el arreglo (6/6 corridas en el destino): más adelante en la misma transacción
+  `reajustarImpuestoOrigen` ya escribe el origen, así que el WriteConflict ocurría igual. El arreglo adelanta la
+  escritura para que el tope no dependa de esa escritura posterior (si se quita o se vuelve condicional, la carrera
+  vuelve). Es una prueba de regresión, no de rojo/verde.
 
 ### B6. Receptor del CPE normalizado en el servidor; boleta a «clientes varios» — `bc31672`
 
@@ -199,4 +203,26 @@ No hay funcionalidades nuevas en esa rama: todo lo que no se porta es documentac
 
 ## 6. Resultado del port
 
-_(se completa al terminar)_
+| Repo | Origen → destino (`port/fixes-revision-compras`) | Forma |
+|---|---|---|
+| Backend | `dc1004f` → `21e5dcc` | `cherry-pick -x` limpio |
+| Backend | `bc31672` → `d2de42f` | `cherry-pick -x` limpio |
+| Frontend | `9afa81ba` → `74c2246e` | `cherry-pick -x` limpio |
+| Frontend | `22a8db9e` → `041d194a` | `cherry-pick -x` limpio |
+
+Ninguno se adaptó a mano (los archivos del destino eran idénticos a la base común). No se portaron `2183e94` /
+`cb834af2` (documentación propia de INTALES `main`).
+
+**Rojo antes del arreglo (código del destino, pruebas del origen):**
+- `test/revisionCompras.test.js`: 4 de 5 fallan (B1, B2, B3, B4); B5 pasa (ver nota en B5).
+- `test/revisionVentasSire.test.js`: el archivo no carga (`ERR_MODULE_NOT_FOUND` de `src/utils/receptorCpe.js`, B6);
+  con una copia temporal sin esa importación, las 3 pruebas de detracción, parser SIRE y conciliación fallan (B8–B10).
+- `src/utils/catalogosSunat.test.js`: 1 de 1 falla (F2).
+
+**Conteo de pruebas:**
+
+| | Antes | Después del port | Después del merge |
+|---|---|---|---|
+| Backend `npm test` | 254 (253 ✔, 1 omitido) | 264 (263 ✔, 1 omitido) | ver commit de merge |
+| Frontend `npm test` | 69 ✔ | 70 ✔ | ver commit de merge |
+| Frontend `npm run build` | OK | OK | ver commit de merge |
