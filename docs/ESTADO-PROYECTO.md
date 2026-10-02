@@ -115,12 +115,10 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 **⚠ Mencionar al usuario al abrir el proyecto: las "Decisiones por confirmar" de abajo.**
 
-**Pendiente — SUNAT 3270 con descuento de línea (detectado 2026-10-02):** `src/builders/factura.builder.js` manda en
-`cac:AlternativeConditionPrice/cbc:PriceAmount` (precio unitario con IGV, tipo 01) `item.precioUnitario`, el precio
-**antes** del descuento de línea. SUNAT lo valida contra (valor de venta de la línea + IGV) / cantidad, que ya está
-descontado, y rechaza la factura con 3270. Arreglo (ya aplicado en SIPAPP-MICRONEGOCIOS `21ec2ae` y SIPAPP-HUAQUIAN
-`51a2974`): `precioConIgv = montoDescuento > 0 && cantidad > 0 ? total / cantidad : precioUnitario` y usarlo en ese
-`PriceAmount`; `cac:Price` sigue antes del descuento. Verificado en SUNAT demo (F099-101 aceptada). Agregar prueba.
+**Resuelto (2026-10-02) — SUNAT 3270 con descuento de línea:** `cac:AlternativeConditionPrice` (precio unitario con IGV)
+ahora es (valor de venta + IGV) / cantidad, ya descontado (`src/builders/factura.builder.js`, prueba
+`test/precioUnitarioDescuento.test.js`). Mismo arreglo en SIPAPP-MICRONEGOCIOS y SIPAPP-HUAQUIAN. Sigue **pendiente** en
+las ramas `ventas/produccion/contabilidadoficial` y `modulo-venta/informes/comprabasico`.
 
 **Tarea "saldos de tesorería": en `main` y con push (2026-10-02)**, `feature/movimientos-manuales` (Backend y Frontend),
 E2E en navegador OK (8 escenarios: saldo inicial PEN/USD, tarjetas, aporte, egreso de caja sin saldo → 409, gasto
