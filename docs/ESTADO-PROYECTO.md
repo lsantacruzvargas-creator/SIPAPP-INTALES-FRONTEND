@@ -74,7 +74,8 @@ El tope de apiperu y el candado de emisión de NC viven **en memoria**: asumen u
 | Motor contable C1 (plan de cuentas PCGE + importación desde Excel, periodos, asientos manuales, pantalla Contabilidad) | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/contabilidad/HANDOFF-contabilidad.md` |
 | Bancos B7: movimientos sin documento, transferencias propias, saldo inicial y libro por cuenta, conciliación bancaria mensual | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/superpowers/specs/2026-10-02-bancos-b7-design.md` |
 | Caja chica: fondo fijo, gastos (boleta, ticket, factura sin crédito, RH, movilidad, vale), rendición y reposición, arqueo | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/superpowers/specs/2026-10-02-caja-chica-design.md` |
-| Motor contable C2–C5 | Diseñado; C2 espera las respuestas del contador | `docs/contabilidad/2026-10-01-preguntas-contador-C2.md` |
+| Motor contable C2: asientos automáticos (compras, ventas, Tesorería) y exportación a **CONCAR** (PCGE 2019) | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/superpowers/specs/2026-10-02-c2-asientos-concar-design.md` |
+| Motor contable C3–C5 | Diseñado | `docs/contabilidad/2026-10-01-referencias-erp-C2-C5.md` |
 
 Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide): `bloqueo-edicion`,
 `comprobantes-compra`, `ajustes-tributarios`, `ventas-usd-tributario`, `seguridad-auditoria`, `ligar-cpe-factura`.
@@ -83,7 +84,8 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 **Tributario / contable**
 - **INTALES no será la contabilidad oficial** (2026-10-01): genera los asientos y los **exporta al software del
-  contador** (CONCAR/StarSoft, plantilla por confirmar). La fase C4 pasa de "exportación PLE" a "exportación al
+  contador**. Software: **CONCAR** con **PCGE 2019** (decisión 2026-10-02; formato de importación de 41 columnas
+  portado de contaperu). La fase C4 pasa de "exportación PLE" a "exportación al
   software del contador"; el plan de cuentas se importa del contador para que los códigos coincidan.
 - Retención de 4ta: se declara en el **mes de pago** del recibo (el resumen la prorratea por neto pagado).
 - Retención IGV 3 %: solo comprobantes con crédito fiscal; **no aplica a recibos de servicios públicos (14)** ni a sus notas.
@@ -125,11 +127,12 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 - Preguntas del documento `docs/contabilidad/2026-10-01-casos-prueba-contables.md` (sección final): costeo de OT y
   CIF, cuentas de NC de compra (60x vs 7311) y de venta (7411 vs 7032x), cuenta BN (1042 vs 107), 4ta al provisionar o
   al pagar, boletas en el Registro de Compras, coeficiente de renta, vigencia del D. Leg. 1669.
-- **Todo lo necesario para C2** está reunido en `docs/contabilidad/2026-10-01-preguntas-contador-C2.md` (software y
-  plantilla de importación, plan de cuentas, cuentas por operación, criterios tributarios).
+- C2 está hecha con defaults; queda **validar con el contador** (`docs/contabilidad/2026-10-01-preguntas-contador-C2.md`):
+  subdiario de caja-bancos (21 por defecto), flag `N` en caja-bancos US$ (primera importación real), divisionarias a
+  6 dígitos, maestro de anexos en CONCAR (RUC), destinos 9x/79 (apagados), cuenta de detracción BN (1042/107).
 
 **Brechas contables aún abiertas** (de `casos-prueba-contables.md` §4; B1–B5, B9 y B7 ya resueltas, B7 en la rama): B6
-cuenta de gasto por comprobante de compra; B10 periodo de anotación y
+cuenta de gasto por comprobante de compra (en la rama: cuenta por comprobante asignable desde pendientes); B10 periodo de anotación y
 crédito diferido (1673); B11–B13 costo de OT por devengo, salidas de almacén y IGV sin crédito al costo; B14 bases no
 gravadas/exoneradas; B15 retención 3 % al pagar y CRE/PDT 626; B16 detracción solo para servicios; B17 fecha de
 aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.

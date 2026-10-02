@@ -1,4 +1,4 @@
-# Traspaso — motor contable (actualizado 2026-10-01, noche)
+# Traspaso — motor contable (actualizado 2026-10-02)
 
 > Contexto general del proyecto, decisiones del usuario y comandos: **`docs/ESTADO-PROYECTO.md`**.
 
@@ -27,9 +27,11 @@ El plan de cuentas debe ser el del contador (se importa desde Excel).
     Playwright: subcuenta, asiento S/ y US$, descuadre bloqueado, anulación, tesorero/jefatura sin botones,
     facturación sin acceso, importación de Excel.
   - Registro y decisiones: `docs/superpowers/sdd/2026-10-01-contabilidad-c1/progress.md`.
-- **C2 bloqueada por respuestas del contador**: `docs/contabilidad/2026-10-01-preguntas-contador-C2.md`
-  (software y plantilla, plan de cuentas, anexos, subdiarios, destinos, cuenta por tipo de compra — brecha B6 —,
-  costeo de OT, NC, bancos, criterios tributarios).
+- **C2 implementada** (CONCAR + PCGE 2019, decisión del usuario 2026-10-02): spec
+  `docs/superpowers/specs/2026-10-02-c2-asientos-concar-design.md`, ledger `docs/superpowers/sdd/2026-10-02-c2-concar/progress.md`.
+  Backend `src/utils/asientosAutomaticos.js`, `src/utils/concar.js`, rutas `/api/contabilidad/{automaticos,
+  configuracion,exportaciones}`; frontend pestañas Automáticos, Exportar CONCAR y Configuración. Las respuestas
+  del contador (`2026-10-01-preguntas-contador-C2.md`) ahora solo ajustan la configuración.
 - Documentos previos: investigación (`2026-10-01-investigacion-libros-electronicos.md`), diseño
   (`2026-10-01-motor-contable-design.md`, con el cambio de alcance arriba), spec C1, guía contable y casos de prueba
   (23 casos, brechas B1–B25; B1–B5 y B9 resueltas en `main`; B8 resuelta: exportar).
@@ -45,11 +47,11 @@ El plan de cuentas debe ser el del contador (se importa desde Excel).
 
 ## Siguiente paso
 
-1. El usuario envía `2026-10-01-preguntas-contador-C2.md` al contador y trae: plantilla de importación de ejemplo,
-   plan de cuentas en Excel, códigos de anexos/subdiarios/centros de costo y las respuestas.
-2. Con eso: spec de C2 siguiendo `2026-10-01-referencias-erp-C2-C5.md` (`ConfiguracionContable` con las cuentas del contador, cuenta por tipo de artículo y por
-   comprobante, asientos automáticos en borrador, bandeja de revisión) y rediseño de C4 como exportación a su plantilla. B7 ya está hecha; C5 en suspenso.
-3. Pendiente menor de C1 para C4: correlativo de línea (B19) si la plantilla del contador lo pide.
+1. Primera importación real en CONCAR con el contador: validar subdiarios, flag `N` de caja-bancos en US$, anexos
+   (RUC en su maestro), centros de costo y siglas. Ajustar en Contabilidad → Configuración.
+2. Importar su plan de cuentas (6 dígitos) y reemplazar las cuentas de la configuración por sus divisionarias.
+3. Fuera de C2 (siguientes): cuenta por tipo de artículo, destinos 9x/79 si CONCAR no los genera, costo de ventas,
+   anticipos, retención 3 % con CRE, exportar asientos manuales, maestro de anexos; C3 (cierre de mes) y StarSoft.
 
 ## Convenciones
 

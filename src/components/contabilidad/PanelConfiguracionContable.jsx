@@ -13,7 +13,7 @@ const CUENTAS = [
   ["ventasProductos", "Ventas de productos fabricados"], ["ventasMercaderias", "Ventas de mercaderías"],
   ["comprasDefecto", "Compras por defecto (vacía: cada comprobante con su cuenta)"],
 ];
-const SUBDIARIOS = [["compras", "Compras"], ["comprasDetraccion", "Compras con detracción"], ["boletas", "Boletas de compra"], ["honorarios", "Honorarios"], ["ventas", "Ventas"], ["cajaBancos", "Caja y bancos"]];
+const SUBDIARIOS = [["compras", "Compras"], ["comprasDetraccion", "Compras con detracción"], ["boletas", "Boletas de compra"], ["honorarios", "Honorarios"], ["ventas", "Ventas"], ["cajaBancos", "Caja y bancos"], ["diario", "Diario (manuales)"]];
 const TIPOS = { "01": "Factura", "02": "Recibo por honorarios", "03": "Boleta", "07": "Nota de crédito", "08": "Nota de débito", "12": "Ticket", "14": "Servicios públicos" };
 
 // Configuración contable (C2): cuentas por rol, subdiarios y datos de CONCAR, cuentas de bancos y centros de costo.
@@ -24,11 +24,13 @@ export default function PanelConfiguracionContable({ cuentas, puedeEscribir }) {
   const [procesando, setProcesando] = useState(false);
   const [aviso, setAviso] = useState("");
 
-  const cargar = useCallback(async () => {
+  // `soloListas`: tras guardar una cuenta de banco o un centro no se pisa lo que se está editando en el formulario.
+  const cargar = useCallback(async (soloListas = false) => {
     try {
       const r = await fetchAuth("/contabilidad/configuracion");
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.mensaje || "No se pudo cargar la configuración.");
+      if (soloListas === true) return setDatos((x) => ({ ...d, config: x?.config || d.config }));
       setDatos(d);
       setForm(d.config);
       setCodigosDet(Object.entries(d.config.detraccion?.codigos || {}).map(([k, v]) => `${k}=${v}`).join(", "));
@@ -74,7 +76,7 @@ export default function PanelConfiguracionContable({ cuentas, puedeEscribir }) {
       const r = await fetchAuth(`/contabilidad/configuracion/${ruta}/${id}`, { method: "PUT", body: JSON.stringify(cuerpo) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) return setAviso(d.mensaje || "No se pudo guardar.");
-      cargar();
+      cargar(true);
     } catch {
       setAviso("Error de conexión con el servidor.");
     }

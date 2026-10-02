@@ -34,14 +34,13 @@ export default function PanelAutomaticos({ cuentas, puedeGenerar, puedeEscribir 
   const cargar = useCallback(async () => {
     if (!/^\d{6}$/.test(periodo)) return;
     try {
-      const [p, b, c] = await Promise.all([
+      const [p, e] = await Promise.all([
         fetchAuth(`/contabilidad/automaticos/pendientes?periodo=${periodo}`).then((r) => leer(r, "No se pudieron revisar los pendientes.")),
-        fetchAuth(`/contabilidad/asientos?periodo=${periodo}&estado=borrador`).then((r) => leer(r, "No se pudieron cargar los borradores.")),
-        fetchAuth(`/contabilidad/asientos?periodo=${periodo}&estado=contabilizado`).then((r) => leer(r, "No se pudieron cargar los asientos.")),
+        fetchAuth(`/contabilidad/automaticos/estado?periodo=${periodo}`).then((r) => leer(r, "No se pudieron cargar los borradores.")),
       ]);
       setPendientes(p);
-      setBorradores(b.asientos);
-      setObservados(c.asientos.filter((a) => a.origenCambiado || a.origenAnulado));
+      setBorradores(e.borradores);
+      setObservados(e.observados);
       setElegidos(new Set());
     } catch (e) {
       setAviso(e.message || "Error de conexión con el servidor.");
@@ -51,24 +50,26 @@ export default function PanelAutomaticos({ cuentas, puedeGenerar, puedeEscribir 
 
   const accion = async (fn) => {
     setProcesando(true);
-    try { await fn(); } catch (e) { setAviso(e.message || "Error de conexión con el servidor."); } finally { setProcesando(false); }
+    try { await fn(); } catch (e) { setAviso(e.message || "Error de conexión con el servidor."); } finally { setProcesando(false); cargar(); }
   };
   const generar = () => accion(async () => {
     const d = await leer(await fetchAuth("/contabilidad/automaticos/generar", { method: "POST", body: JSON.stringify({ periodo }) }), "No se pudieron generar los asientos.");
     setResultado(d);
-    await cargar();
   });
-  const contabilizar = () => accion(async () => {
-    const d = await leer(await fetchAuth("/contabilidad/automaticos/contabilizar", { method: "POST", body: JSON.stringify({ ids: [...elegidos] }) }), "No se pudo contabilizar.");
-    setAviso(`${d.contabilizados} asiento(s) contabilizados.`);
-    await cargar();
+  // Por selección o todo el mes; los que no se pueden contabilizar se informan y los demás siguen.
+  const contabilizar = (todoElMes) => accion(async () => {
+    const cuerpo = todoElMes ? { periodo } : { ids: [...elegidos] };
+    const d = await leer(await fetchAuth("/contabilidad/automaticos/contabilizar", { method: "POST", body: JSON.stringify(cuerpo) }), "No se pudo contabilizar.");
+    setAviso(`${d.contabilizados} asiento(s) contabilizados.${d.errores?.length ? ` No se contabilizaron ${d.errores.length}: ${d.errores.slice(0, 5).join(" · ")}${d.errores.length > 5 ? " …" : ""}` : ""}`);
+  });
+  const resolver = (a) => accion(async () => {
+    await leer(await fetchAuth(`/contabilidad/automaticos/${a._id}/resolver`, { method: "POST" }), "No se pudo resolver.");
   });
   const asignar = (p) => accion(async () => {
     await leer(await fetchAuth("/contabilidad/automaticos/asignar-cuenta", {
       method: "POST", body: JSON.stringify({ tipo: p.origen.tipo, id: p.origen.id, cuenta: cuentaDe[p.origen.id] }),
     }), "No se pudo asignar la cuenta.");
     setCuentaDe((c) => ({ ...c, [p.origen.id]: undefined }));
-    await cargar();
   });
 
   const alternar = (id) => setElegidos((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -133,9 +134,18 @@ export default function PanelAutomaticos({ cuentas, puedeGenerar, puedeEscribir 
       {observados.length > 0 && (
         <section className="space-y-1">
           <h3 className="text-sm font-semibold text-red-700">Contabilizados cuyo documento cambió o se anuló ({observados.length})</h3>
-          <p className="text-xs text-gray-500">Anúlalos en la pestaña Asientos y vuelve a generar el mes (si ya se exportaron, corrige con un asiento de ajuste).</p>
+          <p className="text-xs text-gray-500">
+            Si no se exportó: anúlalo en la pestaña Asientos y vuelve a generar el mes. Si ya se exportó: registra un
+            asiento manual de ajuste (también se exporta) y dalo por resuelto.
+          </p>
           <ul className="text-sm text-gray-700 list-disc pl-5">
-            {observados.map((a) => <li key={a._id}><span className="font-mono text-xs">{a.cuo}</span> {a.glosa} — {a.origenAnulado ? "documento anulado" : "documento cambiado"}</li>)}
+            {observados.map((a) => (
+              <li key={a._id}>
+                <span className="font-mono text-xs">{a.cuo}</span> {a.glosa} — {a.origenAnulado ? "documento anulado" : "documento cambiado"}
+                {a.exportacion?.lote && <span className="text-xs text-green-700"> · exportado {a.exportacion.numero}</span>}
+                {puedeEscribir && <button onClick={() => resolver(a)} disabled={procesando} className="ml-2 text-xs text-purple-600 hover:underline">Dar por resuelto</button>}
+              </li>
+            ))}
           </ul>
         </section>
       )}
@@ -145,7 +155,13 @@ export default function PanelAutomaticos({ cuentas, puedeGenerar, puedeEscribir 
           <h3 className="text-sm font-semibold text-gray-700">Borradores del mes ({borradores.length})</h3>
           <div className="flex-1" />
           {puedeGenerar && (
-            <button onClick={contabilizar} disabled={procesando || !elegidos.size}
+            <button onClick={() => contabilizar(true)} disabled={procesando || !borradores.length}
+              className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-40">
+              Contabilizar todo el mes
+            </button>
+          )}
+          {puedeGenerar && (
+            <button onClick={() => contabilizar(false)} disabled={procesando || !elegidos.size}
               className="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-700 disabled:opacity-40">
               Contabilizar seleccionados ({elegidos.size})
             </button>

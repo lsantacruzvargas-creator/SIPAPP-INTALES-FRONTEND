@@ -7,7 +7,7 @@ import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
-const NOMBRES = { compras: "Compras", comprasDetraccion: "Compras con detracción", boletas: "Boletas", honorarios: "Honorarios", ventas: "Ventas", cajaBancos: "Caja y bancos" };
+const NOMBRES = { compras: "Compras", comprasDetraccion: "Compras con detracción", boletas: "Boletas", honorarios: "Honorarios", ventas: "Ventas", cajaBancos: "Caja y bancos", diario: "Diario" };
 
 async function descargar(lote) {
   const blob = new Blob([await libroConcar(lote)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -52,9 +52,10 @@ export default function PanelExportarConcar({ puedeEscribir }) {
       const r = await fetchAuth("/contabilidad/exportaciones", { method: "POST", body: JSON.stringify({ periodo, soloNuevos, numerosIniciales: iniciales }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) return setAviso(d.mensaje || "No se pudo exportar.");
-      await descargar(d);
       setIniciales({});
       cargar();
+      // La exportación ya quedó registrada: si falla solo la descarga, se baja desde la lista.
+      await descargar(d).catch(() => setAviso(`La exportación ${d.codigo} se registró, pero no se pudo armar el Excel: descárgala desde la lista.`));
     } catch {
       setAviso("Error de conexión con el servidor.");
     } finally {
@@ -77,7 +78,8 @@ export default function PanelExportarConcar({ puedeEscribir }) {
     <div className="space-y-5">
       <p className="text-sm text-gray-500">
         Excel de importación de CONCAR (41 columnas, hoja CONCAR) con los asientos automáticos <b>contabilizados</b> del
-        mes. Un asiento exportado ya no se anula: se corrige con un asiento de ajuste. El número de comprobante (mes +
+        mes, automáticos y manuales (estos en el subdiario de diario). Un asiento exportado ya no se anula: se corrige con
+        un asiento de ajuste. El número de comprobante (mes +
         correlativo) se pone por subdiario al exportar.
       </p>
       {puedeEscribir && (
