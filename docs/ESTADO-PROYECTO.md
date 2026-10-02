@@ -126,6 +126,11 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 **⚠ Mencionar al usuario al abrir el proyecto: las "Decisiones por confirmar" de abajo.**
 
+**Resuelto (2026-10-02) — SUNAT 3270 con descuento de línea:** `cac:AlternativeConditionPrice` (precio unitario con IGV)
+ahora es (valor de venta + IGV) / cantidad, ya descontado (`src/builders/factura.builder.js`, prueba
+`test/precioUnitarioDescuento.test.js`). Mismo arreglo en SIPAPP-MICRONEGOCIOS y SIPAPP-HUAQUIAN. Sigue **pendiente** en
+las ramas `ventas/produccion/contabilidadoficial` y `modulo-venta/informes/comprabasico`.
+
 **Tarea "saldos de tesorería": en `main` y con push (2026-10-02)**, `feature/movimientos-manuales` (Backend y Frontend),
 E2E en navegador OK (8 escenarios: saldo inicial PEN/USD, tarjetas, aporte, egreso de caja sin saldo → 409, gasto
 bancario con sobregiro confirmado, transferencia solo misma moneda, pago y "Ya se pagó" con sobregiro, anular un
