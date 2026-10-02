@@ -12,6 +12,6 @@ pendientes, comandos de tests/E2E y flujo de trabajo. El motor contable tiene su
 
 ## Aviso al abrir el proyecto
 
-Al empezar una sesión, recuérdale al usuario en una línea lo pendiente de `docs/ESTADO-PROYECTO.md` §5: la tarea
-**saldos de tesorería** (saldo inicial, ingreso/egreso manual, saldo insuficiente — aprobada, sin código, con las
-lecciones de Micronegocios anotadas ahí) y las ramas `feature/*` que esperan su OK para mergear.
+Al empezar una sesión, recuérdale al usuario en una línea lo pendiente de `docs/ESTADO-PROYECTO.md` §5: las
+**decisiones por confirmar** de la tarea de saldos de tesorería (ya en `main`), los menores diferidos y las ramas que
+esperan su OK para mergear o hacer push.

@@ -113,9 +113,12 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 ## 5. Pendientes
 
-**⚠ Mencionar al usuario al abrir el proyecto — tarea "saldos de tesorería": implementada en
-`feature/movimientos-manuales` (Backend y Frontend, 2026-10-02), sin mergear; falta la prueba E2E en navegador y su OK.**
-Plan y ledger: `docs/superpowers/plans/2026-10-02-intales-saldos-tesoreria.md` y
+**⚠ Mencionar al usuario al abrir el proyecto: las "Decisiones por confirmar" de abajo.**
+
+**Tarea "saldos de tesorería": en `main` y con push (2026-10-02)**, `feature/movimientos-manuales` (Backend y Frontend),
+E2E en navegador OK (8 escenarios: saldo inicial PEN/USD, tarjetas, aporte, egreso de caja sin saldo → 409, gasto
+bancario con sobregiro confirmado, transferencia solo misma moneda, pago y "Ya se pagó" con sobregiro, anular un
+ingreso ya gastado → 409, selectores con saldo, dif. de cambio con saldo inicial USD, contador sin botones). Plan y ledger: `docs/superpowers/plans/2026-10-02-intales-saldos-tesoreria.md` y
 `docs/superpowers/sdd/2026-10-02-intales-saldos-tesoreria-progress.md`. Incluye:
 - Saldo inicial por cuenta (monto, fecha y TC compra SUNAT si es USD; editable solo sin movimientos, jefatura/admin) y
   saldo calculado por agregación (`utils/saldosCuentas.js`), visible en Movimientos, Configuración y en los selectores
@@ -128,11 +131,25 @@ Plan y ledger: `docs/superpowers/plans/2026-10-02-intales-saldos-tesoreria.md` y
   va en la raíz del body). Mide el **mínimo del saldo acumulado** desde la fecha; el saldo inicial no cuenta antes de su
   fecha. La diferencia de cambio al cierre suma el saldo inicial con su TC.
 
-**Mergeada en `main` local, pendiente de push:** `feature/revision-compras` (Backend y Frontend, merge del 2026-10-02)
-— correcciones de compras traídas de la revisión de Micronegocios (línea de SC condicionada, anular OC libera solo sus
-líneas, fecha de entrega real, retención de 4ta > S/ 1,500, notas simultáneas sobre el mismo origen), receptor validado
-y boleta a clientes varios en CPE, SIRE más robusto. Suite verde sobre el merge; el push a `origin/main` espera el OK
-del usuario.
+**En `main` y con push (2026-10-02):** `feature/revision-compras` (Backend y Frontend) — correcciones de compras
+traídas de la revisión de Micronegocios (línea de SC condicionada, anular OC libera solo sus líneas, fecha de entrega
+real, retención de 4ta > S/ 1,500, notas simultáneas sobre el mismo origen), receptor validado y boleta a clientes
+varios en CPE (tipo y número `-`, aceptada en SUNAT demo), detracción 004/026/027 → 400 (también fuera del selector),
+SIRE más robusto.
+
+**Rama `ventas/produccion/contabilidadoficial`** (worktree `SIPAPP-INTALES-venta-produccion-contaoficial`): ya tiene los
+arreglos de `feature/revision-compras` y el del selector de detracción (especificación en su
+`docs/PORT-fixes-revision-compras.md`). **Los saldos de tesorería NO se portaron**: esa rama se sigue avanzando y se
+mergeará con `main`, que ya los trae.
+
+**Decisiones por confirmar con el usuario** (tomadas al implementar los saldos; el usuario pidió dejarlas anotadas):
+1. El saldo inicial lo editan jefatura y admin (como el resto de Configuración); el tesorero no.
+2. Se agregaron transferencias entre cuentas propias de la misma moneda (el diseño no las pedía).
+3. Manuales en USD: el ingreso usa el TC de cobros (compra por defecto), el egreso el de pagos (venta) y la
+   transferencia el de compra.
+4. Se permiten movimientos manuales con la cuenta de detracciones (pagar impuestos con fondos BN, liberación de fondos).
+5. El contador y facturación todavía pueden anular pagos y cobros **con documento** (como antes); solo los manuales
+   quedaron restringidos.
 
 **Por confirmar con el contador** (no implementar sin respuesta):
 - Si el RCE del SIRE trae los montos de comprobantes en US$ en dólares o en soles (probar con un archivo real).
@@ -162,6 +179,20 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
   sin filtrar ambiente; el ajuste de cierre no se guarda; NC 01 desde la UI no precarga otros cargos/redondeo;
   `ModalCrearFactura` no envía detracción al CPE.
 - Bloqueo de edición y compras: ver la sección "Estado" de sus specs.
+- Saldos de tesorería (revisión final y E2E, 2026-10-02):
+  - Un manual con fecha futura se acepta y ya suma al saldo mostrado.
+  - Egreso con fecha anterior al saldo inicial: se compara contra 0 (regla aprobada) pero el mensaje no lo explica.
+  - Dos constantes `CONCEPTOS_MANUALES` distintas (la del modelo incluye "transferencia"); renombrar la de utils.
+  - `leerSaldoInicial` toma `""` como 0 y `true` como 1.
+  - `GET /cuentas-tesoreria` hace una agregación y un `exists` por cuenta (aceptable con pocas cuentas).
+  - El diálogo manual deja combinar Ingreso con "Retiro" o "Gasto bancario" (y Egreso con "Aporte"): filtrar
+    conceptos por tipo.
+  - Al anular un ingreso ya gastado el mensaje dice "disponible S/ -450.00, falta S/ 450.00": decir "anularlo dejaría
+    la cuenta en −S/ 450.00".
+  - Las tarjetas muestran el negativo como "S/ -380.20" (en otros lugares "−S/ 380.20").
+  - En la base E2E, la tarjeta de BCP Dólares (US$ 2,217.82) y el cierre de dif. de cambio (US$ 2,276.82) difieren en
+    el egreso MOV-0007 de S/ 59 (un comprobante en soles pagado desde la cuenta en dólares): revisar si un pago en otra
+    moneda debe bloquearse o convertirse.
 
 ## 6. Índice de documentos
 
