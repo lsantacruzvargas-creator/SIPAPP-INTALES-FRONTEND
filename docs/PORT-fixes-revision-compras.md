@@ -188,9 +188,17 @@ No hay funcionalidades nuevas en esa rama: todo lo que no se porta es documentac
 
 ## 4. Pendiente detectado (no está en el origen, no se porta)
 
-- El selector de detracción del frontend (`DETRACCION_BIENES_SERVICIOS` en `src/utils/catalogosSunat.js`) todavía
-  ofrece 004/026/027; el backend ahora responde 400 para ellos. El skill `sunat-cpe-ubl21` §16 recomienda quitarlos del
-  selector. Igual en INTALES `main`.
+- ~~El selector de detracción del frontend (`DETRACCION_BIENES_SERVICIOS` en `src/utils/catalogosSunat.js`) todavía
+  ofrece 004/026/027~~ — **resuelto (2026-10-02):** INTALES `main` lo corrigió (`DETRACCION_VENTA_CPE`, commit de origen
+  `61b7b8d9`) y se trajo a esta rama con cherry-pick.
+
+### Saldos de tesorería: NO se portan aquí, llegan por merge
+
+La tarea "saldos de tesorería" (saldo inicial por cuenta, saldo calculado, ingreso/egreso manual, transferencias
+entre cuentas y regla de saldo insuficiente) se implementó en `feature/movimientos-manuales` y ya está en `main` de
+INTALES (2026-10-02). Esta rama se sigue avanzando por separado y **se mergeará con `main`**: en ese merge entran los
+saldos completos. No portar commits sueltos de saldos a esta rama. Detalle, decisiones por confirmar y menores en
+`docs/ESTADO-PROYECTO.md` §5 de `main`.
 
 ## 5. Verificación
 

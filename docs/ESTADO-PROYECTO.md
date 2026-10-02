@@ -113,6 +113,10 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 ## 5. Pendientes
 
+**Rama `ventas/produccion/contabilidadoficial` (2026-10-02):** tiene los arreglos de `feature/revision-compras` de
+INTALES (ver `docs/PORT-fixes-revision-compras.md`). **Los saldos de tesorería (saldo inicial, movimientos manuales,
+saldo insuficiente) están en `main` y llegarán con el merge de `main` a esta rama**; no se portaron por separado.
+
 **Por confirmar con el contador** (no implementar sin respuesta):
 - Si el RCE del SIRE trae los montos de comprobantes en US$ en dólares o en soles (probar con un archivo real).
 - TC compra/venta en cobros y pagos en dólares.
