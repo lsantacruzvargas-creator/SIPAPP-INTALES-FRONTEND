@@ -123,9 +123,11 @@ bloquean; banco pide confirmar sobregiro). Al implementarla, aplicar desde el in
 - La diferencia de cambio al cierre (`utils/diferenciaCambioCierre.js`) debe sumar el saldo inicial con su TC.
 - Rama sugerida `feature/movimientos-manuales` en ambos repos; merge solo con OK del usuario.
 
-**Rama sin mergear:** `feature/revision-compras` (Backend y Frontend, 2026-10-02) — correcciones de compras traídas de
-la revisión de Micronegocios (línea de SC condicionada, anular OC libera solo sus líneas, fecha de entrega real,
-retención de 4ta > S/ 1,500, notas simultáneas sobre el mismo origen). Suite verde; espera el OK del usuario.
+**Mergeada en `main` local, pendiente de push:** `feature/revision-compras` (Backend y Frontend, merge del 2026-10-02)
+— correcciones de compras traídas de la revisión de Micronegocios (línea de SC condicionada, anular OC libera solo sus
+líneas, fecha de entrega real, retención de 4ta > S/ 1,500, notas simultáneas sobre el mismo origen), receptor validado
+y boleta a clientes varios en CPE, SIRE más robusto. Suite verde sobre el merge; el push a `origin/main` espera el OK
+del usuario.
 
 **Por confirmar con el contador** (no implementar sin respuesta):
 - Si el RCE del SIRE trae los montos de comprobantes en US$ en dólares o en soles (probar con un archivo real).
