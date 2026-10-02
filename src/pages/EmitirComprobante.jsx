@@ -12,7 +12,7 @@ import {
   MOTIVO_NC,
   MOTIVO_ND,
   TIPO_MONEDA,
-  DETRACCION_BIENES_SERVICIOS,
+  DETRACCION_VENTA_CPE,
   normalizarCuentaDetraccion,
   cuentaDetraccionValida,
   itemVacioComprobante,
@@ -919,12 +919,12 @@ export default function EmitirComprobante() {
                         onChange={(e) => {
                           const cod = e.target.value;
                           setDetraccionCodigoBien(cod);
-                          const b = DETRACCION_BIENES_SERVICIOS.find((x) => x.codigo === cod);
+                          const b = DETRACCION_VENTA_CPE.find((x) => x.codigo === cod);
                           if (b?.porcentaje != null) setDetraccionPorcentaje(String(b.porcentaje));
                         }}
                         className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500">
                         <option value="">— Seleccionar —</option>
-                        {DETRACCION_BIENES_SERVICIOS.map((b) => (
+                        {DETRACCION_VENTA_CPE.map((b) => (
                           <option key={b.codigo} value={b.codigo}>{b.codigo} — {b.descripcion}</option>
                         ))}
                       </select>
