@@ -281,6 +281,10 @@ export const DETRACCION_BIENES_SERVICIOS = [
   { codigo: "041", descripcion: "Plomo", porcentaje: 15 },
 ];
 
+// Para emitir el CPE: 004, 026 y 027 van con tipo de operación 1002/1003/1004 y datos (embarcación, ruta, vehículo)
+// que la factura aún no arma; el backend los rechaza. En compras sí se registran.
+export const DETRACCION_VENTA_CPE = DETRACCION_BIENES_SERVICIOS.filter((b) => !["004", "026", "027"].includes(b.codigo));
+
 export function calcularLineaComprobante(item) {
   const cantidad  = Number(item.cantidad) || 0;
   const valorUnit = Number(item.valorUnitario) || 0;
