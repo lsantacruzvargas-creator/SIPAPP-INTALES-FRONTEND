@@ -121,7 +121,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   // Recibo por honorarios: solo la retención de 4ta, y solo si se marca (decisión del usuario: manual).
   const esRH = form.tipoComprobante === "02";
   const imp = esNC ? { tipo: "ninguno", codigoSunat: "" } : esRH
-    ? { tipo: form.retener4ta ? "retencion4ta" : "ninguno", codigoSunat: "" }
+    ? { tipo: form.retener4ta && total * tipoCambio > 1500 ? "retencion4ta" : "ninguno", codigoSunat: "" }
     : form.impuestoManual ? { tipo: form.impuestoTipo, codigoSunat: form.codigoSunat } : sugerido;
   const puedeYaPagado = form.condicion === "contado" && !esNC;
   const previaNota = esNC && origen ? vistaPreviaNota({ totalNota: total, saldoOrigen: origen.saldoNeto }) : null;
@@ -295,11 +295,13 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
         </div>
 
         <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-3">
-          {esRH && (
+          {esRH && (total * tipoCambio > 1500 ? (
             <label className="text-xs text-gray-600 flex items-center gap-1.5">
               <input type="checkbox" checked={form.retener4ta} onChange={set("retener4ta")} />Retener 4ta categoría (8 %)
             </label>
-          )}
+          ) : (
+            <p className="text-xs text-gray-500">La retención de 4ta (8 %) solo va en recibos mayores a S/ 1,500.</p>
+          ))}
           <div className={`grid grid-cols-3 gap-3 ${esRH || esNC ? "hidden" : ""}`}>
             <label className="text-xs text-gray-500">Impuesto
               <select value={imp.tipo} onChange={elegirImpuesto("impuestoTipo")} className={INP}>
