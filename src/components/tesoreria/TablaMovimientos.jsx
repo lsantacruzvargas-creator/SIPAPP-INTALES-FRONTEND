@@ -8,6 +8,8 @@ import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../
 import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
 import ModalMovimientoManual from "./ModalMovimientoManual";
+import { enviarConSobregiro } from "../../utils/sobregiro";
+import useConfirmar from "../../hooks/useConfirmar";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
 const fecha = (d) => formatearFecha(d, { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -22,6 +24,7 @@ export default function TablaMovimientos() {
   const [error, setError] = useState("");
   const [cuentas, setCuentas] = useState([]);
   const [modal, setModal] = useState(null);
+  const { confirmar, dialogo } = useConfirmar("Sí, anular");
   const puedeManual = puedeMovimientoManual(rolDeSesion());
 
   const cargar = useCallback(() => Promise.all([fetchAuth("/movimientos-tesoreria"), fetchAuth("/cuentas-tesoreria")]).then(async ([rm, rc]) => {
@@ -41,18 +44,20 @@ export default function TablaMovimientos() {
   const subIngresos = sumarPorMoneda(vigentes.filter((m) => m.tipo === "ingreso"), (m) => m.monto, (m) => m.moneda);
   const subEgresos = sumarPorMoneda(vigentes.filter((m) => m.tipo === "egreso"), (m) => m.monto, (m) => m.moneda);
 
+  // Anular un ingreso ya gastado deja un banco en negativo: el servidor pide confirmar el sobregiro.
   const anular = async (motivo) => {
+    const mov = anulando;
+    setAnulando(null);
     setProcesando(true);
     setError("");
     try {
-      const r = await fetchAuth(`/movimientos-tesoreria/${anulando._id}/anular`, { method: "PATCH", body: JSON.stringify({ motivo }) });
+      const r = await enviarConSobregiro((b) => fetchAuth(`/movimientos-tesoreria/${mov._id}/anular`, { method: "PATCH", body: JSON.stringify(b) }), { motivo }, confirmar);
       if (r.ok) await cargar();
       else setError((await r.json().catch(() => ({}))).mensaje || "No se pudo anular el movimiento.");
     } catch {
       setError("Error de conexión con el servidor, intenta de nuevo.");
     } finally {
       setProcesando(false);
-      setAnulando(null);
     }
   };
 
@@ -153,6 +158,7 @@ export default function TablaMovimientos() {
         <ModalMovimientoManual modo={modal} cuentas={cuentas} onClose={() => setModal(null)}
           onGuardado={() => { setModal(null); cargar(); }} />
       )}
+      {dialogo}
     </div>
   );
 }
