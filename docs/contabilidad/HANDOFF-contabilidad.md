@@ -38,6 +38,8 @@ El plan de cuentas debe ser el del contador (se importa desde Excel).
   `docs/superpowers/specs/2026-10-02-bancos-b7-design.md`. Los tipos de movimiento tienen `cuentaContable` (vacía
   hasta que el contador responda B18) y cada movimiento libre puede llevar la suya: C2 las usará para el subdiario
   de caja-bancos.
+- **Caja chica implementada** (`docs/superpowers/specs/2026-10-02-caja-chica-design.md`): cada gasto lleva cuenta
+  contable opcional; C2 la usará (cuenta de fondos fijos 102 y gasto 6x según el contador).
 - **Referencias de otros ERP** (ERP C# dominicano, FacturaScripts, prototipo Java): diseño adoptado para C2, B7 y el
   re-dimensionamiento de C3–C5 en `2026-10-01-referencias-erp-C2-C5.md`.
 

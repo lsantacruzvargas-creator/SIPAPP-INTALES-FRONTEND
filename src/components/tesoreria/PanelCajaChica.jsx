@@ -31,7 +31,8 @@ export default function PanelCajaChica({ centrosCosto }) {
     if (!r.ok) return;
     const lista = await r.json();
     setCajas(lista);
-    setSel((s) => s || lista[0]?._id || "");
+    // Si la caja elegida dejó de ser caja chica, se pasa a la primera.
+    setSel((s) => (lista.some((c) => c._id === s) ? s : lista[0]?._id || ""));
   }).catch(() => setError("Error de conexión con el servidor.")), []);
   useEffect(() => {
     cargarCajas();
@@ -95,6 +96,7 @@ export default function PanelCajaChica({ centrosCosto }) {
   };
 
   if (!cajas.length) {
+    if (error) return <p className="text-sm text-red-600">{error}</p>;
     return <p className="text-sm text-gray-500">No hay cajas chicas. Jefatura o admin la configura en Tesorería → Configuración (una cuenta de tipo caja en soles con responsable y monto del fondo); luego se abre el fondo con una transferencia desde Bancos.</p>;
   }
   return (
@@ -177,7 +179,7 @@ export default function PanelCajaChica({ centrosCosto }) {
                       <td className="px-3 py-2">{g.descripcion}</td>
                       <td className="px-3 py-2">{g.centroCosto?.nombre || "—"}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{money(g.monto)}</td>
-                      <td className="px-3 py-2 text-right">{!g.anulado && <button onClick={() => setModal({ anularGasto: g })} className="text-xs text-red-500 hover:text-red-700">Anular</button>}</td>
+                      <td className="px-3 py-2 text-right">{!g.anulado && !g.movimiento?.rendicion && <button onClick={() => setModal({ anularGasto: g })} className="text-xs text-red-500 hover:text-red-700">Anular</button>}</td>
                     </tr>
                   ))}
                   {!datos.length && <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400">Sin gastos</td></tr>}
@@ -229,7 +231,7 @@ export default function PanelCajaChica({ centrosCosto }) {
       {modal === "gasto" && caja && (
         <ModalGastoCaja caja={caja} centrosCosto={centrosCosto} onClose={() => setModal(null)} onGuardado={() => { setModal(null); refrescar(); }} />
       )}
-      {["rendir", "reponer", "arqueo"].includes(modal) && (
+      {["rendir", "reponer", "arqueo"].includes(modal) && caja && (modal !== "reponer" || res?.rendicionPendiente) && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md space-y-4">
             {modal === "rendir" && (
@@ -287,7 +289,7 @@ export default function PanelCajaChica({ centrosCosto }) {
           </div>
         </div>
       )}
-      {modal === "anularRend" && (
+      {modal === "anularRend" && res?.rendicionPendiente && (
         <PromptAccion titulo={`Anular la rendición ${res.rendicionPendiente.codigo}`} label="Motivo" procesando={procesando}
           textoConfirmar="Anular" onCancelar={() => setModal(null)} onConfirmar={anularRend} />
       )}

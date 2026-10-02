@@ -42,7 +42,8 @@ export default function PanelBancos({ centrosCosto }) {
   const actual = cuentas.find((c) => c._id === sel);
   // Si llegó el libro de otra cuenta (no debería), no se muestra.
   const libroVisible = libro && String(libro.cuenta?._id) === String(sel) ? libro : null;
-  const descripcion = (m) => m.concepto === "libre" ? `${m.tipoMovimiento?.nombre || ""} — ${m.glosa}`
+  const descripcion = (m) => m.concepto === "caja_chica" ? `Gasto de caja chica — ${m.glosa}`
+    : m.concepto === "libre" ? `${m.tipoMovimiento?.nombre || ""} — ${m.glosa}`
     : m.concepto === "transferencia" ? (m.glosa || `${m.cuenta?.nombre} → ${m.cuentaDestino?.nombre}`)
     : `${CONCEPTOS_MOVIMIENTO[m.concepto]} de ${m.documento?.tipo === "facturaVenta" ? "factura de venta" : "comprobante de compra"}`;
 

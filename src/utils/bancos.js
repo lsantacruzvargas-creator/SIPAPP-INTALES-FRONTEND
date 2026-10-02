@@ -39,4 +39,4 @@ export function mesAnteriorLima(hoy = new Date()) {
   return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
 }
 
-export const CONCEPTOS_MOVIMIENTO = { neto: "Neto", impuesto: "Impuesto", libre: "Sin documento", transferencia: "Entre cuentas" };
+export const CONCEPTOS_MOVIMIENTO = { neto: "Neto", impuesto: "Impuesto", libre: "Sin documento", transferencia: "Entre cuentas", caja_chica: "Caja chica" };

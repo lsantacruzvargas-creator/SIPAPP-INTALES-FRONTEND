@@ -42,6 +42,27 @@ tope): jefatura y admin.
 Varias monedas (solo soles), adjuntar la foto del comprobante (se puede agregar luego con el patrón de adjuntos),
 flujo de aprobación por firma, asientos (C2).
 
-## Estado
+## Estado (2026-10-02)
 
-(Se completa al cerrar.)
+Implementado en la rama `claude/affectionate-ride-1ql646` (ambos repos), sin merge a `main`. Backend:
+`src/utils/cajaChica.js`, `src/routes/cajaChica.js` (`/api/caja-chica`), modelos `GastoCajaChica`,
+`RendicionCajaChica` (una pendiente por caja, índice único parcial) y `ArqueoCajaChica`; `CuentaTesoreria.cajaChica`;
+`MovimientoTesoreria.concepto = caja_chica`, `gastoCajaChica`, `rendicion`. Frontend: pestaña **Caja chica** en
+Tesorería y configuración en Configuración. Tests: `test/cajaChica.test.js` (11), `src/utils/cajaChica.test.js` (2);
+Playwright: configurar → abrir fondo → gastos (boleta y movilidad; tope) → rendir → reponer → arqueo con faltante.
+
+Reglas añadidas tras la revisión:
+- Ninguna vía deja la caja chica en negativo: gastos, pagos de comprobantes, movimientos libres, transferencias que
+  salen y anular lo que entró (apertura, reposición, ingresos).
+- Nada se registra con fecha anterior al saldo inicial de su cuenta (todas las cuentas de Tesorería); gastos y
+  cortes de rendición no pueden ser futuros.
+- Se repone solo desde un banco y con fecha no anterior al corte. Anular la transferencia de reposición la devuelve
+  a pendiente, salvo que ya haya otra pendiente.
+- Solo se rinden gastos y comprobantes pagados con la caja; un egreso sin documento (p. ej. faltante de arqueo) no se
+  repone: lo asume el responsable y aparece como descuadre del fondo.
+- El mismo comprobante (RUC, tipo, serie, número) no se registra dos veces, ni como gasto ni frente a Comprobantes
+  de compra.
+- La caja chica se quita solo liquidada (sin rendición pendiente, sin gastos por rendir y con saldo 0); una cuenta
+  desactivada no recibe gastos; el saldo inicial de una caja con gastos o rendiciones no se cambia.
+
+Menores diferidos: adjuntar la foto del comprobante; la OT del gasto no se valida como abierta.

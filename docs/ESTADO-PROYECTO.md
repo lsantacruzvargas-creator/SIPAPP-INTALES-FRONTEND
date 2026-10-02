@@ -73,6 +73,7 @@ El tope de apiperu y el candado de emisión de NC viven **en memoria**: asumen u
 | Factura de venta ligada a su comprobante SUNAT al crearla | En main | ver §4 |
 | Motor contable C1 (plan de cuentas PCGE + importación desde Excel, periodos, asientos manuales, pantalla Contabilidad) | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/contabilidad/HANDOFF-contabilidad.md` |
 | Bancos B7: movimientos sin documento, transferencias propias, saldo inicial y libro por cuenta, conciliación bancaria mensual | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/superpowers/specs/2026-10-02-bancos-b7-design.md` |
+| Caja chica: fondo fijo, gastos (boleta, ticket, factura sin crédito, RH, movilidad, vale), rendición y reposición, arqueo | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/superpowers/specs/2026-10-02-caja-chica-design.md` |
 | Motor contable C2–C5 | Diseñado; C2 espera las respuestas del contador | `docs/contabilidad/2026-10-01-preguntas-contador-C2.md` |
 
 Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide): `bloqueo-edicion`,
