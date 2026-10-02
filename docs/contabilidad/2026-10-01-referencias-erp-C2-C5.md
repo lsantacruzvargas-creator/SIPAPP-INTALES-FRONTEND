@@ -8,6 +8,8 @@ Se revisaron tres repos (solo lectura) para completar el diseño de C2 en adelan
 | `facturascripts` | ERP PHP open source (España, LGPL-3.0), activo | **Alta**: asientos automáticos “todo o nada”, resolución de cuentas por prioridad, cierre anual idempotente; trae un **plan PCGE peruano** (`Core/Data/Codpais/PER/defaultPlan.csv`, 1 790 cuentas) |
 | `sistema-contable` | Prototipo académico Java/MySQL, 2022–2023 | **Baja**: no funciona contra su propio esquema; solo aporta la tabla `destino_compra` (6x → 9x / 79) |
 
+| `sistemacontable` (revisado 2026-10-02) | App Django/SQLite peruana de curso (PCGE a 2 dígitos) | **Baja**: confirma el mapeo de EEFF por cuenta de 2 dígitos; no resuelve ninguna pregunta al contador |
+
 Ningún repo trae normativa peruana completa (IGV, detracción, retención, SIRE, destinos automáticos, diferencia de
 cambio): eso sigue saliendo de la guía contable y los casos de prueba de `docs/contabilidad/`.
 
@@ -74,6 +76,18 @@ el Mayor oficial, el cierre anual y los EEFF. Recomendación:
 - Activos fijos y planilla: cuentas en el tipo de activo y depreciación mensual con valor residual; planilla
   resumida por centro de costo — como **plantillas de asiento** (ERP C# `TCONTA_ASIENTOS_PREDEFINIDOS`, ampliadas a
   N líneas), ya que se registran como asientos manuales.
+
+## `sistemacontable` (Django, PCGE a 2 dígitos)
+
+Cada línea se guarda suelta (cuenta, Debe/Haber, monto): no hay asiento con varias líneas ni control de cuadre, ni
+subcuentas, IGV, terceros, documentos o periodos. Lo único aprovechable, para cuando se reactive C5:
+- **Estado de resultados por función**: ventas 70, costo de ventas 69, gastos administrativos 94, gastos de ventas 95,
+  otros ingresos 75, ingresos financieros 77, otros gastos 65, gastos financieros 67, impuesto a la renta 88 →
+  utilidad bruta, operativa, antes de impuestos y neta (usa los destinos 9x, coherente con nuestro diseño).
+- **Situación financiera**: pasivo corriente 40–44 y 46–48, no corriente 45 y 49; activo corriente/no corriente
+  elegido por el usuario en cada línea. Simplificación: en la práctica 45 se divide en porción corriente y no
+  corriente, y la clasificación debe ir en la cuenta (configurable), no en cada movimiento.
+- Sus reportes suman importes sin mirar el lado Debe/Haber en resultados (error), así que no se reutiliza código.
 
 ## Plan de cuentas: contraste con FacturaScripts (PER)
 
