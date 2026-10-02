@@ -113,6 +113,13 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 ## 5. Pendientes
 
+**Pendiente — SUNAT 3270 con descuento de línea (detectado 2026-10-02):** `src/builders/factura.builder.js` manda en
+`cac:AlternativeConditionPrice/cbc:PriceAmount` (precio unitario con IGV, tipo 01) `item.precioUnitario`, el precio
+**antes** del descuento de línea. SUNAT lo valida contra (valor de venta de la línea + IGV) / cantidad, que ya está
+descontado, y rechaza la factura con 3270. Arreglo (ya aplicado en SIPAPP-MICRONEGOCIOS `21ec2ae` y SIPAPP-HUAQUIAN
+`51a2974`): `precioConIgv = montoDescuento > 0 && cantidad > 0 ? total / cantidad : precioUnitario` y usarlo en ese
+`PriceAmount`; `cac:Price` sigue antes del descuento. Verificado en SUNAT demo (F099-101 aceptada). Agregar prueba.
+
 **Rama `ventas/produccion/contabilidadoficial` (2026-10-02):** tiene los arreglos de `feature/revision-compras` de
 INTALES (ver `docs/PORT-fixes-revision-compras.md`) y **los saldos de tesorería**, traídos con cherry-pick desde
 `feature/movimientos-manuales` (la misma tarea que está en `main`, con E2E OK). Plan y ledger:
