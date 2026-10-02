@@ -3,7 +3,7 @@ import { fetchAuth, getUsuario } from "../../utils/fetchAuth";
 import { formatearFecha, formatearFechaHora } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { avisoDeRespuesta } from "../../utils/bloqueo";
-import { resumenConciliacion, periodoDeMes, textoPeriodo, mesAnteriorLima, CONCEPTOS_MOVIMIENTO } from "../../utils/bancos";
+import { resumenConciliacion, periodoDeMes, textoPeriodo, mesAnteriorLima, descripcionMovimiento } from "../../utils/bancos";
 import useBloqueoEdicion from "../../hooks/useBloqueoEdicion";
 import BarraEdicion from "../BarraEdicion";
 import PromptAccion from "../PromptAccion";
@@ -91,8 +91,7 @@ export default function PanelConciliacion() {
   const moneda = conc?.cuenta?.moneda || "PEN";
   const res = conc ? resumenConciliacion({ pendientes: conc.calculo.pendientes, marcados, saldoExtracto: extracto, saldoLibros: conc.calculo.saldoLibros }) : null;
   const marcar = (id) => setMarcados((ms) => (ms.includes(id) ? ms.filter((x) => x !== id) : [...ms, id]));
-  const descripcion = (m) => m.concepto === "caja_chica" ? `Gasto de caja chica — ${m.glosa}` : m.concepto === "libre" ? `${m.tipoMovimiento?.nombre || ""} — ${m.glosa}`
-    : m.concepto === "transferencia" ? (m.glosa || "Transferencia") : CONCEPTOS_MOVIMIENTO[m.concepto];
+  const descripcion = descripcionMovimiento;
 
   return (
     <div className="space-y-5">

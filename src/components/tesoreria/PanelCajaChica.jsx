@@ -8,6 +8,8 @@ import { exportarHoja } from "../../utils/exportarTabla";
 import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
 import ModalGastoCaja from "./ModalGastoCaja";
+import { enviarConSobregiro } from "../../utils/sobregiro";
+import useConfirmar from "../../hooks/useConfirmar";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
 const fecha = (d) => formatearFecha(d, { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -25,6 +27,7 @@ export default function PanelCajaChica({ centrosCosto }) {
   const [form, setForm] = useState({});
   const [error, setError] = useState("");
   const [procesando, setProcesando] = useState(false);
+  const { confirmar, dialogo } = useConfirmar();
   const pedido = useRef(0);
 
   const cargarCajas = useCallback(() => fetchAuth("/caja-chica").then(async (r) => {
@@ -71,9 +74,12 @@ export default function PanelCajaChica({ centrosCosto }) {
     }
   };
   const rendir = () => accion(() => fetchAuth(`/caja-chica/${sel}/rendiciones`, { method: "POST", body: JSON.stringify({ hasta: form.hasta || fechaHoyLima() }) }), "No se pudo rendir.");
-  const reponer = () => accion(() => conBloqueo("rendicionCajaChica", res.rendicionPendiente._id, (h) => fetchAuth(`/caja-chica/rendiciones/${res.rendicionPendiente._id}/reponer`, {
-    method: "POST", headers: h, body: JSON.stringify({ cuentaOrigen: form.cuentaOrigen, fecha: form.fecha || fechaHoyLima(), medio: form.medio || "transferencia", numeroOperacion: form.numeroOperacion || "" }),
-  })), "No se pudo reponer.");
+  // El banco de origen puede quedar sobregirado: se pregunta con el diálogo propio y se reintenta confirmando.
+  const reponer = () => accion(() => conBloqueo("rendicionCajaChica", res.rendicionPendiente._id, (h) => enviarConSobregiro(
+    (b) => fetchAuth(`/caja-chica/rendiciones/${res.rendicionPendiente._id}/reponer`, { method: "POST", headers: h, body: JSON.stringify(b) }),
+    { cuentaOrigen: form.cuentaOrigen, fecha: form.fecha || fechaHoyLima(), medio: form.medio || "transferencia", numeroOperacion: form.numeroOperacion || "" },
+    confirmar,
+  )), "No se pudo reponer.");
   const anularRend = (motivo) => accion(() => conBloqueo("rendicionCajaChica", res.rendicionPendiente._id, (h) => fetchAuth(`/caja-chica/rendiciones/${res.rendicionPendiente._id}/anular`, {
     method: "POST", headers: h, body: JSON.stringify({ motivo }),
   })), "No se pudo anular la rendición.");
@@ -297,6 +303,7 @@ export default function PanelCajaChica({ centrosCosto }) {
         <PromptAccion titulo={`Anular el gasto ${modal.anularGasto.codigo}`} label="Motivo" procesando={procesando}
           textoConfirmar="Anular" onCancelar={() => setModal(null)} onConfirmar={anularGasto} />
       )}
+      {dialogo}
     </div>
   );
 }

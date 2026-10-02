@@ -111,6 +111,7 @@ export const AYUDA = {
       { termino: "Doc. de detracción, área y constancia pendiente", definicion: "Datos de la línea de detracción en CONCAR: tipo de documento (DR), código de área y el número que va mientras no exista la constancia de depósito." },
       { termino: "Códigos de detracción (T.G. 28)", definicion: "Equivalencia del código SUNAT del bien o servicio con el de CONCAR. Sin equivalencia, INTALES usa el de SUNAT seguido de 01." },
       { termino: "Cuentas con centro de costo", definicion: "Prefijos de las cuentas que llevan el centro de costo en la exportación (por defecto 62, 63 y 65)." },
+      { termino: "Movimientos manuales", definicion: "Cuenta de la contrapartida de cada ingreso o egreso manual de Tesorería según su concepto (aporte, préstamo, retiro, gasto bancario, otros). Solo el gasto bancario viene con cuenta (6391); las demás las define el contador." },
       { termino: "Cuenta contable de cada caja y banco", definicion: "Cuenta de la clase 10 de cada cuenta de Tesorería (por ejemplo BCP Soles → 1041). Sin ella, sus movimientos quedan pendientes." },
       { termino: "Código contable del centro de costo", definicion: "Código del centro de costo en CONCAR (hasta 6 letras o dígitos)." },
     ],

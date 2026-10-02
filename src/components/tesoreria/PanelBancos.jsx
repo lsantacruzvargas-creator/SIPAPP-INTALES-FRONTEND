@@ -2,22 +2,25 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha } from "../../utils/fecha";
 import { money } from "../../utils/compras";
-import { textoPeriodo, CONCEPTOS_MOVIMIENTO } from "../../utils/bancos";
+import { textoPeriodo, descripcionMovimiento } from "../../utils/bancos";
+import { puedeMovimientoManual, rolDeSesion } from "../../utils/roles";
 import { exportarHoja } from "../../utils/exportarTabla";
 import TablaScroll from "../TablaScroll";
-import ModalMovimientoBanco from "./ModalMovimientoBanco";
+import ModalMovimientoManual from "./ModalMovimientoManual";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
 const fecha = (d) => formatearFecha(d, { day: "2-digit", month: "2-digit", year: "numeric" });
 const TIPO_CUENTA = { banco: "Banco", caja: "Caja", detracciones: "Detracciones" };
 
-// Saldos por cuenta y libro de cada cuenta (libro de bancos), con movimientos sin documento y transferencias.
-export default function PanelBancos({ centrosCosto }) {
+// Saldos por cuenta y libro de cada cuenta (libro de bancos). Los ingresos/egresos manuales y las transferencias usan
+// el mismo formulario que la pestaña Movimientos.
+export default function PanelBancos() {
+  const manual = puedeMovimientoManual(rolDeSesion());
   const [cuentas, setCuentas] = useState([]);
   const [sel, setSel] = useState("");
   const [rango, setRango] = useState({ desde: "", hasta: "" });
   const [libro, setLibro] = useState(null);
-  const [modal, setModal] = useState(null); // "libre" | "transferencia"
+  const [modal, setModal] = useState(null); // "manual" | "transferencia"
   const [error, setError] = useState("");
 
   const cargarSaldos = useCallback(() => fetchAuth("/bancos/saldos").then(async (r) => {
@@ -42,10 +45,7 @@ export default function PanelBancos({ centrosCosto }) {
   const actual = cuentas.find((c) => c._id === sel);
   // Si llegó el libro de otra cuenta (no debería), no se muestra.
   const libroVisible = libro && String(libro.cuenta?._id) === String(sel) ? libro : null;
-  const descripcion = (m) => m.concepto === "caja_chica" ? `Gasto de caja chica — ${m.glosa}`
-    : m.concepto === "libre" ? `${m.tipoMovimiento?.nombre || ""} — ${m.glosa}`
-    : m.concepto === "transferencia" ? (m.glosa || `${m.cuenta?.nombre} → ${m.cuentaDestino?.nombre}`)
-    : `${CONCEPTOS_MOVIMIENTO[m.concepto]} de ${m.documento?.tipo === "facturaVenta" ? "factura de venta" : "comprobante de compra"}`;
+  const descripcion = descripcionMovimiento;
 
   const exportar = () => libroVisible && exportarHoja(`libro-${actual?.nombre || "cuenta"}.xlsx`, "Libro", [
     { "FECHA": "", "CÓDIGO": "SALDO ANTERIOR", "DESCRIPCIÓN": "", "N° OPERACIÓN": "", "ENTRADA": "", "SALIDA": "", "SALDO": libroVisible.saldoAnterior },
@@ -57,10 +57,12 @@ export default function PanelBancos({ centrosCosto }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap gap-2 justify-end">
-        <button onClick={() => setModal("transferencia")} className="border border-purple-300 text-purple-700 px-3 py-2 rounded-lg text-sm hover:bg-purple-50">Transferencia entre cuentas</button>
-        <button onClick={() => setModal("libre")} className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700">+ Movimiento sin documento</button>
-      </div>
+      {manual && (
+        <div className="flex flex-wrap gap-2 justify-end">
+          <button onClick={() => setModal("transferencia")} className="border border-purple-300 text-purple-700 px-3 py-2 rounded-lg text-sm hover:bg-purple-50">Transferencia entre cuentas</button>
+          <button onClick={() => setModal("manual")} className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700">+ Ingreso / egreso manual</button>
+        </div>
+      )}
       <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {cuentas.filter((c) => c.activo).map((c) => (
           <button key={c._id} onClick={() => { if (c._id !== sel) { setLibro(null); setSel(c._id); } }}
@@ -89,7 +91,7 @@ export default function PanelBancos({ centrosCosto }) {
                 <tbody className="divide-y divide-gray-100">
                   <tr className="bg-gray-50/50 text-gray-500"><td colSpan={6} className="px-3 py-2">Saldo anterior</td><td className="px-3 py-2 text-right tabular-nums">{money(libroVisible.saldoAnterior, actual.moneda)}</td></tr>
                   {libroVisible.movimientos.map((m) => (
-                    <tr key={m._id}>
+                    <tr key={m._id} className={m.saldoInicial ? "bg-emerald-50/40" : ""}>
                       <td className="px-3 py-2 whitespace-nowrap">{fecha(m.fecha)}</td>
                       <td className="px-3 py-2 font-medium">{m.codigo}</td>
                       <td className="px-3 py-2">{descripcion(m)}</td>
@@ -110,8 +112,7 @@ export default function PanelBancos({ centrosCosto }) {
       )}
       {!sel && <p className="text-sm text-gray-400">Elige una cuenta para ver su libro.</p>}
       {modal && (
-        <ModalMovimientoBanco modo={modal} cuentas={cuentas} cuentaInicial={sel} centrosCosto={centrosCosto}
-          onClose={() => setModal(null)} onGuardado={guardado} />
+        <ModalMovimientoManual modo={modal} cuentas={cuentas} onClose={() => setModal(null)} onGuardado={guardado} />
       )}
     </div>
   );

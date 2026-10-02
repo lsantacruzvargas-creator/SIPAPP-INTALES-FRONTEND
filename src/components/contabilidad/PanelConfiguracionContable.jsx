@@ -13,6 +13,8 @@ const CUENTAS = [
   ["ventasProductos", "Ventas de productos fabricados"], ["ventasMercaderias", "Ventas de mercaderías"],
   ["comprasDefecto", "Compras por defecto (vacía: cada comprobante con su cuenta)"],
 ];
+// Contrapartida de cada ingreso/egreso manual de Tesorería (si el movimiento no trae su cuenta).
+const MANUALES = [["aporte", "Aporte (ej. 50 o 52)"], ["prestamo", "Préstamo (ej. 45)"], ["retiro", "Retiro (ej. 14)"], ["gasto_bancario", "Gasto bancario (6391)"], ["otros", "Otros"]];
 const SUBDIARIOS = [["compras", "Compras"], ["comprasDetraccion", "Compras con detracción"], ["boletas", "Boletas de compra"], ["honorarios", "Honorarios"], ["ventas", "Ventas"], ["cajaBancos", "Caja y bancos"], ["diario", "Diario (manuales)"]];
 const TIPOS = { "01": "Factura", "02": "Recibo por honorarios", "03": "Boleta", "07": "Nota de crédito", "08": "Nota de débito", "12": "Ticket", "14": "Servicios públicos" };
 
@@ -100,6 +102,9 @@ export default function PanelConfiguracionContable({ cuentas, puedeEscribir }) {
             ))}
             {CUENTAS.map(([k, l]) => (
               <tr key={k}><td className="py-1 pr-3 text-gray-600">{l}</td><td className="py-1" colSpan={2}>{cuenta(`cuentas.${k}`, form.cuentas[k], ["retencionesSufridas", "comprasDefecto", "ventasProductos", "ventasMercaderias", "ventasServicios"].includes(k))}</td></tr>
+            ))}
+            {MANUALES.map(([k, l]) => (
+              <tr key={`m-${k}`}><td className="py-1 pr-3 text-gray-600">Movimiento manual: {l}</td><td className="py-1" colSpan={2}>{cuenta(`manuales.${k}`, form.manuales?.[k], true)}</td></tr>
             ))}
             <tr><td className="py-1 pr-3 text-gray-600">Venta por defecto</td><td className="py-1" colSpan={2}>
               <select value={form.ventaPorDefecto} disabled={ro} onChange={(e) => set("ventaPorDefecto", e.target.value)} className={INP}>

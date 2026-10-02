@@ -36,10 +36,16 @@ El plan de cuentas debe ser el del contador (se importa desde Excel).
   (`2026-10-01-motor-contable-design.md`, con el cambio de alcance arriba), spec C1, guía contable y casos de prueba
   (23 casos, brechas B1–B25; B1–B5 y B9 resueltas en `main`; B8 resuelta: exportar).
 
-- **B7 implementada** (bancos: movimientos sin documento, transferencias, saldos, conciliación):
-  `docs/superpowers/specs/2026-10-02-bancos-b7-design.md`. Los tipos de movimiento tienen `cuentaContable` (vacía
-  hasta que el contador responda B18) y cada movimiento libre puede llevar la suya: C2 las usará para el subdiario
-  de caja-bancos.
+- **Saldos y movimientos manuales de Tesorería** (de `main`, `feature/movimientos-manuales`): saldo inicial por cuenta
+  (`CuentaTesoreria.saldoInicial/fechaSaldoInicial/tipoCambioSaldoInicial`), ingresos/egresos manuales
+  (`MovimientoTesoreria.conceptoManual`: aporte, préstamo, retiro, gasto bancario, otros) y transferencias propias
+  (`conceptoManual: "transferencia"`), saldo insuficiente (`utils/saldosCuentas.js`). Integrado con la rama contable el
+  2026-10-02: cada manual puede llevar `cuentaContable` y `centroCosto`; si no, C2 usa la cuenta del concepto en
+  `ConfiguracionContable.manuales` (semilla solo gasto bancario 6391; aporte 50/52, préstamo 45, retiro 14 los define
+  el contador). Transferencia: 10x contra 10x.
+- **Bancos B7** (`docs/superpowers/specs/2026-10-02-bancos-b7-design.md`): libro por cuenta y conciliación bancaria
+  mensual, sobre los saldos y movimientos de `main` (el catálogo de tipos de movimiento de B7 se retiró en la
+  integración).
 - **Caja chica implementada** (`docs/superpowers/specs/2026-10-02-caja-chica-design.md`): cada gasto lleva cuenta
   contable opcional; C2 la usará (cuenta de fondos fijos 102 y gasto 6x según el contador).
 - **Referencias de otros ERP** (ERP C# dominicano, FacturaScripts, prototipo Java): diseño adoptado para C2, B7 y el

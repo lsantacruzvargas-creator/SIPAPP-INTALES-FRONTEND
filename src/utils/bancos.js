@@ -1,5 +1,6 @@
 // Lógica pura de Bancos (espejo de Backend/src/utils/bancos.js, spec 2026-10-02-bancos-b7).
 import { round2 } from "./compras.js";
+import { etiquetaConceptoManual } from "./tesoreria.js";
 
 // +1 entra a la cuenta, −1 sale, 0 no la toca.
 export function signo(mov, cuentaId) {
@@ -39,4 +40,12 @@ export function mesAnteriorLima(hoy = new Date()) {
   return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
 }
 
-export const CONCEPTOS_MOVIMIENTO = { neto: "Neto", impuesto: "Impuesto", libre: "Sin documento", transferencia: "Entre cuentas", caja_chica: "Caja chica" };
+// Descripción de un movimiento en el libro de bancos y en la conciliación (incluye la fila del saldo inicial).
+export function descripcionMovimiento(m) {
+  if (m.saldoInicial) return "Saldo inicial";
+  const extra = m.descripcion ? ` — ${m.descripcion}` : "";
+  if (m.conceptoManual === "transferencia") return `Transferencia ${m.cuenta?.nombre || ""} → ${m.cuentaDestino?.nombre || ""}${extra}`;
+  if (m.conceptoManual) return `${etiquetaConceptoManual(m.conceptoManual)}${extra}`;
+  if (m.concepto === "caja_chica") return `Gasto de caja chica${extra}`;
+  return `${m.concepto === "neto" ? "Neto" : "Impuesto"} de ${m.documento?.tipo === "facturaVenta" ? "factura de venta" : "comprobante de compra"}`;
+}

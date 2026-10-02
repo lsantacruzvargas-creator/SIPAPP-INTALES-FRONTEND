@@ -9,3 +9,9 @@ pendientes, comandos de tests/E2E y flujo de trabajo. El motor contable tiene su
 - No mergees ni subas `main` sin el OK explícito del usuario; corre la suite completa sobre el resultado del merge.
 - Fechas en hora Lima; nunca `alert/confirm/prompt` (la app corre en Electron); validar en el servidor con listas blancas.
 - Tests backend: `MONGO_URI_TEST="mongodb://localhost:27017/sipapp-intales-test?replicaSet=rs0" npm test`.
+
+## Aviso al abrir el proyecto
+
+Al empezar una sesión, recuérdale al usuario en una línea lo pendiente de `docs/ESTADO-PROYECTO.md` §5: las
+**decisiones por confirmar** de la tarea de saldos de tesorería (ya en `main`), los menores diferidos y las ramas que
+esperan su OK para mergear o hacer push.

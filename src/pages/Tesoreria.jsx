@@ -70,7 +70,7 @@ export default function Tesoreria() {
       {tab === "por-pagar" && <TablaPorPagar recarga={recarga} onRegistrarFactura={setModalFactura} />}
       {tab === "por-cobrar" && <TablaPorCobrar />}
       {tab === "movimientos" && <TablaMovimientos />}
-      {tab === "bancos" && <PanelBancos centrosCosto={catalogos.centrosCosto} />}
+      {tab === "bancos" && <PanelBancos />}
       {tab === "conciliacion" && <PanelConciliacion />}
       {tab === "caja-chica" && <PanelCajaChica centrosCosto={catalogos.centrosCosto} />}
       {tab === "sire" && <PanelSire onRegistrarFactura={setModalFactura} />}

@@ -1,6 +1,6 @@
 # Estado del proyecto SIPAPP-INTALES — punto de entrada para agentes
 
-**Actualizado:** 2026-10-01 · **Idéntico en** `docs/` de los repos Backend y Frontend (y en `docs/` de la carpeta raíz).
+**Actualizado:** 2026-10-02 · **Idéntico en** `docs/` de los repos Backend y Frontend (y en `docs/` de la carpeta raíz).
 
 Léelo antes de tocar código. Responde al usuario **en español, conciso**; él decide lo de negocio y pide el merge a
 `main` explícitamente (nunca mergear ni subir `main` sin su OK).
@@ -72,7 +72,8 @@ El tope de apiperu y el candado de emisión de NC viven **en memoria**: asumen u
 | Auditoría de seguridad y manejo de errores | En main | `docs/superpowers/sdd/2026-10-01-seguridad-auditoria-progress.md` |
 | Factura de venta ligada a su comprobante SUNAT al crearla | En main | ver §4 |
 | Motor contable C1 (plan de cuentas PCGE + importación desde Excel, periodos, asientos manuales, pantalla Contabilidad) | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/contabilidad/HANDOFF-contabilidad.md` |
-| Bancos B7: movimientos sin documento, transferencias propias, saldo inicial y libro por cuenta, conciliación bancaria mensual | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/superpowers/specs/2026-10-02-bancos-b7-design.md` |
+| Saldos de tesorería, movimientos manuales y transferencias | En main (`feature/movimientos-manuales`, ver §5) | `docs/superpowers/sdd/2026-10-02-intales-saldos-tesoreria-progress.md` |
+| Bancos B7: libro por cuenta y conciliación bancaria mensual (sobre los saldos y movimientos manuales de `main`; integrado 2026-10-02) | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/superpowers/specs/2026-10-02-bancos-b7-design.md` |
 | Caja chica: fondo fijo, gastos (boleta, ticket, factura sin crédito, RH, movilidad, vale), rendición y reposición, arqueo | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/superpowers/specs/2026-10-02-caja-chica-design.md` |
 | Motor contable C2: asientos automáticos (compras, ventas, Tesorería) y exportación a **CONCAR** (PCGE 2019) | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/superpowers/specs/2026-10-02-c2-asientos-concar-design.md` |
 | Motor contable C3: cierre de mes (verificar, cerrar y reabrir; bloqueo del mes en todo el sistema) y reportes de control (Diario, Mayor, Balance de comprobación) | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/superpowers/specs/2026-10-02-c3-cierre-reportes-design.md` |
@@ -123,6 +124,44 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 ## 5. Pendientes
 
+**⚠ Mencionar al usuario al abrir el proyecto: las "Decisiones por confirmar" de abajo.**
+
+**Tarea "saldos de tesorería": en `main` y con push (2026-10-02)**, `feature/movimientos-manuales` (Backend y Frontend),
+E2E en navegador OK (8 escenarios: saldo inicial PEN/USD, tarjetas, aporte, egreso de caja sin saldo → 409, gasto
+bancario con sobregiro confirmado, transferencia solo misma moneda, pago y "Ya se pagó" con sobregiro, anular un
+ingreso ya gastado → 409, selectores con saldo, dif. de cambio con saldo inicial USD, contador sin botones). Plan y ledger: `docs/superpowers/plans/2026-10-02-intales-saldos-tesoreria.md` y
+`docs/superpowers/sdd/2026-10-02-intales-saldos-tesoreria-progress.md`. Incluye:
+- Saldo inicial por cuenta (monto, fecha y TC compra SUNAT si es USD; editable solo sin movimientos, jefatura/admin) y
+  saldo calculado por agregación (`utils/saldosCuentas.js`), visible en Movimientos, Configuración y en los selectores
+  de cuenta de pagos, cobros y "Ya se pagó".
+- Ingreso/egreso manual (aporte, préstamo, retiro, gasto bancario, otros) y transferencia entre cuentas propias de la
+  misma moneda: `POST /movimientos-tesoreria/manual` y `/transferencia`; registran y anulan admin, jefatura y tesorero
+  (el contador y facturación solo leen); en USD con el TC SUNAT del día.
+- Saldo insuficiente en pagos, autodetracción, egresos manuales y transferencias: caja y detracciones → 409; banco →
+  409 `codigo: "SOBREGIRO"` y se registra con `confirmarSobregiro: true` (diálogo propio en el panel; en "Ya se pagó"
+  va en la raíz del body). Mide el **mínimo del saldo acumulado** desde la fecha; el saldo inicial no cuenta antes de su
+  fecha. La diferencia de cambio al cierre suma el saldo inicial con su TC.
+
+**En `main` y con push (2026-10-02):** `feature/revision-compras` (Backend y Frontend) — correcciones de compras
+traídas de la revisión de Micronegocios (línea de SC condicionada, anular OC libera solo sus líneas, fecha de entrega
+real, retención de 4ta > S/ 1,500, notas simultáneas sobre el mismo origen), receptor validado y boleta a clientes
+varios en CPE (tipo y número `-`, aceptada en SUNAT demo), detracción 004/026/027 → 400 (también fuera del selector),
+SIRE más robusto.
+
+**Rama `ventas/produccion/contabilidadoficial`** (worktree `SIPAPP-INTALES-venta-produccion-contaoficial`): ya tiene los
+arreglos de `feature/revision-compras` y el del selector de detracción (especificación en su
+`docs/PORT-fixes-revision-compras.md`). **Los saldos de tesorería NO se portaron**: esa rama se sigue avanzando y se
+mergeará con `main`, que ya los trae.
+
+**Decisiones por confirmar con el usuario** (tomadas al implementar los saldos; el usuario pidió dejarlas anotadas):
+1. El saldo inicial lo editan jefatura y admin (como el resto de Configuración); el tesorero no.
+2. Se agregaron transferencias entre cuentas propias de la misma moneda (el diseño no las pedía).
+3. Manuales en USD: el ingreso usa el TC de cobros (compra por defecto), el egreso el de pagos (venta) y la
+   transferencia el de compra.
+4. Se permiten movimientos manuales con la cuenta de detracciones (pagar impuestos con fondos BN, liberación de fondos).
+5. El contador y facturación todavía pueden anular pagos y cobros **con documento** (como antes); solo los manuales
+   quedaron restringidos.
+
 **Por confirmar con el contador** (no implementar sin respuesta):
 - Si el RCE del SIRE trae los montos de comprobantes en US$ en dólares o en soles (probar con un archivo real).
 - TC compra/venta en cobros y pagos en dólares.
@@ -133,7 +172,7 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
   subdiario de caja-bancos (21 por defecto), flag `N` en caja-bancos US$ (primera importación real), divisionarias a
   6 dígitos, maestro de anexos en CONCAR (RUC), destinos 9x/79 (apagados), cuenta de detracción BN (1042/107).
 
-**Brechas contables aún abiertas** (de `casos-prueba-contables.md` §4; B1–B5, B9 y B7 ya resueltas, B7 en la rama): B6
+**Brechas contables aún abiertas** (de `casos-prueba-contables.md` §4; B1–B5, B9 y B7 ya resueltas; B7 = movimientos manuales de `main` + conciliación de la rama): B6
 cuenta de gasto por comprobante de compra (en la rama: cuenta por comprobante asignable desde pendientes); B10 periodo de anotación y
 crédito diferido (1673); B11–B13 costo de OT por devengo, salidas de almacén y IGV sin crédito al costo; B14 bases no
 gravadas/exoneradas; B15 retención 3 % al pagar y CRE/PDT 626; B16 detracción solo para servicios; B17 fecha de
@@ -152,6 +191,20 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
   sin filtrar ambiente; el ajuste de cierre no se guarda; NC 01 desde la UI no precarga otros cargos/redondeo;
   `ModalCrearFactura` no envía detracción al CPE.
 - Bloqueo de edición y compras: ver la sección "Estado" de sus specs.
+- Saldos de tesorería (revisión final y E2E, 2026-10-02):
+  - Un manual con fecha futura se acepta y ya suma al saldo mostrado.
+  - Egreso con fecha anterior al saldo inicial: se compara contra 0 (regla aprobada) pero el mensaje no lo explica.
+  - Dos constantes `CONCEPTOS_MANUALES` distintas (la del modelo incluye "transferencia"); renombrar la de utils.
+  - `leerSaldoInicial` toma `""` como 0 y `true` como 1.
+  - `GET /cuentas-tesoreria` hace una agregación y un `exists` por cuenta (aceptable con pocas cuentas).
+  - El diálogo manual deja combinar Ingreso con "Retiro" o "Gasto bancario" (y Egreso con "Aporte"): filtrar
+    conceptos por tipo.
+  - Al anular un ingreso ya gastado el mensaje dice "disponible S/ -450.00, falta S/ 450.00": decir "anularlo dejaría
+    la cuenta en −S/ 450.00".
+  - Las tarjetas muestran el negativo como "S/ -380.20" (en otros lugares "−S/ 380.20").
+  - En la base E2E, la tarjeta de BCP Dólares (US$ 2,217.82) y el cierre de dif. de cambio (US$ 2,276.82) difieren en
+    el egreso MOV-0007 de S/ 59 (un comprobante en soles pagado desde la cuenta en dólares): revisar si un pago en otra
+    moneda debe bloquearse o convertirse.
 
 ## 6. Índice de documentos
 

@@ -127,7 +127,7 @@ export default function PanelAutomaticos({ cuentas, puedeGenerar, puedeEscribir 
               </tbody>
             </table>
           </TablaScroll>
-          <p className="text-xs text-gray-400">Las cuentas de bancos, tipos de movimiento y la configuración se completan en la pestaña Configuración.</p>
+          <p className="text-xs text-gray-400">Las cuentas de bancos, las de los movimientos manuales (por concepto) y el resto se completan en la pestaña Configuración.</p>
         </section>
       )}
 
