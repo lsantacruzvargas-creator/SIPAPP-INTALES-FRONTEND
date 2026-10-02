@@ -192,12 +192,15 @@ No hay funcionalidades nuevas en esa rama: todo lo que no se porta es documentac
   ofrece 004/026/027~~ — **resuelto (2026-10-02):** INTALES `main` lo corrigió (`DETRACCION_VENTA_CPE`, commit de origen
   `61b7b8d9`) y se trajo a esta rama con cherry-pick.
 
-### Saldos de tesorería: NO se portan aquí, llegan por merge
+### Saldos de tesorería: traídos con cherry-pick (2026-10-02)
 
 La tarea "saldos de tesorería" (saldo inicial por cuenta, saldo calculado, ingreso/egreso manual, transferencias
-entre cuentas y regla de saldo insuficiente) se implementó en `feature/movimientos-manuales` y ya está en `main` de
-INTALES (2026-10-02). Esta rama se sigue avanzando por separado y **se mergeará con `main`**: en ese merge entran los
-saldos completos. No portar commits sueltos de saldos a esta rama. Detalle, decisiones por confirmar y menores en
+entre cuentas y regla de saldo insuficiente) se trajo a esta rama desde `feature/movimientos-manuales` (la misma que
+está en `main` de INTALES, con E2E OK), a pedido del usuario:
+- Backend: `bc31672..1e3c4c2` de origen (9 commits) con `cherry-pick -x`; conflicto solo en `docs/ESTADO-PROYECTO.md`.
+- Frontend: `22a8db9e..49baeab7` de origen (6 commits); mismo conflicto de docs.
+Cuando esta rama se mergee con `main`, git verá los mismos cambios en ambos lados (los commits ya tienen su par en
+`main`): no debería haber más conflictos que los de documentación. Decisiones por confirmar y menores en
 `docs/ESTADO-PROYECTO.md` §5 de `main`.
 
 ## 5. Verificación
