@@ -38,13 +38,14 @@ export default function PanelCierreMes({ puedeCerrar }) {
   useEffect(() => { const t = setTimeout(cargar, 0); return () => clearTimeout(t); }, [cargar]);
 
   const verificar = useCallback(async () => {
-    if (!/^\d{6}$/.test(periodo)) return;
+    // La verificación es costosa: no se pide para un mes ya cerrado.
+    if (!/^\d{6}$/.test(periodo) || cerrado) return;
     try {
       setVerificacion(await leer(await fetchAuth(`/contabilidad/periodos/${periodo}/verificacion`), "No se pudo verificar el mes."));
     } catch (e) {
       setAviso(e.message || "Error de conexión con el servidor.");
     }
-  }, [periodo]);
+  }, [periodo, cerrado]);
   useEffect(() => { const t = setTimeout(verificar, 200); return () => clearTimeout(t); }, [verificar]);
 
   const accion = async (fn) => {
@@ -71,10 +72,10 @@ export default function PanelCierreMes({ puedeCerrar }) {
           <label className="text-xs text-gray-500 block">Mes</label>
           <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className={INP} />
         </div>
-        <span className={`text-sm font-semibold pb-2 ${cerrado ? "text-red-700" : "text-green-700"}`}>{cerrado ? "Cerrado" : "Abierto"}</span>
+        <span className={`text-sm font-semibold pb-2 ${cerrado ? "text-red-700" : "text-green-700"}`}>{cerrado ? "Cerrado" : actual?.estado === "cerrando" ? "Cerrándose…" : "Abierto"}</span>
         <div className="flex-1" />
         {puedeCerrar && !cerrado && (
-          <button onClick={() => setConfirmando(true)} disabled={procesando || !verificacion?.puedeCerrar}
+          <button onClick={() => setConfirmando(true)} disabled={procesando || verificacion?.periodo !== periodo || !verificacion?.puedeCerrar}
             className="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-700 disabled:opacity-40">Cerrar el mes</button>
         )}
         {puedeCerrar && cerrado && (
@@ -97,7 +98,7 @@ export default function PanelCierreMes({ puedeCerrar }) {
                 {p.detalle.length > 0 && <ul className="list-disc pl-5 text-xs text-gray-600 mt-1">{p.detalle.map((d, i) => <li key={i}>{d}</li>)}</ul>}
               </div>
             ))}
-            <p className="text-xs text-gray-400">Se resuelve en las pestañas Automáticos y Exportar CONCAR.</p>
+            <p className="text-xs text-gray-400">Se resuelve en las pestañas Automáticos y Exportar CONCAR. Solo se cierran meses ya terminados.</p>
           </section>
         )
       )}
@@ -119,10 +120,12 @@ export default function PanelCierreMes({ puedeCerrar }) {
               {periodos.map((p) => (
                 <tr key={p.periodo} className="border-b border-gray-100 align-top">
                   <td className="py-1.5 pr-3"><button onClick={() => setMes(mesDePeriodo(p.periodo))} className="text-purple-600 hover:underline">{textoPeriodo(p.periodo)}</button></td>
-                  <td className={`py-1.5 pr-3 ${p.estado === "cerrado" ? "text-red-700" : "text-green-700"}`}>{p.estado === "cerrado" ? "Cerrado" : "Abierto"}</td>
+                  <td className={`py-1.5 pr-3 ${p.estado === "abierto" ? "text-green-700" : "text-red-700"}`}>{{ cerrado: "Cerrado", cerrando: "Cerrándose", abierto: "Abierto" }[p.estado]}</td>
                   <td className="py-1.5 pr-3 text-xs text-gray-600">{p.cerradoEn ? `${p.cerradoPor} · ${formatearFechaHora(p.cerradoEn)}` : ""}</td>
                   <td className="py-1.5 pr-3 text-xs text-gray-600">
-                    {(p.reaperturas || []).map((r, i) => <div key={i}>{r.por} · {formatearFechaHora(r.en)}: {r.motivo}</div>)}
+                    {(p.reaperturas || []).map((r, i) => (
+                      <div key={i}>{r.por} · {formatearFechaHora(r.en)}: {r.motivo}{r.cerradoPor ? ` (cerrado por ${r.cerradoPor})` : ""}</div>
+                    ))}
                   </td>
                 </tr>
               ))}

@@ -101,7 +101,10 @@ export default function PanelReportesContables({ centrosCosto }) {
         <button onClick={consultar} disabled={cargando} className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">Ver</button>
         {datos && <button onClick={exportar} className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50">Exportar Excel</button>}
       </div>
-      <p className="text-xs text-gray-400">Solo asientos contabilizados. Es un reporte de control: los libros oficiales los lleva el software del contador.</p>
+      <p className="text-xs text-gray-400">
+        Solo asientos contabilizados. Las cuentas de resultado (clases 6 a 9) arrancan cada ejercicio en cero (sin el
+        asiento de cierre, que lo hace el contador). Es un reporte de control: los libros oficiales los lleva su software.
+      </p>
 
       {datos?.vista === "balance" && (
         <TablaScroll>
@@ -170,7 +173,10 @@ export default function PanelReportesContables({ centrosCosto }) {
               <th className="py-2 pr-3 text-right">Debe</th><th className="py-2 pr-3 text-right">Haber</th>
             </tr></thead>
             <tbody>
-              {datos.asientos.map((a) => a.lineas.map((l, i) => (
+              {datos.asientos.length > 1500 && (
+                <tr><td colSpan={6} className="py-2 text-xs text-amber-700">Se muestran los primeros 1500 asientos; el Excel trae todos.</td></tr>
+              )}
+              {datos.asientos.slice(0, 1500).map((a) => a.lineas.map((l, i) => (
                 <tr key={`${a._id}-${i}`} className={i === a.lineas.length - 1 ? "border-b border-gray-200" : ""}>
                   <td className="py-1 pr-3 whitespace-nowrap">{i === 0 ? fecha(a.fecha) : ""}</td>
                   <td className="py-1 pr-3 font-mono text-xs">{i === 0 ? a.cuo : ""}</td>

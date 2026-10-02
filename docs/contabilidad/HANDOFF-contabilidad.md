@@ -45,6 +45,11 @@ El plan de cuentas debe ser el del contador (se importa desde Excel).
 - **Referencias de otros ERP** (ERP C# dominicano, FacturaScripts, prototipo Java): diseño adoptado para C2, B7 y el
   re-dimensionamiento de C3–C5 en `2026-10-01-referencias-erp-C2-C5.md`.
 
+- **C3 implementada**: cierre de mes del tesorero (todo generado, contabilizado y exportado; después el mes queda
+  bloqueado en compras, Tesorería, caja chica, CPE y asientos; reapertura con motivo) y reportes de control.
+  Spec `docs/superpowers/specs/2026-10-02-c3-cierre-reportes-design.md`, ledger `docs/superpowers/sdd/2026-10-02-c3-cierre/progress.md`.
+  **C4** quedó hecha con C2 (CONCAR); **C5** en suspenso.
+
 ## Siguiente paso
 
 1. Primera importación real en CONCAR con el contador: validar subdiarios, flag `N` de caja-bancos en US$, anexos
