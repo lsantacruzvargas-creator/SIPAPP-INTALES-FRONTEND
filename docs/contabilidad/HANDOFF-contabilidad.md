@@ -13,7 +13,7 @@ El plan de cuentas debe ser el del contador (se importa desde Excel).
 
 ## Estado
 
-- **C1 implementada** en la rama `claude/affectionate-ride-1ql646` de ambos repos (sin merge a `main`):
+- **C1 implementada** (en `main` desde 2026-10-02, junto con C2, C3, Bancos B7 y caja chica):
   - Backend: `CuentaContable`, `PeriodoContable`, `Asiento`; `src/data/pcge.js` (PCGE 2019: cuentas de 2 dígitos y
     las subcuentas que usa INTALES, verificadas en la guía contable); carga automática al arrancar si el plan está
     vacío y `node src/scripts/seedPcge.js`; rutas `/api/contabilidad/cuentas` (incluye `POST /importar` del plan del
