@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha } from "../../utils/fecha";
 import { money } from "../../utils/compras";
@@ -23,26 +23,32 @@ export default function PanelBancos({ centrosCosto }) {
   const cargarSaldos = useCallback(() => fetchAuth("/bancos/saldos").then(async (r) => {
     if (r.ok) setCuentas(await r.json());
   }).catch(() => setError("Error de conexión con el servidor.")), []);
+  // Solo cuenta la última consulta: al cambiar rápido de cuenta no se mezcla el libro de otra.
+  const pedido = useRef(0);
   const cargarLibro = useCallback(() => {
     if (!sel) return Promise.resolve();
+    const n = ++pedido.current;
     const qs = new URLSearchParams(Object.entries(rango).filter(([, v]) => v));
     return fetchAuth(`/bancos/cuentas/${sel}/libro?${qs}`).then(async (r) => {
       const d = await r.json().catch(() => ({}));
-      if (r.ok) { setLibro(d); setError(""); } else setError(d.mensaje || "No se pudo cargar el libro.");
-    }).catch(() => setError("Error de conexión con el servidor."));
+      if (n !== pedido.current) return;
+      if (r.ok) { setLibro(d); setError(""); } else { setLibro(null); setError(d.mensaje || "No se pudo cargar el libro."); }
+    }).catch(() => { if (n === pedido.current) { setLibro(null); setError("Error de conexión con el servidor."); } });
   }, [sel, rango]);
   useEffect(() => { cargarSaldos(); }, [cargarSaldos]);
   useEffect(() => { cargarLibro(); }, [cargarLibro]);
 
   const guardado = () => { setModal(null); cargarSaldos(); cargarLibro(); };
   const actual = cuentas.find((c) => c._id === sel);
+  // Si llegó el libro de otra cuenta (no debería), no se muestra.
+  const libroVisible = libro && String(libro.cuenta?._id) === String(sel) ? libro : null;
   const descripcion = (m) => m.concepto === "libre" ? `${m.tipoMovimiento?.nombre || ""} — ${m.glosa}`
     : m.concepto === "transferencia" ? (m.glosa || `${m.cuenta?.nombre} → ${m.cuentaDestino?.nombre}`)
     : `${CONCEPTOS_MOVIMIENTO[m.concepto]} de ${m.documento?.tipo === "facturaVenta" ? "factura de venta" : "comprobante de compra"}`;
 
-  const exportar = () => libro && exportarHoja(`libro-${actual?.nombre || "cuenta"}.xlsx`, "Libro", [
-    { "FECHA": "", "CÓDIGO": "SALDO ANTERIOR", "DESCRIPCIÓN": "", "N° OPERACIÓN": "", "ENTRADA": "", "SALIDA": "", "SALDO": libro.saldoAnterior },
-    ...libro.movimientos.map((m) => ({
+  const exportar = () => libroVisible && exportarHoja(`libro-${actual?.nombre || "cuenta"}.xlsx`, "Libro", [
+    { "FECHA": "", "CÓDIGO": "SALDO ANTERIOR", "DESCRIPCIÓN": "", "N° OPERACIÓN": "", "ENTRADA": "", "SALIDA": "", "SALDO": libroVisible.saldoAnterior },
+    ...libroVisible.movimientos.map((m) => ({
       "FECHA": fecha(m.fecha), "CÓDIGO": m.codigo, "DESCRIPCIÓN": descripcion(m), "N° OPERACIÓN": m.numeroOperacion,
       "ENTRADA": m.entrada || "", "SALIDA": m.salida || "", "SALDO": m.saldo,
     })),
@@ -56,7 +62,7 @@ export default function PanelBancos({ centrosCosto }) {
       </div>
       <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {cuentas.filter((c) => c.activo).map((c) => (
-          <button key={c._id} onClick={() => setSel(c._id)}
+          <button key={c._id} onClick={() => { if (c._id !== sel) { setLibro(null); setSel(c._id); } }}
             className={`text-left rounded-xl border p-4 transition ${sel === c._id ? "border-purple-400 bg-purple-50" : "border-gray-200 bg-white hover:border-purple-200"}`}>
             <p className="text-xs text-gray-500">{TIPO_CUENTA[c.tipo]}{c.conciliadoHasta ? ` · conciliada a ${textoPeriodo(c.conciliadoHasta)}` : ""}</p>
             <p className="font-semibold text-gray-800">{c.nombre}</p>
@@ -65,7 +71,7 @@ export default function PanelBancos({ centrosCosto }) {
         ))}
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      {actual && libro && (
+      {actual && libroVisible && (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-3 items-center">
             <h3 className="font-semibold text-gray-700">Libro de {actual.nombre}</h3>
@@ -80,8 +86,8 @@ export default function PanelBancos({ centrosCosto }) {
                   <tr>{["Fecha", "Código", "Descripción", "N° operación", "Entrada", "Salida", "Saldo"].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  <tr className="bg-gray-50/50 text-gray-500"><td colSpan={6} className="px-3 py-2">Saldo anterior</td><td className="px-3 py-2 text-right tabular-nums">{money(libro.saldoAnterior, actual.moneda)}</td></tr>
-                  {libro.movimientos.map((m) => (
+                  <tr className="bg-gray-50/50 text-gray-500"><td colSpan={6} className="px-3 py-2">Saldo anterior</td><td className="px-3 py-2 text-right tabular-nums">{money(libroVisible.saldoAnterior, actual.moneda)}</td></tr>
+                  {libroVisible.movimientos.map((m) => (
                     <tr key={m._id}>
                       <td className="px-3 py-2 whitespace-nowrap">{fecha(m.fecha)}</td>
                       <td className="px-3 py-2 font-medium">{m.codigo}</td>
@@ -92,9 +98,9 @@ export default function PanelBancos({ centrosCosto }) {
                       <td className="px-3 py-2 text-right tabular-nums">{money(m.saldo, actual.moneda)}</td>
                     </tr>
                   ))}
-                  {!libro.movimientos.length && <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-400">Sin movimientos en el rango</td></tr>}
+                  {!libroVisible.movimientos.length && <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-400">Sin movimientos en el rango</td></tr>}
                 </tbody>
-                <tfoot className="bg-gray-50 font-semibold"><tr><td colSpan={6} className="px-3 py-2">Saldo final</td><td className="px-3 py-2 text-right tabular-nums">{money(libro.saldoFinal, actual.moneda)}</td></tr></tfoot>
+                <tfoot className="bg-gray-50 font-semibold"><tr><td colSpan={6} className="px-3 py-2">Saldo final</td><td className="px-3 py-2 text-right tabular-nums">{money(libroVisible.saldoFinal, actual.moneda)}</td></tr></tfoot>
               </table>
             </TablaScroll>
           </div>

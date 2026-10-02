@@ -9,13 +9,15 @@ const MEDIOS = [["transferencia", "Transferencia"], ["deposito", "Depósito"], [
 export default function ModalMovimientoBanco({ modo, cuentas, cuentaInicial, centrosCosto, onClose, onGuardado }) {
   const [tipos, setTipos] = useState([]);
   const [form, setForm] = useState({
-    cuenta: cuentaInicial || "", cuentaDestino: "", tipoMovimiento: "", fecha: fechaHoyLima(), monto: "",
+    cuenta: cuentas.some((c) => c._id === cuentaInicial && c.activo && (modo === "libre" || c.tipo !== "detracciones")) ? cuentaInicial : "",
+    cuentaDestino: "", cuentaContable: "", tipoMovimiento: "", fecha: fechaHoyLima(), monto: "",
     medio: "transferencia", numeroOperacion: "", glosa: "", centroCosto: "",
   });
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
   const libre = modo === "libre";
-  const activas = cuentas.filter((c) => c.activo && c.tipo !== "detracciones");
+  // Las de detracciones admiten movimientos libres (pago de tributos, comisiones) pero no transferencias.
+  const activas = cuentas.filter((c) => c.activo && (libre || c.tipo !== "detracciones"));
 
   useEffect(() => {
     if (!libre) return;
@@ -33,7 +35,7 @@ export default function ModalMovimientoBanco({ modo, cuentas, cuentaInicial, cen
     try {
       const body = libre
         ? { cuenta: form.cuenta, tipoMovimiento: form.tipoMovimiento, fecha: form.fecha, monto: form.monto, medio: form.medio,
-            numeroOperacion: form.numeroOperacion, glosa: form.glosa, centroCosto: form.centroCosto || null }
+            numeroOperacion: form.numeroOperacion, glosa: form.glosa, centroCosto: form.centroCosto || null, cuentaContable: form.cuentaContable.trim() }
         : { cuenta: form.cuenta, cuentaDestino: form.cuentaDestino, fecha: form.fecha, monto: form.monto, medio: form.medio,
             numeroOperacion: form.numeroOperacion, glosa: form.glosa };
       const r = await fetchAuth(libre ? "/bancos/movimientos" : "/bancos/transferencias", { method: "POST", body: JSON.stringify(body) });
@@ -94,11 +96,17 @@ export default function ModalMovimientoBanco({ modo, cuentas, cuentaInicial, cen
             <input value={form.glosa} onChange={set("glosa")} placeholder={libre ? "Ej.: Comisión de mantenimiento setiembre" : ""} className={INP} />
           </label>
           {libre && (
-            <label className="text-xs text-gray-500 col-span-2">Centro de costo (opcional)
+            <label className="text-xs text-gray-500">Centro de costo (opcional)
               <select value={form.centroCosto} onChange={set("centroCosto")} className={INP}>
                 <option value="">—</option>
                 {centrosCosto.map((c) => <option key={c._id} value={c._id}>{c.nombre}</option>)}
               </select>
+            </label>
+          )}
+          {libre && (
+            <label className="text-xs text-gray-500">Cuenta contable (opcional)
+              <input value={form.cuentaContable} onChange={set("cuentaContable")} inputMode="numeric"
+                placeholder={tipo?.cuentaContable ? `La del tipo: ${tipo.cuentaContable}` : "La del tipo"} className={`${INP} font-mono`} />
             </label>
           )}
         </div>

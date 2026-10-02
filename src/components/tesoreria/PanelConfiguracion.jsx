@@ -129,7 +129,12 @@ export default function PanelConfiguracion({ onCambio }) {
                 <td className={`px-3 py-2 ${t.lado === "egreso" ? "text-red-600" : "text-emerald-700"}`}>{t.lado === "egreso" ? "Egreso" : "Ingreso"}</td>
                 <td className="px-3 py-2">
                   <input defaultValue={t.cuentaContable} placeholder="Ej.: 6391" inputMode="numeric" disabled={guardando}
-                    onBlur={(e) => e.target.value.trim() !== (t.cuentaContable || "") && guardar(`/bancos/tipos-movimiento/${t._id}`, "PUT", { cuentaContable: e.target.value.trim() })}
+                    onBlur={async (e) => {
+                      const input = e.target;
+                      if (input.value.trim() === (t.cuentaContable || "")) return;
+                      // Rechazada: vuelve al valor guardado (el mensaje queda arriba).
+                      if (!(await guardar(`/bancos/tipos-movimiento/${t._id}`, "PUT", { cuentaContable: input.value.trim() }))) input.value = t.cuentaContable || "";
+                    }}
                     className={`${INP} w-28 py-1 font-mono`} />
                 </td>
                 <td className="px-3 py-2"><input type="checkbox" disabled={guardando} checked={t.activo} onChange={(e) => guardar(`/bancos/tipos-movimiento/${t._id}`, "PUT", { activo: e.target.checked })} /></td>

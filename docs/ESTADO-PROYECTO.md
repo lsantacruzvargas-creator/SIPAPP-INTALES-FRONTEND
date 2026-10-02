@@ -72,6 +72,7 @@ El tope de apiperu y el candado de emisión de NC viven **en memoria**: asumen u
 | Auditoría de seguridad y manejo de errores | En main | `docs/superpowers/sdd/2026-10-01-seguridad-auditoria-progress.md` |
 | Factura de venta ligada a su comprobante SUNAT al crearla | En main | ver §4 |
 | Motor contable C1 (plan de cuentas PCGE + importación desde Excel, periodos, asientos manuales, pantalla Contabilidad) | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/contabilidad/HANDOFF-contabilidad.md` |
+| Bancos B7: movimientos sin documento, transferencias propias, saldo inicial y libro por cuenta, conciliación bancaria mensual | **Implementado** en la rama `claude/affectionate-ride-1ql646` (sin merge a `main`) | `docs/superpowers/specs/2026-10-02-bancos-b7-design.md` |
 | Motor contable C2–C5 | Diseñado; C2 espera las respuestas del contador | `docs/contabilidad/2026-10-01-preguntas-contador-C2.md` |
 
 Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide): `bloqueo-edicion`,
@@ -126,8 +127,8 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 - **Todo lo necesario para C2** está reunido en `docs/contabilidad/2026-10-01-preguntas-contador-C2.md` (software y
   plantilla de importación, plan de cuentas, cuentas por operación, criterios tributarios).
 
-**Brechas contables aún abiertas** (de `casos-prueba-contables.md` §4; B1–B5 y B9 ya resueltas): B6 cuenta de gasto por
-comprobante de compra; B7 movimientos de tesorería sin documento y conciliación bancaria; B10 periodo de anotación y
+**Brechas contables aún abiertas** (de `casos-prueba-contables.md` §4; B1–B5, B9 y B7 ya resueltas, B7 en la rama): B6
+cuenta de gasto por comprobante de compra; B10 periodo de anotación y
 crédito diferido (1673); B11–B13 costo de OT por devengo, salidas de almacén y IGV sin crédito al costo; B14 bases no
 gravadas/exoneradas; B15 retención 3 % al pagar y CRE/PDT 626; B16 detracción solo para servicios; B17 fecha de
 aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.

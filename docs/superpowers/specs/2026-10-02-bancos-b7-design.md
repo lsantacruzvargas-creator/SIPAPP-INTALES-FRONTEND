@@ -52,6 +52,19 @@ Comisiones y gastos bancarios (egreso), ITF (egreso), Intereses ganados (ingreso
 (ingreso), Otros ingresos (ingreso), Otros egresos (egreso). Sin cuenta contable por defecto (la define el contador,
 pregunta B18).
 
-## Estado
+## Estado (2026-10-02)
 
-(Se completa al cerrar la rama.)
+Implementado en la rama `claude/affectionate-ride-1ql646` (ambos repos), sin merge a `main`. Backend:
+`src/utils/bancos.js`, `src/routes/bancos.js` (`/api/bancos`), modelos `TipoMovimientoBanco` y `ConciliacionBancaria`,
+`MovimientoTesoreria` con `concepto` libre/transferencia. Frontend: pestañas **Bancos** y **Conciliación** en
+Tesorería; saldo inicial y tipos de movimiento en Configuración. Tests: `test/bancos.test.js` (13),
+`src/utils/bancos.test.js` (3); Playwright con backend real.
+
+Reglas añadidas tras la revisión: no se concilia un mes futuro ni se cierra un mes que no terminó; una sola
+conciliación abierta por cuenta (se cierran en orden); el saldo inicial cuenta para cortes en su fecha o después y la
+diferencia de cambio de cierre de cuentas en US$ parte de él; las cuentas de detracciones admiten movimientos libres
+(pago de tributos, comisiones) pero no transferencias propias.
+
+Menores diferidos: en el libro y la conciliación los pagos/cobros de facturas se describen sin número de comprobante
+ni tercero; transferencias entre monedas distintas se registran como dos movimientos; caja chica, importación del
+extracto (CSV) y chequera quedan fuera.
