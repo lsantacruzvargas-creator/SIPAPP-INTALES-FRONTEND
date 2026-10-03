@@ -131,11 +131,10 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 `95d9ae0` (incluye el arreglo de SUNAT 3270 y los saldos de tesorería, que esta rama ya tenía por cherry-pick). En
 `main` el trabajo contable se revierte (decisión del usuario 2026-10-03: el motor contable va solo en esta rama).
 
-**Pendiente en esta rama — doble pago/cobro durante la recarga (detectado 2026-10-02):** tras registrar un pago, cobro
-o movimiento, `TablaPorPagar`, `TablaPorCobrar` y `TablaMovimientos` cierran el modal y recargan, pero mientras llega
-la respuesta la fila sigue con "Registrar pago"/"Cobrar" y el saldo viejo (con red lenta se puede abrir otro pago).
-Arreglo aplicado en INTALES `main` (frontend, merge `8124b3f7`) y MICRONEGOCIOS: estado `recargando` que deshabilita
-las acciones hasta que termina la recarga.
+**Resuelto en esta rama (2026-10-03) — doble pago/cobro durante la recarga:** tras registrar un pago, cobro o
+movimiento, `TablaPorPagar`, `TablaPorCobrar` y `TablaMovimientos` dejan las acciones deshabilitadas (estado
+`recargando`) hasta que termina la recarga, así no se abre otro pago con el saldo viejo. Traído de `main` con
+cherry-pick (`3838fea`).
 
 **Resuelto (2026-10-02) — SUNAT 3270 con descuento de línea:** `cac:AlternativeConditionPrice` (precio unitario con IGV)
 ahora es (valor de venta + IGV) / cantidad, ya descontado (`src/builders/factura.builder.js`, prueba

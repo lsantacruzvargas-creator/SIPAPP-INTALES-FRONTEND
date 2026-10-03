@@ -25,6 +25,13 @@ export default function TablaPorCobrar() {
     if (r.ok) setFacturas(await r.json());
   }), []);
   useEffect(() => { cargar(); }, [cargar]);
+  // Tras un cobro, la tabla aún trae los saldos viejos hasta que termina la recarga: mientras tanto no se
+  // puede volver a registrar (con red lenta invitaba a pagar dos veces).
+  const [recargando, setRecargando] = useState(false);
+  const recargar = async () => {
+    setRecargando(true);
+    try { await cargar(); } finally { setRecargando(false); }
+  };
 
   const set = (campo) => (e) => setFiltros((f) => ({ ...f, [campo]: e.target.value }));
   const filtradas = filtrarFacturas(facturas, filtros, { lado: "venta", hoyIso });
@@ -80,7 +87,7 @@ export default function TablaPorCobrar() {
                     <td className="px-3 py-2 text-center"><Check ok={f.saldoNeto <= 0.009} /></td>
                     <td className="px-3 py-2 tabular-nums">{money(f.saldoNeto, f.moneda)}{f.saldoImpuesto > 0.009 ? ` + ${money(f.saldoImpuesto)}` : ""}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
-                      {pendiente && <button onClick={() => setCobrando(f)} className="text-xs text-purple-600 hover:text-purple-800">Registrar cobro</button>}
+                      {pendiente && <button onClick={() => setCobrando(f)} disabled={recargando} className="text-xs text-purple-600 hover:text-purple-800 disabled:opacity-40">Registrar cobro</button>}
                       {sinCobros && puedeEditarFacturas(rolDeSesion()) && <button onClick={() => setEditandoImpuesto(f)} className="text-xs text-gray-500 hover:text-gray-700">Impuesto</button>}
                     </td>
                   </tr>
@@ -104,7 +111,7 @@ export default function TablaPorCobrar() {
           </table>
         </TablaScroll>
       </div>
-      {cobrando && <ModalMovimiento lado="venta" documento={cobrando} onClose={() => setCobrando(null)} onGuardado={() => { setCobrando(null); cargar(); }} />}
+      {cobrando && <ModalMovimiento lado="venta" documento={cobrando} onClose={() => setCobrando(null)} onGuardado={() => { setCobrando(null); recargar(); }} />}
       {editandoImpuesto && <ModalImpuestoVenta factura={editandoImpuesto} onClose={() => setEditandoImpuesto(null)} onGuardada={() => { setEditandoImpuesto(null); cargar(); }} />}
     </div>
   );
