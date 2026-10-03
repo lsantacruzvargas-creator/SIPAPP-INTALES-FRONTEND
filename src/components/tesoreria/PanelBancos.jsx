@@ -41,7 +41,14 @@ export default function PanelBancos() {
   useEffect(() => { cargarSaldos(); }, [cargarSaldos]);
   useEffect(() => { cargarLibro(); }, [cargarLibro]);
 
-  const guardado = () => { setModal(null); cargarSaldos(); cargarLibro(); };
+  // Tras registrar, los saldos y el libro aún son los viejos hasta que termina la recarga: mientras tanto no se puede
+  // volver a registrar (con red lenta invitaba a registrar dos veces).
+  const [recargando, setRecargando] = useState(false);
+  const guardado = async () => {
+    setModal(null);
+    setRecargando(true);
+    try { await Promise.all([cargarSaldos(), cargarLibro()]); } finally { setRecargando(false); }
+  };
   const actual = cuentas.find((c) => c._id === sel);
   // Si llegó el libro de otra cuenta (no debería), no se muestra.
   const libroVisible = libro && String(libro.cuenta?._id) === String(sel) ? libro : null;
@@ -59,8 +66,8 @@ export default function PanelBancos() {
     <div className="space-y-5">
       {manual && (
         <div className="flex flex-wrap gap-2 justify-end">
-          <button onClick={() => setModal("transferencia")} className="border border-purple-300 text-purple-700 px-3 py-2 rounded-lg text-sm hover:bg-purple-50">Transferencia entre cuentas</button>
-          <button onClick={() => setModal("manual")} className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700">+ Ingreso / egreso manual</button>
+          <button onClick={() => setModal("transferencia")} disabled={recargando} className="border border-purple-300 text-purple-700 px-3 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50">Transferencia entre cuentas</button>
+          <button onClick={() => setModal("manual")} disabled={recargando} className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">+ Ingreso / egreso manual</button>
         </div>
       )}
       <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">

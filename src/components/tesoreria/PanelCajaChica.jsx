@@ -55,7 +55,14 @@ export default function PanelCajaChica({ centrosCosto }) {
 
   const caja = cajas.find((c) => c._id === sel);
   const res = caja?.resumen;
-  const refrescar = () => { cargarCajas(); cargarVista(); };
+  // Tras un gasto, rendición, reposición, arqueo o anulación, el resumen y la lista aún son los viejos hasta que termina
+  // la recarga: mientras tanto no se puede volver a registrar (con red lenta invitaba a registrar dos veces).
+  const [recargando, setRecargando] = useState(false);
+  const refrescar = async () => {
+    setRecargando(true);
+    try { await Promise.all([cargarCajas(), cargarVista()]); } finally { setRecargando(false); }
+  };
+  const ocupado = procesando || recargando;
   const accion = async (fn, fallo) => {
     setError("");
     setProcesando(true);
@@ -115,11 +122,11 @@ export default function PanelCajaChica({ centrosCosto }) {
         )}
         {caja && <span className="text-sm text-gray-600">{caja.nombre} · responsable: <b>{caja.cajaChica.responsable}</b></span>}
         <div className="flex-1" />
-        <button onClick={() => { setForm({ efectivo: "" }); setModal("arqueo"); }} className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50">Arqueo</button>
-        <button onClick={() => { setForm({ hasta: fechaHoyLima() }); setModal("rendir"); }} disabled={!res?.porRendir || !!res?.rendicionPendiente}
+        <button onClick={() => { setForm({ efectivo: "" }); setModal("arqueo"); }} disabled={ocupado} className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Arqueo</button>
+        <button onClick={() => { setForm({ hasta: fechaHoyLima() }); setModal("rendir"); }} disabled={ocupado || !res?.porRendir || !!res?.rendicionPendiente}
           title={res?.rendicionPendiente ? "Primero repón la rendición pendiente" : ""}
           className="border border-purple-300 text-purple-700 px-3 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50">Rendir gastos</button>
-        <button onClick={() => setModal("gasto")} className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700">+ Gasto</button>
+        <button onClick={() => setModal("gasto")} disabled={ocupado} className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">+ Gasto</button>
       </div>
 
       {res && (
@@ -132,8 +139,8 @@ export default function PanelCajaChica({ centrosCosto }) {
               <>
                 <p className="tabular-nums">{money(res.rendicionPendiente.total)} <span className="text-xs text-gray-400">{res.rendicionPendiente.codigo}</span></p>
                 <div className="flex gap-3 mt-1">
-                  <button onClick={() => { setForm({ cuentaOrigen: bancos[0]?._id || "", fecha: fechaHoyLima(), medio: "transferencia" }); setModal("reponer"); }} className="text-xs text-purple-700 hover:underline">Reponer</button>
-                  <button onClick={() => setModal("anularRend")} className="text-xs text-red-600 hover:underline">Anular</button>
+                  <button onClick={() => { setForm({ cuentaOrigen: bancos[0]?._id || "", fecha: fechaHoyLima(), medio: "transferencia" }); setModal("reponer"); }} disabled={ocupado} className="text-xs text-purple-700 hover:underline disabled:opacity-40">Reponer</button>
+                  <button onClick={() => setModal("anularRend")} disabled={ocupado} className="text-xs text-red-600 hover:underline disabled:opacity-40">Anular</button>
                 </div>
               </>
             ) : <p className="text-gray-400">—</p>}
@@ -185,7 +192,7 @@ export default function PanelCajaChica({ centrosCosto }) {
                       <td className="px-3 py-2">{g.descripcion}</td>
                       <td className="px-3 py-2">{g.centroCosto?.nombre || "—"}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{money(g.monto)}</td>
-                      <td className="px-3 py-2 text-right">{!g.anulado && !g.movimiento?.rendicion && <button onClick={() => setModal({ anularGasto: g })} className="text-xs text-red-500 hover:text-red-700">Anular</button>}</td>
+                      <td className="px-3 py-2 text-right">{!g.anulado && !g.movimiento?.rendicion && <button onClick={() => setModal({ anularGasto: g })} disabled={ocupado} className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40">Anular</button>}</td>
                     </tr>
                   ))}
                   {!datos.length && <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400">Sin gastos</td></tr>}
