@@ -7,6 +7,7 @@ import PanelExportarConcar from "../components/contabilidad/PanelExportarConcar"
 import PanelConfiguracionContable from "../components/contabilidad/PanelConfiguracionContable";
 import PanelReportesContables from "../components/contabilidad/PanelReportesContables";
 import PanelCierreMes from "../components/contabilidad/PanelCierreMes";
+import PanelLibrosPle from "../components/contabilidad/PanelLibrosPle";
 import PanelAyuda from "../components/contabilidad/PanelAyuda";
 
 const TABS = [
@@ -14,6 +15,7 @@ const TABS = [
   { id: "automaticos", label: "Automáticos" },
   { id: "concar", label: "Exportar CONCAR" },
   { id: "cierre", label: "Cierre de mes" },
+  { id: "ple", label: "Libros PLE" },
   { id: "reportes", label: "Reportes" },
   { id: "plan", label: "Plan de cuentas" },
   { id: "configuracion", label: "Configuración" },
@@ -44,7 +46,7 @@ export default function Contabilidad() {
       <div className="flex items-start gap-3">
        <div className="flex-1">
         <h1 className="text-xl font-bold text-gray-800">Contabilidad</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Plan de cuentas (PCGE 2019), asientos y exportación a CONCAR{puedeEscribir ? "" : " — solo lectura"}</p>
+        <p className="text-sm text-gray-400 mt-0.5">Plan de cuentas (PCGE 2019), asientos, exportación a CONCAR y libros PLE{puedeEscribir ? "" : " — solo lectura"}</p>
        </div>
         <button onClick={() => setAyuda(true)} title="Qué significa cada término de esta pantalla"
           className="flex items-center gap-1.5 border border-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-sm hover:bg-purple-50">
@@ -66,6 +68,7 @@ export default function Contabilidad() {
       {tab === "automaticos" && <PanelAutomaticos cuentas={cuentas} puedeGenerar={puedeGenerar} puedeEscribir={puedeEscribir} />}
       {tab === "concar" && <PanelExportarConcar puedeEscribir={puedeEscribir} />}
       {tab === "cierre" && <PanelCierreMes puedeCerrar={rol === "tesorero"} />}
+      {tab === "ple" && <PanelLibrosPle />}
       {tab === "reportes" && <PanelReportesContables centrosCosto={centrosCosto} />}
       {tab === "configuracion" && <PanelConfiguracionContable cuentas={cuentas} puedeEscribir={puedeEscribir} />}
       {tab === "plan" && <PanelPlanCuentas cuentas={cuentas} onCambio={cargarCuentas} puedeEscribir={puedeEscribir} />}

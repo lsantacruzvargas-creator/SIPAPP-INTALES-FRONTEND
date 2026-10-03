@@ -155,11 +155,26 @@ nada con fecha de ese mes. ¿Cada cuánto quiere recibir la exportación (mensua
 **E3. Reportes.** INTALES tiene Diario, Mayor y Balance de comprobación **de control** (para cuadrar con lo
 importado). ¿Necesita algún otro reporte desde INTALES (por ejemplo, conciliación bancaria)?
 
+## F. Libros electrónicos (PLE) desde INTALES (rama contabilidadoficial, 2026-10-03)
+
+**F1. Libros.** INTALES generará los .txt de Diario (5.1), Plan de cuentas (5.3), Mayor (6.1) y Caja y Bancos (1.1 y
+1.2). Con ingresos entre 300 y 1700 UIT, ¿son los que corresponden a INTALES? ¿Falta alguno (por ejemplo 3.x)?
+
+**F2. Plan de cuentas 5.3.** INTALES envía las cuentas activas y las usadas en el mes. ¿Prefiere solo las usadas, o
+todo el plan en el primer mes del ejercicio y luego solo las nuevas?
+
+**F3. Apertura y dato estructurado.** ¿Registra usted el asiento de apertura del ejercicio (subdiario Apertura, sale
+con correlativo `A`)? El campo 20 del Diario (enlace con el registro de compras o ventas del SIRE) va vacío: ¿lo exige?
+
+**F4. CONCAR.** Si los libros los presenta INTALES, ¿sigue importando los asientos en CONCAR (para EEFF y declaraciones)?
+Si no, INTALES deja de exigir la exportación para cerrar el mes.
+
 ---
 
 ## Ya decidido (no hace falta responder)
 
-- INTALES exporta asientos al software del contador (CONCAR, PCGE 2019); no lleva los libros oficiales ni el PLE.
+- INTALES exporta asientos al software del contador (CONCAR, PCGE 2019). En la rama `contabilidadoficial` (2026-10-03)
+  INTALES además presenta los libros PLE de Diario, Plan de cuentas, Mayor y Caja y Bancos.
 - NC y ND en dólares: tipo de cambio del comprobante que modifican.
 - Retención de 4.ª: se declara en el mes de pago.
 - Retención IGV 3 %: no aplica a recibos de servicios públicos (14).

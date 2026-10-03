@@ -3,6 +3,7 @@ import { fetchAuth } from "../../utils/fetchAuth";
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
 import BuscadorCuenta from "./BuscadorCuenta";
+import { ENTIDADES_FINANCIERAS } from "../../utils/contabilidad";
 
 const INP = "border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
 const CUENTAS_MONEDA = [["proveedores", "Proveedores (facturas)"], ["honorarios", "Honorarios por pagar"], ["clientes", "Clientes"]];
@@ -153,16 +154,29 @@ export default function PanelConfiguracionContable({ cuentas, puedeEscribir }) {
 
       <section className="space-y-2">
         <h3 className="text-sm font-semibold text-gray-700">Cuenta contable de cada caja y banco</h3>
+        <p className="text-xs text-gray-400">En los bancos, la entidad financiera (tabla 3 SUNAT) y el número de cuenta salen en el libro PLE 1.2.</p>
         <TablaScroll>
           <table className="text-sm">
             <tbody>
               {datos.cuentasTesoreria.map((c) => (
                 <tr key={c._id} className="border-b border-gray-100">
                   <td className="py-1 pr-3 text-gray-700">{c.nombre} <span className="text-xs text-gray-400">{c.tipo} · {c.moneda}{c.activo === false ? " · inactiva" : ""}</span></td>
-                  <td className="py-1">
+                  <td className="py-1 pr-2">
                     <BuscadorCuenta cuentas={cuentas.filter((x) => x.codigo.startsWith("10"))} valor={c.cuentaContable || ""} disabled={ro} permitirVacio className="w-64"
                       onChange={(v) => guardarCodigo("cuentas-tesoreria", c._id, { cuentaContable: v })} />
                   </td>
+                  {c.tipo !== "caja" && (
+                    <>
+                      <td className="py-1 pr-2">
+                        <select value={c.codigoEntidad || ""} disabled={ro} aria-label={`Entidad financiera de ${c.nombre}`} className={`${INP} w-52`}
+                          onChange={(e) => guardarCodigo("cuentas-tesoreria", c._id, { codigoEntidad: e.target.value })}>
+                          <option value="">Entidad financiera…</option>
+                          {Object.entries(ENTIDADES_FINANCIERAS).map(([k, v]) => <option key={k} value={k}>{k} {v}</option>)}
+                        </select>
+                      </td>
+                      <td className="py-1"><NumeroCuenta cuenta={c} ro={ro} onGuardar={(v) => guardarCodigo("cuentas-tesoreria", c._id, { numero: v })} /></td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -180,6 +194,18 @@ export default function PanelConfiguracionContable({ cuentas, puedeEscribir }) {
       </section>
       {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
     </div>
+  );
+}
+
+function NumeroCuenta({ cuenta, ro, onGuardar }) {
+  const [valor, setValor] = useState(cuenta.numero || "");
+  const cambiado = valor !== (cuenta.numero || "");
+  return (
+    <span className="flex items-center gap-2">
+      <input value={valor} maxLength={30} disabled={ro} placeholder="N.º de cuenta" aria-label={`Número de cuenta de ${cuenta.nombre}`}
+        onChange={(e) => setValor(e.target.value.replace(/[^0-9-]/g, ""))} className={`${INP} w-44 font-mono`} />
+      {!ro && cambiado && <button onClick={() => onGuardar(valor)} className="text-xs text-purple-600 hover:underline">Guardar</button>}
+    </span>
   );
 }
 

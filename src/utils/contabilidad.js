@@ -6,6 +6,13 @@ export const SUBDIARIOS = {
   compras: "Compras", ventas: "Ventas", "caja-bancos": "Caja y bancos", diario: "Diario",
   apertura: "Apertura", cierre: "Cierre", ajuste: "Ajuste",
 };
+// Tabla 3 SUNAT (entidades financieras), para el libro PLE 1.2. La misma lista valida el backend (utils/ple.js).
+export const ENTIDADES_FINANCIERAS = {
+  "01": "Banco Central de Reserva del Perú", "02": "Banco de Crédito del Perú", "03": "Interbank", "07": "Citibank del Perú",
+  "09": "Scotiabank Perú", "11": "BBVA Perú", "18": "Banco de la Nación", "23": "Banco de Comercio", "35": "Banco Pichincha",
+  "38": "BanBif", "49": "Mibanco", "53": "HSBC Bank Perú", "54": "Banco Falabella", "55": "Banco Ripley", "56": "Banco Santander Perú",
+  "58": "Banco Azteca", "99": "Otros",
+};
 export const SUBDIARIOS_MANUALES = ["diario", "apertura", "ajuste", "cierre"];
 export const ELEMENTOS = {
   1: "Activo disponible y exigible", 2: "Activo realizable", 3: "Activo inmovilizado", 4: "Pasivo", 5: "Patrimonio",

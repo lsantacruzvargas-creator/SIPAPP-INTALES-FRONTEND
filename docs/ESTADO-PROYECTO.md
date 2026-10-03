@@ -78,7 +78,8 @@ El tope de apiperu y el candado de emisión de NC viven **en memoria**: asumen u
 | Motor contable C2: asientos automáticos (compras, ventas, Tesorería) y exportación a **CONCAR** (PCGE 2019) | En main (2026-10-02, desde `claude/affectionate-ride-1ql646`) | `docs/superpowers/specs/2026-10-02-c2-asientos-concar-design.md` |
 | Motor contable C3: cierre de mes (verificar, cerrar y reabrir; bloqueo del mes en todo el sistema) y reportes de control (Diario, Mayor, Balance de comprobación) | En main (2026-10-02, desde `claude/affectionate-ride-1ql646`) | `docs/superpowers/specs/2026-10-02-c3-cierre-reportes-design.md` |
 | Motor contable C4 (exportación al software del contador) | Hecha con C2 (CONCAR) | — |
-| Motor contable C5 (cierre anual, EEFF) | En suspenso: lo hace el software del contador | `docs/contabilidad/2026-10-01-referencias-erp-C2-C5.md` |
+| Motor contable C5 ligero: libros PLE (Diario 5.1, Plan de cuentas 5.3, Mayor 6.1, Caja y Bancos 1.1/1.2) de un mes cerrado | Solo en `ventas/produccion/contabilidadoficial` (2026-10-03) | `docs/contabilidad/HANDOFF-contabilidad.md` |
+| Motor contable C5 completo (Inventarios y Balances 3.x, cierre anual, EEFF) | En suspenso: lo hace el software del contador | `docs/contabilidad/2026-10-01-referencias-erp-C2-C5.md` |
 
 Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide): `bloqueo-edicion`,
 `comprobantes-compra`, `ajustes-tributarios`, `ventas-usd-tributario`, `seguridad-auditoria`, `ligar-cpe-factura`.
@@ -90,6 +91,10 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
   contador**. Software: **CONCAR** con **PCGE 2019** (decisión 2026-10-02; formato de importación de 41 columnas
   portado de contaperu). La fase C4 pasa de "exportación PLE" a "exportación al
   software del contador"; el plan de cuentas se importa del contador para que los códigos coincidan.
+- **PLE desde INTALES** (2026-10-03, rama `ventas/produccion/contabilidadoficial`): INTALES **presenta** los libros
+  Diario (5.1), Plan de cuentas (5.3), Mayor (6.1) y Caja y Bancos (1.1 y 1.2) con el programa PLE; el contador ya no
+  los presenta desde CONCAR (la exportación a CONCAR sigue disponible). Compras y Ventas siguen por el SIRE.
+  Inventarios y Balances (3.x), cierre anual y EEFF quedan fuera (C5 completo en suspenso).
 - Retención de 4ta: se declara en el **mes de pago** del recibo (el resumen la prorratea por neto pagado).
 - Retención IGV 3 %: solo comprobantes con crédito fiscal; **no aplica a recibos de servicios públicos (14)** ni a sus notas.
 - NC/ND en dólares: TC del **comprobante que modifican** (Oficio SUNAT 024-2000).
@@ -130,6 +135,18 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 `claude/affectionate-ride-1ql646` (motor contable C1–C3, CONCAR, Bancos B7, caja chica, ayuda), que trae `main` hasta
 `95d9ae0` (incluye el arreglo de SUNAT 3270 y los saldos de tesorería, que esta rama ya tenía por cherry-pick). En
 `main` el trabajo contable se revierte (decisión del usuario 2026-10-03: el motor contable va solo en esta rama).
+
+**Rama `venta-produc-compra-contaConcar` (2026-10-03, ambos repos):** copia de `ventas/produccion/contabilidadoficial`
+tal como quedó antes del C5 ligero (backend `c87bf51`, frontend `1663ebb`): el alcance "solo exportar a CONCAR".
+Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` (solo vive en el contenedor de la sesión).
+
+**C5 ligero en `contabilidadoficial` (2026-10-03) — pendientes:**
+- **Validar los .txt con el programa PLE** antes de la primera presentación: las estructuras salen del Anexo 2
+  (versión R.S. 361-2015) y no se probaron aún en el PLE real. Ajustar en `src/utils/ple.js`.
+- Campo 20 del Diario (dato estructurado que enlaza con el registro de compras o ventas) va vacío; asiento de
+  apertura (correlativo `A`) solo si el contador lo registra como asiento manual de subdiario Apertura.
+- El cierre de mes sigue exigiendo exportar a CONCAR; si el contador deja de importar, quitar esa condición.
+- Preguntas al contador F1–F4 (`docs/contabilidad/Preguntas al contador.md`).
 
 **Resuelto en esta rama (2026-10-03) — doble pago/cobro durante la recarga:** tras registrar un pago, cobro o
 movimiento, `TablaPorPagar`, `TablaPorCobrar` y `TablaMovimientos` dejan las acciones deshabilitadas (estado

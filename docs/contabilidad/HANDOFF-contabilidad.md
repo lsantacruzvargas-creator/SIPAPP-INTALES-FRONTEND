@@ -11,6 +11,11 @@ estos docs están idénticos en `docs/contabilidad/` de ambos.
 plantilla de importación de su software (CONCAR/StarSoft, por confirmar); el PLE queda opcional y C5 en suspenso.
 El plan de cuentas debe ser el del contador (se importa desde Excel).
 
+**Cambio 2026-10-03 (solo rama `ventas/produccion/contabilidadoficial`): C5 ligero.** INTALES **presenta** con el
+programa PLE el Diario (5.1), el Plan de cuentas (5.3), el Mayor (6.1) y Caja y Bancos (1.1 y 1.2); el contador ya no
+los presenta desde CONCAR. Compras y Ventas siguen por el SIRE. La rama `venta-produc-compra-contaConcar` guarda el
+alcance anterior (solo CONCAR).
+
 ## Estado
 
 - **C1 implementada** (en `main` desde 2026-10-02, junto con C2, C3, Bancos B7 y caja chica):
@@ -55,8 +60,19 @@ El plan de cuentas debe ser el del contador (se importa desde Excel).
   bloqueado en compras, Tesorería, caja chica, CPE y asientos; reapertura con motivo) y reportes de control.
   Spec `docs/superpowers/specs/2026-10-02-c3-cierre-reportes-design.md`, ledger `docs/superpowers/sdd/2026-10-02-c3-cierre/progress.md`.
   **C4** quedó hecha con C2 (CONCAR); **C5** en suspenso.
+- **C5 ligero (PLE) implementada** (2026-10-03, solo en `contabilidadoficial`): `src/utils/ple.js` (estructuras 5.1,
+  5.3, 6.1, 1.1 y 1.2 del Anexo 2, nombre `LE…` del archivo, texto en latin1 con `\r\n`) y `GET
+  /api/contabilidad/ple?periodo=` (resumen) y `/api/contabilidad/ple/:libro?periodo=` (el .txt). Solo de un mes
+  **cerrado** y con los asientos contabilizados. 1.1 = líneas de 101/102/103; 1.2 = líneas de 104 con el banco
+  (`CuentaTesoreria.codigoEntidad`, tabla 3, y `numero`, en Contabilidad → Configuración), el medio de pago (tabla 1
+  desde el movimiento), el tercero y el número de operación. 5.3 = cuentas activas y las usadas en el mes (plan 01).
+  Frontend: pestaña **Libros PLE** y sección de ayuda. Tests `test/ple.test.js` (4); E2E con Playwright (configurar
+  el banco, descargar 1.2 y 5.1, mes abierto rechazado). Pendiente: validar con el programa PLE real (ver ESTADO §5).
 
 ## Siguiente paso
+
+0. C5 ligero: cargar los .txt de un mes de prueba en el programa PLE y corregir lo que observe; preguntas F1–F4 al
+   contador.
 
 1. Primera importación real en CONCAR con el contador: validar subdiarios, flag `N` de caja-bancos en US$, anexos
    (RUC en su maestro), centros de costo y siglas. Ajustar en Contabilidad → Configuración.

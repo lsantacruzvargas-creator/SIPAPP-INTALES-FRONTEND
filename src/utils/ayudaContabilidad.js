@@ -74,6 +74,22 @@ export const AYUDA = {
       { termino: "Asiento descuadrado", definicion: "Asiento cuyo Debe no es igual a su Haber. Impide el cierre." },
     ],
   },
+  ple: {
+    titulo: "Libros PLE",
+    descripcion: "Los libros electrónicos que INTALES presenta a SUNAT con el programa PLE, generados desde los asientos contabilizados de un mes cerrado.",
+    terminos: [
+      { termino: "PLE", definicion: "Programa de Libros Electrónicos de SUNAT: valida los archivos .txt de cada libro y los envía. INTALES genera los archivos; se cargan en el PLE." },
+      { termino: "SIRE", definicion: "Sistema de SUNAT para los Registros de Compras y Ventas. Por eso Compras y Ventas no salen en esta pestaña." },
+      { termino: "Libro Diario (5.1)", definicion: "Cada línea de cada asiento contabilizado del mes, con su CUO, cuenta, documento, Debe y Haber." },
+      { termino: "Plan de cuentas (5.3)", definicion: "Las cuentas activas del plan (y las usadas en el mes), con el código 01 del PCGE." },
+      { termino: "Libro Mayor (6.1)", definicion: "Los mismos registros del Diario, ordenados por cuenta." },
+      { termino: "Caja (1.1)", definicion: "Las líneas de las cuentas de efectivo: caja (101), fondos fijos como la caja chica (102) y efectivo en tránsito (103)." },
+      { termino: "Bancos (1.2)", definicion: "Las líneas de las cuentas corrientes (104) con su banco, número de cuenta, medio de pago, beneficiario y número de operación. Cada banco necesita su entidad financiera y número en Configuración." },
+      { termino: "Entidad financiera (tabla 3)", definicion: "Código SUNAT del banco, por ejemplo 02 BCP, 11 BBVA o 18 Banco de la Nación. Se elige en Configuración, junto a la cuenta contable del banco." },
+      { termino: "Nombre del archivo", definicion: "LE + RUC + periodo + código del libro + indicadores. El penúltimo grupo dice si el libro tiene movimientos (1) o va vacío (0); también se presenta vacío." },
+      { termino: "Mes cerrado", definicion: "El PLE solo sale de un mes cerrado, para que lo presentado no cambie. Si se reabre un mes ya presentado, hay que presentar el libro de nuevo (rectificación)." },
+    ],
+  },
   reportes: {
     titulo: "Reportes",
     descripcion: "Reportes de control con los asientos contabilizados, para cuadrar con lo que el contador importa. Los libros oficiales los lleva su software.",
@@ -119,7 +135,7 @@ export const AYUDA = {
 };
 
 // Pestañas con su ayuda, en el orden de la pantalla, y al final los conceptos básicos.
-export const ORDEN_AYUDA = ["asientos", "automaticos", "concar", "cierre", "reportes", "plan", "configuracion", "general"];
+export const ORDEN_AYUDA = ["asientos", "automaticos", "concar", "cierre", "ple", "reportes", "plan", "configuracion", "general"];
 
 // Términos de todas las secciones que contienen `texto` (en el término o la definición, sin tildes ni mayúsculas).
 export function buscarAyuda(texto) {
