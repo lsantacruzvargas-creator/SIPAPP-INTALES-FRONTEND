@@ -1,6 +1,6 @@
 # Estado del proyecto SIPAPP-INTALES — punto de entrada para agentes
 
-**Actualizado:** 2026-10-01 · **Idéntico en** `docs/` de los repos Backend y Frontend (y en `docs/` de la carpeta raíz).
+**Actualizado:** 2026-10-02 · **Idéntico en** `docs/` de los repos Backend y Frontend (y en `docs/` de la carpeta raíz).
 
 Léelo antes de tocar código. Responde al usuario **en español, conciso**; él decide lo de negocio y pide el merge a
 `main` explícitamente (nunca mergear ni subir `main` sin su OK).
@@ -59,7 +59,7 @@ El tope de apiperu y el candado de emisión de NC viven **en memoria**: asumen u
 - Skills globales útiles: `contabilidad-peru` (PCGE, asientos, TC, SIRE/PLE, CONCAR/StarSoft, casos de prueba),
   `erp-reglas-datos`, `express-async-crash-audit`, `sunat-cpe-ubl21`.
 
-## 3. Qué hay en `main` (2026-10-01)
+## 3. Qué hay en `main` (2026-10-02)
 
 | Área | Estado | Spec / registro |
 |---|---|---|
@@ -71,7 +71,14 @@ El tope de apiperu y el candado de emisión de NC viven **en memoria**: asumen u
 | Ventas en US$, TC del día y diferencia de cambio en cobros/pagos, reporte de diferencia de cambio al cierre, NC de venta parcial, resumen tributario completo (ventas, IGV del mes, renta) | En main | `docs/superpowers/specs/2026-10-01-ventas-usd-tributario-design.md` |
 | Auditoría de seguridad y manejo de errores | En main | `docs/superpowers/sdd/2026-10-01-seguridad-auditoria-progress.md` |
 | Factura de venta ligada a su comprobante SUNAT al crearla | En main | ver §4 |
-| Motor contable (C1–C5) | **Diseñado, sin código** | `docs/contabilidad/HANDOFF-contabilidad.md` |
+| Motor contable C1 (plan de cuentas PCGE + importación desde Excel, periodos, asientos manuales, pantalla Contabilidad) | En main (2026-10-02, desde `claude/affectionate-ride-1ql646`) | `docs/contabilidad/HANDOFF-contabilidad.md` |
+| Saldos de tesorería, movimientos manuales y transferencias | En main (`feature/movimientos-manuales`, ver §5) | `docs/superpowers/sdd/2026-10-02-intales-saldos-tesoreria-progress.md` |
+| Bancos B7: libro por cuenta y conciliación bancaria mensual (sobre los saldos y movimientos manuales de `main`; integrado 2026-10-02) | En main (2026-10-02, desde `claude/affectionate-ride-1ql646`) | `docs/superpowers/specs/2026-10-02-bancos-b7-design.md` |
+| Caja chica: fondo fijo, gastos (boleta, ticket, factura sin crédito, RH, movilidad, vale), rendición y reposición, arqueo | En main (2026-10-02, desde `claude/affectionate-ride-1ql646`) | `docs/superpowers/specs/2026-10-02-caja-chica-design.md` |
+| Motor contable C2: asientos automáticos (compras, ventas, Tesorería) y exportación a **CONCAR** (PCGE 2019) | En main (2026-10-02, desde `claude/affectionate-ride-1ql646`) | `docs/superpowers/specs/2026-10-02-c2-asientos-concar-design.md` |
+| Motor contable C3: cierre de mes (verificar, cerrar y reabrir; bloqueo del mes en todo el sistema) y reportes de control (Diario, Mayor, Balance de comprobación) | En main (2026-10-02, desde `claude/affectionate-ride-1ql646`) | `docs/superpowers/specs/2026-10-02-c3-cierre-reportes-design.md` |
+| Motor contable C4 (exportación al software del contador) | Hecha con C2 (CONCAR) | — |
+| Motor contable C5 (cierre anual, EEFF) | En suspenso: lo hace el software del contador | `docs/contabilidad/2026-10-01-referencias-erp-C2-C5.md` |
 
 Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide): `bloqueo-edicion`,
 `comprobantes-compra`, `ajustes-tributarios`, `ventas-usd-tributario`, `seguridad-auditoria`, `ligar-cpe-factura`.
@@ -79,6 +86,10 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 ## 4. Decisiones del usuario vigentes (no re-preguntar)
 
 **Tributario / contable**
+- **INTALES no será la contabilidad oficial** (2026-10-01): genera los asientos y los **exporta al software del
+  contador**. Software: **CONCAR** con **PCGE 2019** (decisión 2026-10-02; formato de importación de 41 columnas
+  portado de contaperu). La fase C4 pasa de "exportación PLE" a "exportación al
+  software del contador"; el plan de cuentas se importa del contador para que los códigos coincidan.
 - Retención de 4ta: se declara en el **mes de pago** del recibo (el resumen la prorratea por neto pagado).
 - Retención IGV 3 %: solo comprobantes con crédito fiscal; **no aplica a recibos de servicios públicos (14)** ni a sus notas.
 - NC/ND en dólares: TC del **comprobante que modifican** (Oficio SUNAT 024-2000).
@@ -113,23 +124,28 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 ## 5. Pendientes
 
-**Pendiente — doble pago/cobro durante la recarga (detectado 2026-10-02):** tras registrar un pago, cobro o
-movimiento, `TablaPorPagar`, `TablaPorCobrar` y `TablaMovimientos` cierran el modal y recargan, pero mientras llega la
-respuesta la fila sigue con "Registrar pago"/"Cobrar" y el saldo viejo (con red lenta se puede abrir otro pago).
-Arreglo aplicado en INTALES `main` (frontend, merge `8124b3f7`) y MICRONEGOCIOS: estado `recargando` que deshabilita las
-acciones hasta que termina la recarga.
+**⚠ Mencionar al usuario al abrir el proyecto: las "Decisiones por confirmar" de abajo.**
 
-**Pendiente — SUNAT 3270 con descuento de línea (detectado 2026-10-02):** `src/builders/factura.builder.js` manda en
-`cac:AlternativeConditionPrice/cbc:PriceAmount` (precio unitario con IGV, tipo 01) `item.precioUnitario`, el precio
-**antes** del descuento de línea. SUNAT lo valida contra (valor de venta de la línea + IGV) / cantidad, que ya está
-descontado, y rechaza la factura con 3270. Arreglo (ya aplicado en SIPAPP-MICRONEGOCIOS `21ec2ae` y SIPAPP-HUAQUIAN
-`51a2974`): `precioConIgv = montoDescuento > 0 && cantidad > 0 ? total / cantidad : precioUnitario` y usarlo en ese
-`PriceAmount`; `cac:Price` sigue antes del descuento. Verificado en SUNAT demo (F099-101 aceptada). Agregar prueba.
+**Rama `ventas/produccion/contabilidadoficial` (2026-10-03):** recibió por merge la rama contable
+`claude/affectionate-ride-1ql646` (motor contable C1–C3, CONCAR, Bancos B7, caja chica, ayuda), que trae `main` hasta
+`95d9ae0` (incluye el arreglo de SUNAT 3270 y los saldos de tesorería, que esta rama ya tenía por cherry-pick). En
+`main` el trabajo contable se revierte (decisión del usuario 2026-10-03: el motor contable va solo en esta rama).
 
-**Rama `ventas/produccion/contabilidadoficial` (2026-10-02):** tiene los arreglos de `feature/revision-compras` de
-INTALES (ver `docs/PORT-fixes-revision-compras.md`) y **los saldos de tesorería**, traídos con cherry-pick desde
-`feature/movimientos-manuales` (la misma tarea que está en `main`, con E2E OK). Plan y ledger:
-`docs/superpowers/plans/2026-10-02-intales-saldos-tesoreria.md` y
+**Pendiente en esta rama — doble pago/cobro durante la recarga (detectado 2026-10-02):** tras registrar un pago, cobro
+o movimiento, `TablaPorPagar`, `TablaPorCobrar` y `TablaMovimientos` cierran el modal y recargan, pero mientras llega
+la respuesta la fila sigue con "Registrar pago"/"Cobrar" y el saldo viejo (con red lenta se puede abrir otro pago).
+Arreglo aplicado en INTALES `main` (frontend, merge `8124b3f7`) y MICRONEGOCIOS: estado `recargando` que deshabilita
+las acciones hasta que termina la recarga.
+
+**Resuelto (2026-10-02) — SUNAT 3270 con descuento de línea:** `cac:AlternativeConditionPrice` (precio unitario con IGV)
+ahora es (valor de venta + IGV) / cantidad, ya descontado (`src/builders/factura.builder.js`, prueba
+`test/precioUnitarioDescuento.test.js`). Mismo arreglo en SIPAPP-MICRONEGOCIOS y SIPAPP-HUAQUIAN. Sigue **pendiente** en
+la rama `modulo-venta/informes/comprabasico` (en `contabilidadoficial` llegó con el merge del 2026-10-03).
+
+**Tarea "saldos de tesorería": en `main` y con push (2026-10-02)**, `feature/movimientos-manuales` (Backend y Frontend),
+E2E en navegador OK (8 escenarios: saldo inicial PEN/USD, tarjetas, aporte, egreso de caja sin saldo → 409, gasto
+bancario con sobregiro confirmado, transferencia solo misma moneda, pago y "Ya se pagó" con sobregiro, anular un
+ingreso ya gastado → 409, selectores con saldo, dif. de cambio con saldo inicial USD, contador sin botones). Plan y ledger: `docs/superpowers/plans/2026-10-02-intales-saldos-tesoreria.md` y
 `docs/superpowers/sdd/2026-10-02-intales-saldos-tesoreria-progress.md`. Incluye:
 - Saldo inicial por cuenta (monto, fecha y TC compra SUNAT si es USD; editable solo sin movimientos, jefatura/admin) y
   saldo calculado por agregación (`utils/saldosCuentas.js`), visible en Movimientos, Configuración y en los selectores
@@ -141,7 +157,33 @@ INTALES (ver `docs/PORT-fixes-revision-compras.md`) y **los saldos de tesorería
   409 `codigo: "SOBREGIRO"` y se registra con `confirmarSobregiro: true` (diálogo propio en el panel; en "Ya se pagó"
   va en la raíz del body). Mide el **mínimo del saldo acumulado** desde la fecha; el saldo inicial no cuenta antes de su
   fecha. La diferencia de cambio al cierre suma el saldo inicial con su TC.
-- Decisiones por confirmar y menores de esta tarea: ver `docs/ESTADO-PROYECTO.md` §5 de `main`.
+
+**En `main` y con push (2026-10-02):** `feature/revision-compras` (Backend y Frontend) — correcciones de compras
+traídas de la revisión de Micronegocios (línea de SC condicionada, anular OC libera solo sus líneas, fecha de entrega
+real, retención de 4ta > S/ 1,500, notas simultáneas sobre el mismo origen), receptor validado y boleta a clientes
+varios en CPE (tipo y número `-`, aceptada en SUNAT demo), detracción 004/026/027 → 400 (también fuera del selector),
+SIRE más robusto.
+
+**Rama `ventas/produccion/contabilidadoficial`** (worktree `SIPAPP-INTALES-venta-produccion-contaoficial`): ya tiene los
+arreglos de `feature/revision-compras` y el del selector de detracción (especificación en su
+`docs/PORT-fixes-revision-compras.md`). **Los saldos de tesorería NO se portaron**: esa rama se sigue avanzando y se
+mergeará con `main`, que ya los trae.
+
+**Motor contable C1–C3, CONCAR, Bancos B7 y caja chica: en `main` y con push (2026-10-02).** La rama
+`claude/affectionate-ride-1ql646` (mergeada) trajo `main` (saldos y movimientos manuales) y adapta encima Bancos B7 (libro y
+conciliación), caja chica, C1–C3 y CONCAR. Se retiró el catálogo de tipos de movimiento de B7 y sus rutas; los
+manuales de `main` admiten cuenta contable y centro de costo opcionales y C2 usa la cuenta por concepto de
+Contabilidad → Configuración (semilla: gasto bancario 6391). Backend 369 tests (368 ok, 1 omitido), frontend 94,
+E2E del flujo integrado OK. Detalle en las secciones «Integración con main» de los specs de B7 y caja chica.
+
+**Decisiones por confirmar con el usuario** (tomadas al implementar los saldos; el usuario pidió dejarlas anotadas):
+1. El saldo inicial lo editan jefatura y admin (como el resto de Configuración); el tesorero no.
+2. Se agregaron transferencias entre cuentas propias de la misma moneda (el diseño no las pedía).
+3. Manuales en USD: el ingreso usa el TC de cobros (compra por defecto), el egreso el de pagos (venta) y la
+   transferencia el de compra.
+4. Se permiten movimientos manuales con la cuenta de detracciones (pagar impuestos con fondos BN, liberación de fondos).
+5. El contador y facturación todavía pueden anular pagos y cobros **con documento** (como antes); solo los manuales
+   quedaron restringidos.
 
 **Por confirmar con el contador** (no implementar sin respuesta):
 - Si el RCE del SIRE trae los montos de comprobantes en US$ en dólares o en soles (probar con un archivo real).
@@ -149,11 +191,12 @@ INTALES (ver `docs/PORT-fixes-revision-compras.md`) y **los saldos de tesorería
 - Preguntas del documento `docs/contabilidad/2026-10-01-casos-prueba-contables.md` (sección final): costeo de OT y
   CIF, cuentas de NC de compra (60x vs 7311) y de venta (7411 vs 7032x), cuenta BN (1042 vs 107), 4ta al provisionar o
   al pagar, boletas en el Registro de Compras, coeficiente de renta, vigencia del D. Leg. 1669.
-- **Decisión de fondo**: ¿INTALES será la contabilidad oficial (PLE) o exportará asientos al software del contador
-  (plantilla de CONCAR/StarSoft)?
+- C2 está hecha con defaults; queda **validar con el contador** (`docs/contabilidad/Preguntas al contador.md`):
+  subdiario de caja-bancos (21 por defecto), flag `N` en caja-bancos US$ (primera importación real), divisionarias a
+  6 dígitos, maestro de anexos en CONCAR (RUC), destinos 9x/79 (apagados), cuenta de detracción BN (1042/107).
 
-**Brechas contables aún abiertas** (de `casos-prueba-contables.md` §4; B1–B5 y B9 ya resueltas): B6 cuenta de gasto por
-comprobante de compra; B7 conciliación bancaria (los movimientos sin documento ya están en `feature/movimientos-manuales`); B10 periodo de anotación y
+**Brechas contables aún abiertas** (de `casos-prueba-contables.md` §4; B1–B5, B9 y B7 ya resueltas; B7 = movimientos manuales de `main` + conciliación de la rama): B6
+cuenta de gasto por comprobante de compra (en la rama: cuenta por comprobante asignable desde pendientes); B10 periodo de anotación y
 crédito diferido (1673); B11–B13 costo de OT por devengo, salidas de almacén y IGV sin crédito al costo; B14 bases no
 gravadas/exoneradas; B15 retención 3 % al pagar y CRE/PDT 626; B16 detracción solo para servicios; B17 fecha de
 aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
@@ -171,10 +214,24 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
   sin filtrar ambiente; el ajuste de cierre no se guarda; NC 01 desde la UI no precarga otros cargos/redondeo;
   `ModalCrearFactura` no envía detracción al CPE.
 - Bloqueo de edición y compras: ver la sección "Estado" de sus specs.
+- Saldos de tesorería (revisión final y E2E, 2026-10-02):
+  - Un manual con fecha futura se acepta y ya suma al saldo mostrado.
+  - Egreso con fecha anterior al saldo inicial: se compara contra 0 (regla aprobada) pero el mensaje no lo explica.
+  - Dos constantes `CONCEPTOS_MANUALES` distintas (la del modelo incluye "transferencia"); renombrar la de utils.
+  - `leerSaldoInicial` toma `""` como 0 y `true` como 1.
+  - `GET /cuentas-tesoreria` hace una agregación y un `exists` por cuenta (aceptable con pocas cuentas).
+  - El diálogo manual deja combinar Ingreso con "Retiro" o "Gasto bancario" (y Egreso con "Aporte"): filtrar
+    conceptos por tipo.
+  - Al anular un ingreso ya gastado el mensaje dice "disponible S/ -450.00, falta S/ 450.00": decir "anularlo dejaría
+    la cuenta en −S/ 450.00".
+  - Las tarjetas muestran el negativo como "S/ -380.20" (en otros lugares "−S/ 380.20").
+  - En la base E2E, la tarjeta de BCP Dólares (US$ 2,217.82) y el cierre de dif. de cambio (US$ 2,276.82) difieren en
+    el egreso MOV-0007 de S/ 59 (un comprobante en soles pagado desde la cuenta en dólares): revisar si un pago en otra
+    moneda debe bloquearse o convertirse.
 
 ## 6. Índice de documentos
 
-- `docs/contabilidad/`: investigación de libros electrónicos, diseño del motor contable (aprobado, cuentas corregidas),
+- `docs/contabilidad/`: **`Preguntas al contador.md`** (todas las preguntas abiertas, consolidadas 2026-10-02), **referencias de otros ERP para C2–C5**, investigación de libros electrónicos, diseño del motor contable (aprobado, cuentas corregidas),
   spec de implementación C1, **guía contable** y **casos de prueba** (agente contador), `HANDOFF-contabilidad.md`.
 - `docs/superpowers/specs/`: todos los specs (cotización, centro de costo, compras, Tesorería B1, bloqueo de edición,
   comprobantes de compra, ventas US$/tributario).

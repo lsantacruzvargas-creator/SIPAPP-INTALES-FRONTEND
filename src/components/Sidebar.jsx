@@ -163,6 +163,7 @@ export default function Sidebar() {
   // - Compras (SC → licitación → OC a proveedor): admin, jefatura y vendedor.
   // - Tesorería (por pagar/cobrar, movimientos, SIRE): admin, jefatura, facturacion, tesorero y contador.
   // - tesorero y contador: Tesorería, Facturas y Fact. Electrónica (ver y descargar).
+  // - Contabilidad (plan de cuentas, asientos): admin, jefatura, tesorero y contador; escriben admin y contador.
   const NAV_ITEMS = [
     { to: "/dashboard", label: "Dashboard", Icon: IconHome, show: esAdmin || esJefatura || esPlanner || esCoordinadora || esAsistente },
     { to: "/ordenes-trabajo", label: "Orden de Trabajo", Icon: IconClipboard, show: esComercial || esTecnico || esSupervisor || esPlanner || esJefatura || esCoordinadora },
@@ -182,6 +183,7 @@ export default function Sidebar() {
     { to: "/requerimientos", label: "Requerimientos", Icon: IconClipboardList, show: esAdmin || esAlmacenero || esJefatura || esCoordinadora || esVendedor },
     { to: "/compras", label: "Compras", Icon: IconBag, show: esAdmin || esJefatura || esVendedor },
     { to: "/tesoreria", label: "Tesorería", Icon: IconReceipt, show: esAdmin || esFacturacion || esJefatura || esFinanzas },
+    { to: "/contabilidad", label: "Contabilidad", Icon: IconDocument, show: esAdmin || esJefatura || esFinanzas },
     { to: "/centros-costo", label: "Centros de Costo", Icon: IconTag, show: esAdmin || esJefatura },
     { to: "/maquinas", label: "Máquinas", Icon: IconServer, show: esAdmin || esJefatura },
     { to: "/tarifas-personal", label: "Tarifas de Personal", Icon: IconUsers, show: esAdmin || esJefatura },
