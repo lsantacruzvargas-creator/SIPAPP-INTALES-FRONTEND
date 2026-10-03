@@ -117,8 +117,13 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 **Resuelto (2026-10-02) — SUNAT 3270 con descuento de línea:** `cac:AlternativeConditionPrice` (precio unitario con IGV)
 ahora es (valor de venta + IGV) / cantidad, ya descontado (`src/builders/factura.builder.js`, prueba
-`test/precioUnitarioDescuento.test.js`). Mismo arreglo en SIPAPP-MICRONEGOCIOS y SIPAPP-HUAQUIAN. Sigue **pendiente** en
-las ramas `ventas/produccion/contabilidadoficial` y `modulo-venta/informes/comprabasico`.
+`test/precioUnitarioDescuento.test.js`). Mismo arreglo en SIPAPP-MICRONEGOCIOS, SIPAPP-HUAQUIAN y la rama `modulo-venta/informes/comprabasico`; sigue
+**pendiente** en `ventas/produccion/contabilidadoficial`.
+
+**Resuelto (2026-10-02) — doble pago/cobro durante la recarga:** tras registrar un pago, cobro o movimiento,
+`TablaPorPagar`, `TablaPorCobrar` y `TablaMovimientos` deshabilitan sus acciones hasta que termina la recarga (con red
+lenta la fila seguía con "Registrar pago" y el saldo viejo). Mismo arreglo en SIPAPP-MICRONEGOCIOS y en la rama
+comprabasico; pendiente en contaoficial.
 
 **Tarea "saldos de tesorería": en `main` y con push (2026-10-02)**, `feature/movimientos-manuales` (Backend y Frontend),
 E2E en navegador OK (8 escenarios: saldo inicial PEN/USD, tarjetas, aporte, egreso de caja sin saldo → 409, gasto
@@ -184,11 +189,6 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
   sin filtrar ambiente; el ajuste de cierre no se guarda; NC 01 desde la UI no precarga otros cargos/redondeo;
   `ModalCrearFactura` no envía detracción al CPE.
 - Bloqueo de edición y compras: ver la sección "Estado" de sus specs.
-- Doble pago/cobro durante la recarga (detectado en MICRONEGOCIOS, 2026-10-02): tras registrar un pago o cobro,
-  `TablaPorPagar`, `TablaPorCobrar` y `TablaMovimientos` cierran el modal y recargan, pero mientras llega la respuesta
-  la fila sigue mostrando "Registrar pago"/"Cobrar" con el saldo viejo. Con red lenta se puede abrir otro pago (el
-  backend lo rechaza si ya no hay saldo, pero con pagos parciales invita a pagar de más). Arreglo aplicado en
-  MICRONEGOCIOS `fc70fbd`: estado `cargando`/`actualizando` que deshabilita las acciones hasta que termina la recarga.
 - Saldos de tesorería (revisión final y E2E, 2026-10-02):
   - Un manual con fecha futura se acepta y ya suma al saldo mostrado.
   - Egreso con fecha anterior al saldo inicial: se compara contra 0 (regla aprobada) pero el mensaje no lo explica.

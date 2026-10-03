@@ -44,6 +44,14 @@ export default function TablaMovimientos() {
   const subIngresos = sumarPorMoneda(vigentes.filter((m) => m.tipo === "ingreso"), (m) => m.monto, (m) => m.moneda);
   const subEgresos = sumarPorMoneda(vigentes.filter((m) => m.tipo === "egreso"), (m) => m.monto, (m) => m.moneda);
 
+  // Tras un movimiento, la tabla y los saldos aún son los viejos hasta que termina la recarga: mientras tanto no se
+  // puede volver a registrar (con red lenta invitaba a pagar dos veces).
+  const [recargando, setRecargando] = useState(false);
+  const recargar = async () => {
+    setRecargando(true);
+    try { await cargar(); } finally { setRecargando(false); }
+  };
+
   // Anular un ingreso ya gastado deja un banco en negativo: el servidor pide confirmar el sobregiro.
   const anular = async (motivo) => {
     const mov = anulando;
@@ -130,7 +138,7 @@ export default function TablaMovimientos() {
                     )}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {!m.anulado && (!m.conceptoManual || puedeManual) && <button onClick={() => setAnulando(m)} className="text-xs text-red-500 hover:text-red-700">Anular</button>}
+                    {!m.anulado && (!m.conceptoManual || puedeManual) && <button onClick={() => setAnulando(m)} disabled={procesando || recargando} className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40">Anular</button>}
                   </td>
                 </tr>
               ))}
@@ -156,7 +164,7 @@ export default function TablaMovimientos() {
       )}
       {modal && (
         <ModalMovimientoManual modo={modal} cuentas={cuentas} onClose={() => setModal(null)}
-          onGuardado={() => { setModal(null); cargar(); }} />
+          onGuardado={() => { setModal(null); recargar(); }} />
       )}
       {dialogo}
     </div>

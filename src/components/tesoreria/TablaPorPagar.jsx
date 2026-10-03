@@ -30,6 +30,13 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
     if (r.ok) setDatos(await r.json());
   }), []);
   useEffect(() => { cargar(); }, [cargar, recarga]);
+  // Tras un pago o cobro, la tabla aún trae los saldos viejos hasta que termina la recarga: mientras tanto no se
+  // puede volver a registrar (con red lenta invitaba a pagar dos veces).
+  const [recargando, setRecargando] = useState(false);
+  const recargar = async () => {
+    setRecargando(true);
+    try { await cargar(); } finally { setRecargando(false); }
+  };
 
   const set = (campo) => (e) => setFiltros((f) => ({ ...f, [campo]: e.target.value }));
   const facturas = filtrarFacturas(datos.facturas, filtros, { lado: "compra", hoyIso });
@@ -182,9 +189,9 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
                         {f.aplicadoNC > 0.009 && <span className="block text-[11px] text-gray-400">NC aplicadas {money(f.aplicadoNC, f.moneda)}</span>}
                       </td>
                       <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">
-                        {pendiente && <button onClick={() => setPagando(f)} className="text-xs text-purple-600 hover:text-purple-800">Registrar pago</button>}
+                        {pendiente && <button onClick={() => setPagando(f)} disabled={recargando} className="text-xs text-purple-600 hover:text-purple-800 disabled:opacity-40">Registrar pago</button>}
                         {f.tipoComprobante === "07" && f.saldoAFavor > 0.009 && <button onClick={() => setAplicando(f)} className="text-xs text-green-700 hover:text-green-900">Aplicar a…</button>}
-                        {f.pagadoNeto + f.pagadoImpuesto === 0 && <button onClick={() => setAnulando(f)} className="text-xs text-red-500 hover:text-red-700">Anular</button>}
+                        {f.pagadoNeto + f.pagadoImpuesto === 0 && <button onClick={() => setAnulando(f)} disabled={recargando} className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40">Anular</button>}
                       </td>
                     </tr>
                   );
@@ -210,7 +217,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
       </div>
 
       {aplicando && <ModalAplicarNota nota={aplicando} facturas={datos.facturas} onClose={() => setAplicando(null)} onAplicada={() => { setAplicando(null); cargar(); }} />}
-      {pagando && <ModalMovimiento lado="compra" documento={pagando} onClose={() => setPagando(null)} onGuardado={() => { setPagando(null); cargar(); }} />}
+      {pagando && <ModalMovimiento lado="compra" documento={pagando} onClose={() => setPagando(null)} onGuardado={() => { setPagando(null); recargar(); }} />}
       {anulando && (
         <PromptAccion titulo={`Anular ${anulando.codigo}`} placeholder="Motivo de la anulación"
           onCancelar={() => setAnulando(null)} onConfirmar={anular} procesando={procesando} textoConfirmar="Anular" />
