@@ -137,7 +137,6 @@ export const textoCuenta = (c) =>
 // Columnas Documento / Tercero / Parte del libro de movimientos.
 export function referenciaMovimiento(m) {
   if (m.conceptoManual) return { documento: etiquetaConceptoManual(m.conceptoManual), tercero: m.descripcion || "", parte: "Manual" };
-  if (m.concepto === "caja_chica") return { documento: "Gasto de caja chica", tercero: m.descripcion || "", parte: "Caja chica" };
   return { documento: m.documentoRef?.comprobante || "", tercero: m.documentoRef?.tercero || "", parte: m.concepto === "neto" ? "Neto" : "Impuesto" };
 }
 

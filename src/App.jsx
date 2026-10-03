@@ -24,7 +24,6 @@ import Inventario from "./pages/Inventario";
 import Requerimientos from "./pages/Requerimientos";
 import Compras from "./pages/Compras";
 import Tesoreria from "./pages/Tesoreria";
-import Contabilidad from "./pages/Contabilidad";
 import TipoCambio from "./pages/TipoCambio";
 import CentrosCosto from "./pages/CentrosCosto";
 import Maquinas from "./pages/Maquinas";
@@ -235,15 +234,6 @@ export default function App() {
         element={
           <ProtectedRoute roles={["admin", "jefatura", "facturacion", "tesorero", "contador"]}>
             <Layout><Tesoreria /></Layout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/contabilidad"
-        element={
-          <ProtectedRoute roles={["admin", "jefatura", "tesorero", "contador"]}>
-            <Layout><Contabilidad /></Layout>
           </ProtectedRoute>
         }
       />

@@ -21,12 +21,10 @@ export default function PanelConfiguracion({ onCambio }) {
   // Saldo inicial en edición (solo cuentas sin movimientos): { id, saldoInicial, fechaSaldoInicial }.
   const [editando, setEditando] = useState(null);
 
-  const [cajaEditada, setCajaEditada] = useState(null); // { id, responsable, montoFondo, topeGasto }
-
   const cargar = useCallback(() => Promise.all([fetchAuth("/cuentas-tesoreria"), fetchAuth("/configuracion")]).then(async ([rc, rg]) => {
     if (rc.ok) setCuentas(await rc.json());
     if (rg.ok) setConfig(await rg.json());
-  }).catch(() => setError("Error de conexión con el servidor.")), []);
+  }), []);
   useEffect(() => { cargar(); }, [cargar]);
 
   const guardar = async (ruta, metodo, body) => {
@@ -50,10 +48,6 @@ export default function PanelConfiguracion({ onCambio }) {
   };
   const set = (campo) => (e) => setNueva((n) => ({ ...n, [campo]: e.target.value }));
   const crear = async () => { if (await guardar("/cuentas-tesoreria", "POST", conSaldoInicial(nueva))) setNueva(VACIA); };
-  const guardarCaja = async (activa) => {
-    const { id, ...datos } = cajaEditada;
-    if (await guardar(`/caja-chica/cuentas/${id}`, "PUT", activa ? { ...datos, activa: true } : { activa: false })) setCajaEditada(null);
-  };
   const guardarInicial = async () => {
     const { id, saldoInicial, fechaSaldoInicial } = editando;
     if (await guardar(`/cuentas-tesoreria/${id}`, "PUT", { saldoInicial: Number(saldoInicial) || 0, fechaSaldoInicial })) setEditando(null);
@@ -133,37 +127,6 @@ export default function PanelConfiguracion({ onCambio }) {
           <button onClick={crear} disabled={guardando || !nueva.nombre.trim() || (Number(nueva.saldoInicial) > 0 && !nueva.fechaSaldoInicial)} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50">Agregar cuenta</button>
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
-      </div>
-      <div className="space-y-2">
-        <h3 className="text-sm font-bold text-gray-700 uppercase">Cajas chicas (fondo fijo)</h3>
-        <p className="text-[11px] text-gray-400">Una cuenta de tipo caja en soles. Después de configurarla, abre el fondo con una transferencia desde Bancos.</p>
-        <table className="w-full text-sm bg-white rounded-xl border border-gray-100">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="px-3 py-2 text-left">Caja</th><th className="px-3 py-2 text-left">Caja chica</th></tr></thead>
-          <tbody className="divide-y divide-gray-100">
-            {cuentas.filter((c) => c.tipo === "caja" && c.moneda === "PEN").map((c) => (
-              <tr key={c._id}>
-                <td className="px-3 py-2">{c.nombre}</td>
-                <td className="px-3 py-2">
-                  {cajaEditada?.id === c._id ? (
-                    <span className="flex flex-wrap gap-1 items-center">
-                      <input value={cajaEditada.responsable} onChange={(e) => setCajaEditada((s) => ({ ...s, responsable: e.target.value }))} placeholder="Responsable" className={`${INP} py-1`} />
-                      <input value={cajaEditada.montoFondo} onChange={(e) => setCajaEditada((s) => ({ ...s, montoFondo: e.target.value }))} placeholder="Fondo S/" inputMode="decimal" className={`${INP} w-28 py-1`} />
-                      <input value={cajaEditada.topeGasto} onChange={(e) => setCajaEditada((s) => ({ ...s, topeGasto: e.target.value }))} placeholder="Tope por gasto" inputMode="decimal" className={`${INP} w-32 py-1`} />
-                      <button onClick={() => guardarCaja(true)} disabled={guardando || !cajaEditada.responsable.trim() || !cajaEditada.montoFondo} className="text-xs text-purple-700 hover:underline disabled:opacity-50">Guardar</button>
-                      {c.cajaChica?.activa && <button onClick={() => guardarCaja(false)} disabled={guardando} className="text-xs text-red-600 hover:underline">Quitar</button>}
-                      <button onClick={() => setCajaEditada(null)} className="text-xs text-gray-500 hover:underline">Cancelar</button>
-                    </span>
-                  ) : (
-                    <button onClick={() => setCajaEditada({ id: c._id, responsable: c.cajaChica?.responsable || "", montoFondo: String(c.cajaChica?.montoFondo || ""), topeGasto: String(c.cajaChica?.topeGasto || "") })}
-                      className="text-xs text-gray-600 hover:underline">
-                      {c.cajaChica?.activa ? `Sí · ${c.cajaChica.responsable} · fondo S/ ${Number(c.cajaChica.montoFondo).toFixed(2)}${c.cajaChica.topeGasto ? ` · tope S/ ${Number(c.cajaChica.topeGasto).toFixed(2)}` : ""}` : "Configurar como caja chica"}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   );

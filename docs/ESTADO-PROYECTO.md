@@ -59,7 +59,7 @@ El tope de apiperu y el candado de emisión de NC viven **en memoria**: asumen u
 - Skills globales útiles: `contabilidad-peru` (PCGE, asientos, TC, SIRE/PLE, CONCAR/StarSoft, casos de prueba),
   `erp-reglas-datos`, `express-async-crash-audit`, `sunat-cpe-ubl21`.
 
-## 3. Qué hay en `main` (2026-10-02)
+## 3. Qué hay en `main` (2026-10-01)
 
 | Área | Estado | Spec / registro |
 |---|---|---|
@@ -71,14 +71,7 @@ El tope de apiperu y el candado de emisión de NC viven **en memoria**: asumen u
 | Ventas en US$, TC del día y diferencia de cambio en cobros/pagos, reporte de diferencia de cambio al cierre, NC de venta parcial, resumen tributario completo (ventas, IGV del mes, renta) | En main | `docs/superpowers/specs/2026-10-01-ventas-usd-tributario-design.md` |
 | Auditoría de seguridad y manejo de errores | En main | `docs/superpowers/sdd/2026-10-01-seguridad-auditoria-progress.md` |
 | Factura de venta ligada a su comprobante SUNAT al crearla | En main | ver §4 |
-| Motor contable C1 (plan de cuentas PCGE + importación desde Excel, periodos, asientos manuales, pantalla Contabilidad) | En main (2026-10-02, desde `claude/affectionate-ride-1ql646`) | `docs/contabilidad/HANDOFF-contabilidad.md` |
-| Saldos de tesorería, movimientos manuales y transferencias | En main (`feature/movimientos-manuales`, ver §5) | `docs/superpowers/sdd/2026-10-02-intales-saldos-tesoreria-progress.md` |
-| Bancos B7: libro por cuenta y conciliación bancaria mensual (sobre los saldos y movimientos manuales de `main`; integrado 2026-10-02) | En main (2026-10-02, desde `claude/affectionate-ride-1ql646`) | `docs/superpowers/specs/2026-10-02-bancos-b7-design.md` |
-| Caja chica: fondo fijo, gastos (boleta, ticket, factura sin crédito, RH, movilidad, vale), rendición y reposición, arqueo | En main (2026-10-02, desde `claude/affectionate-ride-1ql646`) | `docs/superpowers/specs/2026-10-02-caja-chica-design.md` |
-| Motor contable C2: asientos automáticos (compras, ventas, Tesorería) y exportación a **CONCAR** (PCGE 2019) | En main (2026-10-02, desde `claude/affectionate-ride-1ql646`) | `docs/superpowers/specs/2026-10-02-c2-asientos-concar-design.md` |
-| Motor contable C3: cierre de mes (verificar, cerrar y reabrir; bloqueo del mes en todo el sistema) y reportes de control (Diario, Mayor, Balance de comprobación) | En main (2026-10-02, desde `claude/affectionate-ride-1ql646`) | `docs/superpowers/specs/2026-10-02-c3-cierre-reportes-design.md` |
-| Motor contable C4 (exportación al software del contador) | Hecha con C2 (CONCAR) | — |
-| Motor contable C5 (cierre anual, EEFF) | En suspenso: lo hace el software del contador | `docs/contabilidad/2026-10-01-referencias-erp-C2-C5.md` |
+| Motor contable (C1–C5) | **Diseñado, sin código** | `docs/contabilidad/HANDOFF-contabilidad.md` |
 
 Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide): `bloqueo-edicion`,
 `comprobantes-compra`, `ajustes-tributarios`, `ventas-usd-tributario`, `seguridad-auditoria`, `ligar-cpe-factura`.
@@ -86,10 +79,6 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 ## 4. Decisiones del usuario vigentes (no re-preguntar)
 
 **Tributario / contable**
-- **INTALES no será la contabilidad oficial** (2026-10-01): genera los asientos y los **exporta al software del
-  contador**. Software: **CONCAR** con **PCGE 2019** (decisión 2026-10-02; formato de importación de 41 columnas
-  portado de contaperu). La fase C4 pasa de "exportación PLE" a "exportación al
-  software del contador"; el plan de cuentas se importa del contador para que los códigos coincidan.
 - Retención de 4ta: se declara en el **mes de pago** del recibo (el resumen la prorratea por neto pagado).
 - Retención IGV 3 %: solo comprobantes con crédito fiscal; **no aplica a recibos de servicios públicos (14)** ni a sus notas.
 - NC/ND en dólares: TC del **comprobante que modifican** (Oficio SUNAT 024-2000).
@@ -163,13 +152,6 @@ arreglos de `feature/revision-compras` y el del selector de detracción (especif
 `docs/PORT-fixes-revision-compras.md`). **Los saldos de tesorería NO se portaron**: esa rama se sigue avanzando y se
 mergeará con `main`, que ya los trae.
 
-**Motor contable C1–C3, CONCAR, Bancos B7 y caja chica: en `main` y con push (2026-10-02).** La rama
-`claude/affectionate-ride-1ql646` (mergeada) trajo `main` (saldos y movimientos manuales) y adapta encima Bancos B7 (libro y
-conciliación), caja chica, C1–C3 y CONCAR. Se retiró el catálogo de tipos de movimiento de B7 y sus rutas; los
-manuales de `main` admiten cuenta contable y centro de costo opcionales y C2 usa la cuenta por concepto de
-Contabilidad → Configuración (semilla: gasto bancario 6391). Backend 369 tests (368 ok, 1 omitido), frontend 94,
-E2E del flujo integrado OK. Detalle en las secciones «Integración con main» de los specs de B7 y caja chica.
-
 **Decisiones por confirmar con el usuario** (tomadas al implementar los saldos; el usuario pidió dejarlas anotadas):
 1. El saldo inicial lo editan jefatura y admin (como el resto de Configuración); el tesorero no.
 2. Se agregaron transferencias entre cuentas propias de la misma moneda (el diseño no las pedía).
@@ -185,12 +167,11 @@ E2E del flujo integrado OK. Detalle en las secciones «Integración con main» d
 - Preguntas del documento `docs/contabilidad/2026-10-01-casos-prueba-contables.md` (sección final): costeo de OT y
   CIF, cuentas de NC de compra (60x vs 7311) y de venta (7411 vs 7032x), cuenta BN (1042 vs 107), 4ta al provisionar o
   al pagar, boletas en el Registro de Compras, coeficiente de renta, vigencia del D. Leg. 1669.
-- C2 está hecha con defaults; queda **validar con el contador** (`docs/contabilidad/Preguntas al contador.md`):
-  subdiario de caja-bancos (21 por defecto), flag `N` en caja-bancos US$ (primera importación real), divisionarias a
-  6 dígitos, maestro de anexos en CONCAR (RUC), destinos 9x/79 (apagados), cuenta de detracción BN (1042/107).
+- **Decisión de fondo**: ¿INTALES será la contabilidad oficial (PLE) o exportará asientos al software del contador
+  (plantilla de CONCAR/StarSoft)?
 
-**Brechas contables aún abiertas** (de `casos-prueba-contables.md` §4; B1–B5, B9 y B7 ya resueltas; B7 = movimientos manuales de `main` + conciliación de la rama): B6
-cuenta de gasto por comprobante de compra (en la rama: cuenta por comprobante asignable desde pendientes); B10 periodo de anotación y
+**Brechas contables aún abiertas** (de `casos-prueba-contables.md` §4; B1–B5 y B9 ya resueltas): B6 cuenta de gasto por
+comprobante de compra; B7 conciliación bancaria (los movimientos sin documento ya están en `feature/movimientos-manuales`); B10 periodo de anotación y
 crédito diferido (1673); B11–B13 costo de OT por devengo, salidas de almacén y IGV sin crédito al costo; B14 bases no
 gravadas/exoneradas; B15 retención 3 % al pagar y CRE/PDT 626; B16 detracción solo para servicios; B17 fecha de
 aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
@@ -225,7 +206,7 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
 
 ## 6. Índice de documentos
 
-- `docs/contabilidad/`: **`Preguntas al contador.md`** (todas las preguntas abiertas, consolidadas 2026-10-02), **referencias de otros ERP para C2–C5**, investigación de libros electrónicos, diseño del motor contable (aprobado, cuentas corregidas),
+- `docs/contabilidad/`: investigación de libros electrónicos, diseño del motor contable (aprobado, cuentas corregidas),
   spec de implementación C1, **guía contable** y **casos de prueba** (agente contador), `HANDOFF-contabilidad.md`.
 - `docs/superpowers/specs/`: todos los specs (cotización, centro de costo, compras, Tesorería B1, bloqueo de edición,
   comprobantes de compra, ventas US$/tributario).
