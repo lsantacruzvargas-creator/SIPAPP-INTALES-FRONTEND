@@ -113,6 +113,12 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 ## 5. Pendientes
 
+**⚠ Contabilidad, bancos B7 y caja chica NO van en `main` (decisión del usuario, 2026-10-02):** el motor contable
+C1–C3 (asientos, automáticos, exportar CONCAR, cierre de mes, plan de cuentas), bancos B7 y caja chica de la rama
+`claude/affectionate-ride-1ql646` son **solo para `ventas/produccion/contabilidadoficial`**. Esa rama llegó a `origin/main`
+por error; se revirtió (`80c5410` backend, `52663131` frontend) y se mergeó en contabilidadoficial. Agentes: no subir ese
+trabajo a `main`. Si algún día se mergea contabilidadoficial hacia `main`, revertir antes esos dos commits de revert.
+
 **⚠ Mencionar al usuario al abrir el proyecto: las "Decisiones por confirmar" de abajo.**
 
 **Resuelto (2026-10-02) — SUNAT 3270 con descuento de línea:** `cac:AlternativeConditionPrice` (precio unitario con IGV)
