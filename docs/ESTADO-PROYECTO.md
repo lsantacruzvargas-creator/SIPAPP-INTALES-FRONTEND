@@ -113,6 +113,12 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 ## 5. Pendientes
 
+**Pendiente — doble pago/cobro durante la recarga (detectado 2026-10-02):** tras registrar un pago, cobro o
+movimiento, `TablaPorPagar`, `TablaPorCobrar` y `TablaMovimientos` cierran el modal y recargan, pero mientras llega la
+respuesta la fila sigue con "Registrar pago"/"Cobrar" y el saldo viejo (con red lenta se puede abrir otro pago).
+Arreglo aplicado en INTALES `main` (frontend, merge `8124b3f7`) y MICRONEGOCIOS: estado `recargando` que deshabilita las
+acciones hasta que termina la recarga.
+
 **Pendiente — SUNAT 3270 con descuento de línea (detectado 2026-10-02):** `src/builders/factura.builder.js` manda en
 `cac:AlternativeConditionPrice/cbc:PriceAmount` (precio unitario con IGV, tipo 01) `item.precioUnitario`, el precio
 **antes** del descuento de línea. SUNAT lo valida contra (valor de venta de la línea + IGV) / cantidad, que ya está
