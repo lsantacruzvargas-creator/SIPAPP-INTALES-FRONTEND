@@ -184,6 +184,11 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
   sin filtrar ambiente; el ajuste de cierre no se guarda; NC 01 desde la UI no precarga otros cargos/redondeo;
   `ModalCrearFactura` no envía detracción al CPE.
 - Bloqueo de edición y compras: ver la sección "Estado" de sus specs.
+- Doble pago/cobro durante la recarga (detectado en MICRONEGOCIOS, 2026-10-02): tras registrar un pago o cobro,
+  `TablaPorPagar`, `TablaPorCobrar` y `TablaMovimientos` cierran el modal y recargan, pero mientras llega la respuesta
+  la fila sigue mostrando "Registrar pago"/"Cobrar" con el saldo viejo. Con red lenta se puede abrir otro pago (el
+  backend lo rechaza si ya no hay saldo, pero con pagos parciales invita a pagar de más). Arreglo aplicado en
+  MICRONEGOCIOS `fc70fbd`: estado `cargando`/`actualizando` que deshabilita las acciones hasta que termina la recarga.
 - Saldos de tesorería (revisión final y E2E, 2026-10-02):
   - Un manual con fecha futura se acepta y ya suma al saldo mostrado.
   - Egreso con fecha anterior al saldo inicial: se compara contra 0 (regla aprobada) pero el mensaje no lo explica.
