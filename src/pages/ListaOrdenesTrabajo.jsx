@@ -354,10 +354,6 @@ export default function ListaOrdenesTrabajo() {
   );
 
   const hayFiltro = Object.values(filtros).some(Boolean);
-  // Con qué categoría se queda la vista — "todos" no filtra nada (todas las
-  // tablas se muestran).
-  const mostrarPlanner = (clave) => filtroEstadoPlanner === "todos" || filtroEstadoPlanner === clave;
-
   // Mismas columnas que TablaOTs (ver el nuevo orden ahí) — una hoja por
   // cada tabla visible.
   const filaOT = (o) => ({
@@ -433,7 +429,7 @@ export default function ListaOrdenesTrabajo() {
         </select>
 
         <select value={filtroEstadoPlanner} onChange={(e) => setFiltroEstadoPlanner(e.target.value)} className={SELECT}>
-          <option value="todos">Todo estado</option>
+          <option value="todos">Todas las Órdenes de Trabajo</option>
           <option value="noAsignada">No asignada</option>
           <option value="enProgreso">En progreso</option>
           <option value="completada">Completada</option>
@@ -501,18 +497,17 @@ export default function ListaOrdenesTrabajo() {
       </div>
 
       <>
-          {/* Vista global: todas las OTs juntas (sin separar por asignación),
-              respondiendo al mismo filtro de Estado de arriba — "Todo
-              estado" muestra la unión exacta de las 5 tablas de abajo. */}
-          <TablaOTs
-            titulo="Todas las Órdenes de Trabajo"
-            acento="bg-indigo-500"
-            ordenes={todasOTs}
-            onSelect={setSeleccionada}
-            vacioMsg={hayFiltro || filtroEstadoPlanner !== "todos" ? "Sin resultados para los filtros aplicados" : "Sin órdenes de trabajo"}
-          />
+          {filtroEstadoPlanner === "todos" && (
+            <TablaOTs
+              titulo="Todas las Órdenes de Trabajo"
+              acento="bg-indigo-500"
+              ordenes={todasOTs}
+              onSelect={setSeleccionada}
+              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de trabajo"}
+            />
+          )}
 
-          {mostrarPlanner("noAsignada") && (
+          {filtroEstadoPlanner === "noAsignada" && (
             <TablaOTs
               titulo="Órdenes no asignadas"
               acento="bg-red-500"
@@ -522,7 +517,7 @@ export default function ListaOrdenesTrabajo() {
             />
           )}
 
-          {mostrarPlanner("enProgreso") && (
+          {filtroEstadoPlanner === "enProgreso" && (
             <TablaOTs
               titulo="Órdenes en progreso"
               acento="bg-blue-500"
@@ -532,7 +527,7 @@ export default function ListaOrdenesTrabajo() {
             />
           )}
 
-          {mostrarPlanner("completada") && (
+          {filtroEstadoPlanner === "completada" && (
             <TablaOTs
               titulo="Órdenes completadas"
               acento="bg-green-500"
@@ -542,7 +537,7 @@ export default function ListaOrdenesTrabajo() {
             />
           )}
 
-          {mostrarPlanner("entregada") && (
+          {filtroEstadoPlanner === "entregada" && (
             <TablaOTs
               titulo="Órdenes entregadas"
               acento="bg-teal-500"
@@ -553,7 +548,7 @@ export default function ListaOrdenesTrabajo() {
           )}
         </>
 
-      {mostrarPlanner("cerrada") && (
+      {filtroEstadoPlanner === "cerrada" && (
         <TablaOTs
           titulo="Órdenes cerradas"
           acento="bg-gray-500"

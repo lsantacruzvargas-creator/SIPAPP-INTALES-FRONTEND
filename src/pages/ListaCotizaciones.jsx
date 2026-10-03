@@ -19,7 +19,6 @@ const FILTROS_VACIO = { empresa: "", planta: "", ano: "", mes: "", oc: "", busqu
 
 const VISTAS = [
   { valor: "todasLasCotizaciones", label: "Todas las cotizaciones" },
-  { valor: "todas",      label: "Todas las tablas" },
   { valor: "sinOT",      label: "Cotizaciones sin OT" },
   { valor: "pendientes", label: "Cotizaciones pendientes de OC" },
   { valor: "conOC",      label: "Cotización con OC" },
@@ -350,12 +349,7 @@ export default function ListaCotizaciones() {
   // vivir en esa tabla, no duplicarse acá.
   const sinOT = filtradas.filter((c) => !c._esOT && !esCerrada(c) && !otsPorCot.get(c._id)?.length);
   const hayFiltro = Object.values(filtros).some(Boolean);
-  // Si hay una búsqueda de texto activa, no dejar que el selector de "vista"
-  // esconda una tabla donde SÍ cae el resultado (ej. buscar un N° OT que
-  // pertenece a una cotización "con OC" mientras la vista activa es
-  // "Pendientes") — las otras 3 páginas de lista siempre muestran todas sus
-  // categorías a la vez, así que en búsqueda esta página se comporta igual.
-  const vistaEfectiva = filtros.busqueda ? "todasLasCotizaciones" : vista;
+  const vistaEfectiva = vista;
 
   // Misma columnas que TablaCotizaciones — una hoja por cada tabla visible.
   const filaCotizacion = (c) => {
@@ -510,7 +504,7 @@ export default function ListaCotizaciones() {
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "sinOT") && (
+      {vistaEfectiva === "sinOT" && (
         <TablaCotizaciones
           titulo="Cotizaciones sin OT"
           acento="bg-indigo-500"
@@ -522,7 +516,7 @@ export default function ListaCotizaciones() {
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "pendientes") && (
+      {vistaEfectiva === "pendientes" && (
         <TablaCotizaciones
           titulo="Cotizaciones pendientes de OC"
           acento="bg-amber-500"
@@ -537,7 +531,7 @@ export default function ListaCotizaciones() {
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "conOC") && (
+      {vistaEfectiva === "conOC" && (
         <TablaCotizaciones
           titulo="Cotización con OC"
           acento="bg-emerald-500"
@@ -551,7 +545,7 @@ export default function ListaCotizaciones() {
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "cerradas") && (
+      {vistaEfectiva === "cerradas" && (
         <TablaCotizaciones
           titulo="Cotizaciones cerradas"
           acento="bg-gray-500"

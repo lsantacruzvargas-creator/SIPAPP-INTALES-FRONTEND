@@ -22,6 +22,7 @@ import ListaGuias from "./pages/ListaGuias";
 import EmitirGuia from "./pages/EmitirGuia";
 import Inventario from "./pages/Inventario";
 import Requerimientos from "./pages/Requerimientos";
+import Compras from "./pages/Compras";
 import TipoCambio from "./pages/TipoCambio";
 import CentrosCosto from "./pages/CentrosCosto";
 import Maquinas from "./pages/Maquinas";
@@ -213,6 +214,15 @@ export default function App() {
         element={
           <ProtectedRoute roles={["admin", "almacenero", "jefatura", "coordinadora", "vendedor"]}>
             <Layout><Requerimientos /></Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/compras"
+        element={
+          <ProtectedRoute roles={["admin", "jefatura", "coordinadora", "vendedor"]}>
+            <Layout><Compras /></Layout>
           </ProtectedRoute>
         }
       />

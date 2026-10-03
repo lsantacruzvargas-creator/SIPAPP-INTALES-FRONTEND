@@ -17,7 +17,6 @@ const TH = "px-4 py-3 font-semibold text-gray-500 whitespace-nowrap";
 // Cotizaciones (ver ListaCotizaciones.jsx).
 const VISTAS = [
   { valor: "todasLasOC",  label: "Todas las Órdenes de Compra" },
-  { valor: "todas",       label: "Todas las tablas" },
   { valor: "sinFactura",  label: "Sin factura" },
   { valor: "conFactura",  label: "Con factura" },
   { valor: "cerradas",    label: "Cerradas" },
@@ -375,10 +374,7 @@ export default function ListaOrdenesCompra() {
   });
 
   const hayFiltro = busqueda || estadoOT || empresa || planta || anio || mes;
-  // Si hay búsqueda de texto activa, no dejar que el selector de "vista"
-  // esconda una tabla donde SÍ cae el resultado — mismo criterio que
-  // ListaCotizaciones.jsx.
-  const vistaEfectiva = busqueda ? "todasLasOC" : vista;
+  const vistaEfectiva = vista;
 
   const tieneFactura = (o) => !!(factByOCMap[o._id] || factMap[o.cotizacion?._id || o.cotizacion]);
   const cerradas   = filtradas.filter((o) => o.estadoCadena === "cerrado");
@@ -555,7 +551,7 @@ export default function ListaOrdenesCompra() {
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "sinFactura") && (
+      {vistaEfectiva === "sinFactura" && (
         <TablaOC
           titulo="Órdenes de Compra sin factura"
           acento="bg-amber-500"
@@ -571,7 +567,7 @@ export default function ListaOrdenesCompra() {
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "conFactura") && (
+      {vistaEfectiva === "conFactura" && (
         <TablaOC
           titulo="Órdenes de Compra con factura"
           acento="bg-emerald-500"
@@ -583,7 +579,7 @@ export default function ListaOrdenesCompra() {
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "cerradas") && (
+      {vistaEfectiva === "cerradas" && (
         <TablaOC
           titulo="Órdenes de Compra cerradas"
           acento="bg-gray-500"
