@@ -1,4 +1,4 @@
-# Traspaso — motor contable (actualizado 2026-10-02)
+# Traspaso — motor contable (actualizado 2026-10-03)
 
 > Contexto general del proyecto, decisiones del usuario y comandos: **`docs/ESTADO-PROYECTO.md`**.
 
@@ -68,6 +68,29 @@ alcance anterior (solo CONCAR).
   desde el movimiento), el tercero y el número de operación. 5.3 = cuentas activas y las usadas en el mes (plan 01).
   Frontend: pestaña **Libros PLE** y sección de ayuda. Tests `test/ple.test.js` (4); E2E con Playwright (configurar
   el banco, descargar 1.2 y 5.1, mes abierto rechazado). Pendiente: validar con el programa PLE real (ver ESTADO §5).
+
+- **Revisión contra contaperu y ajustes (2026-10-03, sin commit aún)**:
+  - **PLE** alineado con el Libro Diario aceptado por SUNAT que contrasta contaperu (`datos/sunat/ple_campos.json`):
+    5.1/6.1/1.1 escriben tercero `0`, comprobante `00` y el **número del asiento** donde no hay documento (campos
+    obligatorios), y la fecha nula `01/01/0001` donde no hay vencimiento; el 5.3 lleva periodo `AAAAMM01` (AAAAMMDD) y
+    solo cuentas de movimiento activas o usadas, desde tres dígitos. El resumen (`GET /ple`) devuelve `avisos` (cuentas
+    del Diario con menos de 4 dígitos: sobre 100 UIT se exigen 4). El 1.2 no cambió (contaperu no lo cubre).
+  - **Diferencia de cambio al cierre**: `POST /api/contabilidad/automaticos/diferencia-cambio { periodo }` (admin,
+    contador, tesorero) → `generarDiferenciaCambio` en `utils/asientosAutomaticos.js`. Sale del **mayor**: por cuenta
+    en dólares (clientes, proveedores y honorarios US$ por tercero y documento; bancos US$ por cuenta) compara el saldo
+    en soles de lo contabilizado (asientos en USD y ajustes anteriores) con el saldo en dólares al TC SUNAT del último
+    día (clase 1 al compra, clase 4 al venta). Borrador en el subdiario `ajuste`, origen `DiferenciaCambio` sin id; se
+    regenera (reemplaza su borrador) y, ya contabilizado, solo agrega lo que falte. Exige: mes terminado y abierto, sin
+    borradores hasta ese periodo, TC publicado (no respaldo) y que un banco en soles y otro en dólares no compartan
+    cuenta contable. En CONCAR sale con flag `N`, dólares 0 y soles el ajuste. **No es requisito del cierre de mes.**
+    Frontend: botón «Diferencia de cambio al cierre» en la pestaña Automáticos.
+  - **Constancia de detracción** en CONCAR (columna S de la línea `DR`): el número de operación del depósito de la
+    detracción si ya está en Tesorería; si no, el comodín de la configuración (`lineas.detraccion.constancia`).
+  - **PCGE 2019 confirmado** por el usuario (contaperu trae además un catálogo «2026»: no se usa).
+  - Fechas: ver ESTADO-PROYECTO §5.
+  - **No se tocó (espera al contador)**: periodo de anotación de compras tardías (B10/E1/D7), retención IGV 3 % por
+    40114 con CRE (B15/D4), tasa AO y doble anexo de CONCAR (A8/A4). El Diario sigue sin planilla, depreciación ni costo
+    de ventas: van como asientos manuales.
 
 ## Siguiente paso
 

@@ -106,8 +106,11 @@ con crédito fiscal se registran por Comprobantes de compra) o necesita el IGV s
 
 **C1. Diferencia de cambio en cobros y pagos.** Hoy va en el asiento del cobro o pago (676/776). ¿Correcto?
 
-**C2. Diferencia de cambio al cierre del mes.** INTALES tiene el reporte (Tesorería) pero no genera el asiento. ¿Lo
-calcula su software o quiere que INTALES lo genere?
+**C2. Diferencia de cambio al cierre del mes.** INTALES ya puede generar el asiento (Contabilidad → Automáticos →
+«Diferencia de cambio al cierre»): ajusta los saldos en dólares de clientes, proveedores y bancos al TC SUNAT del último
+día (compra para activos, venta para pasivos) contra 676/776, en el subdiario de ajustes. Es opcional. ¿Lo quiere desde
+INTALES o lo calcula su software? En el Excel de CONCAR sale en soles con flag `N` y dólares en 0: **¿CONCAR lo acepta
+así sobre una cuenta en dólares?**
 
 **C3. Costo de las órdenes de trabajo.** ¿La compra va directo al costo de la OT (60x/63x con destino 92 por OT) o pasa
 por almacén (60 → 25 → 61 → 92)? ¿Cómo reparte los costos indirectos (CIF)? ¿Usa 2151/2351/7151/6932 al cierre?
@@ -160,7 +163,7 @@ importado). ¿Necesita algún otro reporte desde INTALES (por ejemplo, conciliac
 **F1. Libros.** INTALES generará los .txt de Diario (5.1), Plan de cuentas (5.3), Mayor (6.1) y Caja y Bancos (1.1 y
 1.2). Con ingresos entre 300 y 1700 UIT, ¿son los que corresponden a INTALES? ¿Falta alguno (por ejemplo 3.x)?
 
-**F2. Plan de cuentas 5.3.** INTALES envía las cuentas activas y las usadas en el mes. ¿Prefiere solo las usadas, o
+**F2. Plan de cuentas 5.3.** INTALES envía las cuentas de movimiento activas y las usadas en el mes (desde tres dígitos). ¿Prefiere solo las usadas, o
 todo el plan en el primer mes del ejercicio y luego solo las nuevas?
 
 **F3. Apertura y dato estructurado.** ¿Registra usted el asiento de apertura del ejercicio (subdiario Apertura, sale

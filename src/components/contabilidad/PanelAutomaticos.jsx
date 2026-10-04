@@ -62,6 +62,13 @@ export default function PanelAutomaticos({ cuentas, puedeGenerar, puedeEscribir 
     const d = await leer(await fetchAuth("/contabilidad/automaticos/contabilizar", { method: "POST", body: JSON.stringify(cuerpo) }), "No se pudo contabilizar.");
     setAviso(`${d.contabilizados} asiento(s) contabilizados.${d.errores?.length ? ` No se contabilizaron ${d.errores.length}: ${d.errores.slice(0, 5).join(" · ")}${d.errores.length > 5 ? " …" : ""}` : ""}`);
   });
+  // Borrador del ajuste al TC SUNAT del último día del mes, con lo ya contabilizado.
+  const diferenciaCambio = () => accion(async () => {
+    const d = await leer(await fetchAuth("/contabilidad/automaticos/diferencia-cambio", { method: "POST", body: JSON.stringify({ periodo }) }), "No se pudo calcular la diferencia de cambio.");
+    setAviso(d.asiento
+      ? `Ajuste por diferencia de cambio en borrador (TC compra ${d.tcCompra}, venta ${d.tcVenta}): ganancia ${money(d.ganancia)} y pérdida ${money(d.perdida)}. Revísalo abajo y contabilízalo.`
+      : `Sin diferencia de cambio por ajustar al ${formatearFecha(`${d.fecha}T12:00:00-05:00`)}.`);
+  });
   const resolver = (a) => accion(async () => {
     await leer(await fetchAuth(`/contabilidad/automaticos/${a._id}/resolver`, { method: "POST" }), "No se pudo resolver.");
   });
@@ -154,6 +161,13 @@ export default function PanelAutomaticos({ cuentas, puedeGenerar, puedeEscribir 
         <div className="flex items-center gap-3">
           <h3 className="text-sm font-semibold text-gray-700">Borradores del mes ({borradores.length})</h3>
           <div className="flex-1" />
+          {puedeGenerar && (
+            <button onClick={diferenciaCambio} disabled={procesando || borradores.some((a) => a.subdiario !== "ajuste")}
+              title="Ajusta al tipo de cambio de cierre los saldos en dólares de clientes, proveedores y bancos. Primero contabiliza los borradores del mes."
+              className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-40">
+              Diferencia de cambio al cierre
+            </button>
+          )}
           {puedeGenerar && (
             <button onClick={() => contabilizar(true)} disabled={procesando || !borradores.length}
               className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-40">
