@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
-import { formatearFecha } from "../utils/fecha";
+import { formatearFecha, aInputFecha } from "../utils/fecha";
 import { round2 } from "../utils/compras";
 import { calcularImpuesto, partes, etiquetaImpuesto } from "../utils/tesoreria";
 import ModalMovimiento from "./tesoreria/ModalMovimiento";
@@ -74,7 +74,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
   const [form, setForm] = useState({
     numeroFactura:      inicial.numeroFactura      || "",
     fechaCancelacion:   inicial.fechaCancelacion
-      ? new Date(inicial.fechaCancelacion).toISOString().split("T")[0] : "",
+      ? aInputFecha(inicial.fechaCancelacion) : "",
     empresa:            inicial.empresa?._id       || "",
     subtotal:           subtotalInicial != null ? String(subtotalInicial) : "",
     descripcion:        inicial.descripcion        || "",
@@ -84,7 +84,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
     numeroGuiaRemision: inicial.numeroGuiaRemision || "",
     codigoSap:          inicial.codigoSap          || "",
     fechaSalida: inicial.fechaSalida
-      ? new Date(inicial.fechaSalida).toISOString().split("T")[0] : "",
+      ? aInputFecha(inicial.fechaSalida) : "",
   });
   const [calc, setCalc]           = useState(calcular(subtotalInicial, inicial.impuesto));
   const [ocVinculada, setOC]      = useState(inicial.ordenCompra || null);

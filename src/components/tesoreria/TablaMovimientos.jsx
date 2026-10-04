@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
-import { formatearFecha } from "../../utils/fecha";
+import { formatearFecha, aInputFecha } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { totalesMovimientos, referenciaMovimiento } from "../../utils/tesoreria";
 import { puedeMovimientoManual, rolDeSesion } from "../../utils/roles";
@@ -35,7 +35,7 @@ export default function TablaMovimientos() {
 
   const set = (campo) => (e) => setFiltros((f) => ({ ...f, [campo]: e.target.value }));
   const filtrados = movs.filter((m) => {
-    const dia = String(m.fecha).slice(0, 10);
+    const dia = aInputFecha(m.fecha);
     return (!filtros.cuenta || m.cuenta?._id === filtros.cuenta || m.cuentaDestino?._id === filtros.cuenta)
       && (!filtros.desde || dia >= filtros.desde) && (!filtros.hasta || dia <= filtros.hasta);
   });

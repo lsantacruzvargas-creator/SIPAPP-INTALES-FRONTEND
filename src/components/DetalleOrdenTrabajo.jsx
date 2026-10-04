@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
-import { formatearFecha } from "../utils/fecha";
+import { formatearFecha, aInputFecha } from "../utils/fecha";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
 import ModalOrdenCompra from "./ModalOrdenCompra";
 import SelectorEmpresas from "./SelectorEmpresas";
@@ -85,7 +85,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     numeroGuiaEmision: inicial.numeroGuiaEmision || "",
     numeroGuiaRemision: inicial.numeroGuiaRemision || "",
     fechaSalida: inicial.fechaSalida
-      ? new Date(inicial.fechaSalida).toISOString().split("T")[0] : "",
+      ? aInputFecha(inicial.fechaSalida) : "",
     protocolo: inicial.protocolo || "",
     observaciones: inicial.observaciones || "",
     estado: inicial.estado || "pendiente",

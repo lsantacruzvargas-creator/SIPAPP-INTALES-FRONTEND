@@ -148,6 +148,24 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
 - El cierre de mes sigue exigiendo exportar a CONCAR; si el contador deja de importar, quitar esa condición.
 - Preguntas al contador F1–F4 (`docs/contabilidad/Preguntas al contador.md`).
 
+**Revisión del motor contable contra contaperu y fechas en hora de Lima (2026-10-03, cambios locales sin commit):**
+- PLE corregido, asiento de diferencia de cambio al cierre y constancia de detracción en CONCAR: detalle en
+  `docs/contabilidad/HANDOFF-contabilidad.md`. El plan sigue siendo **PCGE 2019** (decisión del usuario).
+- **Fechas (frontend):** `utils/fecha.js` suma `aInputFecha`, `anioLima` y `mesLima`; `formatearFecha` y esas tres
+  leen un valor a **medianoche UTC exacta** como día de calendario (así guardan sus fechas las cotizaciones, OT, OC,
+  ingresos de equipo y comprobantes electrónicos) y cualquier otro instante en hora de Lima. Se quitaron los
+  `toISOString().split("T")[0]`, `getFullYear()`/`getMonth()` y `setHours()` de los detalles, las listas y el
+  Dashboard (antes, después de las 19:00 o en el borde del mes daban el día o el mes equivocado).
+- **Fechas (backend):** al cerrar una cotización con fecha de pago, la factura se guarda a medianoche de Lima
+  (`routes/cotizaciones.js`, antes medianoche UTC = día anterior en Lima); los rangos mensuales del resumen tributario
+  y del SIRE ya no dependen del huso del servidor (`setUTCMonth`).
+- **Decisión pendiente del usuario:** las fechas de solo día de los módulos antiguos (cotización, OT, OC, ingreso de
+  equipo) se siguen **guardando** a medianoche UTC; se muestran bien, pero un reporte del servidor por rango en hora
+  de Lima puede contar el día 1 en el mes anterior. Unificar exige un cast global en Mongoose y **migrar los datos
+  existentes**: no se hizo sin su OK.
+- Pendiente de la auditoría (no pedido): asignación masiva en cotizaciones/OT/OC, informes sin guarda de rol, cantidad
+  negativa en movimientos de almacén y JWT sin revalidar usuario (el usuario dejó seguridad fuera por ahora).
+
 **Resuelto en esta rama (2026-10-03) — doble pago/cobro durante la recarga:** tras registrar un pago, cobro o
 movimiento, `TablaPorPagar`, `TablaPorCobrar` y `TablaMovimientos` dejan las acciones deshabilitadas (estado
 `recargando`) hasta que termina la recarga, así no se abre otro pago con el saldo viejo. Traído de `main` con

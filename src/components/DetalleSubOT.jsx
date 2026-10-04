@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
-import { formatearFecha } from "../utils/fecha";
+import { formatearFecha, aInputFecha } from "../utils/fecha";
 import ModalRequerimiento from "./ModalRequerimiento";
 import ModalNotificacionTrabajo from "./ModalNotificacionTrabajo";
 import ModalDetalleNotificacionTrabajo from "./ModalDetalleNotificacionTrabajo";
@@ -63,7 +63,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
     personalAsignado:      inicial.personalAsignado?._id || inicial.personalAsignado || "",
     estado:                 inicial.estado                 || "pendiente",
     fechaEntrega: inicial.fechaEntrega
-      ? new Date(inicial.fechaEntrega).toISOString().split("T")[0] : "",
+      ? aInputFecha(inicial.fechaEntrega) : "",
     numeroGuiaRemision:    inicial.numeroGuiaRemision    || "",
     observaciones:          inicial.observaciones          || "",
     irreparable:            inicial.irreparable            || false,
