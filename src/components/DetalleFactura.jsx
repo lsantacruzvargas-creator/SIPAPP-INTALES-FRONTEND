@@ -21,7 +21,7 @@ function calcular(sub, impuesto) {
   const igv = round2(s * 0.18);
   const total = round2(s + igv);
   const tipo = impuesto?.tipo || "ninguno";
-  const { monto } = calcularImpuesto({ tipo, codigoSunat: impuesto?.codigoSunat, total });
+  const { monto } = calcularImpuesto({ tipo, codigoSunat: impuesto?.codigoSunat, tasa: impuesto?.tasa, total });
   const quienDeposita = impuesto?.quienDeposita || "cliente";
   return { igv, total, detraccion: monto, totalAPagar: partes({ lado: "venta", total, impuesto: { tipo, monto, quienDeposita } }).neto };
 }
@@ -540,7 +540,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
         mensaje={<>
           <span className="block mb-2">Cambiar el subtotal recalcula la factura. Revisa los nuevos valores:</span>
           <span className="block">Subtotal: {money(recalculo.subtotal)} · IGV: {money(recalculo.igv)} · Total: {money(recalculo.total)}</span>
-          {recalculo.tipoImpuesto !== "ninguno" && <span className="block">{recalculo.tipoImpuesto === "retencion" ? "Retención" : "Detracción"}: {money(recalculo.impuesto)}</span>}
+          {recalculo.tipoImpuesto !== "ninguno" && <span className="block">{{ retencion: "Retención", percepcion: "Percepción" }[recalculo.tipoImpuesto] || "Detracción"}: {money(recalculo.impuesto)}</span>}
           <span className="block font-semibold">Neto a cobrar: {money(recalculo.totalAPagar)}</span>
           {recalculo.cuotas.map((c) => <span key={c.numero} className="block text-xs">Cuota {c.numero}: {money(c.monto)}</span>)}
         </>}

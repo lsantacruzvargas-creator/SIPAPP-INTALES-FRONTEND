@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { money } from "../../utils/compras";
 import { calcularImpuesto, partes, CODIGOS_DETRACCION } from "../../utils/tesoreria";
@@ -12,12 +12,20 @@ export default function ModalImpuestoVenta({ factura, onClose, onGuardada }) {
     tipo: factura.impuesto?.tipo || "ninguno",
     codigoSunat: factura.impuesto?.codigoSunat || "037",
     quienDeposita: factura.impuesto?.quienDeposita === "nosotros" ? "nosotros" : "cliente",
+    tasa: String(factura.impuesto?.tipo === "percepcion" ? factura.impuesto.tasa : 0.02),
   });
+  // La percepción solo se ofrece si la empresa es agente de percepción (o si la factura ya la tiene).
+  const [esAgentePercepcion, setEsAgentePercepcion] = useState(false);
+  useEffect(() => {
+    fetchAuth("/configuracion").then(async (r) => { if (r.ok) setEsAgentePercepcion(!!(await r.json()).esAgentePercepcion); }).catch(() => {});
+  }, []);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const set = (campo) => (e) => setForm((f) => ({ ...f, [campo]: e.target.value }));
 
-  const { monto } = calcularImpuesto({ tipo: form.tipo, codigoSunat: form.codigoSunat, total: factura.total });
+  const { monto } = calcularImpuesto({ tipo: form.tipo, codigoSunat: form.codigoSunat, tasa: Number(form.tasa), total: factura.total,
+    moneda: factura.moneda || "PEN", tipoCambio: factura.tipoCambio || 1 });
+  const esPercepcion = form.tipo === "percepcion";
   const quien = form.tipo === "detraccion" ? form.quienDeposita : "cliente";
   const { neto } = partes({ lado: "venta", total: factura.total, impuesto: { tipo: form.tipo, monto, quienDeposita: quien } });
 
@@ -25,7 +33,7 @@ export default function ModalImpuestoVenta({ factura, onClose, onGuardada }) {
     setGuardando(true);
     setError("");
     try {
-      const r = await conBloqueo("factura", factura._id, (h) => fetchAuth(`/facturas/${factura._id}/impuesto`, { method: "PATCH", headers: h, body: JSON.stringify({ ...form, quienDeposita: quien }) }));
+      const r = await conBloqueo("factura", factura._id, (h) => fetchAuth(`/facturas/${factura._id}/impuesto`, { method: "PATCH", headers: h, body: JSON.stringify({ ...form, tasa: Number(form.tasa), quienDeposita: quien }) }));
       const data = await r.json().catch(() => ({}));
       if (!r.ok) return setError(data.mensaje || "No se pudo cambiar el impuesto.");
       onGuardada(data);
@@ -43,8 +51,17 @@ export default function ModalImpuestoVenta({ factura, onClose, onGuardada }) {
         <label className="text-xs text-gray-500 block">Tipo
           <select value={form.tipo} onChange={set("tipo")} className={INP}>
             <option value="ninguno">Ninguno</option><option value="detraccion">Detracción</option><option value="retencion">Retención 3 % (cliente agente)</option>
+            {(esAgentePercepcion || factura.impuesto?.tipo === "percepcion") && <option value="percepcion">Percepción (INTALES agente)</option>}
           </select>
         </label>
+        {esPercepcion && (
+          <label className="text-xs text-gray-500 block">Tasa
+            <select value={form.tasa} onChange={set("tasa")} className={INP}>
+              <option value="0.02">2 % — venta interna</option>
+              <option value="0.005">0.5 % — el cliente también es agente de percepción</option>
+            </select>
+          </label>
+        )}
         {form.tipo === "detraccion" && (
           <>
             <label className="text-xs text-gray-500 block">Bien o servicio
@@ -61,8 +78,10 @@ export default function ModalImpuestoVenta({ factura, onClose, onGuardada }) {
           </>
         )}
         <div className="flex justify-between text-sm border-t border-gray-100 pt-3">
-          <span>Impuesto {money(monto)}</span>
-          <span className="font-bold text-emerald-700">Neto a cobrar {money(neto)}</span>
+          <span>{esPercepcion ? "Percepción" : "Impuesto"} {money(monto)}</span>
+          <span className="font-bold text-emerald-700">
+            {esPercepcion ? `Se cobra ${money(neto, factura.moneda)} + ${money(monto)} de percepción` : `Neto a cobrar ${money(neto)}`}
+          </span>
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">

@@ -157,7 +157,7 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, vacioMsg }) {
                           <span>{Number(f.impuesto?.monto ?? f.detraccion ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}</span>
                           {f.impuesto?.tipo && f.impuesto.tipo !== "ninguno" && (
                             <span className={`text-[11px] ${f.saldoImpuesto > 0.009 ? "text-gray-400" : "text-emerald-600"}`}>
-                              {f.impuesto.tipo === "retencion" ? "Retención" : "Detracción"} {f.saldoImpuesto > 0.009 ? "pendiente" : "✓"}
+                              {{ retencion: "Retención", percepcion: "Percepción" }[f.impuesto.tipo] || "Detracción"} {f.saldoImpuesto > 0.009 ? "pendiente" : "✓"}
                             </span>
                           )}
                         </div>

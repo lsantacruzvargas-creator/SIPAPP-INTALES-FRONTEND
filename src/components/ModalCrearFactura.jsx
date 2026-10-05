@@ -111,6 +111,15 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
   const [buscadorOC, setBOC]      = useState(false);
   const [formaPago, setFormaPago] = useState("Contado");
   const [cuotas, setCuotas]       = useState([]);
+  // Percepción del IGV: solo si la empresa está marcada como agente de percepción (Tesorería → Configuración).
+  const [esAgentePercepcion, setEsAgentePercepcion] = useState(false);
+  const [percepcion, setPercepcion] = useState({ aplica: false, tasa: "0.02" });
+  useEffect(() => {
+    fetchAuth("/configuracion").then(async (r) => { if (r.ok) setEsAgentePercepcion(!!(await r.json()).esAgentePercepcion); }).catch(() => {});
+  }, []);
+  const conPercepcion = esAgentePercepcion && percepcion.aplica;
+  // Vista previa en soles; el servidor la recalcula sobre el total del comprobante.
+  const percepcionSoles = conPercepcion ? Math.round(calc.total * Number(percepcion.tasa) * (moneda === "USD" ? Number(tipoCambio) || 0 : 1) * 100) / 100 : 0;
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState("");
   const [exito, setExito]         = useState(null);
@@ -240,6 +249,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
         moneda,
         numeroOrdenCompra: form.numeroOrdenCompra || "",
         ordenCompra: ocId,
+        ...(conPercepcion ? { percepcion: { aplica: true, tasa: Number(percepcion.tasa) } } : {}),
       }),
     });
     const dataCpe = await resCpe.json();
@@ -412,15 +422,50 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
               <label className="text-xs text-gray-500 block mb-1">Total ({sim})</label>
               <input value={calc.total.toFixed(2)} disabled className={INP_DIS} />
             </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Detracción (12%) en S/</label>
-              <input value={calc.detraccion.toFixed(2)} disabled className={INP_DIS} />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Total a pagar ({sim})</label>
-              <input value={calc.totalAPagar.toFixed(2)} disabled className={`${INP_DIS} font-semibold`} />
-            </div>
+            {conPercepcion ? (
+              <>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Percepción ({Number(percepcion.tasa) * 100}%) en S/</label>
+                  <input value={percepcionSoles.toFixed(2)} disabled className={INP_DIS} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Total a cobrar ({sim}) + percepción</label>
+                  <input value={calc.total.toFixed(2)} disabled className={`${INP_DIS} font-semibold`} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Detracción (12%) en S/</label>
+                  <input value={calc.detraccion.toFixed(2)} disabled className={INP_DIS} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Total a pagar ({sim})</label>
+                  <input value={calc.totalAPagar.toFixed(2)} disabled className={`${INP_DIS} font-semibold`} />
+                </div>
+              </>
+            )}
           </div>
+
+          {esAgentePercepcion && (
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <label className="flex items-center gap-2 text-gray-600">
+                <input type="checkbox" checked={percepcion.aplica} onChange={(e) => setPercepcion((p) => ({ ...p, aplica: e.target.checked }))} />
+                Venta con percepción del IGV
+              </label>
+              {percepcion.aplica && (
+                <>
+                  <select value={percepcion.tasa} onChange={(e) => setPercepcion((p) => ({ ...p, tasa: e.target.value }))} className={`${INP} w-auto`}>
+                    <option value="0.02">2 % — venta interna</option>
+                    <option value="0.005">0.5 % — el cliente también es agente de percepción</option>
+                  </select>
+                  <span className="text-xs text-gray-500">
+                    {formaPago === "Credito" ? "Al crédito se percibe al cobrar; el comprobante de percepción se emite desde Tesorería." : "Al contado va dentro de la factura."}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Forma de pago — igual que "Emitir CPE": Crédito exige cuotas con fecha de
               vencimiento (SUNAT rechaza con error 3249 si falta la info de cuotas). */}

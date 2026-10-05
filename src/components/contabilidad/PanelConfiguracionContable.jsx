@@ -9,7 +9,8 @@ const INP = "border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline
 const CUENTAS_MONEDA = [["proveedores", "Proveedores (facturas)"], ["honorarios", "Honorarios por pagar"], ["clientes", "Clientes"]];
 const CUENTAS = [
   ["igv", "IGV"], ["retencion4ta", "Retención de 4.ª categoría"], ["detraccionCompras", "Detracción de compras (lo detraído)"],
-  ["retencionesSufridas", "Retenciones IGV sufridas"], ["difCambioPerdida", "Diferencia de cambio — pérdida"],
+  ["retencionesSufridas", "Retenciones IGV sufridas"], ["percepciones", "Percepciones IGV por pagar (INTALES agente)"],
+  ["difCambioPerdida", "Diferencia de cambio — pérdida"],
   ["difCambioGanancia", "Diferencia de cambio — ganancia"], ["ventasServicios", "Ventas de servicios"],
   ["ventasProductos", "Ventas de productos fabricados"], ["ventasMercaderias", "Ventas de mercaderías"],
   ["comprasDefecto", "Compras por defecto (vacía: cada comprobante con su cuenta)"],
@@ -102,7 +103,7 @@ export default function PanelConfiguracionContable({ cuentas, puedeEscribir }) {
                 <td className="py-1"><span className="text-xs text-gray-400 mr-1">US$</span>{cuenta(`cuentas.${k}.USD`, form.cuentas[k]?.USD)}</td></tr>
             ))}
             {CUENTAS.map(([k, l]) => (
-              <tr key={k}><td className="py-1 pr-3 text-gray-600">{l}</td><td className="py-1" colSpan={2}>{cuenta(`cuentas.${k}`, form.cuentas[k], ["retencionesSufridas", "comprasDefecto", "ventasProductos", "ventasMercaderias", "ventasServicios"].includes(k))}</td></tr>
+              <tr key={k}><td className="py-1 pr-3 text-gray-600">{l}</td><td className="py-1" colSpan={2}>{cuenta(`cuentas.${k}`, form.cuentas[k], ["retencionesSufridas", "percepciones", "comprasDefecto", "ventasProductos", "ventasMercaderias", "ventasServicios"].includes(k))}</td></tr>
             ))}
             {MANUALES.map(([k, l]) => (
               <tr key={`m-${k}`}><td className="py-1 pr-3 text-gray-600">Movimiento manual: {l}</td><td className="py-1" colSpan={2}>{cuenta(`manuales.${k}`, form.manuales?.[k], true)}</td></tr>

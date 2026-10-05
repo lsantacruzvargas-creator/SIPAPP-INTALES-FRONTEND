@@ -328,3 +328,13 @@ test("referenciaMovimiento: documento y tercero; los manuales muestran su concep
     { documento: "Aporte", tercero: "Aporte del socio", parte: "Manual" });
   assert.deepEqual(referenciaMovimiento({ documentoRef: null, concepto: "impuesto" }), { documento: "", tercero: "", parte: "Impuesto" });
 });
+
+test("percepción (INTALES agente): no se descuenta, se cobra además del total; 2 % o 0.5 %", () => {
+  assert.deepEqual(calcularImpuesto({ tipo: "percepcion", tasa: 0.02, total: 1180 }), { tasa: 0.02, monto: 23.6 });
+  assert.deepEqual(calcularImpuesto({ tipo: "percepcion", tasa: 0.005, total: 1180, moneda: "USD", tipoCambio: 3.75 }), { tasa: 0.005, monto: 22.13 });
+  assert.equal(calcularImpuesto({ tipo: "percepcion", tasa: 0.5, total: 100 }).tasa, 0.02, "una tasa que no existe cae a la general");
+  assert.deepEqual(partes({ lado: "venta", total: 1180, impuesto: { tipo: "percepcion", monto: 23.6, quienDeposita: "cliente" } }), { neto: 1180, impuesto: 23.6 });
+  assert.equal(tipoMovimientoEsperado({ lado: "venta", concepto: "impuesto", impuesto: { tipo: "percepcion", quienDeposita: "cliente" } }), "ingreso");
+  assert.equal(etiquetaImpuesto({ tipo: "percepcion", tasa: 0.005 }), "Percepción 0.5%");
+  assert.equal(etiquetaImpuesto({ tipo: "percepcion", tasa: 0.02 }), "Percepción 2%");
+});

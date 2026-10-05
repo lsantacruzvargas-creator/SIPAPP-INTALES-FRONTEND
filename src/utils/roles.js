@@ -3,6 +3,8 @@ export const ROLES_FINANZAS = ["admin", "jefatura", "facturacion", "tesorero", "
 export const veFacturas = (rol) => ROLES_FINANZAS.includes(rol);
 // Crear/editar facturas de venta y su impuesto (tesorero y contador solo ven).
 export const puedeEditarFacturas = (rol) => ["admin", "jefatura", "facturacion"].includes(rol);
+// Emitir ante SUNAT (facturas, notas y comprobantes de percepción): espejo de Backend/src/routes/cpe.js.
+export const puedeEmitirCpe = (rol) => ["admin", "jefatura", "facturacion"].includes(rol);
 // Espejo de ROLES_MOVIMIENTO_MANUAL (Backend/src/middleware/puedeTesoreria.js): ingresos/egresos
 // manuales y transferencias entre cuentas; el contador solo lee.
 export const puedeMovimientoManual = (rol) => ["admin", "jefatura", "tesorero"].includes(rol);

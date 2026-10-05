@@ -3,10 +3,11 @@ import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha, aInputFecha } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { totalesMovimientos, referenciaMovimiento } from "../../utils/tesoreria";
-import { puedeMovimientoManual, rolDeSesion } from "../../utils/roles";
+import { puedeMovimientoManual, puedeEmitirCpe, rolDeSesion } from "../../utils/roles";
 import { sumarPorMoneda, textoMontos, exportarHoja, filasSubtotal } from "../../utils/exportarTabla";
 import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
+import AvisoAccion from "../AvisoAccion";
 import ModalMovimientoManual from "./ModalMovimientoManual";
 import { enviarConSobregiro } from "../../utils/sobregiro";
 import useConfirmar from "../../hooks/useConfirmar";
@@ -25,7 +26,10 @@ export default function TablaMovimientos() {
   const [cuentas, setCuentas] = useState([]);
   const [modal, setModal] = useState(null);
   const { confirmar, dialogo } = useConfirmar("Sí, anular");
+  const emision = useConfirmar("Sí, emitir");
+  const [aviso, setAviso] = useState("");
   const puedeManual = puedeMovimientoManual(rolDeSesion());
+  const puedeEmitir = puedeEmitirCpe(rolDeSesion());
 
   const cargar = useCallback(() => Promise.all([fetchAuth("/movimientos-tesoreria"), fetchAuth("/cuentas-tesoreria")]).then(async ([rm, rc]) => {
     if (rm.ok) setMovs(await rm.json());
@@ -50,6 +54,24 @@ export default function TablaMovimientos() {
   const recargar = async () => {
     setRecargando(true);
     try { await cargar(); } finally { setRecargando(false); }
+  };
+
+  // Comprobante de percepción (tipo 40) del cobro de la percepción de una factura al crédito: va a SUNAT.
+  const emitirPercepcion = async (m) => {
+    if (!(await emision.confirmar(`Se emitirá ante SUNAT el comprobante de percepción por ${money(m.monto)} del cobro ${m.codigo}. ¿Continuar?`))) return;
+    setProcesando(true);
+    setError("");
+    try {
+      const r = await fetchAuth("/percepciones", { method: "POST", body: JSON.stringify({ movimiento: m._id }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) setError(d.mensaje || "No se pudo emitir el comprobante de percepción.");
+      else setAviso(`Comprobante de percepción ${d.serie}-${d.correlativo}: ${d.estado === "ACEPTADO" ? "aceptado por SUNAT" : "en proceso en SUNAT"}.`);
+      await cargar();
+    } catch {
+      setError("Error de conexión con el servidor: revisa la tabla antes de reintentar.");
+    } finally {
+      setProcesando(false);
+    }
   };
 
   // Anular un ingreso ya gastado deja un banco en negativo: el servidor pide confirmar el sobregiro.
@@ -138,6 +160,16 @@ export default function TablaMovimientos() {
                     )}
                   </td>
                   <td className="px-3 py-2 text-right">
+                    {m.percepcion?.comprobante && (
+                      <span className="block text-[11px] text-gray-500" title="Comprobante de percepción">
+                        {m.percepcion.comprobante.serie}-{m.percepcion.comprobante.correlativo} · {m.percepcion.comprobante.estado === "ACEPTADO" ? "aceptado" : "en proceso"}
+                      </span>
+                    )}
+                    {m.percepcion && !m.percepcion.comprobante && puedeEmitir && (
+                      <button onClick={() => emitirPercepcion(m)} disabled={procesando || recargando} className="block ml-auto text-xs text-purple-600 hover:underline disabled:opacity-40">
+                        Emitir comprobante de percepción
+                      </button>
+                    )}
                     {!m.anulado && (!m.conceptoManual || puedeManual) && <button onClick={() => setAnulando(m)} disabled={procesando || recargando} className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40">Anular</button>}
                   </td>
                 </tr>
@@ -167,6 +199,8 @@ export default function TablaMovimientos() {
           onGuardado={() => { setModal(null); recargar(); }} />
       )}
       {dialogo}
+      {emision.dialogo}
+      {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
     </div>
   );
 }

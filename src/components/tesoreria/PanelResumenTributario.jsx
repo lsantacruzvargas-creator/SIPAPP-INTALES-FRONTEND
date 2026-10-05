@@ -58,6 +58,7 @@ export default function PanelResumenTributario() {
       { CONCEPTO: "IGV – débito fiscal", "MONTO S/": t.igv.debito },
       { CONCEPTO: "IGV – crédito fiscal", "MONTO S/": t.igv.credito },
       { CONCEPTO: "Retenciones de IGV sufridas", "MONTO S/": t.igv.retenciones },
+      { CONCEPTO: "Percepciones de IGV practicadas (por pagar a SUNAT)", "MONTO S/": t.percepcionesPracticadas || 0 },
       { CONCEPTO: t.igv.resultado >= 0 ? "IGV por pagar" : "Saldo a favor del mes", "MONTO S/": Math.abs(t.igv.resultado) },
       { CONCEPTO: `Pago a cuenta de renta (${(t.renta.coeficiente * 100).toFixed(2)} %)`, "MONTO S/": t.renta.monto },
       { CONCEPTO: "Compras sin crédito fiscal", "MONTO S/": t.sinCredito.total },
@@ -91,6 +92,9 @@ export default function PanelResumenTributario() {
           <Tarjeta titulo="Ventas (débito fiscal)" filas={[["Base imponible", t.ventas.base], ["IGV", t.ventas.igv], ["Total", t.ventas.total]]} />
           <Tarjeta titulo="IGV del mes" filas={[["Débito fiscal", t.igv.debito], ["Crédito fiscal", -t.igv.credito], ["Retenciones sufridas", -t.igv.retenciones],
             [t.igv.resultado >= 0 ? "IGV por pagar" : "Saldo a favor", Math.abs(t.igv.resultado)]]} />
+          {t.percepcionesPracticadas > 0 && (
+            <Tarjeta titulo="Percepciones de IGV (INTALES agente)" filas={[["Percibido en el mes — por pagar a SUNAT", t.percepcionesPracticadas]]} />
+          )}
           <Tarjeta titulo="Pago a cuenta de renta" filas={[["Ventas netas", t.renta.base], ["Coeficiente", `${(t.renta.coeficiente * 100).toFixed(2)} %`], ["A pagar", t.renta.monto]]} />
         </div>
       )}

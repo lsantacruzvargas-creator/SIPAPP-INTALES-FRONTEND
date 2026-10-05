@@ -13,7 +13,7 @@ const TIPOS = { banco: "Banco", caja: "Caja", detracciones: "Detracciones (Banco
 
 export default function PanelConfiguracion({ onCambio }) {
   const [cuentas, setCuentas] = useState([]);
-  const [config, setConfig] = useState({ esAgenteRetencion: false, tcCobros: "compra", tcPagos: "venta", coeficienteRenta: 0.015 });
+  const [config, setConfig] = useState({ esAgenteRetencion: false, esAgentePercepcion: false, tcCobros: "compra", tcPagos: "venta", coeficienteRenta: 0.015 });
   const [coeficiente, setCoeficiente] = useState(null);
   const [nueva, setNueva] = useState(VACIA);
   const [error, setError] = useState("");
@@ -64,6 +64,10 @@ export default function PanelConfiguracion({ onCambio }) {
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" disabled={guardando} checked={!!config.esAgenteRetencion} onChange={(e) => guardar("/configuracion", "PUT", { esAgenteRetencion: e.target.checked })} />
         INTALES es agente de retención (habilita la retención del 3 % en compras)
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" disabled={guardando} checked={!!config.esAgentePercepcion} onChange={(e) => guardar("/configuracion", "PUT", { esAgentePercepcion: e.target.checked })} />
+        INTALES es agente de percepción (habilita la percepción del 2 % o 0.5 % en ventas)
       </label>
       <div className="flex flex-wrap gap-4 items-end text-sm">
         <label className="text-xs text-gray-500">TC SUNAT en cobros en dólares

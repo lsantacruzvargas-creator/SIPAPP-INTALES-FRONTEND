@@ -148,7 +148,36 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
 - El cierre de mes sigue exigiendo exportar a CONCAR; si el contador deja de importar, quitar esa condición.
 - Preguntas al contador F1–F4 (`docs/contabilidad/Preguntas al contador.md`).
 
-**Revisión del motor contable contra contaperu y fechas en hora de Lima (2026-10-03, cambios locales sin commit):**
+**Rama `conta-percepcion` (2026-10-03, worktree `SIPAPP-INTALES-conta-percepcion`, sale de `ventas/produccion/contabilidadoficial`):
+INTALES como agente de percepción del IGV.**
+- **Interruptor**: Tesorería → Configuración, «INTALES es agente de percepción» (`Configuracion.esAgentePercepcion`,
+  jefatura/admin). Sin él, nada de lo siguiente se ofrece ni se acepta.
+- **Factura electrónica** (`POST /cpe/factura`, body `percepcion: { aplica, tasa }`; Emitir CPE y «+ Nueva Factura»): tasa
+  2 % (cargo 51) o 0.5 % si el cliente también es agente (cargo 53), sobre el total con IGV. Solo facturas (no boletas) y
+  nunca con detracción; todo se valida antes de reservar el correlativo (`utils/percepcion.js`).
+  - **Al contado**: la percepción va en la factura — operación `2001`, leyenda 2000 «COMPROBANTE DE PERCEPCIÓN»,
+    `PaymentTerms` «Percepcion» con el total a cobrar en soles y `AllowanceCharge` con el cargo. `PayableAmount` no
+    cambia.
+  - **Al crédito**: la factura sale normal (`0101`) y queda marcada; se percibe al cobrar.
+- **Factura interna y Tesorería**: `impuesto.tipo = "percepcion"` (monto en S/, tasa por factura). No se descuenta: se
+  cobra el total (concepto neto) y, aparte, la percepción (concepto impuesto, ingreso a una cuenta en soles que no sea
+  la de detracciones). La toma del comprobante al ligarse; sin comprobante se marca al crear o en «Impuesto».
+- **Comprobante de Percepción electrónico (tipo 40, serie `P001`)**: Tesorería → Movimientos, botón «Emitir comprobante
+  de percepción» en cada cobro de percepción de una factura al crédito (`POST /api/percepciones { movimiento }`, roles
+  que emiten CPE). Modelo `ComprobantePercepcion`, builder `builders/percepcion.builder.js` (root `Perception`, UBL 2.0).
+  Uno por cobro; con comprobante vigente el cobro ya no se anula.
+- **Contabilidad**: el cobro de la percepción genera D banco / H percepciones por pagar (cuenta en Contabilidad →
+  Configuración, vacía por defecto; PCGE 40113, que se agregó al plan semilla). Resumen tributario: «Percepciones de IGV
+  practicadas» del mes.
+- Tests: `test/percepcion.test.js` (7) y `utils/tesoreria.test.js` en el frontend. Todo probado con `SUNAT_MOCK=true`.
+- **Pendiente antes de producción**: (1) emitir en SUNAT demo una factura al contado con percepción y un comprobante
+  tipo 40 — ninguno de los dos XML se ha validado contra SUNAT, y hay que confirmar que SmartPSE acepta el tipo 40 por
+  el hub; (2) reversión del comprobante de percepción (resumen de reversiones) — hoy no existe; (3) percepciones en
+  boletas y percepciones sufridas en compras; (4) crear la cuenta 40113 en el plan de una base ya sembrada y
+  configurarla; (5) la percepción solo aplica a bienes del régimen de venta interna (Ley 29173): se marca por factura,
+  el sistema no sabe qué bienes están sujetos; (6) probar las pantallas en el navegador (no se hizo).
+
+**Revisión del motor contable contra contaperu y fechas en hora de Lima (2026-10-03):**
 - PLE corregido, asiento de diferencia de cambio al cierre y constancia de detracción en CONCAR: detalle en
   `docs/contabilidad/HANDOFF-contabilidad.md`. El plan sigue siendo **PCGE 2019** (decisión del usuario).
 - **Fechas (frontend):** `utils/fecha.js` suma `aInputFecha`, `anioLima` y `mesLima`; `formatearFecha` y esas tres

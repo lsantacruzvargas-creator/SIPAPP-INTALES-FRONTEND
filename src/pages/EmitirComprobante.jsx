@@ -65,6 +65,10 @@ export default function EmitirComprobante() {
   const [detraccionCodigoBien, setDetraccionCodigoBien] = useState("");
   const [detraccionPorcentaje, setDetraccionPorcentaje] = useState("");
   const [detraccionCuentaBancaria, setDetraccionCuentaBancaria] = useState("");
+  // Percepción del IGV: solo si la empresa está marcada como agente de percepción (Tesorería → Configuración).
+  const [esAgentePercepcion, setEsAgentePercepcion] = useState(false);
+  const [percepcionAplica, setPercepcionAplica] = useState(false);
+  const [percepcionTasa, setPercepcionTasa] = useState("0.02");
   const [numeroOrdenCompra, setNumeroOrdenCompra] = useState("");
   const [ordenCompraId, setOrdenCompraId] = useState("");
   const [mostrarBuscadorOC, setMostrarBuscadorOC] = useState(false);
@@ -152,6 +156,10 @@ export default function EmitirComprobante() {
       aplicarPrellenadoOC(pre.oc, pre.cotizacion);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    fetchAuth("/configuracion").then(async (r) => { if (r.ok) setEsAgentePercepcion(!!(await r.json()).esAgentePercepcion); }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -264,6 +272,10 @@ export default function EmitirComprobante() {
     : moneda === "USD" ? (Math.round(totalGeneral * (Number(detraccionPorcentaje) || 0)) / 100).toFixed(2)
     : Math.round(totalGeneral * (Number(detraccionPorcentaje) || 0) / 100).toFixed(2);
 
+  // Vista previa: el servidor recalcula la percepción sobre el total del comprobante.
+  const conPercepcion = esAgentePercepcion && percepcionAplica && tipoDoc === "01" && !detraccionAplica;
+  const percepcionMonto = conPercepcion ? Math.round(totalGeneral * Number(percepcionTasa) * 100) / 100 : 0;
+
   const ro = !!resultado?.ok;
 
   const ordenesCompraFiltradas = ordenesCompra.filter((o) => {
@@ -330,6 +342,7 @@ export default function EmitirComprobante() {
       if (!detraccionCuentaBancaria.trim()) return "La cuenta del Banco de la Nación es requerida.";
       if (!cuentaDetraccionValida(detraccionCuentaBancaria)) return "La cuenta del Banco de la Nación debe tener 11 dígitos.";
     }
+    if (conPercepcion && detraccionAplica) return "Una operación sujeta a detracción no lleva percepción.";
     if (esNota) {
       if (!referencia.id) return "Selecciona el comprobante a modificar.";
       if (!motivoCodigo) return "Selecciona el motivo.";
@@ -421,6 +434,7 @@ export default function EmitirComprobante() {
               cuentaBancaria: detraccionCuentaBancaria.trim(),
             },
           } : {}),
+          ...(conPercepcion ? { percepcion: { aplica: true, tasa: Number(percepcionTasa) } } : {}),
         };
       }
       const res  = await fetchAuth(endpoint, { method: "POST", body: JSON.stringify(body) });
@@ -490,6 +504,8 @@ export default function EmitirComprobante() {
     setDetraccionCodigoBien("");
     setDetraccionPorcentaje("");
     setDetraccionCuentaBancaria("");
+    setPercepcionAplica(false);
+    setPercepcionTasa("0.02");
     setNumeroOrdenCompra("");
     setOrdenCompraId("");
     setOcOrigen(null);
@@ -949,6 +965,42 @@ export default function EmitirComprobante() {
                   </div>
                 )}
               </div>
+
+              {esAgentePercepcion && tipoDoc === "01" && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-500 mb-3">
+                    <input type="checkbox" checked={percepcionAplica} disabled={ro || detraccionAplica}
+                      onChange={(e) => setPercepcionAplica(e.target.checked)} />
+                    Venta con percepción del IGV
+                    {detraccionAplica && <span className="text-xs font-normal text-gray-400">(no aplica con detracción)</span>}
+                  </label>
+                  {conPercepcion && (
+                    <div className="grid grid-cols-4 gap-4 items-end">
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Tasa</label>
+                        <select value={percepcionTasa} disabled={ro} onChange={(e) => setPercepcionTasa(e.target.value)}
+                          className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500">
+                          <option value="0.02">2 % — venta interna</option>
+                          <option value="0.005">0.5 % — el cliente también es agente de percepción</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Percepción</label>
+                        <input value={percepcionMonto.toFixed(2)} disabled className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Total a cobrar</label>
+                        <input value={(totalGeneral + percepcionMonto).toFixed(2)} disabled className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
+                      </div>
+                      <p className="col-span-4 text-xs text-gray-500">
+                        {formaPago === "Credito"
+                          ? "Al crédito la factura sale sin percepción: se percibe al cobrar y el comprobante de percepción se emite desde Tesorería → Movimientos."
+                          : "Al contado la percepción va dentro de la factura (operación 2001), que sirve como comprobante de percepción."}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <label className="block text-xs font-medium text-gray-500 mb-1">N° Orden de Compra (opcional)</label>

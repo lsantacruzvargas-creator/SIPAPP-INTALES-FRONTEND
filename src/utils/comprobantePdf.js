@@ -173,6 +173,20 @@ export function generarComprobantePdf(comprobante, { logoUrl } = {}) {
     doc.text(`Cuenta Banco de la Nación: ${comprobante.detraccion.cuentaBancaria || "-"}`, margin, y);
   }
 
+  // Percepción dentro de la factura (al contado): la representación impresa lleva la leyenda y el total a cobrar.
+  const percepcion = comprobante.percepcion;
+  if (percepcion?.aplica && percepcion.enComprobante) {
+    y += 4;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("COMPROBANTE DE PERCEPCIÓN", margin, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.text(`Percepción ${+(percepcion.tasa * 100).toFixed(1)}% sobre ${simbolo} ${Number(percepcion.base || 0).toFixed(2)}: ${simbolo} ${Number(percepcion.monto || 0).toFixed(2)}`, margin, y);
+    y += 5;
+    doc.text(`Total a cobrar con percepción: S/ ${Number(percepcion.totalPen || 0).toFixed(2)}`, margin, y);
+  }
+
   if (comprobante.observaciones || comprobante.informacionRelacionada) {
     y += 8;
     doc.setFontSize(9);

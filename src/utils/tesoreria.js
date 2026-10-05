@@ -7,14 +7,20 @@ import { fechaHoyLima, formatearFecha, aInputFecha } from "./fecha.js";
 // es solo la vista previa de los formularios.
 export const UMBRAL_IMPUESTO = 700;
 export const TASA_RETENCION = 0.03;
+// Percepción del IGV en ventas (INTALES agente): 2 % general o 0.5 % si el cliente también es agente.
+export const TASAS_PERCEPCION = [0.02, 0.005];
 export const CODIGO_SERVICIOS = "037";
 export const CODIGOS_DETRACCION = DETRACCION_BIENES_SERVICIOS.filter((c) => c.porcentaje);
 
 const aSoles = (total, moneda, tipoCambio) => (moneda === "USD" ? Number(total) * Number(tipoCambio || 1) : Number(total));
 
-export function calcularImpuesto({ tipo, codigoSunat, total, moneda = "PEN", tipoCambio = 1 }) {
+export function calcularImpuesto({ tipo, codigoSunat, total, moneda = "PEN", tipoCambio = 1, tasa }) {
   if (!tipo || tipo === "ninguno") return { tasa: 0, monto: 0 };
   const soles = aSoles(total, moneda, tipoCambio);
+  if (tipo === "percepcion") {
+    const t = TASAS_PERCEPCION.includes(Number(tasa)) ? Number(tasa) : TASAS_PERCEPCION[0];
+    return { tasa: t, monto: round2(soles * t) };
+  }
   if (tipo === "detraccion") {
     const bien = CODIGOS_DETRACCION.find((c) => c.codigo === codigoSunat);
     if (!bien) return { tasa: 0, monto: 0 };
@@ -29,6 +35,8 @@ const seDescuenta = (lado, quienDeposita) => (lado === "compra" ? quienDeposita 
 
 export function partes({ lado, total, moneda = "PEN", tipoCambio = 1, impuesto }) {
   if (!impuesto || impuesto.tipo === "ninguno" || !impuesto.monto) return { neto: round2(total), impuesto: 0 };
+  // La percepción no se descuenta: se cobra además del total.
+  if (impuesto.tipo === "percepcion") return { neto: round2(total), impuesto: impuesto.monto };
   const enMonedaDoc = moneda === "USD" ? impuesto.monto / Number(tipoCambio) : impuesto.monto;
   const neto = seDescuenta(lado, impuesto.quienDeposita) ? round2(total - enMonedaDoc) : round2(total);
   const parteImpuesto = lado === "compra" && impuesto.quienDeposita === "proveedor" ? 0 : impuesto.monto;
@@ -39,6 +47,7 @@ export function tipoMovimientoEsperado({ lado, concepto, impuesto }) {
   if (lado === "compra") return "egreso";
   if (concepto === "neto") return "ingreso";
   if (impuesto?.tipo === "retencion") return "retencion";
+  if (impuesto?.tipo === "percepcion") return "ingreso";
   return impuesto?.quienDeposita === "cliente" ? "ingreso" : "transferencia";
 }
 
@@ -75,6 +84,7 @@ export function etiquetaImpuesto(impuesto) {
   if (impuesto?.tipo === "detraccion") return `Detracción ${pct}`;
   if (impuesto?.tipo === "retencion") return `Retención ${pct}`;
   if (impuesto?.tipo === "retencion4ta") return `Retención 4ta ${pct}`;
+  if (impuesto?.tipo === "percepcion") return `Percepción ${+((impuesto.tasa || 0) * 100).toFixed(1)}%`;
   return "Sin detracción / retención";
 }
 
