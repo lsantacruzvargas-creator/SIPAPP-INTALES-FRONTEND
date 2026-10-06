@@ -25,8 +25,9 @@ export const AYUDA = {
     descripcion: "Todos los asientos: los automáticos (de compras, ventas y Tesorería) y los manuales. Aquí se filtran, se ven en detalle, se crean asientos manuales y se anulan.",
     terminos: [
       { termino: "Asiento manual", definicion: "El que escribe el contador o el administrador (subdiarios Diario, Apertura, Ajuste o Cierre). Sirve, por ejemplo, para corregir un asiento ya exportado." },
-      { termino: "Automático", definicion: "Asiento armado por INTALES desde un documento (compra, venta, cobro, pago, movimiento de banco o gasto de caja chica)." },
-      { termino: "Estado: Borrador", definicion: "Asiento automático todavía en revisión: aún no tiene número ni CUO definitivo. Se regenera si su documento cambia." },
+      { termino: "Automático", definicion: "Asiento armado por INTALES desde un documento (compra, venta, cobro, pago, movimiento de banco o gasto de caja chica). Es la base: el contador o el administrador lo completan con «Editar» (más cuentas, otra distribución). La fecha, la moneda y el tipo de cambio son los del documento." },
+      { termino: "Editado a mano", definicion: "Automático que alguien completó. «Generar asientos del mes» ya no lo reescribe; si su documento cambia después, se marca para revisarlo. Mientras sea borrador se puede descartar lo editado y volver al generado." },
+      { termino: "Estado: Borrador", definicion: "Asiento automático todavía en revisión: aún no tiene número ni CUO definitivo. Se regenera si su documento cambia, salvo que se haya editado a mano." },
       { termino: "Estado: Contabilizado", definicion: "Asiento confirmado, con correlativo y CUO. Ya no cambia aunque cambie su documento (se marca para revisarlo)." },
       { termino: "Estado: Anulado", definicion: "Asiento dejado sin efecto, con motivo. No suma en reportes. Un automático anulado se vuelve a generar desde su documento." },
       { termino: "Exportado", definicion: "Asiento ya enviado a CONCAR. No se anula: se corrige con un asiento manual de ajuste." },

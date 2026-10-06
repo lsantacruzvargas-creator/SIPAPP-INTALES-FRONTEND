@@ -91,6 +91,8 @@ alcance anterior (solo CONCAR).
   - **No se tocó (espera al contador)**: periodo de anotación de compras tardías (B10/E1/D7), retención IGV 3 % por
     40114 con CRE (B15/D4), tasa AO y doble anexo de CONCAR (A8/A4). El Diario sigue sin planilla, depreciación ni costo
     de ventas: van como asientos manuales.
+- **Asientos automáticos editables (2026-10-05)**: el automático es la base y el contador lo completa a mano desde Asientos o
+  Automáticos; generar no pisa lo editado. Detalle en `docs/ESTADO-PROYECTO.md` §5.
 
 ## Siguiente paso
 
