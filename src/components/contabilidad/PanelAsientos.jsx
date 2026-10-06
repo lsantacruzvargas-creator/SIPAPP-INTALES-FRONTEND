@@ -146,14 +146,14 @@ export default function PanelAsientos({ cuentas, centrosCosto, puedeEscribir }) 
                 <td className="py-1.5 pr-3 text-right tabular-nums">{money(total(a, "haber"))}</td>
                 <td className="py-1.5 pr-3 text-xs no-underline">
                   {ESTADOS[a.estado]}
-                  {a.origen?.tipo !== "manual" && <span className="ml-1 text-gray-400">· automático</span>}
+                  {a.origen?.tipo !== "manual" && <span className="ml-1 text-gray-400">· automático{a.editadoManualmente ? " (editado)" : ""}</span>}
                   {a.exportacion?.lote && <span className="ml-1 text-green-700">· exportado {a.exportacion.numero}</span>}
                   {a.estado === "contabilizado" && (a.origenCambiado || a.origenAnulado) && (
                     <span className="ml-1 text-red-600">· documento {a.origenAnulado ? "anulado" : "cambiado"}</span>
                   )}
                 </td>
                 <td className="py-1.5 text-right whitespace-nowrap">
-                  <button onClick={() => abrir(a)} className="text-xs text-purple-600 hover:underline mr-3">Ver</button>
+                  <button onClick={() => abrir(a)} className="text-xs text-purple-600 hover:underline mr-3">{puedeEscribir && a.estado !== "anulado" && !a.exportacion?.lote ? "Editar" : "Ver"}</button>
                   {puedeEscribir && a.estado === "contabilizado" && !a.exportacion?.lote && (
                     <button onClick={() => setAnulando(a)} className="text-xs text-red-600 hover:underline">Anular</button>
                   )}

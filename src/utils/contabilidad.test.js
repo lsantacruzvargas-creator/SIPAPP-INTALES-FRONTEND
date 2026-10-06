@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { totalesAsiento, validarLineas, lineasParaEnviar, lineasDeAsiento, arbolCuentas, filtrarPlan, cuentasDeFilasExcel, sinTildes } from "./contabilidad.js";
+import { totalesAsiento, validarLineas, lineasParaEnviar, lineasDeAsiento, lineaIntacta, arbolCuentas, filtrarPlan, cuentasDeFilasExcel, sinTildes } from "./contabilidad.js";
 
 const cuentas = new Map([
   ["6329", { codigo: "6329", activa: true, deMovimiento: true }],
@@ -83,4 +83,26 @@ test("destinoPorDefecto: 941/791 solo para gastos 62–68", async () => {
   assert.deepEqual(destinoPorDefecto("6341"), { debe: "941", haber: "791" });
   assert.deepEqual(destinoPorDefecto("602"), { debe: "", haber: "" });
   assert.deepEqual(destinoPorDefecto(undefined), { debe: "", haber: "" });
+});
+
+test("editar un asiento guardado: las líneas sin tocar van solo con su posición; las cambiadas la llevan para conservar su comprobante", () => {
+  // Cobro automático en dólares: banco y cliente a distinto TC, y la diferencia de cambio solo en soles.
+  const form = lineasDeAsiento({ moneda: "USD", lineas: [
+    { cuenta: "1041", debe: 375, haber: 0, debeME: 100, haberME: 0 },
+    { cuenta: "1212", debe: 0, haber: 370, debeME: 0, haberME: 100, tercero: { tipoDoc: "6", numDoc: "20555555555" } },
+    { cuenta: "776", debe: 0, haber: 5, debeME: 0, haberME: 0 },
+  ] });
+  assert.deepEqual(form.map((l) => [l.origenLinea, l.soloSoles, l.soles]), [[0, false, 375], [1, false, 370], [2, true, 5]]);
+  assert.ok(form.every(lineaIntacta));
+  assert.deepEqual(lineasParaEnviar(form, "USD"), [0, 1, 2].map((i) => ({ origenLinea: i, sinCambios: true })));
+  assert.deepEqual(validarLineas(form, cuentas), [], "las intactas no se validan aquí (776 ni siquiera está en este plan)");
+  assert.deepEqual(totalesAsiento(form), { debe: 100, haber: 100, diferencia: 0, cuadra: true });
+
+  // Se cambia el importe del cliente y se agrega una línea nueva.
+  const editado = [form[0], { ...form[1], haber: 90 }, form[2], { cuenta: "6329", glosa: "", debe: "", haber: 10, centroCosto: "", tercero: {} }];
+  assert.equal(lineaIntacta(editado[1]), false);
+  const cuerpo = lineasParaEnviar(editado, "USD");
+  assert.deepEqual(cuerpo[0], { origenLinea: 0, sinCambios: true });
+  assert.deepEqual([cuerpo[1].origenLinea, cuerpo[1].sinCambios, cuerpo[1].haberME, cuerpo[1].cuenta], [1, undefined, 90, "1212"]);
+  assert.deepEqual([cuerpo[3].origenLinea, cuerpo[3].haberME], [undefined, 10]);
 });

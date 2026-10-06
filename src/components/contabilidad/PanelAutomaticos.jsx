@@ -7,6 +7,7 @@ import { mesAnteriorLima, periodoDeMes } from "../../utils/bancos";
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
 import BuscadorCuenta from "./BuscadorCuenta";
+import ModalAsiento from "./ModalAsiento";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
 const fecha = (d) => formatearFecha(d, { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -14,7 +15,8 @@ const total = (a, k) => round2(a.lineas.reduce((s, l) => s + (l[k] || 0), 0));
 const ASIGNABLES = ["FacturaProveedor", "Comprobante"];
 
 // Asientos automáticos del mes (C2): generar desde compras, ventas y Tesorería; resolver pendientes; contabilizar.
-export default function PanelAutomaticos({ cuentas, puedeGenerar, puedeEscribir }) {
+export default function PanelAutomaticos({ cuentas, centrosCosto, puedeGenerar, puedeEscribir }) {
+  const [modal, setModal] = useState(null); // asiento abierto para ver o completar
   const [mes, setMes] = useState(mesAnteriorLima());
   const [pendientes, setPendientes] = useState(null);
   const [resultado, setResultado] = useState(null);
@@ -78,6 +80,18 @@ export default function PanelAutomaticos({ cuentas, puedeGenerar, puedeEscribir 
     }), "No se pudo asignar la cuenta.");
     setCuentaDe((c) => ({ ...c, [p.origen.id]: undefined }));
   });
+
+  // Abre el borrador completo (con todos sus datos) para verlo o completarlo a mano.
+  const abrir = async (a) => {
+    try {
+      const r = await fetchAuth(`/contabilidad/asientos/${a._id}`);
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) setModal(d);
+      else setAviso(d.mensaje || "No se pudo abrir el asiento.");
+    } catch {
+      setAviso("Error de conexión con el servidor.");
+    }
+  };
 
   const alternar = (id) => setElegidos((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const todos = borradores.length > 0 && elegidos.size === borradores.length;
@@ -187,7 +201,7 @@ export default function PanelAutomaticos({ cuentas, puedeGenerar, puedeEscribir 
               <tr className="text-left text-xs text-gray-500 border-b">
                 <th className="py-2 pr-3">{puedeGenerar && <input type="checkbox" aria-label="Todos" checked={todos} onChange={() => setElegidos(todos ? new Set() : new Set(borradores.map((a) => a._id)))} />}</th>
                 <th className="py-2 pr-3">Fecha</th><th className="py-2 pr-3">Subdiario</th><th className="py-2 pr-3">Glosa</th>
-                <th className="py-2 pr-3">Cuentas</th><th className="py-2 pr-3 text-right">Debe S/</th><th className="py-2 pr-3 text-right">Haber S/</th>
+                <th className="py-2 pr-3">Cuentas</th><th className="py-2 pr-3 text-right">Debe S/</th><th className="py-2 pr-3 text-right">Haber S/</th><th className="py-2" />
               </tr>
             </thead>
             <tbody>
@@ -196,19 +210,29 @@ export default function PanelAutomaticos({ cuentas, puedeGenerar, puedeEscribir 
                   <td className="py-1.5 pr-3">{puedeGenerar && <input type="checkbox" checked={elegidos.has(a._id)} onChange={() => alternar(a._id)} />}</td>
                   <td className="py-1.5 pr-3 whitespace-nowrap">{fecha(a.fecha)}</td>
                   <td className="py-1.5 pr-3 whitespace-nowrap">{SUBDIARIOS[a.subdiario]} <span className="text-xs text-gray-400">({a.subdiarioExport})</span></td>
-                  <td className="py-1.5 pr-3">{a.glosa}{a.moneda === "USD" && <span className="ml-1 text-xs text-blue-600">US$ · TC {a.tipoCambio}</span>}</td>
+                  <td className="py-1.5 pr-3">{a.glosa}{a.moneda === "USD" && <span className="ml-1 text-xs text-blue-600">US$ · TC {a.tipoCambio}</span>}
+                    {a.editadoManualmente && <span className="ml-1 text-xs text-purple-600">· editado a mano</span>}
+                    {a.origenCambiado && <span className="ml-1 text-xs text-red-600">· su documento cambió</span>}
+                  </td>
                   <td className="py-1.5 pr-3 font-mono text-xs">
                     {a.lineas.map((l, i) => <div key={i}>{l.debe ? "D" : "H"} {l.cuenta} {money(l.debe || l.haber)}</div>)}
                   </td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">{money(total(a, "debe"))}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">{money(total(a, "haber"))}</td>
+                  <td className="py-1.5 text-right">
+                    <button onClick={() => abrir(a)} disabled={procesando} className="text-xs text-purple-600 hover:underline disabled:opacity-40">{puedeEscribir ? "Editar" : "Ver"}</button>
+                  </td>
                 </tr>
               ))}
-              {!borradores.length && <tr><td colSpan={7} className="py-4 text-center text-gray-400 text-sm">Sin borradores en el periodo</td></tr>}
+              {!borradores.length && <tr><td colSpan={8} className="py-4 text-center text-gray-400 text-sm">Sin borradores en el periodo</td></tr>}
             </tbody>
           </table>
         </TablaScroll>
       </section>
+      {modal && (
+        <ModalAsiento asiento={modal} cuentas={cuentas} centrosCosto={centrosCosto} puedeEscribir={puedeEscribir}
+          onClose={() => setModal(null)} onGuardado={() => { setModal(null); cargar(); }} />
+      )}
       {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
     </div>
   );

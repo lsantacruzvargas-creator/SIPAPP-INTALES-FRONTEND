@@ -177,6 +177,18 @@ INTALES como agente de percepción del IGV.**
   configurarla; (5) la percepción solo aplica a bienes del régimen de venta interna (Ley 29173): se marca por factura,
   el sistema no sabe qué bienes están sujetos; (6) probar las pantallas en el navegador (no se hizo).
 
+**Asientos automáticos editables (2026-10-05, decisión del usuario: el automático es la base y se completa a mano):**
+- `PUT /api/contabilidad/asientos/:id` edita también los automáticos, en borrador o contabilizados (admin y contador). No
+  se editan los anulados ni los **ya exportados** (esto último vale también para los manuales: antes se podían editar).
+  En un automático la fecha, la moneda y el TC son los de su documento (el servidor ignora lo que llegue).
+- El formulario manda cada línea guardada con su posición (`origenLinea`); si no se tocó (`sinCambios`) el servidor la
+  conserva tal cual (un automático en dólares tiene líneas a distinto TC o solo en soles); si cambió, conserva el papel
+  de la línea, el comprobante, la referencia y la detracción (los usan CONCAR y el PLE). `utils/asientos.js`.
+- Queda `editadoManualmente`: «Generar asientos del mes» no reescribe un borrador editado; si su documento cambió lo
+  marca (`origenCambiado`). `POST /api/contabilidad/automaticos/:id/restablecer` descarta lo editado de un borrador.
+- Frontend: el mismo modal desde Asientos («Editar») y desde Automáticos (botón «Editar» en cada borrador), con aviso
+  de que es automático y «Descartar lo editado y volver al generado».
+
 **Revisión del motor contable contra contaperu y fechas en hora de Lima (2026-10-03):**
 - PLE corregido, asiento de diferencia de cambio al cierre y constancia de detracción en CONCAR: detalle en
   `docs/contabilidad/HANDOFF-contabilidad.md`. El plan sigue siendo **PCGE 2019** (decisión del usuario).
