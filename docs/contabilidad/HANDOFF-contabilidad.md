@@ -89,10 +89,12 @@ alcance anterior (solo CONCAR).
   - **PCGE 2019 confirmado** por el usuario (contaperu trae además un catálogo «2026»: no se usa).
   - Fechas: ver ESTADO-PROYECTO §5.
   - **No se tocó (espera al contador)**: periodo de anotación de compras tardías (B10/E1/D7), retención IGV 3 % por
-    40114 con CRE (B15/D4), tasa AO y doble anexo de CONCAR (A8/A4). El Diario sigue sin planilla, depreciación ni costo
+    40114 con CRE (B15/D4), tasa AO y doble anexo de CONCAR (A8/A4). El Diario sigue sin depreciación ni costo (la planilla entra desde el 2026-10-06: ver abajo)
     de ventas: van como asientos manuales.
 - **Asientos automáticos editables (2026-10-05)**: el automático es la base y el contador lo completa a mano desde Asientos o
   Automáticos; generar no pisa lo editado. Detalle en `docs/ESTADO-PROYECTO.md` §5.
+- **Planilla y PLAME (2026-10-06)**: módulo `/planilla` (trabajadores, parámetros, boletas, archivos del PLAME) y asiento
+  automático de origen `Planilla` con sus pagos por Tesorería. Detalle y pendientes en `docs/ESTADO-PROYECTO.md` §5.
 
 ## Siguiente paso
 

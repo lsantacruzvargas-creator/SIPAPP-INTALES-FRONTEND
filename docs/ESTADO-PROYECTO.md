@@ -148,6 +148,45 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
 - El cierre de mes sigue exigiendo exportar a CONCAR; si el contador deja de importar, quitar esa condición.
 - Preguntas al contador F1–F4 (`docs/contabilidad/Preguntas al contador.md`).
 
+**Planilla de remuneraciones y PLAME (2026-10-06, primera entrega):**
+- **Qué cubre**: ficha del trabajador, parámetros del mes, planilla mensual con boletas, archivos de importación del
+  PLAME y asiento contable con su pago por Tesorería. Pantalla `/planilla` (admin, jefatura y contador ven; escriben
+  admin y contador). Backend: `routes/planilla.js`, `utils/planilla.js` (cálculo, funciones puras), `utils/plame.js`,
+  modelos `Trabajador`, `ParametrosPlanilla`, `Planilla`, `BoletaPago`, catálogo `data/conceptosPlame.js`.
+- **Fuentes**: Anexo 2 (tablas, actualizado 11.09.26) y Anexo 3 (estructuras, jul-2023) de SUNAT. El catálogo de
+  conceptos (Tabla 22, 154 códigos del sector privado con su afectación a EsSalud, ONP, AFP y 5.ª) se generó del Excel
+  oficial. Los tres repos de referencia (`planilla-pe`, `sunat_planilla`, `OCA_payroll`) solo sirvieron de contraste:
+  no se copió código (la 5.ª y la AFP de `planilla-pe` no siguen la norma).
+- **Régimen laboral** (general / pequeña / micro): `Configuracion.regimenLaboral`, se cambia en Tesorería →
+  Configuración (jefatura o admin). Hoy define las gratificaciones que proyecta la 5.ª.
+- **Parámetros por mes** (`/planilla/parametros/:periodo`): UIT, RMV, EsSalud, ONP y AFP (aporte, prima, tope y
+  comisión de cada AFP). Sin guardarlos no se calcula: las tasas de AFP cambian cada mes y se copian de la SBS.
+- **Cálculo**: días base 30 (ingreso/cese dentro del mes: días calendario), suspensiones de la Tabla 21 (las S.P. y las
+  subsidiadas no se pagan; vacaciones van al 0118), asignación familiar 10 % de la RMV en proporción a los días
+  pagados, horas extras 25/35 %, conceptos fijos y adicionales por código de la Tabla 22; ONP 13 %; AFP 10 % +
+  comisión + prima hasta el tope; EsSalud 9 % con base mínima de una RMV (con EPS, 25 % del aporte va a la EPS; SIS
+  sin aporte); renta de 5.ª por el art. 40 del Reglamento (proyección, 7 UIT, escala 8–30 %, divisores 12/9/8/5/4/1,
+  retenciones de meses anteriores y retención completa de pagos extraordinarios).
+- **5.ª de meses que no están en el sistema**: se anota en la ficha (`quintaAnterior`: mes, ingresos afectos y
+  retenido). Sin eso, al empezar a mitad de año la retención sale baja.
+- **Flujo**: guardar parámetros → «Generar planilla» (borrador, toma los datos actuales de cada ficha y conserva lo
+  digitado) → editar cada boleta (asistencia y conceptos del mes) → «Cerrar». Cerrada: boletas fijas, archivos del
+  PLAME y asiento. Se reabre si su asiento no está contabilizado y el periodo contable sigue abierto.
+- **PLAME** (`/planilla/:periodo/plame`): `.rem` (sin ONP ni EsSalud: los calcula el PDT), `.jor`, `.snl`, `.toc` de la
+  planilla cerrada, y `.ps4` / `.4ta` de los recibos por honorarios con pago en el mes (4.ª se declara al pagar).
+- **Asiento** (origen `Planilla`, subdiario diario, último día del mes): gasto por cuenta y centro de costo del
+  trabajador contra 4111 (neto), 40173, 4032, 407, 4031 y, si hay, EPS y descuentos. Cuentas en Planilla → Cuentas
+  (`ConfiguracionContable.planilla`). Sale con «Generar asientos del mes» y se completa a mano como cualquier automático.
+- **Pagos**: egreso manual de Tesorería con concepto «Planilla: remuneraciones / AFP / EsSalud / ONP / renta de 5.ª»
+  (`pago_*`), que cancela la cuenta por pagar del asiento.
+- Tests: `test/planillaCalculo.test.js` (11), `test/planilla.test.js` (8) y `utils/planilla.test.js` en el frontend.
+  Probado en el navegador (alta de trabajador, parámetros, generar, editar boleta, PDF, cerrar y descarga del `.rem`).
+- **Pendiente**: (1) importar los archivos en el PDT PLAME real — no se ha probado contra el validador de SUNAT;
+  (2) gratificaciones, CTS, vacaciones truncas y liquidación (hoy la gratificación se digita como concepto 0406 + 0312);
+  (3) provisiones mensuales de beneficios en el asiento; (4) carga masiva al T-Registro; (5) SCTR, SENATI y vida ley;
+  (6) rentas de 5.ª de otros empleadores (`.or5`) y recálculo de la 5.ª al cese (art. 41); (7) subsidios de EsSalud
+  (0915/0916) y prima AFP de mayores de 65; (8) confirmar con el contador lo marcado [Confirmar] en `utils/planilla.js`.
+
 **Asientos automáticos editables (2026-10-05, decisión del usuario: el automático es la base y se completa a mano):**
 - `PUT /api/contabilidad/asientos/:id` edita también los automáticos, en borrador o contabilizados (admin y contador). No
   se editan los anulados ni los **ya exportados** (esto último vale también para los manuales: antes se podían editar).

@@ -127,7 +127,12 @@ export function filtrarFacturas(lista, f, { lado, hoyIso }) {
 export const CONCEPTOS_MANUALES = [
   { valor: "aporte", label: "Aporte" }, { valor: "prestamo", label: "Préstamo" }, { valor: "retiro", label: "Retiro" },
   { valor: "gasto_bancario", label: "Gasto bancario" }, { valor: "otros", label: "Otros" },
+  // Pagos de la planilla (solo egresos): cancelan lo que dejó por pagar su asiento.
+  { valor: "pago_remuneraciones", label: "Planilla: remuneraciones", soloEgreso: true }, { valor: "pago_afp", label: "Planilla: AFP", soloEgreso: true },
+  { valor: "pago_essalud", label: "Planilla: EsSalud", soloEgreso: true }, { valor: "pago_onp", label: "Planilla: ONP", soloEgreso: true },
+  { valor: "pago_quinta", label: "Planilla: renta de 5.ª", soloEgreso: true },
 ];
+export const conceptosManualesDe = (tipo) => CONCEPTOS_MANUALES.filter((c) => !c.soloEgreso || tipo === "egreso");
 export const etiquetaConceptoManual = (valor) =>
   valor === "transferencia" ? "Transferencia entre cuentas" : CONCEPTOS_MANUALES.find((c) => c.valor === valor)?.label || valor;
 
