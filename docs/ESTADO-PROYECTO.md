@@ -113,6 +113,17 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 ## 5. Pendientes
 
+**Resuelto (2026-10-07) — retención del IGV en la factura electrónica (Backend `603638e`, Frontend `24e9453c`; origen
+SIPAPP-HUAQUIAN `55a4b9a` y `de8fb2f`; ver skill `sunat-cpe-ubl21` §28):** Emitir Comprobante tiene el checkbox "Operación
+sujeta a retención del IGV", excluyente con la detracción (3 % por defecto). El XML la informa como `cac:AllowanceCharge`
+código 62 (catálogo 53) entre los `PaymentTerms` y `TaxTotal`, sobre el importe total; no cambia `PayableAmount` ni el
+tipo de operación. El monto lo calcula el servidor (`Comprobante.retencion`); detracción + retención o porcentaje ≤ 0 →
+400 antes del correlativo. Al crédito, el monto neto pendiente y la suma de las cuotas son total − detracción − retención
+(el formulario validaba las cuotas contra el total aunque hubiera detracción; ahora sigue al XML). La factura interna
+ligada a un comprobante con retención nace con impuesto `retencion` (el 3 % de Tesorería), no con la detracción por
+defecto. Pruebas: `test/retencionIgvCpe.test.js` y `test/ligarCpeFactura.test.js`. Desde INTALES no se emitió nada a
+SUNAT: la estructura es la que SUNAT demo aceptó a HUAQUIAN. Aplicado por separado en las cinco ramas.
+
 **Resuelto (2026-10-07) — descuento por línea en Emitir Comprobante (Frontend `74d22fbd`; origen SIPAPP-HUAQUIAN
 `ff72647`; ver skill `sunat-cpe-ubl21` §10):** el input "Desc. %" guarda 0-100, pero `calcularLineaComprobante`
 (`utils/catalogosSunat.js`) trabaja en fracción 0-1; con descuento, los totales en pantalla salían mal (20 % sobre 100
