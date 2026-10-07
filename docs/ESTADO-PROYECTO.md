@@ -113,6 +113,12 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 ## 5. Pendientes
 
+**Resuelto (2026-10-07) — descuento por línea en Emitir Comprobante (Frontend `74d22fbd`; origen SIPAPP-HUAQUIAN
+`ff72647`; ver skill `sunat-cpe-ubl21` §10):** el input "Desc. %" guarda 0-100, pero `calcularLineaComprobante`
+(`utils/catalogosSunat.js`) trabaja en fracción 0-1; con descuento, los totales en pantalla salían mal (20 % sobre 100
+daba base −1900) y de ahí salen el monto neto de detracción que se envía y la validación de cuotas. `itemsCalc` en
+`Frontend/src/pages/EmitirComprobante.jsx` ahora convierte a fracción antes de calcular.
+
 **⚠ Contabilidad, bancos B7 y caja chica NO van en `main` (decisión del usuario, 2026-10-02):** el motor contable
 C1–C3 (asientos, automáticos, exportar CONCAR, cierre de mes, plan de cuentas), bancos B7 y caja chica de la rama
 `claude/affectionate-ride-1ql646` son **solo para `ventas/produccion/contabilidadoficial`**. Esa rama llegó a `origin/main`
