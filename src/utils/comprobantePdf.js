@@ -173,6 +173,18 @@ export function generarComprobantePdf(comprobante, { logoUrl } = {}) {
     doc.text(`Cuenta Banco de la Nación: ${comprobante.detraccion.cuentaBancaria || "-"}`, margin, y);
   }
 
+  if (comprobante.retencion?.aplica) {
+    y += 4;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("Operación sujeta a retención del IGV", margin, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.text(`Porcentaje: ${comprobante.retencion.porcentaje ?? "-"}%  ·  Monto de retención: ${simbolo} ${Number(comprobante.retencion.monto || 0).toFixed(2)}`, margin, y);
+    y += 5;
+    doc.text(`Neto a cobrar: ${simbolo} ${(Number(totales.totalPagar || 0) - Number(comprobante.retencion.monto || 0)).toFixed(2)}`, margin, y);
+  }
+
   // Percepción dentro de la factura (al contado): la representación impresa lleva la leyenda y el total a cobrar.
   const percepcion = comprobante.percepcion;
   if (percepcion?.aplica && percepcion.enComprobante) {
