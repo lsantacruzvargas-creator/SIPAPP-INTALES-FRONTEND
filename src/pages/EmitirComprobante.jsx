@@ -65,6 +65,8 @@ export default function EmitirComprobante() {
   const [detraccionCodigoBien, setDetraccionCodigoBien] = useState("");
   const [detraccionPorcentaje, setDetraccionPorcentaje] = useState("");
   const [detraccionCuentaBancaria, setDetraccionCuentaBancaria] = useState("");
+  const [retencionAplica, setRetencionAplica] = useState(false);
+  const [retencionPorcentaje, setRetencionPorcentaje] = useState("3");
   const [numeroOrdenCompra, setNumeroOrdenCompra] = useState("");
   const [ordenCompraId, setOrdenCompraId] = useState("");
   const [mostrarBuscadorOC, setMostrarBuscadorOC] = useState(false);
@@ -174,6 +176,7 @@ export default function EmitirComprobante() {
     setTipoDoc(t);
     setSerie(SERIE_POR_TIPO[t]);
     if (t === "01") setReceptor((r) => ({ ...r, schemeID: "6" }));
+    else setRetencionAplica(false);
     if (t !== "07" && t !== "08") {
       setReferencia(REFERENCIA_VACIA);
       setMotivoCodigo("");
@@ -269,6 +272,16 @@ export default function EmitirComprobante() {
     : moneda === "USD" ? (Math.round(totalGeneral * (Number(detraccionPorcentaje) || 0)) / 100).toFixed(2)
     : Math.round(totalGeneral * (Number(detraccionPorcentaje) || 0) / 100).toFixed(2);
 
+  // Retención del IGV: la retiene el cliente (agente de retención) al pagar, sobre el total.
+  // El backend la recalcula igual; acá es para mostrarla y para el neto de las cuotas.
+  const retencionMonto = retencionAplica
+    ? Math.round(totalGeneral * (Number(retencionPorcentaje) || 0)) / 100
+    : 0;
+
+  // Lo que deben sumar las cuotas: el XML informa como monto neto pendiente el total menos la
+  // detracción (va al Banco de la Nación) y menos la retención; el total del comprobante no cambia.
+  const montoNetoPendiente = totalGeneral - (detraccionAplica ? Number(detraccionMontoNeto) || 0 : 0) - retencionMonto;
+
   const ro = !!resultado?.ok;
 
   const ordenesCompraFiltradas = ordenesCompra.filter((o) => {
@@ -321,8 +334,8 @@ export default function EmitirComprobante() {
         if (!c.fechaVencimiento) return "Cada cuota debe tener una fecha de vencimiento.";
       }
       // Exacto: SUNAT rechaza (3319) un crédito cuyas cuotas no suman el monto neto pendiente.
-      if (Math.abs(sumaCuotas - totalGeneral) >= 0.005) {
-        return `La suma de las cuotas (${moneda} ${sumaCuotas.toFixed(2)}) debe ser igual al monto neto pendiente (${moneda} ${totalGeneral.toFixed(2)}).`;
+      if (Math.abs(sumaCuotas - montoNetoPendiente) >= 0.005) {
+        return `La suma de las cuotas (${moneda} ${sumaCuotas.toFixed(2)}) debe ser igual al monto neto pendiente (${moneda} ${montoNetoPendiente.toFixed(2)}).`;
       }
     }
     if (tipoDoc === "03" && receptor.schemeID === "-" && (totalGeneral > 700 || moneda !== "PEN")) {
@@ -334,6 +347,9 @@ export default function EmitirComprobante() {
       if (!detraccionMontoNeto || Number(detraccionMontoNeto) <= 0) return "El monto neto a depositar debe ser mayor a 0.";
       if (!detraccionCuentaBancaria.trim()) return "La cuenta del Banco de la Nación es requerida.";
       if (!cuentaDetraccionValida(detraccionCuentaBancaria)) return "La cuenta del Banco de la Nación debe tener 11 dígitos.";
+    }
+    if (retencionAplica && !(Number(retencionPorcentaje) > 0 && Number(retencionPorcentaje) < 100)) {
+      return "El porcentaje de retención debe ser mayor a 0 y menor a 100.";
     }
     if (esNota) {
       if (!referencia.id) return "Selecciona el comprobante a modificar.";
@@ -426,6 +442,7 @@ export default function EmitirComprobante() {
               cuentaBancaria: detraccionCuentaBancaria.trim(),
             },
           } : {}),
+          ...(retencionAplica ? { retencion: { aplica: true, porcentaje: Number(retencionPorcentaje) } } : {}),
         };
       }
       const res  = await fetchAuth(endpoint, { method: "POST", body: JSON.stringify(body) });
@@ -495,6 +512,8 @@ export default function EmitirComprobante() {
     setDetraccionCodigoBien("");
     setDetraccionPorcentaje("");
     setDetraccionCuentaBancaria("");
+    setRetencionAplica(false);
+    setRetencionPorcentaje("3");
     setNumeroOrdenCompra("");
     setOrdenCompraId("");
     setOcOrigen(null);
@@ -612,7 +631,7 @@ export default function EmitirComprobante() {
                     <div className="flex items-center justify-between mb-2">
                       <label className="block text-xs font-medium text-gray-500">Cuotas de pago<Oblig /></label>
                       <span className="text-xs text-gray-400">
-                        Monto neto pendiente: {moneda} {totalGeneral.toFixed(2)}
+                        Monto neto pendiente: {moneda} {montoNetoPendiente.toFixed(2)}
                       </span>
                     </div>
                     <div className="border border-gray-100 rounded-lg overflow-hidden">
@@ -656,7 +675,7 @@ export default function EmitirComprobante() {
                             className="text-sm text-gray-500 hover:text-gray-800 transition">
                             + Agregar cuota
                           </button>
-                          <span className={`text-xs font-medium ${Math.abs(sumaCuotas - totalGeneral) < 0.01 ? "text-green-600" : "text-red-500"}`}>
+                          <span className={`text-xs font-medium ${Math.abs(sumaCuotas - montoNetoPendiente) < 0.01 ? "text-green-600" : "text-red-500"}`}>
                             Suma de cuotas: {moneda} {sumaCuotas.toFixed(2)}
                           </span>
                         </div>
@@ -905,6 +924,8 @@ export default function EmitirComprobante() {
                     onChange={(e) => {
                       const marcado = e.target.checked;
                       setDetraccionAplica(marcado);
+                      // Detracción y retención del IGV no van juntas — marcar una desmarca la otra.
+                      if (marcado) setRetencionAplica(false);
                       // 037 (Demás servicios gravados con IGV, 12%) es por lejos el más común en
                       // este ERP — se precarga como default para no obligar a buscarlo cada vez,
                       // el usuario puede cambiarlo si el caso es otro. El monto neto se deriva solo
@@ -954,6 +975,40 @@ export default function EmitirComprobante() {
                   </div>
                 )}
               </div>
+
+              {/* Solo en factura: la retención del IGV no aplica a boletas. */}
+              {tipoDoc === "01" && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-500 mb-3">
+                  <input type="checkbox" checked={retencionAplica} disabled={ro}
+                    onChange={(e) => {
+                      setRetencionAplica(e.target.checked);
+                      if (e.target.checked) setDetraccionAplica(false);
+                    }} />
+                  Operación sujeta a retención del IGV
+                </label>
+                {retencionAplica && (
+                  <div className="grid grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Porcentaje (%)<Oblig /></label>
+                      <input type="number" min="0" max="100" step="0.1" value={retencionPorcentaje}
+                        onChange={(e) => setRetencionPorcentaje(e.target.value)} onWheel={(e) => e.target.blur()} disabled={ro} required
+                        className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Monto de retención</label>
+                      <input value={retencionMonto.toFixed(2)} disabled
+                        className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Neto a cobrar (total − retención)</label>
+                      <input value={`${moneda} ${montoNetoPendiente.toFixed(2)}`} disabled
+                        className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
+                    </div>
+                  </div>
+                )}
+              </div>
+              )}
 
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <label className="block text-xs font-medium text-gray-500 mb-1">N° Orden de Compra (opcional)</label>
