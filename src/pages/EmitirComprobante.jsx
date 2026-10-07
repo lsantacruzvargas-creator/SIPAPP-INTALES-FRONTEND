@@ -442,7 +442,7 @@ export default function EmitirComprobante() {
       setResultado(data);
       if (!data.ok) {
         setError(data.mensaje || data.error || "El comprobante fue rechazado por SUNAT.");
-      } else if (ocOrigen) {
+      } else if (ocOrigen || tipoDoc === "01") {
         await crearFacturaInterna(data);
       }
     } catch {
@@ -452,23 +452,28 @@ export default function EmitirComprobante() {
     }
   };
 
-  // Paso 2 (solo cuando se emite desde "Crear Factura" de una OC): crea el
-  // registro interno Factura con el número ya emitido en SUNAT, vinculado a
-  // la OC de origen — mismo paso que hacía ModalCrearFactura.jsx.
+  // Paso 2: crea el registro interno Factura con el número ya emitido en SUNAT (es lo que se ve y se cobra en
+  // Facturas). Desde "Crear Factura" de una OC queda vinculado a ella; una factura emitida suelta se crea sin OC y
+  // el servidor toma el cliente del comprobante. Las boletas no pasan: se cobran al contado.
   const crearFacturaInterna = async (dataCpe) => {
     const factPayload = {
       numeroFactura:      dataCpe.serie,
       fechaEmision:       new Date().toISOString().split("T")[0],
       subtotal:           totales.base,
-      descripcion:        ocOrigen.descripcion || ocOrigen.titulo || "",
-      encargado:          ocOrigen.encargado || "",
-      planta:             ocOrigen.planta || "",
-      numeroGuiaEmision:  ocOrigen.numeroGuiaEmision || "",
-      numeroGuiaRemision: ocOrigen.numeroGuiaRemision || "",
-      ordenCompra:        ocOrigen._id,
-      empresa:            ocOrigen.empresa?._id || ocOrigen.empresa,
-      codigoSap:          ocOrigen.codigoSap,
-      fechaSalida:        ocOrigen.fechaSalida,
+      ...(ocOrigen ? {
+        descripcion:        ocOrigen.descripcion || ocOrigen.titulo || "",
+        encargado:          ocOrigen.encargado || "",
+        planta:             ocOrigen.planta || "",
+        numeroGuiaEmision:  ocOrigen.numeroGuiaEmision || "",
+        numeroGuiaRemision: ocOrigen.numeroGuiaRemision || "",
+        ordenCompra:        ocOrigen._id,
+        empresa:            ocOrigen.empresa?._id || ocOrigen.empresa,
+        codigoSap:          ocOrigen.codigoSap,
+        fechaSalida:        ocOrigen.fechaSalida,
+      } : {
+        descripcion:        items.map((i) => i.descripcion.trim()).filter(Boolean).join("; ").slice(0, 300),
+        comprobante:        dataCpe.id,
+      }),
       ...(retencionAplica ? { retencionPorcentaje: Number(retencionPorcentaje) } : {}),
     };
     if (formaPago === "Credito" && cuotas.length) {
@@ -540,11 +545,13 @@ export default function EmitirComprobante() {
       )}
       {facturaInterna && (
         <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-5 flex items-center justify-between gap-4">
-          <span>Factura <strong>{facturaInterna.codigo}</strong> creada y vinculada a la orden de compra.</span>
-          <button type="button" onClick={() => navigate("/ordenes-compra")}
-            className="shrink-0 text-green-700 underline hover:text-green-900 transition">
-            Volver a Órdenes de Compra
-          </button>
+          <span>Factura <strong>{facturaInterna.codigo}</strong> creada{facturaInterna.ordenCompra ? " y vinculada a la orden de compra" : ": ya aparece en Facturas"}.</span>
+          {facturaInterna.ordenCompra && (
+            <button type="button" onClick={() => navigate("/ordenes-compra")}
+              className="shrink-0 text-green-700 underline hover:text-green-900 transition">
+              Volver a Órdenes de Compra
+            </button>
+          )}
         </div>
       )}
       {error && (
