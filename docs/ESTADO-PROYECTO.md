@@ -129,6 +129,23 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 ## 5. Pendientes
 
+**Resuelto (2026-10-07) — retención del IGV en la factura electrónica (Backend `862c856`, Frontend `156cd4e1`;
+origen SIPAPP-HUAQUIAN `55a4b9a`, `0c71da4`, `de8fb2f` y `bdc4beb`; ver skill `sunat-cpe-ubl21` §28):**
+Emitir Comprobante tiene el checkbox "Operación sujeta a retención del IGV", solo en factura y excluyente con la
+detracción (3 % por defecto). El XML la informa como `cac:AllowanceCharge` código 62 (catálogo 53) entre los
+`PaymentTerms` y `TaxTotal`, sobre el importe total; no cambia `PayableAmount` ni el tipo de operación. El monto lo
+calcula el servidor (`Comprobante.retencion`). Antes del correlativo se rechaza con 400: retención en boleta, detracción
+y retención juntas, porcentaje que no sea mayor a 0 y menor a 100, y detracción negativa o que sumada a la retención
+supere el total (el monto de la detracción lo envía el cliente). Al crédito, el monto neto pendiente y la suma de las
+cuotas son total − detracción − retención (el formulario validaba las cuotas contra el total aunque hubiera detracción;
+ahora sigue al XML). La factura interna ligada a un comprobante con retención nace con impuesto `retencion` (el 3 % de
+Tesorería), no con la detracción por defecto. Pruebas: `test/retencionIgvCpe.test.js` (XML y rechazos, con emisión
+simulada) y `test/ligarCpeFactura.test.js`. Desde INTALES no se emitió nada a SUNAT: la estructura es la que SUNAT demo
+aceptó a HUAQUIAN. Aplicado por separado en las cinco ramas. **Con percepción:** no hay regla que las excluya (nadie
+la pidió). Si coinciden al contado, el XML lleva los dos `AllowanceCharge` (percepción 51/53 y luego retención 62) con
+operación 2001; al crédito sale solo el 62. La factura interna tiene un único impuesto y se queda con la percepción.
+Esa combinación no se ha probado contra SUNAT.
+
 **Resuelto (2026-10-07) — descuento por línea en Emitir Comprobante (Frontend `3d9e1029`; origen SIPAPP-HUAQUIAN
 `ff72647`; ver skill `sunat-cpe-ubl21` §10):** el input "Desc. %" guarda 0-100, pero `calcularLineaComprobante`
 (`utils/catalogosSunat.js`) trabaja en fracción 0-1; con descuento, los totales en pantalla salían mal (20 % sobre 100
