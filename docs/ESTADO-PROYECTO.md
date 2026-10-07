@@ -144,6 +144,20 @@ aceptó a HUAQUIAN. Aplicado por separado en las cinco ramas.
 daba base −1900) y de ahí salen el monto neto de detracción que se envía y la validación de cuotas. `itemsCalc` en
 `Frontend/src/pages/EmitirComprobante.jsx` ahora convierte a fracción antes de calcular.
 
+**Pendiente de portar desde `ventas/produccion/contabilidadoficial` (2026-10-03; backend `da4282b` y `f9d25dd`, frontend `7115c09e` y `00bb1ea4`; ver su
+ESTADO-PROYECTO §5 y las skills `erp-reglas-datos` §3 y `contabilidad-peru`):**
+- Fechas en hora de Lima: `Frontend/src/utils/fecha.js` (`aInputFecha`, `anioLima`, `mesLima`; medianoche UTC exacta =
+  día de calendario) y quitar `toISOString().split("T")[0]`, `getFullYear()`/`getMonth()` y `setHours()` de detalles,
+  listas y Dashboard. Backend: `routes/cotizaciones.js` guarda la fecha de pago del cierre con `aFechaLima` (no
+  `new Date("YYYY-MM-DD")`); `utils/resumenTributario.js` y `routes/sire.js` usan `setUTCMonth` para el fin del mes.
+- **Planilla y PLAME** (2026-10-06, en `contabilidadoficial`, backend `8f7b8d4`, frontend `54825c30`): módulo `/planilla`, asiento de origen
+  `Planilla` en `asientosAutomaticos.js` y conceptos `pago_*` de Tesorería. Llega con el merge de esa rama.
+- Motor contable: **asientos automáticos editables** (2026-10-05, en `contabilidadoficial` `66329ae`/`c548ed70` y `conta-percepcion`, ya con commit):
+  `PUT /contabilidad/asientos/:id` para automáticos conservando sus líneas (`origenLinea`/`sinCambios`),
+  `editadoManualmente` para que generar no los pise y `POST /contabilidad/automaticos/:id/restablecer`.
+- Motor contable: asiento de **diferencia de cambio al cierre** (`generarDiferenciaCambio`, desde el mayor; en CONCAR
+  flag `N` con dólares 0) y **constancia de detracción** en la columna S (número de operación del depósito).
+
 **⚠ Mencionar al usuario al abrir el proyecto: las "Decisiones por confirmar" de abajo.**
 
 **Rama `ventas/produccion/contabilidadoficial` (2026-10-03):** recibió por merge la rama contable
@@ -258,3 +272,8 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
   comprobantes de compra, ventas US$/tributario).
 - `docs/superpowers/plans/` y `docs/superpowers/sdd/`: planes y ledgers (decisiones `Ruling:` y menores).
 - `docs/HANDOFF-comprobantes-compra.md`: traspaso histórico de las Fases 1–2 (cerrado).
+
+- **Factura emitida suelta pasa a «Por cobrar»** (2026-10-07, traído de `contabilidadoficial` `926d52c`/`066860bc`):
+  `EmitirComprobante.jsx` crea la factura interna también sin OC (solo facturas; las boletas no, se cobran al contado)
+  y `POST /facturas` toma el cliente del comprobante y lo registra en Empresas si falta (`clienteDelComprobante`).
+  No regulariza los comprobantes sueltos ya emitidos. Test: `test/ligarCpeFactura.test.js`.
