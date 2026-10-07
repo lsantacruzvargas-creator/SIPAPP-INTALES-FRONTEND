@@ -168,6 +168,18 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
 - El cierre de mes sigue exigiendo exportar a CONCAR; si el contador deja de importar, quitar esa condición.
 - Preguntas al contador F1–F4 (`docs/contabilidad/Preguntas al contador.md`).
 
+**Factura emitida suelta pasa a «Por cobrar» (2026-10-07, decisión del usuario):**
+- Antes, «Emitir comprobante» sin orden de compra solo enviaba a SUNAT: el asiento de venta cargaba la 1212 pero
+  Tesorería no tenía factura interna contra la cual cobrar. Ahora, al emitir una **factura** (01) suelta,
+  `EmitirComprobante.jsx` crea la factura interna ligada al comprobante (mismo paso que ya hacía desde una OC).
+- Sin cliente elegido, `POST /api/facturas` toma el receptor del comprobante y lo registra en Empresas si falta
+  (`clienteDelComprobante` en `routes/facturas.js`; un proveedor existente pasa a «ambos»).
+- **Boletas no**: se cobran al contado y no pasan a «Por cobrar». **Sin regularización** de los comprobantes sueltos
+  ya emitidos (aplica de aquí en adelante).
+- La factura interna calcula el total como subtotal + 18 %: una factura suelta con ítems exonerados o inafectos no
+  cuadra con su comprobante y avisa «se emitió, pero no se pudo crear el registro interno».
+- Test: `test/ligarCpeFactura.test.js`.
+
 **Planilla de remuneraciones y PLAME (2026-10-06, primera entrega):**
 - **Qué cubre**: ficha del trabajador, parámetros del mes, planilla mensual con boletas, archivos de importación del
   PLAME y asiento contable con su pago por Tesorería. Pantalla `/planilla` (admin, jefatura y contador ven; escriben
