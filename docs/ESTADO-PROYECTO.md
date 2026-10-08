@@ -200,6 +200,11 @@ INTALES como agente de percepción del IGV.**
   configurarla; (5) la percepción solo aplica a bienes del régimen de venta interna (Ley 29173): se marca por factura,
   el sistema no sabe qué bienes están sujetos; (6) probar las pantallas en el navegador (no se hizo).
 
+**Pendiente de traer desde `ventas/produccion/contabilidadoficial`:**
+- **Planilla y PLAME** (2026-10-06; backend `8f7b8d4`, frontend `54825c30`): módulo `/planilla` (trabajadores, parámetros
+  del mes, boletas y archivos del PLAME), asiento de origen `Planilla` en `asientosAutomaticos.js`, conceptos `pago_*`
+  de Tesorería y régimen laboral en la configuración. Detalle en el ESTADO-PROYECTO §5 de esa rama.
+
 **Asientos automáticos editables (2026-10-05, decisión del usuario: el automático es la base y se completa a mano):**
 - `PUT /api/contabilidad/asientos/:id` edita también los automáticos, en borrador o contabilizados (admin y contador). No
   se editan los anulados ni los **ya exportados** (esto último vale también para los manuales: antes se podían editar).
@@ -236,6 +241,11 @@ movimiento, `TablaPorPagar`, `TablaPorCobrar` y `TablaMovimientos` dejan las acc
 cherry-pick (`3838fea`). Extendido a **Bancos** (transferencia e ingreso/egreso manual) y **Caja chica** (gasto,
 rendición, reposición, arqueo y anulaciones), probado con E2E y recarga demorada. *Nota para `main`:* no hace falta
 portarlo; tras el revert `main` no tiene Bancos ni Caja chica, y sus tres tablas ya traen el arreglo.
+
+**Resuelto (2026-10-07) — factura emitida suelta pasa a «Por cobrar»** (traído de `contabilidadoficial` `926d52c`/`066860bc`):
+`EmitirComprobante.jsx` crea la factura interna también sin orden de compra (solo facturas; las boletas no, se cobran
+al contado) y `POST /facturas` toma el cliente del comprobante y lo registra en Empresas si falta
+(`clienteDelComprobante`). No regulariza los comprobantes sueltos ya emitidos. Test: `test/ligarCpeFactura.test.js`.
 
 **Resuelto (2026-10-02) — SUNAT 3270 con descuento de línea:** `cac:AlternativeConditionPrice` (precio unitario con IGV)
 ahora es (valor de venta + IGV) / cantidad, ya descontado (`src/builders/factura.builder.js`, prueba
@@ -337,8 +347,3 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
   comprobantes de compra, ventas US$/tributario).
 - `docs/superpowers/plans/` y `docs/superpowers/sdd/`: planes y ledgers (decisiones `Ruling:` y menores).
 - `docs/HANDOFF-comprobantes-compra.md`: traspaso histórico de las Fases 1–2 (cerrado).
-
-- **Factura emitida suelta pasa a «Por cobrar»** (2026-10-07, traído de `contabilidadoficial` `926d52c`/`066860bc`):
-  `EmitirComprobante.jsx` crea la factura interna también sin OC (solo facturas; las boletas no, se cobran al contado)
-  y `POST /facturas` toma el cliente del comprobante y lo registra en Empresas si falta (`clienteDelComprobante`).
-  No regulariza los comprobantes sueltos ya emitidos. Test: `test/ligarCpeFactura.test.js`.
