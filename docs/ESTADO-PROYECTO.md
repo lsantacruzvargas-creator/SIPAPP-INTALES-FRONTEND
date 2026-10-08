@@ -133,12 +133,13 @@ aceptó a HUAQUIAN. Aplicado por separado en las cinco ramas.
 daba base −1900) y de ahí salen el monto neto de detracción que se envía y la validación de cuotas. `itemsCalc` en
 `Frontend/src/pages/EmitirComprobante.jsx` ahora convierte a fracción antes de calcular.
 
-**Pendiente de portar desde `ventas/produccion/contabilidadoficial` (2026-10-03; backend `da4282b` y `f9d25dd`, frontend `7115c09e` y `00bb1ea4`; ver su
-ESTADO-PROYECTO §5 y las skills `erp-reglas-datos` §3 y `contabilidad-peru`):**
-- Fechas en hora de Lima: `Frontend/src/utils/fecha.js` (`aInputFecha`, `anioLima`, `mesLima`; medianoche UTC exacta =
-  día de calendario) y quitar `toISOString().split("T")[0]`, `getFullYear()`/`getMonth()` y `setHours()` de detalles,
-  listas y Dashboard. Backend: `routes/cotizaciones.js` guarda la fecha de pago del cierre con `aFechaLima` (no
-  `new Date("YYYY-MM-DD")`); `utils/resumenTributario.js` y `routes/sire.js` usan `setUTCMonth` para el fin del mes.
+**Fechas en hora de Lima (2026-10-07, traído de `contabilidadoficial` `da4282b`/`00bb1ea4`):**
+- Frontend: `utils/fecha.js` (`aInputFecha`, `anioLima`, `mesLima`; un valor a medianoche UTC exacta es un día de
+  calendario y se lee en UTC, el resto en America/Lima) reemplaza `toISOString().split("T")[0]`,
+  `getFullYear()`/`getMonth()` y `setHours()` en detalles, listas, Dashboard y el PDF de cotización. Test: `utils/fecha.test.js`.
+- Backend: `routes/cotizaciones.js` guarda la fecha de pago del cierre con `aFechaLima`; `utils/resumenTributario.js`
+  y `routes/sire.js` usan `setUTCMonth` para el fin del mes.
+- Sigue pendiente la decisión de unificar el guardado de fechas de módulos antiguos (cast global + migración).
 
 **⚠ Contabilidad, bancos B7 y caja chica NO van en `main` (decisión del usuario, 2026-10-02):** el motor contable
 C1–C3 (asientos, automáticos, exportar CONCAR, cierre de mes, plan de cuentas), bancos B7 y caja chica de la rama
@@ -147,6 +148,11 @@ por error; se revirtió (`80c5410` backend, `52663131` frontend) y se mergeó en
 trabajo a `main`. Si algún día se mergea contabilidadoficial hacia `main`, revertir antes esos dos commits de revert.
 
 **⚠ Mencionar al usuario al abrir el proyecto: las "Decisiones por confirmar" de abajo.**
+
+**Resuelto (2026-10-07) — factura emitida suelta pasa a «Por cobrar»** (traído de `contabilidadoficial` `926d52c`/`066860bc`):
+`EmitirComprobante.jsx` crea la factura interna también sin orden de compra (solo facturas; las boletas no, se cobran
+al contado) y `POST /facturas` toma el cliente del comprobante y lo registra en Empresas si falta
+(`clienteDelComprobante`). No regulariza los comprobantes sueltos ya emitidos. Test: `test/ligarCpeFactura.test.js`.
 
 **Resuelto (2026-10-02) — SUNAT 3270 con descuento de línea:** `cac:AlternativeConditionPrice` (precio unitario con IGV)
 ahora es (valor de venta + IGV) / cantidad, ya descontado (`src/builders/factura.builder.js`, prueba
@@ -245,8 +251,3 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
   comprobantes de compra, ventas US$/tributario).
 - `docs/superpowers/plans/` y `docs/superpowers/sdd/`: planes y ledgers (decisiones `Ruling:` y menores).
 - `docs/HANDOFF-comprobantes-compra.md`: traspaso histórico de las Fases 1–2 (cerrado).
-
-- **Factura emitida suelta pasa a «Por cobrar»** (2026-10-07, traído de `contabilidadoficial` `926d52c`/`066860bc`):
-  `EmitirComprobante.jsx` crea la factura interna también sin OC (solo facturas; las boletas no, se cobran al contado)
-  y `POST /facturas` toma el cliente del comprobante y lo registra en Empresas si falta (`clienteDelComprobante`).
-  No regulariza los comprobantes sueltos ya emitidos. Test: `test/ligarCpeFactura.test.js`.

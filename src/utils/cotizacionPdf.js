@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { formatearFecha } from "./fecha";
+import { formatearFecha, anioLima } from "./fecha";
 import { fetchAuth, fetchUpload } from "./fetchAuth";
 
 // Se cargan desde /public (no un import de módulo) para que, si el archivo
@@ -180,7 +180,7 @@ export const exportarCotizacionPdf = async (cotizacion) => {
   // Código completo del PDF: correlativo-año-INT/iniciales — se arma acá,
   // nunca se persiste (decisión del usuario, 2026-09-11, ver
   // Cotizacion.numeroCotizacion/pre-save en el backend).
-  const anioDoc = cotizacion.fecha ? new Date(cotizacion.fecha).getFullYear() : new Date().getFullYear();
+  const anioDoc = anioLima(cotizacion.fecha || new Date());
   const inicialesAsesor = cotizacion.creadoPor?.iniciales || "";
   const codigoCompleto = `${cotizacion.numeroCotizacion || cotizacion.codigo || "—"}-${anioDoc}-INT/${inicialesAsesor}`;
 
