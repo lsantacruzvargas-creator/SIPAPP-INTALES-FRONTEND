@@ -129,6 +129,15 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 ## 5. Pendientes
 
+**Resuelto (2026-10-07) — el cobro de una venta con cuotas se registra cuota por cuota (Backend `85137db`, Frontend
+`1e04efb6`; pedido del usuario):** «Registrar cobro» muestra una tarjeta por cuota, cada una con su saldo, y el cobro
+del neto se guarda contra la elegida (`MovimientoTesoreria.documento.cuotaId`); no puede pasar del saldo de la cuota y
+un monto menor la deja abierta. La detracción o la retención es un cobro aparte y ya no cubre cuotas, salvo en las
+facturas antiguas cuyas cuotas suman el total del comprobante. Los cobros anteriores, sin cuota, se siguen repartiendo
+en orden (`saldosTesoreria.recalcularFacturaVenta`). **Pendiente de portar** a `main`, `venta-produc-compra-contaConcar`
+y `conta-percepcion` (mismos archivos). Sin tocar: al cambiar el subtotal o aplicar una NC parcial las cuotas se
+prorratean al total del comprobante, no al neto.
+
 **Resuelto (2026-10-07) — retención del IGV en la factura electrónica (Backend `0625367`, Frontend `993295e3`;
 origen SIPAPP-HUAQUIAN `55a4b9a`, `0c71da4`, `de8fb2f` y `bdc4beb`; ver skill `sunat-cpe-ubl21` §28):**
 Emitir Comprobante tiene el checkbox "Operación sujeta a retención del IGV", solo en factura y excluyente con la
