@@ -6,17 +6,20 @@ import BarraEdicion from "../BarraEdicion";
 import { fechaHoyLima } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { fechaConsultableTc, estadoTcComprobante } from "../../utils/tesoreria";
-import { totalesAsiento, validarLineas, lineasParaEnviar, lineasDeAsiento, SUBDIARIOS, SUBDIARIOS_MANUALES } from "../../utils/contabilidad";
+import { totalesAsiento, validarLineas, lineasParaEnviar, lineasDeAsiento, lineaIntacta, SUBDIARIOS, SUBDIARIOS_MANUALES } from "../../utils/contabilidad";
 import BuscadorCuenta from "./BuscadorCuenta";
 
 const INP = "w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
 const lineaVacia = () => ({ cuenta: "", glosa: "", debe: "", haber: "", centroCosto: "", tercero: { tipoDoc: "6", numDoc: "", nombre: "" } });
 const fechaInput = (d) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" }).format(new Date(d));
 
-// Asiento manual: crear o editar (solo los manuales no anulados). Los demás se muestran en lectura.
+// Crear un asiento manual o editar uno existente, manual o automático (el automático sale de su documento y se
+// completa aquí: más cuentas, otra distribución). No se editan los anulados ni los ya exportados.
 export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscribir, onClose, onGuardado }) {
-  const editableSegunEstado = puedeEscribir && (!asiento || (asiento.origen?.tipo === "manual" && asiento.estado !== "anulado"));
-  // Abrir = editar: un asiento manual existente se toma al abrirlo; si otro lo tiene, queda en lectura.
+  const automatico = !!asiento && asiento.origen?.tipo !== "manual";
+  const exportado = !!asiento?.exportacion?.lote;
+  const editableSegunEstado = puedeEscribir && (!asiento || (asiento.estado !== "anulado" && !exportado));
+  // Abrir = editar: un asiento existente se toma al abrirlo; si otro lo tiene, queda en lectura.
   const bloqueo = useBloqueoEdicion("asiento", asiento?._id, asiento?.updatedAt, { autoEditar: !!asiento && editableSegunEstado });
   const editable = editableSegunEstado && (!asiento || bloqueo.editando);
   const [form, setForm] = useState(() => ({
@@ -80,6 +83,22 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
     }
   };
 
+  // Borrador automático editado a mano: se puede volver a lo que genera su documento.
+  const restablecer = async () => {
+    setError("");
+    setGuardando(true);
+    try {
+      const r = await fetchAuth(`/contabilidad/automaticos/${asiento._id}/restablecer`, { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return setError(d.mensaje || "No se pudo restablecer el asiento.");
+      onGuardado(d);
+    } catch {
+      setError("Error de conexión con el servidor: revisa la lista antes de reintentar.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   const simbolo = form.moneda === "USD" ? "US$" : "S/";
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
@@ -92,10 +111,26 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
           {asiento && <p className="text-xs text-gray-400">Creado por {asiento.creadoPor || "—"}{asiento.modificadoPor ? ` · modificado por ${asiento.modificadoPor}` : ""}</p>}
         </div>
         {asiento && editableSegunEstado && <BarraEdicion bloqueo={bloqueo} />}
+        {automatico && (
+          <div className="text-xs text-gray-600 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2 space-y-1">
+            <p>
+              <b>Asiento automático</b>: sale de su documento.
+              {exportado ? " Ya se exportó al software contable: no se edita, se corrige con un asiento de ajuste."
+                : editableSegunEstado ? " Puedes agregar o cambiar líneas; la fecha, la moneda y el tipo de cambio son los del documento. Una vez editado, «Generar asientos del mes» ya no lo reescribe."
+                : ""}
+            </p>
+            {asiento.origenCambiado && <p className="text-red-600">Su documento cambió después: revisa las líneas{asiento.estado === "borrador" ? " o vuelve al generado" : ""}.</p>}
+            {editable && asiento.estado === "borrador" && asiento.editadoManualmente && (
+              <button onClick={restablecer} disabled={guardando} className="text-purple-700 hover:underline disabled:opacity-50">
+                Descartar lo editado y volver al generado
+              </button>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <div>
             <label className="text-xs text-gray-500">Fecha</label>
-            <input type="date" value={form.fecha} onChange={set("fecha")} disabled={!editable} className={INP} />
+            <input type="date" value={form.fecha} onChange={set("fecha")} disabled={!editable || automatico} className={INP} />
           </div>
           <div>
             <label className="text-xs text-gray-500">Subdiario</label>
@@ -109,7 +144,7 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
           </div>
           <div>
             <label className="text-xs text-gray-500">Moneda</label>
-            <select value={form.moneda} onChange={set("moneda")} disabled={!editable} className={INP}>
+            <select value={form.moneda} onChange={set("moneda")} disabled={!editable || automatico} className={INP}>
               <option value="PEN">Soles</option>
               <option value="USD">Dólares</option>
             </select>
@@ -117,7 +152,7 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
           {form.moneda === "USD" && (
             <div>
               <label className="text-xs text-gray-500">Tipo de cambio</label>
-              <input value={form.tipoCambio} onChange={set("tipoCambio")} disabled={!editable || tcSoloLectura} inputMode="decimal" className={INP} />
+              <input value={form.tipoCambio} onChange={set("tipoCambio")} disabled={!editable || tcSoloLectura || automatico} inputMode="decimal" className={INP} />
               {tcAviso && <p className="text-[11px] text-gray-400">{tcAviso}</p>}
             </div>
           )}
@@ -139,17 +174,18 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
               return (
                 <tr key={i} className="align-top border-b border-gray-50">
                   <td className="py-1 pr-2">
-                    <BuscadorCuenta cuentas={cuentas} valor={l.cuenta} onChange={(v) => setLinea(i, { cuenta: v })} disabled={!editable} />
+                    <BuscadorCuenta cuentas={cuentas} valor={l.cuenta} onChange={(v) => setLinea(i, { cuenta: v })} disabled={!editable || l.soloSoles} />
                     {err && <p className="text-[11px] text-red-600 mt-0.5">{err}</p>}
                   </td>
                   <td className="py-1 pr-2"><input value={l.glosa} onChange={(e) => setLinea(i, { glosa: e.target.value })} disabled={!editable} className={INP} /></td>
-                  <td className="py-1 pr-2"><input value={l.debe} inputMode="decimal" disabled={!editable} className={`${INP} text-right`}
+                  <td className="py-1 pr-2"><input value={l.debe} inputMode="decimal" disabled={!editable || l.soloSoles} className={`${INP} text-right`}
                     onChange={(e) => setLinea(i, { debe: e.target.value, ...(e.target.value ? { haber: "" } : {}) })} /></td>
-                  <td className="py-1 pr-2"><input value={l.haber} inputMode="decimal" disabled={!editable} className={`${INP} text-right`}
+                  <td className="py-1 pr-2"><input value={l.haber} inputMode="decimal" disabled={!editable || l.soloSoles} className={`${INP} text-right`}
                     onChange={(e) => setLinea(i, { haber: e.target.value, ...(e.target.value ? { debe: "" } : {}) })} /></td>
                   {form.moneda === "USD" && (
                     <td className="py-1 pr-2 text-right text-xs text-gray-500 tabular-nums pt-2.5">
-                      {money((Number(l.debe) || Number(l.haber) || 0) * (Number(form.tipoCambio) || 0))}
+                      {/* Una línea guardada que no se tocó conserva sus soles (su propio TC, o solo soles). */}
+                      {money(lineaIntacta(l) ? l.soles : (Number(l.debe) || Number(l.haber) || 0) * (Number(form.tipoCambio) || 0))}
                     </td>
                   )}
                   <td className="py-1 pr-2 space-y-1">

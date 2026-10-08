@@ -1,7 +1,7 @@
 import { DETRACCION_BIENES_SERVICIOS } from "./catalogosSunat.js";
 import { round2, money } from "./compras.js";
 import { origenTC, esTcSunat } from "./costos.js";
-import { fechaHoyLima, formatearFecha } from "./fecha.js";
+import { fechaHoyLima, formatearFecha, aInputFecha } from "./fecha.js";
 
 // Espejo de Backend/src/utils/impuesto.js: el backend recalcula siempre; esto
 // es solo la vista previa de los formularios.
@@ -97,7 +97,7 @@ export function vencimientoDe(f, lado) {
 
 export function semaforo(fechaVencimiento, pendiente, hoyIso) {
   if (!fechaVencimiento || !pendiente) return null;
-  const venc = String(fechaVencimiento).slice(0, 10);
+  const venc = aInputFecha(fechaVencimiento);
   if (venc < hoyIso) return "vencida";
   if (venc <= sumarDias(hoyIso, 7)) return "por_vencer";
   return "al_dia";
@@ -113,7 +113,7 @@ export const FILTROS_TESORERIA = { tercero: "", estado: "", vencimiento: "", des
 
 export function filtrarFacturas(lista, f, { lado, hoyIso }) {
   return lista.filter((x) => {
-    const emision = String(x.fechaEmision || "").slice(0, 10);
+    const emision = aInputFecha(x.fechaEmision);
     const pendiente = x.saldoNeto > 0.009 || x.saldoImpuesto > 0.009;
     return (!f.tercero || terceroDe(x, lado).includes(f.tercero.toLowerCase()))
       && (!f.estado || estadoDe(x, lado) === f.estado)
@@ -127,7 +127,12 @@ export function filtrarFacturas(lista, f, { lado, hoyIso }) {
 export const CONCEPTOS_MANUALES = [
   { valor: "aporte", label: "Aporte" }, { valor: "prestamo", label: "Préstamo" }, { valor: "retiro", label: "Retiro" },
   { valor: "gasto_bancario", label: "Gasto bancario" }, { valor: "otros", label: "Otros" },
+  // Pagos de la planilla (solo egresos): cancelan lo que dejó por pagar su asiento.
+  { valor: "pago_remuneraciones", label: "Planilla: remuneraciones", soloEgreso: true }, { valor: "pago_afp", label: "Planilla: AFP", soloEgreso: true },
+  { valor: "pago_essalud", label: "Planilla: EsSalud", soloEgreso: true }, { valor: "pago_onp", label: "Planilla: ONP", soloEgreso: true },
+  { valor: "pago_quinta", label: "Planilla: renta de 5.ª", soloEgreso: true },
 ];
+export const conceptosManualesDe = (tipo) => CONCEPTOS_MANUALES.filter((c) => !c.soloEgreso || tipo === "egreso");
 export const etiquetaConceptoManual = (valor) =>
   valor === "transferencia" ? "Transferencia entre cuentas" : CONCEPTOS_MANUALES.find((c) => c.valor === valor)?.label || valor;
 

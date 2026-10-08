@@ -29,6 +29,7 @@ export function totalesAsiento(lineas) {
 export function validarLineas(lineas, cuentasPorCodigo) {
   const errores = [];
   lineas.forEach((l, indice) => {
+    if (lineaIntacta(l)) return; // viene del asiento guardado y no se tocó: el servidor la conserva
     const err = (mensaje) => errores.push({ indice, mensaje });
     const c = cuentasPorCodigo.get(String(l.cuenta || "").trim());
     if (!c) return err("Elige una cuenta");
@@ -45,25 +46,39 @@ export function validarLineas(lineas, cuentasPorCodigo) {
   return errores;
 }
 
-// Cuerpo de las líneas para el servidor: en USD los importes van como debeME/haberME.
+// Lo que el formulario muestra de una línea: si no cambió respecto de lo guardado, la línea está intacta.
+const huellaLinea = (l) => JSON.stringify([String(l.cuenta || "").trim(), l.glosa || "", num(l.debe), num(l.haber), l.centroCosto || "", l.tercero?.numDoc || ""]);
+export const lineaIntacta = (l) => l.origenLinea != null && (!!l.soloSoles || huellaLinea(l) === l.original);
+
+// Cuerpo de las líneas para el servidor: en USD los importes van como debeME/haberME. Una línea del asiento guardado
+// que no se tocó va solo con su posición (`origenLinea`, `sinCambios`): el servidor la conserva tal cual; si cambió,
+// lleva su posición para conservar el comprobante y el papel de la línea.
 export const lineasParaEnviar = (lineas, moneda) => lineas.map((l) => {
+  if (lineaIntacta(l)) return { origenLinea: l.origenLinea, sinCambios: true };
   const base = {
     cuenta: String(l.cuenta).trim(), glosa: l.glosa || "",
     centroCosto: l.centroCosto || null, tercero: l.tercero || {},
+    ...(l.origenLinea != null ? { origenLinea: l.origenLinea } : {}),
   };
   return moneda === "USD"
     ? { ...base, debeME: num(l.debe), haberME: num(l.haber) }
     : { ...base, debe: num(l.debe), haber: num(l.haber) };
 });
 
-// Del asiento guardado a las líneas del formulario (en la moneda del asiento).
-export const lineasDeAsiento = (asiento) => asiento.lineas.map((l) => ({
-  cuenta: l.cuenta, glosa: l.glosa || "",
-  debe: (asiento.moneda === "USD" ? l.debeME : l.debe) || "",
-  haber: (asiento.moneda === "USD" ? l.haberME : l.haber) || "",
-  centroCosto: l.centroCosto?._id || l.centroCosto || "",
-  tercero: { tipoDoc: l.tercero?.tipoDoc || "", numDoc: l.tercero?.numDoc || "", nombre: l.tercero?.nombre || "" },
-}));
+// Del asiento guardado a las líneas del formulario (en la moneda del asiento). Cada una recuerda su posición y cómo
+// vino (`original`), y sus soles guardados: un automático en dólares tiene líneas a distinto TC y alguna solo en soles
+// (diferencia de cambio), que el formulario muestra pero no edita.
+export const lineasDeAsiento = (asiento) => asiento.lineas.map((l, i) => {
+  const usd = asiento.moneda === "USD";
+  const linea = {
+    cuenta: l.cuenta, glosa: l.glosa || "",
+    debe: (usd ? l.debeME : l.debe) || "",
+    haber: (usd ? l.haberME : l.haber) || "",
+    centroCosto: l.centroCosto?._id || l.centroCosto || "",
+    tercero: { tipoDoc: l.tercero?.tipoDoc || "", numDoc: l.tercero?.numDoc || "", nombre: l.tercero?.nombre || "" },
+  };
+  return { ...linea, origenLinea: i, original: huellaLinea(linea), soles: (l.debe || 0) + (l.haber || 0), soloSoles: usd && !l.debeME && !l.haberME };
+});
 
 // Plan como lista con sangría: [{ ...cuenta, profundidad }] ordenada por código.
 export function arbolCuentas(cuentas) {

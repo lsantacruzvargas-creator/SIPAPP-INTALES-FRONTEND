@@ -184,6 +184,7 @@ export default function Sidebar() {
     { to: "/compras", label: "Compras", Icon: IconBag, show: esAdmin || esJefatura || esVendedor },
     { to: "/tesoreria", label: "Tesorería", Icon: IconReceipt, show: esAdmin || esFacturacion || esJefatura || esFinanzas },
     { to: "/contabilidad", label: "Contabilidad", Icon: IconDocument, show: esAdmin || esJefatura || esFinanzas },
+    { to: "/planilla", label: "Planilla", Icon: IconUsers, show: esAdmin || esJefatura || usuario?.rol === "contador" },
     { to: "/centros-costo", label: "Centros de Costo", Icon: IconTag, show: esAdmin || esJefatura },
     { to: "/maquinas", label: "Máquinas", Icon: IconServer, show: esAdmin || esJefatura },
     { to: "/tarifas-personal", label: "Tarifas de Personal", Icon: IconUsers, show: esAdmin || esJefatura },

@@ -144,19 +144,71 @@ aceptó a HUAQUIAN. Aplicado por separado en las cinco ramas.
 daba base −1900) y de ahí salen el monto neto de detracción que se envía y la validación de cuotas. `itemsCalc` en
 `Frontend/src/pages/EmitirComprobante.jsx` ahora convierte a fracción antes de calcular.
 
-**Pendiente de portar desde `ventas/produccion/contabilidadoficial` (2026-10-03; backend `da4282b` y `f9d25dd`, frontend `7115c09e` y `00bb1ea4`; ver su
-ESTADO-PROYECTO §5 y las skills `erp-reglas-datos` §3 y `contabilidad-peru`):**
-- Fechas en hora de Lima: `Frontend/src/utils/fecha.js` (`aInputFecha`, `anioLima`, `mesLima`; medianoche UTC exacta =
-  día de calendario) y quitar `toISOString().split("T")[0]`, `getFullYear()`/`getMonth()` y `setHours()` de detalles,
-  listas y Dashboard. Backend: `routes/cotizaciones.js` guarda la fecha de pago del cierre con `aFechaLima` (no
-  `new Date("YYYY-MM-DD")`); `utils/resumenTributario.js` y `routes/sire.js` usan `setUTCMonth` para el fin del mes.
-- **Planilla y PLAME** (2026-10-06, en `contabilidadoficial`, backend `8f7b8d4`, frontend `54825c30`): módulo `/planilla`, asiento de origen
-  `Planilla` en `asientosAutomaticos.js` y conceptos `pago_*` de Tesorería. Llega con el merge de esa rama.
-- Motor contable: **asientos automáticos editables** (2026-10-05, en `contabilidadoficial` `66329ae`/`c548ed70` y `conta-percepcion`, ya con commit):
-  `PUT /contabilidad/asientos/:id` para automáticos conservando sus líneas (`origenLinea`/`sinCambios`),
-  `editadoManualmente` para que generar no los pise y `POST /contabilidad/automaticos/:id/restablecer`.
-- Motor contable: asiento de **diferencia de cambio al cierre** (`generarDiferenciaCambio`, desde el mayor; en CONCAR
-  flag `N` con dólares 0) y **constancia de detracción** en la columna S (número de operación del depósito).
+**Planilla de remuneraciones y PLAME (2026-10-06, primera entrega; traído de `contabilidadoficial` `8f7b8d4`/`54825c30` el 2026-10-07):**
+- **Qué cubre**: ficha del trabajador, parámetros del mes, planilla mensual con boletas, archivos de importación del
+  PLAME y asiento contable con su pago por Tesorería. Pantalla `/planilla` (admin, jefatura y contador ven; escriben
+  admin y contador). Backend: `routes/planilla.js`, `utils/planilla.js` (cálculo, funciones puras), `utils/plame.js`,
+  modelos `Trabajador`, `ParametrosPlanilla`, `Planilla`, `BoletaPago`, catálogo `data/conceptosPlame.js`.
+- **Fuentes**: Anexo 2 (tablas, actualizado 11.09.26) y Anexo 3 (estructuras, jul-2023) de SUNAT. El catálogo de
+  conceptos (Tabla 22, 154 códigos del sector privado con su afectación a EsSalud, ONP, AFP y 5.ª) se generó del Excel
+  oficial. Los tres repos de referencia (`planilla-pe`, `sunat_planilla`, `OCA_payroll`) solo sirvieron de contraste:
+  no se copió código (la 5.ª y la AFP de `planilla-pe` no siguen la norma).
+- **Régimen laboral** (general / pequeña / micro): `Configuracion.regimenLaboral`, se cambia en Tesorería →
+  Configuración (jefatura o admin). Hoy define las gratificaciones que proyecta la 5.ª.
+- **Parámetros por mes** (`/planilla/parametros/:periodo`): UIT, RMV, EsSalud, ONP y AFP (aporte, prima, tope y
+  comisión de cada AFP). Sin guardarlos no se calcula: las tasas de AFP cambian cada mes y se copian de la SBS.
+- **Cálculo**: días base 30 (ingreso/cese dentro del mes: días calendario), suspensiones de la Tabla 21 (las S.P. y las
+  subsidiadas no se pagan; vacaciones van al 0118), asignación familiar 10 % de la RMV en proporción a los días
+  pagados, horas extras 25/35 %, conceptos fijos y adicionales por código de la Tabla 22; ONP 13 %; AFP 10 % +
+  comisión + prima hasta el tope; EsSalud 9 % con base mínima de una RMV (con EPS, 25 % del aporte va a la EPS; SIS
+  sin aporte); renta de 5.ª por el art. 40 del Reglamento (proyección, 7 UIT, escala 8–30 %, divisores 12/9/8/5/4/1,
+  retenciones de meses anteriores y retención completa de pagos extraordinarios).
+- **5.ª de meses que no están en el sistema**: se anota en la ficha (`quintaAnterior`: mes, ingresos afectos y
+  retenido). Sin eso, al empezar a mitad de año la retención sale baja.
+- **Flujo**: guardar parámetros → «Generar planilla» (borrador, toma los datos actuales de cada ficha y conserva lo
+  digitado) → editar cada boleta (asistencia y conceptos del mes) → «Cerrar». Cerrada: boletas fijas, archivos del
+  PLAME y asiento. Se reabre si su asiento no está contabilizado y el periodo contable sigue abierto.
+- **PLAME** (`/planilla/:periodo/plame`): `.rem` (sin ONP ni EsSalud: los calcula el PDT), `.jor`, `.snl`, `.toc` de la
+  planilla cerrada, y `.ps4` / `.4ta` de los recibos por honorarios con pago en el mes (4.ª se declara al pagar).
+- **Asiento** (origen `Planilla`, subdiario diario, último día del mes): gasto por cuenta y centro de costo del
+  trabajador contra 4111 (neto), 40173, 4032, 407, 4031 y, si hay, EPS y descuentos. Cuentas en Planilla → Cuentas
+  (`ConfiguracionContable.planilla`). Sale con «Generar asientos del mes» y se completa a mano como cualquier automático.
+- **Pagos**: egreso manual de Tesorería con concepto «Planilla: remuneraciones / AFP / EsSalud / ONP / renta de 5.ª»
+  (`pago_*`), que cancela la cuenta por pagar del asiento.
+- Tests: `test/planillaCalculo.test.js` (11), `test/planilla.test.js` (8) y `utils/planilla.test.js` en el frontend.
+  Probado en el navegador (alta de trabajador, parámetros, generar, editar boleta, PDF, cerrar y descarga del `.rem`).
+- **Pendiente**: (1) importar los archivos en el PDT PLAME real — no se ha probado contra el validador de SUNAT;
+  (2) gratificaciones, CTS, vacaciones truncas y liquidación (hoy la gratificación se digita como concepto 0406 + 0312);
+  (3) provisiones mensuales de beneficios en el asiento; (4) carga masiva al T-Registro; (5) SCTR, SENATI y vida ley;
+  (6) rentas de 5.ª de otros empleadores (`.or5`) y recálculo de la 5.ª al cese (art. 41); (7) subsidios de EsSalud
+  (0915/0916) y prima AFP de mayores de 65; (8) confirmar con el contador lo marcado [Confirmar] en `utils/planilla.js`.
+
+**Asientos automáticos editables (2026-10-05, decisión del usuario: el automático es la base y se completa a mano; traído de `contabilidadoficial` `66329ae`/`c548ed70` el 2026-10-07):**
+- `PUT /api/contabilidad/asientos/:id` edita también los automáticos, en borrador o contabilizados (admin y contador). No
+  se editan los anulados ni los **ya exportados** (esto último vale también para los manuales: antes se podían editar).
+  En un automático la fecha, la moneda y el TC son los de su documento (el servidor ignora lo que llegue).
+- El formulario manda cada línea guardada con su posición (`origenLinea`); si no se tocó (`sinCambios`) el servidor la
+  conserva tal cual (un automático en dólares tiene líneas a distinto TC o solo en soles); si cambió, conserva el papel
+  de la línea, el comprobante, la referencia y la detracción (los usan CONCAR y el PLE). `utils/asientos.js`.
+- Queda `editadoManualmente`: «Generar asientos del mes» no reescribe un borrador editado; si su documento cambió lo
+  marca (`origenCambiado`). `POST /api/contabilidad/automaticos/:id/restablecer` descarta lo editado de un borrador.
+- Frontend: el mismo modal desde Asientos («Editar») y desde Automáticos (botón «Editar» en cada borrador), con aviso
+  de que es automático y «Descartar lo editado y volver al generado».
+
+**Diferencia de cambio al cierre y constancia de detracción (2026-10-07, traído de `contabilidadoficial` `f9d25dd`/`7115c09e`,
+sin la parte del PLE, que esta rama no tiene):**
+- `generarDiferenciaCambio(periodo)` en `asientosAutomaticos.js` (`POST /api/contabilidad/automaticos/diferencia-cambio`):
+  ajuste desde el mayor, activos al TC compra y pasivos al TC venta SUNAT del último día (art. 61 LIR); borrador en el
+  subdiario ajuste. En CONCAR sale con flag `N` y dólares 0. Botón en Contabilidad → Automáticos.
+- La constancia de detracción (columna S de CONCAR) es el número de operación del depósito registrado en Tesorería.
+
+**Fechas en hora de Lima (2026-10-07, traído de `contabilidadoficial` `da4282b`/`00bb1ea4`):**
+- Frontend: `utils/fecha.js` (`aInputFecha`, `anioLima`, `mesLima`; un valor a medianoche UTC exacta es un día de
+  calendario y se lee en UTC, el resto en America/Lima) reemplaza `toISOString().split("T")[0]`,
+  `getFullYear()`/`getMonth()` y `setHours()` en detalles, listas, Dashboard y el PDF de cotización. Test: `utils/fecha.test.js`.
+- Backend: `routes/cotizaciones.js` guarda la fecha de pago del cierre con `aFechaLima`; `utils/resumenTributario.js`
+  y `routes/sire.js` usan `setUTCMonth` para el fin del mes.
+- Sigue pendiente la decisión de unificar el guardado de fechas de módulos antiguos (cast global + migración).
 
 **⚠ Mencionar al usuario al abrir el proyecto: las "Decisiones por confirmar" de abajo.**
 
@@ -171,6 +223,11 @@ movimiento, `TablaPorPagar`, `TablaPorCobrar` y `TablaMovimientos` dejan las acc
 cherry-pick (`3838fea`). Extendido a **Bancos** (transferencia e ingreso/egreso manual) y **Caja chica** (gasto,
 rendición, reposición, arqueo y anulaciones), probado con E2E y recarga demorada. *Nota para `main`:* no hace falta
 portarlo; tras el revert `main` no tiene Bancos ni Caja chica, y sus tres tablas ya traen el arreglo.
+
+**Resuelto (2026-10-07) — factura emitida suelta pasa a «Por cobrar»** (traído de `contabilidadoficial` `926d52c`/`066860bc`):
+`EmitirComprobante.jsx` crea la factura interna también sin orden de compra (solo facturas; las boletas no, se cobran
+al contado) y `POST /facturas` toma el cliente del comprobante y lo registra en Empresas si falta
+(`clienteDelComprobante`). No regulariza los comprobantes sueltos ya emitidos. Test: `test/ligarCpeFactura.test.js`.
 
 **Resuelto (2026-10-02) — SUNAT 3270 con descuento de línea:** `cac:AlternativeConditionPrice` (precio unitario con IGV)
 ahora es (valor de venta + IGV) / cantidad, ya descontado (`src/builders/factura.builder.js`, prueba
@@ -272,8 +329,3 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
   comprobantes de compra, ventas US$/tributario).
 - `docs/superpowers/plans/` y `docs/superpowers/sdd/`: planes y ledgers (decisiones `Ruling:` y menores).
 - `docs/HANDOFF-comprobantes-compra.md`: traspaso histórico de las Fases 1–2 (cerrado).
-
-- **Factura emitida suelta pasa a «Por cobrar»** (2026-10-07, traído de `contabilidadoficial` `926d52c`/`066860bc`):
-  `EmitirComprobante.jsx` crea la factura interna también sin OC (solo facturas; las boletas no, se cobran al contado)
-  y `POST /facturas` toma el cliente del comprobante y lo registra en Empresas si falta (`clienteDelComprobante`).
-  No regulariza los comprobantes sueltos ya emitidos. Test: `test/ligarCpeFactura.test.js`.

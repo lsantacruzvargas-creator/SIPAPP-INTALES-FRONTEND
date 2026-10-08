@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
-import { CONCEPTOS_MANUALES, textoCuenta } from "../../utils/tesoreria";
+import { conceptosManualesDe, textoCuenta } from "../../utils/tesoreria";
 import { enviarConSobregiro } from "../../utils/sobregiro";
 import useConfirmar from "../../hooks/useConfirmar";
 
@@ -58,7 +58,7 @@ export default function ModalMovimientoManual({ modo, cuentas, onClose, onGuarda
           <div className="flex gap-3 text-sm">
             {["ingreso", "egreso"].map((t) => (
               <label key={t} className="flex items-center gap-1.5">
-                <input type="radio" checked={form.tipo === t} onChange={() => setForm((f) => ({ ...f, tipo: t }))} />{t === "ingreso" ? "Ingreso" : "Egreso"}
+                <input type="radio" checked={form.tipo === t} onChange={() => setForm((f) => ({ ...f, tipo: t, conceptoManual: conceptosManualesDe(t).some((c) => c.valor === f.conceptoManual) ? f.conceptoManual : "aporte" }))} />{t === "ingreso" ? "Ingreso" : "Egreso"}
               </label>
             ))}
           </div>
@@ -80,7 +80,7 @@ export default function ModalMovimientoManual({ modo, cuentas, onClose, onGuarda
           ) : (
             <label className="text-xs text-gray-500 col-span-2">Concepto
               <select value={form.conceptoManual} onChange={set("conceptoManual")} className={INP}>
-                {CONCEPTOS_MANUALES.map((c) => <option key={c.valor} value={c.valor}>{c.label}</option>)}
+                {conceptosManualesDe(form.tipo).map((c) => <option key={c.valor} value={c.valor}>{c.label}</option>)}
               </select>
             </label>
           )}

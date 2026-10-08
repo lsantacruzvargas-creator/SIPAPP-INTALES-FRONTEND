@@ -55,6 +55,8 @@ El plan de cuentas debe ser el del contador (se importa desde Excel).
   bloqueado en compras, Tesorería, caja chica, CPE y asientos; reapertura con motivo) y reportes de control.
   Spec `docs/superpowers/specs/2026-10-02-c3-cierre-reportes-design.md`, ledger `docs/superpowers/sdd/2026-10-02-c3-cierre/progress.md`.
   **C4** quedó hecha con C2 (CONCAR); **C5** en suspenso.
+- **Traído de `contabilidadoficial` (2026-10-07)**: asientos automáticos editables, diferencia de cambio al cierre,
+  constancia de detracción y el módulo `/planilla` con su asiento de origen `Planilla`. Detalle en `docs/ESTADO-PROYECTO.md` §5.
 
 ## Siguiente paso
 

@@ -13,7 +13,7 @@ const TIPOS = { banco: "Banco", caja: "Caja", detracciones: "Detracciones (Banco
 
 export default function PanelConfiguracion({ onCambio }) {
   const [cuentas, setCuentas] = useState([]);
-  const [config, setConfig] = useState({ esAgenteRetencion: false, tcCobros: "compra", tcPagos: "venta", coeficienteRenta: 0.015 });
+  const [config, setConfig] = useState({ esAgenteRetencion: false, tcCobros: "compra", tcPagos: "venta", coeficienteRenta: 0.015, regimenLaboral: "general" });
   const [coeficiente, setCoeficiente] = useState(null);
   const [nueva, setNueva] = useState(VACIA);
   const [error, setError] = useState("");
@@ -76,6 +76,11 @@ export default function PanelConfiguracion({ onCambio }) {
             <option value="compra">Compra</option><option value="venta">Venta</option>
           </select>
         </label>
+        <label className="text-xs text-gray-500">Régimen laboral (planilla)
+          <select value={config.regimenLaboral || "general"} disabled={guardando} onChange={(e) => guardar("/configuracion", "PUT", { regimenLaboral: e.target.value })} className={`${INP} block`}>
+            <option value="general">Régimen general</option><option value="pequena">Pequeña empresa (REMYPE)</option><option value="micro">Microempresa (REMYPE)</option>
+          </select>
+        </label>
         <label className="text-xs text-gray-500">Coeficiente de pago a cuenta de renta (%)
           <input type="number" step="0.01" min="0" max="10" disabled={guardando}
             value={coeficiente ?? String(Math.round((config.coeficienteRenta ?? 0.015) * 10000) / 100)}
@@ -84,7 +89,7 @@ export default function PanelConfiguracion({ onCambio }) {
             className={`${INP} block w-32`} />
         </label>
       </div>
-      <p className="text-[11px] text-gray-400 -mt-4">Por defecto, cobros al TC compra y pagos al TC venta (práctica de CONCAR/StarSoft); confirmar con el contador.</p>
+      <p className="text-[11px] text-gray-400 -mt-4">Por defecto, cobros al TC compra y pagos al TC venta (práctica de CONCAR/StarSoft); confirmar con el contador. El régimen laboral define las gratificaciones que proyecta la planilla (general: completas; pequeña empresa: la mitad; microempresa: ninguna) y aplica desde la siguiente vez que se calcule un mes.</p>
       <div className="space-y-2">
         <h3 className="text-sm font-bold text-gray-700 uppercase">Cuentas de tesorería</h3>
         <table className="w-full text-sm bg-white rounded-xl border border-gray-100">

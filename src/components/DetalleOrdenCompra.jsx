@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
-import { formatearFecha, fechaHoyLima } from "../utils/fecha";
+import { formatearFecha, fechaHoyLima, aInputFecha } from "../utils/fecha";
 import { costoEn } from "../utils/costos";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
 import ModalDetalleGuia from "./ModalDetalleGuia";
@@ -43,7 +43,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
     numeroGuiaRemision: orden.numeroGuiaRemision || "",
     codigoSap:          orden.codigoSap          || "",
     fechaSalida: orden.fechaSalida
-      ? new Date(orden.fechaSalida).toISOString().split("T")[0] : "",
+      ? aInputFecha(orden.fechaSalida) : "",
   });
   const [calc, setCalc]           = useState(calcular(subtotalInicial));
   const [empresas, setEmpresas]   = useState([]);

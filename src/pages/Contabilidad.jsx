@@ -63,7 +63,7 @@ export default function Contabilidad() {
         ))}
       </div>
       {tab === "asientos" && <PanelAsientos cuentas={cuentas} centrosCosto={centrosCosto} puedeEscribir={puedeEscribir} />}
-      {tab === "automaticos" && <PanelAutomaticos cuentas={cuentas} puedeGenerar={puedeGenerar} puedeEscribir={puedeEscribir} />}
+      {tab === "automaticos" && <PanelAutomaticos cuentas={cuentas} centrosCosto={centrosCosto} puedeGenerar={puedeGenerar} puedeEscribir={puedeEscribir} />}
       {tab === "concar" && <PanelExportarConcar puedeEscribir={puedeEscribir} />}
       {tab === "cierre" && <PanelCierreMes puedeCerrar={rol === "tesorero"} />}
       {tab === "reportes" && <PanelReportesContables centrosCosto={centrosCosto} />}

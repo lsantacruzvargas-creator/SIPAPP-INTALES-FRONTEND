@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
-import { formatearFecha } from "../utils/fecha";
+import { formatearFecha, aInputFecha, anioLima, fechaHoyLima, mesLima } from "../utils/fecha";
 import ModalOTEquipo from "../components/ModalOTEquipo";
 import TablaScroll from "../components/TablaScroll";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
@@ -18,7 +18,7 @@ const badgeOT = (e) => {
   return "bg-gray-100 text-gray-400";
 };
 
-const hoyISO = () => new Date().toISOString().split("T")[0];
+const hoyISO = fechaHoyLima;
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 const INP_RO = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full cursor-not-allowed";
@@ -86,7 +86,7 @@ export default function IngresoEquipos() {
     setForm({
       empresa:                  ing.empresa?._id || "",
       planta:                   ing.planta || "",
-      fechaIngreso:             ing.fechaIngreso ? ing.fechaIngreso.split("T")[0] : hoyISO(),
+      fechaIngreso:             ing.fechaIngreso ? aInputFecha(ing.fechaIngreso) : hoyISO(),
       tipoEquipo:               ing.tipoEquipo || "",
       marca:                    ing.marca || "",
       modelo:                   ing.modelo || "",
@@ -135,7 +135,7 @@ export default function IngresoEquipos() {
     setGuardando(false);
   };
 
-  const aniosLista = [...new Set(ingresos.map((i) => new Date(i.fechaIngreso).getFullYear()))].sort((a, b) => b - a);
+  const aniosLista = [...new Set(ingresos.map((i) => anioLima(i.fechaIngreso)))].sort((a, b) => b - a);
 
   const empresasLista = [
     ...new Map(
@@ -148,7 +148,6 @@ export default function IngresoEquipos() {
   const filtrados = ingresos.filter((i) => {
     const txt  = busqueda.toLowerCase();
     const ot   = otMap[i._id];
-    const fecha = new Date(i.fechaIngreso);
     const matchBusq = !txt
       || i.codigo?.toLowerCase().includes(txt)
       || i.tipoEquipo?.toLowerCase().includes(txt)
@@ -159,8 +158,8 @@ export default function IngresoEquipos() {
       || ot?.codigo?.toLowerCase().includes(txt)
       || i.numeroGuiaEmision?.toLowerCase().includes(txt);
     const matchEstado  = !estadoFiltro  || ot?.estado === estadoFiltro;
-    const matchAnio    = !anioFiltro    || fecha.getFullYear() === parseInt(anioFiltro);
-    const matchMes     = !mesFiltro     || fecha.getMonth() + 1 === parseInt(mesFiltro);
+    const matchAnio    = !anioFiltro    || anioLima(i.fechaIngreso) === parseInt(anioFiltro);
+    const matchMes     = !mesFiltro     || mesLima(i.fechaIngreso) === parseInt(mesFiltro);
     const matchEmpresa = !empresaFiltro || i.empresa?._id === empresaFiltro;
     const matchPlanta  = !plantaFiltro  || i.planta === plantaFiltro;
     return matchBusq && matchEstado && matchAnio && matchMes && matchEmpresa && matchPlanta;
