@@ -4,7 +4,7 @@ import {
   calcularImpuesto, partes, tipoMovimientoEsperado, sugerirImpuesto, impuestoVentaPorDefecto, etiquetaImpuesto,
   diasCredito, sumarDias, vencimientoDe, semaforo, filtrarFacturas, FILTROS_TESORERIA, totalesMovimientos, cuentasPara, periodoDeMes, fechaIsoTexto, esPagoAntiguo, avisoMoneda, diasEntre,
   CONCEPTOS_MANUALES, etiquetaConceptoManual, textoCuenta, referenciaMovimiento,
-  estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, etiquetaComprobante, vistaPreviaNota, origenesPosibles,
+  estadoTcComprobante, tcValido, fechaConsultableTc, TIPOS_COMPROBANTE_COMPRA, creditoFiscalDe, etiquetaComprobante, vistaPreviaNota, origenesPosibles, partesDeMovimiento,
 } from "./tesoreria.js";
 
 test("calcularImpuesto replica al backend: detracción entera en soles y retención 3 %", () => {
@@ -331,4 +331,38 @@ test("referenciaMovimiento: documento y tercero; los manuales muestran su concep
   assert.deepEqual(referenciaMovimiento({ documentoRef: null, conceptoManual: "aporte", descripcion: "Aporte del socio" }),
     { documento: "Aporte", tercero: "Aporte del socio", parte: "Manual" });
   assert.deepEqual(referenciaMovimiento({ documentoRef: null, concepto: "impuesto" }), { documento: "", tercero: "", parte: "Impuesto" });
+});
+test("partesDeMovimiento: una venta con cuotas se cobra cuota por cuota y el impuesto va aparte", () => {
+  const d = {
+    moneda: "PEN", saldoNeto: 838, saldoImpuesto: 142, impuesto: { tipo: "detraccion", tasa: 0.12 },
+    cuotas: [
+      { _id: "c2", numero: 2, monto: 519, montoPagado: 0, fechaVencimiento: "2026-11-30" },
+      { _id: "c1", numero: 1, monto: 519, montoPagado: 200, fechaVencimiento: "2026-10-30" },
+    ],
+  };
+  const partes = partesDeMovimiento({ lado: "venta", documento: d });
+  assert.deepEqual(partes.map((p) => [p.clave, p.concepto, p.cuotaId, p.titulo, p.saldo, p.moneda]), [
+    ["cuota-c1", "neto", "c1", "Cuota 1", 319, "PEN"],
+    ["cuota-c2", "neto", "c2", "Cuota 2", 519, "PEN"],
+    ["impuesto", "impuesto", null, "Detracción 12%", 142, "PEN"],
+  ]);
+  assert.equal(partes[0].vence, "2026-10-30");
+});
+
+test("partesDeMovimiento: sin cuotas, o en compras, el neto es una sola parte", () => {
+  const venta = { moneda: "USD", saldoNeto: 500, saldoImpuesto: 0, impuesto: { tipo: "ninguno" }, cuotas: [] };
+  assert.deepEqual(partesDeMovimiento({ lado: "venta", documento: venta }).map((p) => [p.clave, p.titulo, p.saldo, p.moneda]), [["neto", "Neto del cliente", 500, "USD"]]);
+  const compra = { saldoNeto: 970, saldoImpuesto: 30, impuesto: { tipo: "retencion", tasa: 0.03 }, cuotas: [{ _id: "x", numero: 1, monto: 970 }] };
+  assert.deepEqual(partesDeMovimiento({ lado: "compra", documento: compra }).map((p) => [p.clave, p.titulo, p.saldo, p.moneda]), [
+    ["neto", "Neto al proveedor", 970, "PEN"], ["impuesto", "Retención 3%", 30, "PEN"],
+  ]);
+});
+
+test("partesDeMovimiento: una cuota no ofrece cobrar más de lo que queda del neto", () => {
+  // Factura antigua: las cuotas suman el total (1180) y el neto es 1038.
+  const d = {
+    saldoNeto: 448, saldoImpuesto: 142, impuesto: { tipo: "detraccion", tasa: 0.12 },
+    cuotas: [{ _id: "c1", numero: 1, monto: 590, montoPagado: 590 }, { _id: "c2", numero: 2, monto: 590, montoPagado: 0 }],
+  };
+  assert.deepEqual(partesDeMovimiento({ lado: "venta", documento: d }).map((p) => p.saldo), [0, 448, 142]);
 });

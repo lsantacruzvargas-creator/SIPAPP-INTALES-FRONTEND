@@ -169,6 +169,22 @@ export function cuentasPara({ cuentas, lado, concepto, impuesto, moneda = "PEN" 
   return { origen: noBN, destino: [] };
 }
 
+// Lo que se puede cobrar o pagar de un documento, cada parte con su saldo. Una venta con cuotas se cobra
+// cuota por cuota; el impuesto (detracción / retención) va siempre aparte.
+export function partesDeMovimiento({ lado, documento: d }) {
+  const moneda = d.moneda || "PEN";
+  const cuotas = lado === "venta" ? [...(d.cuotas || [])].sort((a, b) => a.numero - b.numero) : [];
+  const delNeto = cuotas.length
+    ? cuotas.map((c) => ({
+        clave: `cuota-${c._id}`, concepto: "neto", cuotaId: c._id, titulo: `Cuota ${c.numero}`, vence: c.fechaVencimiento, moneda,
+        // Tope en el saldo del neto: en las facturas antiguas las cuotas suman el total del comprobante.
+        saldo: Math.max(0, Math.min(round2(c.monto - (c.montoPagado || 0)), d.saldoNeto)),
+      }))
+    : [{ clave: "neto", concepto: "neto", cuotaId: null, titulo: lado === "compra" ? "Neto al proveedor" : "Neto del cliente", moneda, saldo: d.saldoNeto }];
+  if (d.impuesto?.tipo === "ninguno") return delNeto;
+  return [...delNeto, { clave: "impuesto", concepto: "impuesto", cuotaId: null, titulo: etiquetaImpuesto(d.impuesto), moneda: "PEN", saldo: d.saldoImpuesto }];
+}
+
 export const periodoDeMes = (mes) => String(mes || "").replace("-", "");
 
 // Los días de SIRE llegan como "YYYY-MM-DD" (ya en hora Lima): se reordenan como
