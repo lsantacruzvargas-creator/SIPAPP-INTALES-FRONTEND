@@ -232,8 +232,9 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
 
 **T-Registro (alta y baja de trabajadores) (2026-11-02, rama `contabilidadoficial`):**
 - **Qué cubre**: la ficha del trabajador se amplía con la sección T-Registro (datos personales, domicilio, régimen, salud y
-  pensión, estudios, cuenta, etc.). El alta tiene estado `sin control` / `pendiente` / `registrada`; la baja tiene esos tres y además `ninguna` (sin fecha de cese)
-  e `incompleta` (pendiente sin motivo).
+  pensión, estudios, cuenta, etc.). El alta tiene estado `sin control` / `pendiente` / `registrada` / `anulada`; la baja tiene
+  `sin control` / `pendiente` / `registrada` y además `ninguna` (sin fecha de cese, o con el alta anulada) e `incompleta` (pendiente sin motivo).
+  Crear una ficha con fecha de cese abre la baja pendiente igual que el PUT.
   Archivos de importación del PVS: alta = `.ide .tra .per .est`, más `.edu` si la situación educativa es 11 o 13–21 y
   `.cta` si el tipo de pago es depósito en cuenta; baja = una fila `.per` tipo 1 sin fecha de inicio, con fin y motivo.
   Alta y baja van en archivos y `.zip` distintos. Se descarga un `.zip` de `.txt` con nombre fechado para abrirlo en el PVS
@@ -241,21 +242,42 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   registrado se bloquean documento, ingreso (alta) y cese (baja), y solo el rol contador ve el botón «Editar» (queda
   registro de ediciones). Catálogos SUNAT (Anexo 2) generados como datos (incluidas nacionalidades, Tabla 4, y países emisores, Tabla 26); catálogo de 377 códigos de error del PVS con
   buscador y corrección sugerida; configuración de valores por defecto (`Configuracion.tregistro`); aviso no bloqueante en
-  la planilla del mes para los trabajadores con trámite pendiente.
+  la planilla del mes: «N trámite(s) pendientes en T-Registro» (altas pendientes y bajas pendientes o incompletas, solo de quien
+  tiene vínculo en el mes elegido).
+- **Anular alta (2026-11-03, solo `contador`)**: `POST /planilla/tregistro/anular-alta { id, motivo ≤ 120 }`. Solo con el alta
+  `pendiente`: queda `anulada` (con `anuladaPor`, `anuladaEn` y `motivoAnulacion`), no se genera ni se marca, no sale en
+  «Pendientes» ni en el aviso de la planilla y su baja no se ofrece. El trabajador sigue en la planilla con sus fechas de ingreso y cese.
+- **Nuevo vínculo / reingreso (2026-11-03, solo `contador`)**: `POST /planilla/tregistro/nuevo-vinculo { id, fechaIngreso }`, solo con la
+  baja `registrada` o el alta `anulada`. El vínculo previo (fechas, alta y baja con sus datos de trámite) pasa a
+  `tregistro.vinculosAnteriores`; la ficha queda con el nuevo ingreso, sin cese, alta `pendiente` y sin baja, y se anota «nuevo vínculo»
+  en `tregistro.ediciones`. El nuevo ingreso debe ser posterior al cese anterior; si el vínculo anterior no tenía cese (alta anulada),
+  se cierra el día previo al nuevo ingreso para que no se crucen. La planilla suma los días de todos los vínculos con días en el mes
+  (`diasDeVinculos`; la boleta guarda en `datos.vinculos` los del mes y en `fechaIngreso`/`fechaCese` los del último), así que los meses del
+  vínculo anterior se siguen generando y los del intervalo no tienen boleta. Solo la gratificación y la 5.ª usan las fechas del último
+  vínculo del mes (aproximación). `PUT` rechaza un ingreso que no sea posterior al cese del vínculo anterior.
+- **Reglas del validador según el manual del PVS (2026-11-03)**: solo valen los TD 01, 04, 07, 09, 22, 23 y 24 (Anexo 3 E5/E11/E29); otro, incluido
+  el carné CPP (26), emite EPE1.1 en alta y baja y ya no envía país 604. Correo (E4 campo 12): usuario de 3 o más caracteres
+  `[A-Z0-9._-]`, servidor de 2 o más (no `com`, `gob`, `gov`, `es`, `pe`), dominio y subdominio solo letras (2 o más), y sin la combinación
+  «no tengo correo» (EPE1.19, EPE1.26, EPE1.27); la UI lo valida igual. La dirección solo es obligatoria con TD distinto de DNI (EDR1.1);
+  con cualquier dato de dirección se aplican las reglas EDR a todos. «S/N», «s.n.» y variantes se guardan y se envían como `sn` y exigen
+  referencia (EDR1.6). Con el alta registrada también se bloquea el país emisor de pasaporte o documento extranjero (07/24). Las fichas
+  nuevas nacen con nacionalidad peruana (9589); las ya guardadas sin nacionalidad no se rellenan.
 - **Archivos principales**: Backend `routes/planillaTRegistro.js`, `utils/tregistro.js` (armado de archivos),
   `utils/tregistroCatalogos.js`, `utils/tregistroValidacion.js` (`estadoTramite`, `validarParaTRegistro` con códigos del PVS),
   `utils/erroresTRegistro.js` + `data/tregistro/`, `scripts/generarCatalogosTRegistro.mjs` y `generarErroresTRegistro.mjs`
   (regeneran los datos desde el Anexo 2 y el manual del PVS). Frontend `components/planilla/FichaTRegistro.jsx`,
   `PanelTRegistro.jsx`, `PanelConfigTRegistro.jsx` (integrados en `PanelTrabajadores` y `PanelPlanillaMes`) y
   `utils/tregistro.js`.
-- Tests: Backend `test/tregistro.test.js` (21, rutas), `tregistroArchivos.test.js` (19), `tregistroCatalogos.test.js` (14) y
-  `tregistroValidacion.test.js` (39); Frontend `utils/tregistro.test.js` (16).
+- Tests: Backend `test/tregistro.test.js` (32, rutas), `tregistroArchivos.test.js` (20), `tregistroCatalogos.test.js` (14) y
+  `tregistroValidacion.test.js` (45); Frontend `utils/tregistro.test.js` (28).
 - **Pendiente T-Registro**: (1) probar los archivos en el PVS T-Registro real y corregir — el usuario decidió entregar sin
   probar. Riesgos concretos: la columna 21 del `.tra` (categoría ocupacional) se envía siempre; si el PVS la rechaza para
   tipo de trabajador 19/20/21, vaciarla en `utils/tregistro.js`; si en la baja también hay que cerrar los tipos 2–4 del
   `.per`. Nacionalidad y país emisor se eligen de las Tablas 4 y 26: la nacionalidad es obligatoria con TD 04, 07, 09, 22, 23 y 24; el
-  país emisor, con 07 y 24; con DNI, carné de extranjería y refugio va vacío y con 22, 23 y 26 (CPP) se envía `604`
-  (el manual no menciona el TD 26: confirmar en el PVS). La nacionalidad no se exige en la baja porque el `.per` no la lleva.
+  país emisor, con 07 y 24; con DNI, carné de extranjería y refugio va vacío y con 22 y 23 se envía `604`.
+  La nacionalidad no se exige en la baja porque el `.per` no la lleva. **Confirmar en el PVS**: la situación especial
+  (ETR21.1) acepta el catálogo completo (Tabla 35, 0–8) pero el manual solo menciona 0, 1 y 2; si el PVS rechaza el teletrabajo (3–8),
+  restringir la lista a 0, 1 y 2 (la corrección del error ya lo orienta); y que el PVS acepte un alta sin dirección con DNI.
   (2) modificación de datos ya registrados en T-Registro (fuera de alcance). (3) SCTR pensión configurable.
   (4) practicantes, prestadores de servicios y derechohabientes. (5) llevar la planilla y el T-Registro a `conta-percepcion`
   (ya anotado arriba).
@@ -284,8 +306,11 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   se valida; el modal «Marcar» preselecciona «alta» si algún elegido tiene el alta «sin control» (riesgo de marcar el alta
   en vez de la baja); `Backend/graphify-out/` está sin trackear y fuera de `.gitignore`.
   (7) A confirmar en la prueba real del PVS (la revisión final no los juzgó): regla ETR25.5 (sindicalizado = 1 exige la
-  estructura 31, ¿aplica al sector privado?); reglas EDR sobre el correo; tipo de institución vs situación educativa
-  (ETR24.3); recontratación y reponer el cese; concurrencia en el PUT bloqueado y en `/marcar`.
+  estructura 31, ¿aplica al sector privado?); tipo de institución vs situación educativa (ETR24.3); reponer el cese sin reingreso;
+  concurrencia en el PUT bloqueado. El reingreso ya se resuelve con «Nuevo vínculo» (el alta nueva del PVS exige cerrar el
+  período anterior: CIP1.6); un reingreso con el alta anulada del vínculo previo no se ha probado en el PVS.
+  (7 bis) Sin hacer del reingreso: la gratificación y la 5.ª de un mes con dos vínculos usan solo el último; «Seleccionar todo» no
+  incluye las filas sin control, pero si una fila sin control en el alta tiene baja pendiente y se elige, también cae en «Descargar altas».
   (8) `contaConcar` (`SIPAPP-INTALES-venta-compra-contaConcar`) es el único otro proyecto con módulo de planilla y no tiene
   T-Registro: pendiente, lo decide el usuario (no se tocó ese proyecto).
 
