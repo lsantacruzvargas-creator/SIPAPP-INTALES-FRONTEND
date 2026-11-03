@@ -1,5 +1,5 @@
 // Planilla de remuneraciones: textos, formulario del trabajador y hojas de Excel. El cálculo lo hace el servidor.
-import { TREGISTRO_VACIO, requiereEstudios } from "./tregistro.js";
+import { TREGISTRO_VACIO, requiereEstudios, mensajeCorreo } from "./tregistro.js";
 
 export const TIPOS_CONCEPTO = { ingreso: "Ingresos", descuento: "Descuentos", aporteTrabajador: "Aportes del trabajador", aporteEmpleador: "Aportes del empleador" };
 export const REGIMENES_SALUD = { essalud: "EsSalud", eps: "EsSalud + EPS", sis: "SIS (microempresa)" };
@@ -43,7 +43,7 @@ const mezclarTregistro = (base, origen) => Object.fromEntries(Object.entries(bas
 )));
 
 export const formularioDeTrabajador = (t) => ({
-  ...TRABAJADOR_VACIO, ...t, tregistro: mezclarTregistro(TREGISTRO_VACIO(), t.tregistro), desbloqueo: false, centroCosto: t.centroCosto || "", fechaCese: t.fechaCese || "", remuneracionBasica: String(t.remuneracionBasica ?? ""),
+  ...TRABAJADOR_VACIO, ...t, tregistro: { ...mezclarTregistro(TREGISTRO_VACIO(), t.tregistro), nacionalidad: t.tregistro?.nacionalidad ?? "" }, desbloqueo: false, centroCosto: t.centroCosto || "", fechaCese: t.fechaCese || "", remuneracionBasica: String(t.remuneracionBasica ?? ""),
   pension: { ...TRABAJADOR_VACIO.pension, ...t.pension },
   conceptosFijos: (t.conceptosFijos || []).map((c) => ({ codigo: c.codigo, monto: String(c.monto) })),
   quintaAnterior: (t.quintaAnterior || []).map((q) => ({ mes: `${q.periodo.slice(0, 4)}-${q.periodo.slice(4)}`, ingresos: String(q.ingresos), retencion: String(q.retencion) })),
@@ -51,7 +51,8 @@ export const formularioDeTrabajador = (t) => ({
 
 function validarTregistro(tr) {
   if (!tr) return "";
-  if (tr.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tr.correo.trim())) return "El correo electrónico no es válido.";
+  const correo = mensajeCorreo(tr.correo);
+  if (correo) return correo;
   if (tr.telefono && !/^\d{1,9}$/.test(tr.telefono.trim())) return "El teléfono solo admite dígitos (hasta 9).";
   if (tr.establecimiento && !/^\d{4}$/.test(tr.establecimiento.trim())) return "El código de establecimiento debe tener 4 dígitos.";
   if (requiereEstudios(tr.situacionEducativa) && tr.estudios?.anioEgreso && !/^\d{4}$/.test(tr.estudios.anioEgreso.trim())) return "El año de egreso debe tener 4 dígitos.";

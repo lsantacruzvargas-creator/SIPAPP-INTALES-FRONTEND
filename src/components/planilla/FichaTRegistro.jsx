@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
-import { requiereEstudios, requiereCuenta } from "../../utils/tregistro";
+import { requiereEstudios, requiereCuenta, paisEmisorBloqueado } from "../../utils/tregistro";
 
 const INP = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
 const GRID = "grid grid-cols-2 md:grid-cols-4 gap-3";
@@ -29,10 +29,10 @@ export function Texto({ etiqueta, valor, onChange, max, ayuda, ancho = "", ...re
   );
 }
 
-export function Lista({ etiqueta, valor, onChange, opciones, vacio = "Elegir…", ancho = "" }) {
+export function Lista({ etiqueta, valor, onChange, opciones, vacio = "Elegir…", ancho = "", disabled = false }) {
   return (
     <label className={`text-xs text-gray-500 ${ancho}`}>{etiqueta}
-      <select value={valor} onChange={onChange} className={INP}>
+      <select value={valor} onChange={onChange} disabled={disabled} className={INP}>
         <option value="">{vacio}</option>
         {opciones.map((o) => <option key={o.codigo} value={o.codigo}>{o.codigo} · {o.nombre}</option>)}
       </select>
@@ -155,7 +155,8 @@ export default function FichaTRegistro({ form, setForm, catalogos, bloqueados })
             </select>
           </label>
           <Lista etiqueta="Nacionalidad" valor={t.nacionalidad} onChange={set("nacionalidad")} opciones={cat.nacionalidades} ancho="col-span-2" />
-          <Lista etiqueta="País emisor del documento" valor={t.paisEmisor} onChange={set("paisEmisor")} opciones={cat.paisesEmisores} ancho="col-span-2" />
+          <Lista etiqueta="País emisor del documento" valor={t.paisEmisor} onChange={set("paisEmisor")} opciones={cat.paisesEmisores} ancho="col-span-2"
+            disabled={paisEmisorBloqueado(form, bloqueados, form.desbloqueo === true)} />
           <p className="col-span-2 md:col-span-4 -mt-2 text-[11px] text-gray-400">
             La nacionalidad es obligatoria con carné de extranjería, pasaporte, carné de refugio, de RR.EE., permiso temporal o documento extranjero.
             El país emisor solo se pide con pasaporte o documento de identidad extranjero; con los demás documentos déjalo vacío.

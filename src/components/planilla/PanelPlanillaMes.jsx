@@ -3,6 +3,7 @@ import { fetchAuth } from "../../utils/fetchAuth";
 import { money } from "../../utils/compras";
 import { periodoDeMes, textoPeriodo } from "../../utils/bancos";
 import { totalesPlanilla, filasExcelPlanilla, textoPension } from "../../utils/planilla";
+import { tramitesPendientesEnMes } from "../../utils/tregistro";
 import { exportarHoja } from "../../utils/exportarTabla";
 import { generarBoletaPdf } from "../../utils/boletaPdf";
 import TablaScroll from "../TablaScroll";
@@ -21,7 +22,7 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
   const [procesando, setProcesando] = useState(false);
   const [confirmando, setConfirmando] = useState(null); // "cerrar" | "reabrir"
   const [boleta, setBoleta] = useState(null);
-  const [altasPendientes, setAltasPendientes] = useState(0);
+  const [tramitesPendientes, setTramitesPendientes] = useState(0);
 
   const cargar = useCallback(async () => {
     if (!/^\d{6}$/.test(periodo)) return;
@@ -33,7 +34,7 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
       const d = await r.json().catch(() => ({}));
       if (r.ok) setCargado(d); else setAviso(d.mensaje || "No se pudo cargar la planilla.");
       const lista = rt?.ok ? await rt.json().catch(() => []) : [];
-      setAltasPendientes(Array.isArray(lista) ? lista.filter((t) => t.estado?.alta === "pendiente").length : 0);
+      setTramitesPendientes(Array.isArray(lista) ? tramitesPendientesEnMes(lista, periodo) : 0);
     } catch {
       setAviso("Error de conexión con el servidor.");
     }
@@ -98,9 +99,9 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
           Antes de generar, revisa y guarda los parámetros de {textoPeriodo(periodo)} en la pestaña «Parámetros» (las tasas de AFP cambian cada mes).
         </p>
       )}
-      {altasPendientes > 0 && (
+      {tramitesPendientes > 0 && (
         <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-          {altasPendientes} trabajador(es) con alta pendiente en T-Registro (se calculan igual en la planilla).
+          {tramitesPendientes} trámite(s) pendientes en T-Registro (no bloquea la planilla).
         </p>
       )}
       {cerrada && (

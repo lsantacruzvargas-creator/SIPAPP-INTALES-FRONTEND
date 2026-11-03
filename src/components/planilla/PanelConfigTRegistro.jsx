@@ -54,7 +54,8 @@ export default function PanelConfigTRegistro({ catalogos, puedeEscribir, onGuard
   return (
     <div className="space-y-4 max-w-3xl">
       <p className="text-sm text-gray-500">
-        Valores con los que se llena la ficha T-Registro de cada trabajador nuevo. Cambiarlos no modifica a los trabajadores que ya existen.
+        Los valores por defecto (contrato, periodicidad, tipo de pago, situación educativa, categoría, ocupación y jornada máxima) se precargan solo en las fichas nuevas;
+        no cambian las fichas ya guardadas. El código de establecimiento se aplica al generar el archivo a todo trabajador cuya ficha no tenga el suyo.
       </p>
       <fieldset disabled={!puedeEscribir || guardando} className="grid grid-cols-2 gap-3 border-0 p-0 m-0 min-w-0">
         <Texto etiqueta="Código de establecimiento anexo" valor={form.codigoEstablecimiento} max={4} inputMode="numeric" ancho="col-span-2 md:col-span-1"

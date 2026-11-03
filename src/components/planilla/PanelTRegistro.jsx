@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { fetchAuth } from "../../utils/fetchAuth";
+import { fetchAuth, getUsuario } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
-import { estadoTexto, puedeGenerar, idsElegibles, esPendiente, nombreZip } from "../../utils/tregistro";
+import {
+  estadoTexto, puedeGenerar, idsElegibles, esPendiente, nombreZip, idsMarcables, excluidosDeMarcar, seleccionablesEnMasa, resumenProblemas,
+  bajasDeAltaSinControl, puedeAnularAlta,
+} from "../../utils/tregistro";
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
 
@@ -9,7 +12,7 @@ const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-n
 const BOTON = "border border-purple-300 text-purple-700 px-3 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50";
 const CHIP = {
   registrada: "bg-green-100 text-green-700", pendiente: "bg-amber-100 text-amber-700",
-  incompleta: "bg-orange-100 text-orange-700", "sin control": "bg-gray-100 text-gray-600",
+  incompleta: "bg-orange-100 text-orange-700", "sin control": "bg-gray-100 text-gray-600", anulada: "bg-red-100 text-red-700",
 };
 const TIPOS = { alta: "Alta", baja: "Baja" };
 const fecha = (iso) => (iso ? iso.split("-").reverse().join("/") : "—");
@@ -21,13 +24,15 @@ function Chip({ estado, texto }) {
 
 function ModalMarcar({ trabajadores, marcando, onCerrar, onMarcado, onConflicto }) {
   const [form, setForm] = useState(() => ({
-    tipo: marcando.tipo ?? (idsElegibles(trabajadores, new Set(marcando.ids), "alta").length ? "alta" : "baja"),
+    tipo: marcando.tipo ?? (idsMarcables(trabajadores, new Set(marcando.ids), "alta").length ? "alta" : "baja"),
     fecha: fechaHoyLima(), ticket: "",
   }));
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
-  const ids = idsElegibles(trabajadores, new Set(marcando.ids), form.tipo);
+  const elegidos = new Set(marcando.ids);
+  const ids = idsMarcables(trabajadores, elegidos, form.tipo);
+  const excluidos = excluidosDeMarcar(trabajadores, elegidos, form.tipo);
 
   const confirmar = async () => {
     if (!form.fecha) return setError("Indica la fecha de registro.");
@@ -78,11 +83,62 @@ function ModalMarcar({ trabajadores, marcando, onCerrar, onMarcado, onConflicto 
               : `Ninguno de los seleccionados tiene ${form.tipo === "alta" ? "un alta" : "una baja"} por registrar.`}
           </p>
         )}
+        {!marcando.tipo && excluidos.length > 0 && (
+          <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <p className="font-medium">No se marcarán {excluidos.length}:</p>
+            <ul className="list-disc pl-4">{excluidos.map((x) => <li key={x.nombre}>{x.nombre}: {x.motivo}</li>)}</ul>
+          </div>
+        )}
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-3">
           <button onClick={onCerrar} disabled={guardando} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
           <button onClick={confirmar} disabled={guardando || !ids.length} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
             {guardando ? "Guardando…" : "Marcar como registrados"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalAnular({ anulando, onCerrar, onAnulada }) {
+  const [motivo, setMotivo] = useState("");
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const confirmar = async () => {
+    const texto = motivo.trim();
+    if (!texto) return setError("Indica el motivo de la anulación.");
+    setGuardando(true);
+    setError("");
+    try {
+      const r = await fetchAuth("/planilla/tregistro/anular-alta", { method: "POST", body: JSON.stringify({ id: anulando._id, motivo: texto }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return setError(d.mensaje || "No se pudo anular el alta.");
+      onAnulada();
+    } catch {
+      setError("Error de conexión con el servidor.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md space-y-4">
+        <h3 className="font-semibold text-gray-800">Anular el alta de {anulando.nombre}</h3>
+        <p className="text-sm text-gray-600">
+          Úsalo cuando el alta no debe registrarse en SUNAT (por ejemplo, se registró dos veces). El trabajador sigue en la planilla con sus fechas de ingreso y cese.
+        </p>
+        <label className="text-xs text-gray-500 block">Motivo de la anulación
+          <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={120} rows={3} className={`${INP} w-full`} />
+          <span className="block text-right text-[11px] text-gray-400">{motivo.length}/120</span>
+        </label>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-3">
+          <button onClick={onCerrar} disabled={guardando} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+          <button onClick={confirmar} disabled={guardando} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">
+            {guardando ? "Guardando…" : "Anular alta"}
           </button>
         </div>
       </div>
@@ -170,6 +226,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
   const [abiertos, setAbiertos] = useState(() => new Set());
   const [descargando, setDescargando] = useState("");
   const [marcando, setMarcando] = useState(null);
+  const [anulando, setAnulando] = useState(null);
   const [problemas, setProblemas] = useState(null);
   const [aviso, setAviso] = useState("");
 
@@ -185,11 +242,14 @@ export default function PanelTRegistro({ puedeEscribir }) {
   useEffect(() => { const t = setTimeout(cargar, 0); return () => clearTimeout(t); }, [cargar]);
 
   const visibles = (trabajadores ?? []).filter((t) => filtro === "todos" || esPendiente(t));
-  const elegibles = visibles.filter((t) => puedeGenerar(t, "alta") || puedeGenerar(t, "baja"));
+  const elegibles = seleccionablesEnMasa(visibles);
   const todosElegidos = elegibles.length > 0 && elegibles.every((t) => seleccion.has(t._id));
   const seleccionVisible = visibles.filter((t) => seleccion.has(t._id)).map((t) => t._id);
   const idsAlta = idsElegibles(visibles, seleccion, "alta");
   const idsBaja = idsElegibles(visibles, seleccion, "baja");
+  const sinAltaPropia = bajasDeAltaSinControl(visibles, idsBaja);
+  const hayMarcables = idsMarcables(visibles, seleccion, "alta").length > 0 || idsMarcables(visibles, seleccion, "baja").length > 0;
+  const rol = getUsuario()?.rol;
 
   const alternar = (id) => setSeleccion((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const alternarTodos = () => setSeleccion((s) => {
@@ -231,11 +291,18 @@ export default function PanelTRegistro({ puedeEscribir }) {
 
   const accionesFila = (t) => {
     const tipos = ["alta", "baja"].filter((tipo) => t.estado[tipo] === "sin control");
-    return tipos.map((tipo) => (
-      <button key={tipo} onClick={() => setMarcando({ tipo, ids: [t._id], nombre: t.nombre })} className="block text-xs text-purple-600 hover:underline whitespace-nowrap">
-        {tipos.length === 1 ? "Ya registrado en SUNAT" : `${TIPOS[tipo]}: ya registrado en SUNAT`}
-      </button>
-    ));
+    return (
+      <>
+        {tipos.map((tipo) => (
+          <button key={tipo} onClick={() => setMarcando({ tipo, ids: [t._id], nombre: t.nombre })} className="block text-xs text-purple-600 hover:underline whitespace-nowrap ml-auto">
+            {tipos.length === 1 ? "Ya registrado en SUNAT" : `${TIPOS[tipo]}: ya registrado en SUNAT`}
+          </button>
+        ))}
+        {puedeAnularAlta(rol, t) && (
+          <button onClick={() => setAnulando(t)} className="block text-xs text-red-600 hover:underline whitespace-nowrap ml-auto">Anular alta</button>
+        )}
+      </>
+    );
   };
 
   const columnas = puedeEscribir ? 8 : 6;
@@ -261,7 +328,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
             <button onClick={() => descargar("baja", idsBaja)} disabled={!idsBaja.length || Boolean(descargando)} className={BOTON}>
               {descargando === "baja" ? "Generando…" : `Descargar bajas (${idsBaja.length})`}
             </button>
-            <button onClick={() => setMarcando({ ids: seleccionVisible })} disabled={!idsAlta.length && !idsBaja.length}
+            <button onClick={() => setMarcando({ ids: seleccionVisible })} disabled={!hayMarcables}
               className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
               Marcar como registrados
             </button>
@@ -269,13 +336,19 @@ export default function PanelTRegistro({ puedeEscribir }) {
         )}
       </div>
 
+      {sinAltaPropia.length > 0 && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          Se asume que su alta se hizo a mano en SUNAT: {sinAltaPropia.join(", ")}.
+        </p>
+      )}
+
       <TablaScroll>
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-gray-500 border-b">
               {puedeEscribir && (
                 <th className="py-2 pr-3 w-8">
-                  <input type="checkbox" checked={todosElegidos} disabled={!elegibles.length} onChange={alternarTodos} title="Seleccionar todo lo elegible" />
+                  <input type="checkbox" checked={todosElegidos} disabled={!elegibles.length} onChange={alternarTodos} title="Seleccionar todo lo pendiente (las filas sin control se eligen una a una)" />
                 </th>
               )}
               <th className="py-2 pr-3">Trabajador</th><th className="py-2 pr-3">Ingreso</th><th className="py-2 pr-3">Cese</th>
@@ -286,7 +359,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
           <tbody>
             {visibles.map((t) => {
               const texto = estadoTexto(t.estado);
-              const cantidad = t.problemasAlta.length + t.problemasBaja.length;
+              const { activos, atenuados } = resumenProblemas(t);
               const abierto = abiertos.has(t._id);
               return (
                 <tr key={t._id} className="border-b border-gray-100 align-top">
@@ -302,16 +375,17 @@ export default function PanelTRegistro({ puedeEscribir }) {
                   <td className="py-1.5 pr-3"><Chip estado={t.estado.alta} texto={texto.alta} /></td>
                   <td className="py-1.5 pr-3">{t.estado.baja === "ninguna" ? <span className="text-gray-300">—</span> : <Chip estado={t.estado.baja} texto={texto.baja} />}</td>
                   <td className="py-1.5 pr-3 min-w-56">
-                    {cantidad === 0 ? <span className="text-xs text-gray-300">—</span> : (
+                    {activos + atenuados === 0 ? <span className="text-xs text-gray-300">—</span> : (
                       <>
-                        <button onClick={() => alternarProblemas(t._id)} className="text-xs text-red-600 hover:underline">
-                          {cantidad} problema(s) {abierto ? "▴" : "▾"}
+                        <button onClick={() => alternarProblemas(t._id)} className={`text-xs hover:underline ${activos ? "text-red-600" : "text-gray-400"}`}>
+                          {activos > 0 && `${activos} problema(s)`}{activos > 0 && atenuados > 0 && " · "}
+                          {atenuados > 0 && `${atenuados} del alta (solo si vas a dar de alta)`} {abierto ? "▴" : "▾"}
                         </button>
                         {abierto && (
                           <div className="mt-1 text-xs text-gray-600 space-y-1">
-                            {[["Alta", t.problemasAlta], ["Baja", t.problemasBaja]].filter(([, l]) => l.length).map(([titulo, l]) => (
-                              <div key={titulo}>
-                                <span className="font-medium">{titulo}</span>
+                            {[["Alta", t.problemasAlta, atenuados > 0], ["Baja", t.problemasBaja, false]].filter(([, l]) => l.length).map(([titulo, l, atenuada]) => (
+                              <div key={titulo} className={atenuada ? "text-gray-400" : ""}>
+                                <span className="font-medium">{titulo}{atenuada && " (solo si vas a dar de alta)"}</span>
                                 <ul className="list-disc pl-4">{l.map((p, i) => <li key={i}>{lineaProblema(p)}</li>)}</ul>
                               </div>
                             ))}
@@ -336,6 +410,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
       <BuscadorErrores />
 
       {marcando && <ModalMarcar trabajadores={trabajadores ?? []} marcando={marcando} onCerrar={() => setMarcando(null)} onMarcado={marcado} onConflicto={cargar} />}
+      {anulando && <ModalAnular anulando={anulando} onCerrar={() => setAnulando(null)} onAnulada={() => { setAnulando(null); cargar(); }} />}
       {problemas && <ModalProblemas problemas={problemas} onCerrar={() => setProblemas(null)} />}
       {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
     </div>

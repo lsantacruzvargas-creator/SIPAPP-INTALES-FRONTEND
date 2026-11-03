@@ -6,7 +6,7 @@ import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
 import FichaTRegistro from "./FichaTRegistro";
-import { TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear } from "../../utils/tregistro";
+import { TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear, puedeNuevoVinculo, lineaEdicion } from "../../utils/tregistro";
 
 const INP = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
 const textoTramite = (estado) => {
@@ -16,10 +16,57 @@ const textoTramite = (estado) => {
 };
 const fecha = (iso) => (iso ? iso.split("-").reverse().join("/") : "");
 
+function ModalNuevoVinculo({ trabajador, onCerrar, onAbierto }) {
+  const [fechaIngreso, setFechaIngreso] = useState("");
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const minimo = trabajador.fechaCese || trabajador.fechaIngreso;
+
+  const confirmar = async () => {
+    if (!fechaIngreso) return setError("Indica la fecha de ingreso del nuevo vínculo.");
+    if (fechaIngreso <= minimo) return setError(`El nuevo ingreso debe ser posterior al ${trabajador.fechaCese ? "cese" : "ingreso"} anterior (${fecha(minimo)}).`);
+    setGuardando(true);
+    setError("");
+    try {
+      const r = await fetchAuth("/planilla/tregistro/nuevo-vinculo", { method: "POST", body: JSON.stringify({ id: trabajador._id, fechaIngreso }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return setError(d.mensaje || "No se pudo abrir el nuevo vínculo.");
+      onAbierto();
+    } catch {
+      setError("Error de conexión con el servidor.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4" style={{ zIndex: 200 }}>
+      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm space-y-4">
+        <h4 className="font-semibold text-gray-800 text-sm">Nuevo vínculo (reingreso)</h4>
+        <p className="text-sm text-gray-600">
+          El vínculo actual ({fecha(trabajador.fechaIngreso)}{trabajador.fechaCese ? ` – ${fecha(trabajador.fechaCese)}` : ""}) queda en el historial con sus trámites y
+          se abre un alta pendiente. Los datos personales y laborales de la ficha se conservan.
+        </p>
+        <label className="text-xs text-gray-500 block">Fecha de ingreso del nuevo vínculo
+          <input type="date" value={fechaIngreso} min={minimo} onChange={(e) => setFechaIngreso(e.target.value)} className={INP} />
+        </label>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={onCerrar} disabled={guardando} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+          <button type="button" onClick={confirmar} disabled={guardando} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
+            {guardando ? "Guardando…" : "Abrir vínculo"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClose, onGuardado }) {
   const [form, setForm] = useState(() => (trabajador ? formularioDeTrabajador(trabajador) : { ...TRABAJADOR_VACIO, tregistro: TREGISTRO_VACIO(catalogos.tregistroConfig) }));
   const [error, setError] = useState("");
   const [confirmaDesbloqueo, setConfirmaDesbloqueo] = useState(false);
+  const [nuevoVinculo, setNuevoVinculo] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const setPension = (k) => (e) => setForm((f) => ({ ...f, pension: { ...f.pension, [k]: e.target.value } }));
@@ -31,6 +78,8 @@ function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClos
   const bloqueados = camposBloqueados(trabajador);
   const hayBloqueo = bloqueados.documento || bloqueados.ingreso || bloqueados.cese;
   const abierto = form.desbloqueo === true;
+  const ediciones = trabajador?.tregistro?.ediciones ?? [];
+  const vinculosAnteriores = trabajador?.tregistro?.vinculosAnteriores ?? [];
   const sinDocumento = bloqueados.documento && !abierto, sinIngreso = bloqueados.ingreso && !abierto, sinCese = bloqueados.cese && !abierto;
 
   const guardar = async () => {
@@ -65,6 +114,30 @@ function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClos
             {!abierto && puedeDesbloquear(rol) && (
               <button type="button" onClick={() => setConfirmaDesbloqueo(true)} className="text-xs text-purple-600 hover:underline">Editar</button>
             )}
+          </div>
+        )}
+        {ediciones.length > 0 && (
+          <div className="text-xs text-gray-500">
+            <p className="font-medium">Historial de ediciones de datos ya registrados</p>
+            <ul className="list-disc pl-4">{ediciones.map((e, i) => <li key={i}>{lineaEdicion(e)}</li>)}</ul>
+          </div>
+        )}
+        {vinculosAnteriores.length > 0 && (
+          <div className="text-xs text-gray-500">
+            <p className="font-medium">Vínculos anteriores</p>
+            <ul className="list-disc pl-4">
+              {vinculosAnteriores.map((v, i) => (
+                <li key={i}>
+                  {fecha(v.fechaIngreso)} – {fecha(v.fechaCese)} · alta {estadoTexto({ alta: v.alta?.estado ?? "sin control" }).alta}
+                  {v.baja?.estado ? `, baja ${v.baja.estado}` : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {editable && puedeNuevoVinculo(rol, trabajador) && (
+          <div>
+            <button type="button" onClick={() => setNuevoVinculo(true)} className="text-xs text-purple-600 hover:underline">Nuevo vínculo (reingreso)</button>
           </div>
         )}
         <fieldset disabled={!editable} className="space-y-4">
@@ -184,6 +257,7 @@ function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClos
           )}
         </div>
       </div>
+      {nuevoVinculo && <ModalNuevoVinculo trabajador={trabajador} onCerrar={() => setNuevoVinculo(false)} onAbierto={onGuardado} />}
       {confirmaDesbloqueo && (
         <ConfirmacionAccion mensaje="SUNAT no se actualiza: corrige también el dato en T-Registro. ¿Desbloquear para editar?" textoConfirmar="Desbloquear"
           onCancelar={() => setConfirmaDesbloqueo(false)} onConfirmar={() => { setForm((f) => ({ ...f, desbloqueo: true })); setConfirmaDesbloqueo(false); }} />
