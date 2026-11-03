@@ -243,16 +243,19 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   registro de ediciones). Catálogos SUNAT (Anexo 2) generados como datos (incluidas nacionalidades, Tabla 4, y países emisores, Tabla 26); catálogo de 377 códigos de error del PVS con
   buscador y corrección sugerida; configuración de valores por defecto (`Configuracion.tregistro`); aviso no bloqueante en
   la planilla del mes: «N trámite(s) pendientes en T-Registro» (altas pendientes y bajas pendientes o incompletas, solo de quien
-  tiene vínculo en el mes elegido).
+  tiene el vínculo actual con días en el mes elegido).
 - **Anular alta (2026-11-03, solo `contador`)**: `POST /planilla/tregistro/anular-alta { id, motivo ≤ 120 }`. Solo con el alta
   `pendiente`: queda `anulada` (con `anuladaPor`, `anuladaEn` y `motivoAnulacion`), no se genera ni se marca, no sale en
   «Pendientes» ni en el aviso de la planilla y su baja no se ofrece. El trabajador sigue en la planilla con sus fechas de ingreso y cese.
 - **Nuevo vínculo / reingreso (2026-11-03, solo `contador`)**: `POST /planilla/tregistro/nuevo-vinculo { id, fechaIngreso }`, solo con la
   baja `registrada` o el alta `anulada`. El vínculo previo (fechas, alta y baja con sus datos de trámite) pasa a
   `tregistro.vinculosAnteriores`; la ficha queda con el nuevo ingreso, sin cese, alta `pendiente` y sin baja, y se anota «nuevo vínculo»
-  en `tregistro.ediciones`. El nuevo ingreso debe ser posterior al cese anterior; si el vínculo anterior no tenía cese (alta anulada),
-  se cierra el día previo al nuevo ingreso para que no se crucen. La planilla suma los días de todos los vínculos con días en el mes
-  (`diasDeVinculos`; la boleta guarda en `datos.vinculos` los del mes y en `fechaIngreso`/`fechaCese` los del último), así que los meses del
+  en `tregistro.ediciones`. El vínculo anterior debe tener fecha de cese (con el alta anulada el cese se puede editar):
+  sin ella responde 409 «registra primero la fecha de cese del vínculo anterior»; con la baja «sin control» pide marcarla primero como
+  registrada. El nuevo ingreso debe ser posterior a ese cese. Si el mes del nuevo ingreso ya tiene la planilla cerrada, la respuesta trae un
+  aviso (`avisos`) que el modal muestra: reabre la planilla si debe incluir el reingreso. Un DNI repetido al crear una ficha orienta a usar
+  «Nuevo vínculo». La planilla suma los días de todos los vínculos con días en el mes
+  (`diasDeVinculos`: si los vínculos cubren todos los días calendario del mes son 30; la boleta guarda en `datos.vinculos` los del mes y en `fechaIngreso`/`fechaCese` los del último), así que los meses del
   vínculo anterior se siguen generando y los del intervalo no tienen boleta. Solo la gratificación y la 5.ª usan las fechas del último
   vínculo del mes (aproximación). `PUT` rechaza un ingreso que no sea posterior al cese del vínculo anterior.
 - **Reglas del validador según el manual del PVS (2026-11-03)**: solo valen los TD 01, 04, 07, 09, 22, 23 y 24 (Anexo 3 E5/E11/E29); otro, incluido
@@ -268,8 +271,8 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   (regeneran los datos desde el Anexo 2 y el manual del PVS). Frontend `components/planilla/FichaTRegistro.jsx`,
   `PanelTRegistro.jsx`, `PanelConfigTRegistro.jsx` (integrados en `PanelTrabajadores` y `PanelPlanillaMes`) y
   `utils/tregistro.js`.
-- Tests: Backend `test/tregistro.test.js` (32, rutas), `tregistroArchivos.test.js` (20), `tregistroCatalogos.test.js` (14) y
-  `tregistroValidacion.test.js` (45); Frontend `utils/tregistro.test.js` (28).
+- Tests: Backend `test/tregistro.test.js` (36, rutas), `tregistroArchivos.test.js` (20), `tregistroCatalogos.test.js` (14) y
+  `tregistroValidacion.test.js` (45); Frontend `utils/tregistro.test.js` (32).
 - **Pendiente T-Registro**: (1) probar los archivos en el PVS T-Registro real y corregir — el usuario decidió entregar sin
   probar. Riesgos concretos: la columna 21 del `.tra` (categoría ocupacional) se envía siempre; si el PVS la rechaza para
   tipo de trabajador 19/20/21, vaciarla en `utils/tregistro.js`; si en la baja también hay que cerrar los tipos 2–4 del
@@ -309,8 +312,10 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   estructura 31, ¿aplica al sector privado?); tipo de institución vs situación educativa (ETR24.3); reponer el cese sin reingreso;
   concurrencia en el PUT bloqueado. El reingreso ya se resuelve con «Nuevo vínculo» (el alta nueva del PVS exige cerrar el
   período anterior: CIP1.6); un reingreso con el alta anulada del vínculo previo no se ha probado en el PVS.
-  (7 bis) Sin hacer del reingreso: la gratificación y la 5.ª de un mes con dos vínculos usan solo el último; «Seleccionar todo» no
-  incluye las filas sin control, pero si una fila sin control en el alta tiene baja pendiente y se elige, también cae en «Descargar altas».
+  (7 bis) Sin hacer del reingreso: la gratificación y la 5.ª de un mes con dos vínculos usan solo el último. Un alta «sin control» no
+  entra a «Descargar altas» por selección (ni masiva ni a mano): se genera con «Generar alta» en su fila, y solo si la fila no tiene cese
+  ni trámite de baja; el modal «Marcar» parte del trámite pendiente de lo elegido. El correo estricto del manual es solo un aviso en la
+  ficha: no impide guardar y el validador lo reporta al generar el alta.
   (8) `contaConcar` (`SIPAPP-INTALES-venta-compra-contaConcar`) es el único otro proyecto con módulo de planilla y no tiene
   T-Registro: pendiente, lo decide el usuario (no se tocó ese proyecto).
 
