@@ -1,4 +1,5 @@
 // Planilla de remuneraciones: textos, formulario del trabajador y hojas de Excel. El cálculo lo hace el servidor.
+import { TREGISTRO_VACIO } from "./tregistro.js";
 
 export const TIPOS_CONCEPTO = { ingreso: "Ingresos", descuento: "Descuentos", aporteTrabajador: "Aportes del trabajador", aporteEmpleador: "Aportes del empleador" };
 export const REGIMENES_SALUD = { essalud: "EsSalud", eps: "EsSalud + EPS", sis: "SIS (microempresa)" };
@@ -33,15 +34,29 @@ export function filasExcelPlanilla(boletas, afps = {}) {
 export const TRABAJADOR_VACIO = {
   tipoDoc: "01", numDoc: "", apellidoPaterno: "", apellidoMaterno: "", nombres: "", cargo: "", centroCosto: "", fechaIngreso: "", fechaCese: "",
   remuneracionBasica: "", asignacionFamiliar: false, conceptosFijos: [], pension: { regimen: "onp", afp: "", comision: "flujo", cuspp: "" },
-  salud: "essalud", quintaAnterior: [],
+  salud: "essalud", quintaAnterior: [], tregistro: TREGISTRO_VACIO(), desbloqueo: false,
 };
 
+// Copia solo las claves del formulario vacío: lo que escribe el servidor (alta, estado de baja, ediciones) no entra al formulario.
+const mezclarTregistro = (base, origen) => Object.fromEntries(Object.entries(base).map(([k, d]) => (
+  [k, typeof d === "object" ? mezclarTregistro(d, origen?.[k]) : origen?.[k] ?? d]
+)));
+
 export const formularioDeTrabajador = (t) => ({
-  ...TRABAJADOR_VACIO, ...t, centroCosto: t.centroCosto || "", fechaCese: t.fechaCese || "", remuneracionBasica: String(t.remuneracionBasica ?? ""),
+  ...TRABAJADOR_VACIO, ...t, tregistro: mezclarTregistro(TREGISTRO_VACIO(), t.tregistro), desbloqueo: false, centroCosto: t.centroCosto || "", fechaCese: t.fechaCese || "", remuneracionBasica: String(t.remuneracionBasica ?? ""),
   pension: { ...TRABAJADOR_VACIO.pension, ...t.pension },
   conceptosFijos: (t.conceptosFijos || []).map((c) => ({ codigo: c.codigo, monto: String(c.monto) })),
   quintaAnterior: (t.quintaAnterior || []).map((q) => ({ mes: `${q.periodo.slice(0, 4)}-${q.periodo.slice(4)}`, ingresos: String(q.ingresos), retencion: String(q.retencion) })),
 });
+
+function validarTregistro(tr) {
+  if (!tr) return "";
+  if (tr.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tr.correo.trim())) return "El correo electrónico no es válido.";
+  if (tr.telefono && !/^\d{1,9}$/.test(tr.telefono.trim())) return "El teléfono solo admite dígitos (hasta 9).";
+  if (tr.establecimiento && !/^\d{4}$/.test(tr.establecimiento.trim())) return "El código de establecimiento debe tener 4 dígitos.";
+  if (tr.estudios?.anioEgreso && !/^\d{4}$/.test(tr.estudios.anioEgreso.trim())) return "El año de egreso debe tener 4 dígitos.";
+  return "";
+}
 
 // Primer dato que falta o está mal en el formulario del trabajador ("" si está completo).
 export function validarTrabajador(f) {
@@ -53,11 +68,11 @@ export function validarTrabajador(f) {
   if (f.pension.regimen === "afp" && !f.pension.afp) return "Elige la AFP del trabajador.";
   if (f.conceptosFijos.some((c) => !c.codigo || !(Number(c.monto) > 0))) return "Completa o quita los conceptos fijos vacíos.";
   if (f.quintaAnterior.some((q) => !/^\d{4}-\d{2}$/.test(q.mes))) return "Indica el mes de cada fila de renta de 5.ª anterior.";
-  return "";
+  return validarTregistro(f.tregistro);
 }
 
-export const cuerpoDeTrabajador = (f) => ({
-  ...f, centroCosto: f.centroCosto || null, remuneracionBasica: Number(f.remuneracionBasica),
+export const cuerpoDeTrabajador = ({ desbloqueo, ...f }) => ({
+  ...f, ...(desbloqueo === true && { desbloqueo }), centroCosto: f.centroCosto || null, remuneracionBasica: Number(f.remuneracionBasica),
   conceptosFijos: f.conceptosFijos.map((c) => ({ codigo: c.codigo, monto: Number(c.monto) })),
   quintaAnterior: f.quintaAnterior.map((q) => ({ periodo: q.mes.replace("-", ""), ingresos: Number(q.ingresos) || 0, retencion: Number(q.retencion) || 0 })),
 });
