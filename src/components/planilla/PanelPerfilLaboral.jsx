@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima, formatearFecha } from "../../utils/fecha";
-import { PERFIL_VACIO } from "../../utils/perfilLaboral";
+import { PERFIL_VACIO, errorFechaSctr, limiteFechaSctr } from "../../utils/perfilLaboral";
 import { Texto, Casilla } from "./FichaTRegistro";
 
 const INP = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
@@ -100,11 +100,14 @@ export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardad
 
   const anioActual = Number(fechaHoyLima().slice(0, 4));
   const pideFecha = codigosSctr(form.sctr) !== codigosSctr(base);
+  // Alta de la cobertura (antes sin SCTR): inicio hasta +30 días. Baja o cambio de entidad cierran la anterior: fin hasta +5.
+  const cierra = codigosSctr(base) !== null;
   const { sctr, vidaLey, senati } = form;
 
   const guardar = async () => {
     if (form.ciiu.codigo && !/^\d{4}$/.test(form.ciiu.codigo)) return setError("El CIIU debe tener 4 dígitos.");
-    if (pideFecha && !sctrFecha) return setError("Indica la fecha del cambio del SCTR.");
+    const errorSctr = pideFecha && errorFechaSctr(sctrFecha, fechaHoyLima(), { cierra });
+    if (errorSctr) return setError(errorSctr);
     setGuardando(true);
     setError("");
     try {
@@ -211,7 +214,7 @@ export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardad
           </div>
           {pideFecha && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
-              <Texto etiqueta="Fecha del cambio" type="date" valor={sctrFecha} onChange={(e) => setSctrFecha(e.target.value)} ancho="block max-w-xs" />
+              <Texto etiqueta="Fecha del cambio" type="date" valor={sctrFecha} onChange={(e) => setSctrFecha(e.target.value)} ancho="block max-w-xs" ayuda={`Hasta el ${formatearFecha(limiteFechaSctr(fechaHoyLima(), { cierra }))}`} />
               <p className="text-[11px] text-amber-800">
                 Cambió la cobertura del SCTR: los trabajadores marcados y ya registrados en T-Registro quedan con una modificación pendiente en esa fecha.
               </p>

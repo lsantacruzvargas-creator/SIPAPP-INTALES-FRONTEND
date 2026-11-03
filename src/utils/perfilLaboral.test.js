@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PERFIL_VACIO, precargaAportes, aplicarPrecarga, cambiaSctrRegistrado } from "./perfilLaboral.js";
+import { PERFIL_VACIO, precargaAportes, aplicarPrecarga, cambiaSctrRegistrado, limiteFechaSctr, errorFechaSctr } from "./perfilLaboral.js";
 
 test("PERFIL_VACIO: misma forma que el del servidor, con textos vacíos en los inputs", () => {
   assert.deepEqual(Object.keys(PERFIL_VACIO), ["remype", "ciiu", "actividadIndustrial", "senati", "sctr", "vidaLey", "cambios"]);
@@ -72,4 +72,21 @@ test("aplicarPrecarga: sin perfil (aún no cargó) no falla y usa la categoría 
   const form = { tregistro: { categoriaOcupacional: "01" }, aportes: { senati: false, sctr: false } };
   assert.deepEqual(aplicarPrecarga(form, {}, null).aportes, { senati: true, sctr: true });
   assert.deepEqual(aplicarPrecarga(form, undefined, undefined).aportes, { senati: true, sctr: true });
+});
+
+test("limiteFechaSctr: inicio de cobertura hasta +30 días, cierre hasta +5 (incluso cruzando mes y año)", () => {
+  assert.equal(limiteFechaSctr("2026-11-03", { cierra: false }), "2026-12-03");
+  assert.equal(limiteFechaSctr("2026-11-03", { cierra: true }), "2026-11-08");
+  assert.equal(limiteFechaSctr("2026-12-28", { cierra: true }), "2027-01-02");
+  assert.equal(limiteFechaSctr("2028-02-10", { cierra: false }), "2028-03-11");
+});
+
+test("errorFechaSctr: acepta hasta el límite, rechaza el día siguiente y la fecha vacía", () => {
+  const hoy = "2026-11-03";
+  assert.equal(errorFechaSctr("2026-12-03", hoy, { cierra: false }), "");
+  assert.match(errorFechaSctr("2026-12-04", hoy, { cierra: false }), /30 días/);
+  assert.equal(errorFechaSctr("2026-11-08", hoy, { cierra: true }), "");
+  assert.match(errorFechaSctr("2026-11-09", hoy, { cierra: true }), /5 días/);
+  assert.equal(errorFechaSctr("2026-10-01", hoy, { cierra: true }), "");
+  assert.match(errorFechaSctr("", hoy, { cierra: false }), /Indica la fecha/);
 });

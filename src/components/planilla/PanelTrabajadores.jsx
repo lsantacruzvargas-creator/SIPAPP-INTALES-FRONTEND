@@ -7,7 +7,7 @@ import AvisoAccion from "../AvisoAccion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
 import FichaTRegistro from "./FichaTRegistro";
 import { TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear, puedeNuevoVinculo, lineaEdicion } from "../../utils/tregistro";
-import { aplicarPrecarga, cambiaSctrRegistrado } from "../../utils/perfilLaboral";
+import { aplicarPrecarga, cambiaSctrRegistrado, errorFechaSctr, limiteFechaSctr } from "../../utils/perfilLaboral";
 import { fechaHoyLima } from "../../utils/fecha";
 
 const INP = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
@@ -105,7 +105,6 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
   // En la ficha nueva las casillas siguen a la categoría ocupacional hasta que el usuario toca alguna.
   const ficha = trabajador ? form : aplicarPrecarga(form, tocados, perfil);
   const riesgo = perfil?.sctr?.actividadRiesgo === true;
-  const muestraSenati = perfil?.senati?.aporta === true || perfil?.actividadIndustrial === true;
   const cambiaSctr = Boolean(trabajador) && riesgo && cambiaSctrRegistrado({ ...trabajador, estado }, ficha);
   const setAporte = (k) => (e) => {
     const marcada = e.target.checked;
@@ -119,7 +118,8 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
     if (falta) return setError(falta);
     const prima = String(form.vidaLeyPrima).trim();
     if (prima !== "" && !(Number.isFinite(Number(prima)) && Number(prima) >= 0)) return setError("La prima de vida ley debe ser un monto de 0 o más.");
-    if (cambiaSctr && (!sctrFecha || sctrFecha > fechaHoyLima())) return setError("Indica la fecha del cambio de SCTR en SUNAT (no puede ser futura).");
+    const errorSctr = cambiaSctr && errorFechaSctr(sctrFecha, fechaHoyLima(), { cierra: !ficha.aportes.sctr });
+    if (errorSctr) return setError(errorSctr);
     setGuardando(true);
     setError("");
     try {
@@ -284,11 +284,9 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
           <div className="space-y-2">
             <h4 className="text-xs font-bold text-gray-600 uppercase">Aportes del empleador</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
-              {muestraSenati && (
-                <label className="text-sm text-gray-700 flex items-center gap-2">
-                  <input type="checkbox" checked={ficha.aportes.senati} onChange={setAporte("senati")} />Aporta a SENATI
-                </label>
-              )}
+              <label className="text-sm text-gray-700 flex items-center gap-2">
+                <input type="checkbox" checked={ficha.aportes.senati} onChange={setAporte("senati")} />Aporta a SENATI
+              </label>
               {riesgo && (
                 <label className="text-sm text-gray-700 flex items-center gap-2">
                   <input type="checkbox" checked={ficha.aportes.sctr} onChange={setAporte("sctr")} />Expuesto a riesgo (SCTR)
@@ -299,11 +297,12 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
               </label>
               {cambiaSctr && (
                 <label className="text-xs text-gray-500">Fecha del cambio en SUNAT
-                  <input type="date" value={sctrFecha} max={fechaHoyLima()} onChange={(e) => setSctrFecha(e.target.value)} className={INP} />
+                  <input type="date" value={sctrFecha} max={limiteFechaSctr(fechaHoyLima(), { cierra: !ficha.aportes.sctr })} onChange={(e) => setSctrFecha(e.target.value)} className={INP} />
                 </label>
               )}
             </div>
-            {cambiaSctr && <p className="text-[11px] text-gray-400">El cambio de SCTR queda como modificación pendiente en T-Registro con esta fecha.</p>}
+            <p className="text-[11px] text-gray-400">Cuenta para la evaluación anual de SENATI (personal de instalación, reparación y mantenimiento, o todo el personal si la empresa es industrial).</p>
+            {cambiaSctr && <p className="text-[11px] text-gray-400">El cambio de SCTR queda como modificación pendiente en T-Registro con esta fecha (inicio hasta 30 días a futuro, fin hasta 5).</p>}
           </div>
 
           <FichaTRegistro form={form} setForm={setForm} catalogos={catalogos} bloqueados={bloqueados} />

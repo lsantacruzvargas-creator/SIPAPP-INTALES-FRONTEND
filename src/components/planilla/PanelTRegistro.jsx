@@ -257,6 +257,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
   const idsModificacionSctr = idsSctr(visibles, seleccion);
   const hayMarcables = idsMarcables(visibles, seleccion, "alta").length > 0 || idsMarcables(visibles, seleccion, "baja").length > 0 || idsModificacionSctr.length > 0;
   const sinControl = sinControlSeleccionables(visibles);
+  const hayBajaSctr = visibles.some((t) => t.estado.sctr === "pendiente" && t.sctr && !t.sctr.despues);
   const rol = getUsuario()?.rol;
 
   const alternar = (id) => setSeleccion((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -353,6 +354,12 @@ export default function PanelTRegistro({ puedeEscribir }) {
           </>
         )}
       </div>
+
+      {hayBajaSctr && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          Si el PVS rechaza la baja de cobertura (ETR17.21), regístrala en T-Registro en línea y luego márcala aquí como registrada.
+        </p>
+      )}
 
       {sinAltaPropia.length > 0 && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">

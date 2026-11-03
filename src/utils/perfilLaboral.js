@@ -35,3 +35,15 @@ export const cambiaSctrRegistrado = (trabajadorGuardado, form) => {
   const { alta, baja } = trabajadorGuardado?.estado ?? {};
   return baja !== "registrada" && (!alta || alta === "registrada" || alta === "sin control");
 };
+
+const sumarDias = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+
+// Reglas del PVS (ETR17.x), las mismas del servidor: el inicio de una cobertura admite hasta +30 días desde hoy y el fin
+// de la que se cierra (baja o cambio de entidad) hasta +5. `cierra` dice si el cambio cierra una cobertura vigente.
+export const limiteFechaSctr = (hoy, { cierra }) => sumarDias(hoy, cierra ? 5 : 30);
+
+export const errorFechaSctr = (fecha, hoy, { cierra }) => {
+  if (!fecha) return "Indica la fecha del cambio de SCTR en SUNAT.";
+  if (fecha <= limiteFechaSctr(hoy, { cierra })) return "";
+  return cierra ? "El fin del SCTR no puede ser más de 5 días posterior a hoy." : "El inicio del SCTR no puede ser más de 30 días posterior a hoy.";
+};
