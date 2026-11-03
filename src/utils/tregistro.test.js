@@ -4,7 +4,7 @@ import {
   TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear, requiereEstudios, requiereCuenta, puedeGenerar, idsElegibles, esPendiente, nombreZip,
   puedeMarcar, idsMarcables, excluidosDeMarcar, seleccionablesEnMasa, resumenProblemas, bajasDeAltaSinControl, puedeAnularAlta, puedeNuevoVinculo,
   paisEmisorBloqueado, lineaEdicion, tramitesPendientesEnMes, mensajeCorreo, puedeGenerarAltaSinControl, tipoMarcarPorDefecto,
-  puedeElegir, puedeSctr, idsSctr, sinControlSeleccionables,
+  puedeElegir, puedeSctr, idsSctr, sinControlSeleccionables, motivoSinSctr,
 } from "./tregistro.js";
 import { TRABAJADOR_VACIO, formularioDeTrabajador, cuerpoDeTrabajador, validarTrabajador } from "./planilla.js";
 
@@ -408,4 +408,27 @@ test("sinControlSeleccionables toma las altas sin control; «Seleccionar todo» 
   assert.deepEqual(seleccionablesEnMasa(lista).map((t) => t._id), ["v", "n"]);
   assert.deepEqual(idsElegibles(lista, new Set(["s"]), "alta"), []);
   assert.deepEqual(idsMarcables(lista, new Set(["s"]), "alta"), ["s"]);
+});
+
+test("una modificación SCTR pendiente cuenta como trámite pendiente: filtro «Pendientes» y «Seleccionar todo»", () => {
+  const lista = [
+    { ...conSctr("registrada", "ninguna"), _id: "a" },
+    { ...conSctr("sin control", "ninguna"), _id: "b" },
+    { ...conSctr("registrada", "ninguna", "ninguna"), _id: "c" },
+    { ...conSctr("registrada", "registrada", "pendiente", "2026-03-31"), _id: "d" },
+    { ...fila("sin control", "ninguna"), _id: "e" },
+  ];
+  assert.deepEqual(lista.filter(esPendiente).map((t) => t._id), ["a", "b"]);
+  assert.deepEqual(seleccionablesEnMasa(lista).map((t) => t._id), ["a", "b"]);
+  assert.equal(esPendiente(conSctr("pendiente", "ninguna")), true);
+});
+
+test("motivoSinSctr: vacío si se puede; si no, la misma razón que puedeSctr", () => {
+  assert.equal(motivoSinSctr(conSctr("registrada", "ninguna")), "");
+  assert.match(motivoSinSctr(conSctr("registrada", "ninguna", "ninguna")), /no tiene una modificación de SCTR pendiente/);
+  assert.match(motivoSinSctr(conSctr("pendiente", "ninguna")), /alta sigue pendiente/);
+  assert.match(motivoSinSctr(conSctr("registrada", "registrada", "pendiente", "2026-03-31")), /baja ya está registrada/);
+  for (const t of [conSctr("registrada", "ninguna"), conSctr("pendiente", "ninguna"), conSctr("registrada", "registrada", "pendiente", "2026-03-31"), conSctr("sin control", "ninguna", "ninguna")]) {
+    assert.equal(motivoSinSctr(t) === "", puedeSctr(t));
+  }
 });

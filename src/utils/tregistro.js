@@ -92,6 +92,13 @@ const motivoNoMarcable = (t, tipo) => {
   return baja === "ninguna" || !t.fechaCese ? "no tiene fecha de cese" : "";
 };
 
+// Mismas condiciones que puedeSctr; "" si la modificación sí se puede generar o marcar.
+export const motivoSinSctr = (t) => {
+  if (t?.estado?.sctr !== "pendiente") return "no tiene una modificación de SCTR pendiente";
+  if (t.estado.alta === "pendiente") return "su alta sigue pendiente: el SCTR va en el archivo de alta";
+  return t.estado.baja === "registrada" ? "la baja ya está registrada" : "";
+};
+
 export const excluidosDeMarcar = (trabajadores, seleccion, tipo) => trabajadores
   .filter((t) => seleccion.has(t._id) && !puedeMarcar(t, tipo))
   .map((t) => ({ nombre: t.nombre, motivo: motivoNoMarcable(t, tipo) }));
@@ -107,11 +114,11 @@ export const tipoMarcarPorDefecto = (trabajadores, seleccion) => {
 // Acción explícita aparte de «Seleccionar todo»: marca las altas sin control para darlas de alta o marcarlas como registradas.
 export const sinControlSeleccionables = (trabajadores) => trabajadores.filter((t) => t.estado?.alta === "sin control");
 
-export const esPendiente = (t) => t?.estado?.alta === "pendiente" || ["pendiente", "incompleta"].includes(t?.estado?.baja);
+export const esPendiente = (t) => t?.estado?.alta === "pendiente" || ["pendiente", "incompleta"].includes(t?.estado?.baja) || puedeSctr(t);
 
-// «Seleccionar todo» solo toma lo que tiene un trámite por hacer; las filas sin control se eligen una a una.
+// «Seleccionar todo» solo toma lo que tiene un trámite por hacer (incluida la modificación SCTR); las filas sin control se eligen una a una.
 export const seleccionablesEnMasa = (trabajadores) =>
-  trabajadores.filter((t) => esPendiente(t) && (puedeGenerar(t, "alta") || puedeGenerar(t, "baja")));
+  trabajadores.filter((t) => esPendiente(t) && (puedeGenerar(t, "alta") || puedeGenerar(t, "baja") || puedeSctr(t)));
 
 // En una fila sin control el alta no es un trabajo pendiente: sus problemas solo importan si se va a dar de alta.
 export const resumenProblemas = (t) => {

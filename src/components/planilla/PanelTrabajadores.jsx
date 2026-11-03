@@ -118,7 +118,7 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
     const falta = validarTrabajador(form);
     if (falta) return setError(falta);
     const prima = String(form.vidaLeyPrima).trim();
-    if (prima !== "" && !(Number(prima) >= 0)) return setError("La prima de vida ley debe ser un monto de 0 o más.");
+    if (prima !== "" && !(Number.isFinite(Number(prima)) && Number(prima) >= 0)) return setError("La prima de vida ley debe ser un monto de 0 o más.");
     if (cambiaSctr && (!sctrFecha || sctrFecha > fechaHoyLima())) return setError("Indica la fecha del cambio de SCTR en SUNAT (no puede ser futura).");
     setGuardando(true);
     setError("");

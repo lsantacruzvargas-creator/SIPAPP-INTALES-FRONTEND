@@ -3,7 +3,7 @@ import { fetchAuth, getUsuario } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
 import {
   estadoTexto, idsElegibles, esPendiente, nombreZip, idsMarcables, excluidosDeMarcar, seleccionablesEnMasa, resumenProblemas,
-  bajasDeAltaSinControl, puedeAnularAlta, puedeGenerarAltaSinControl, tipoMarcarPorDefecto, puedeElegir, puedeSctr, sinControlSeleccionables, idsSctr,
+  bajasDeAltaSinControl, puedeAnularAlta, puedeGenerarAltaSinControl, tipoMarcarPorDefecto, puedeElegir, puedeSctr, sinControlSeleccionables, idsSctr, motivoSinSctr,
 } from "../../utils/tregistro";
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
@@ -16,10 +16,6 @@ const CHIP = {
 };
 const TIPOS = { alta: "Alta", baja: "Baja", sctr: "Modificación SCTR" };
 const fecha = (iso) => (iso ? iso.split("-").reverse().join("/") : "—");
-const motivoSinSctr = (t) => {
-  if (t.estado?.sctr !== "pendiente") return "no tiene una modificación de SCTR pendiente";
-  return t.estado.alta === "pendiente" ? "su alta sigue pendiente: el SCTR va en el archivo de alta" : "la baja ya está registrada";
-};
 const textoSctr = ({ antes, despues } = {}) => (!antes ? "alta de cobertura" : !despues ? "baja de cobertura" : "cambio de cobertura");
 const lineaProblema = (p) => `${p.codigo} — ${p.mensaje}${p.campo ? ` (${p.campo})` : ""}`;
 
@@ -370,7 +366,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
             <tr className="text-left text-xs text-gray-500 border-b">
               {puedeEscribir && (
                 <th className="py-2 pr-3 w-8">
-                  <input type="checkbox" checked={todosElegidos} disabled={!elegibles.length} onChange={alternarTodos} title="Seleccionar todo lo pendiente (las filas sin control se eligen una a una)" />
+                  <input type="checkbox" checked={todosElegidos} disabled={!elegibles.length} onChange={alternarTodos} title="Seleccionar todo lo pendiente: altas, bajas y modificaciones SCTR (las filas sin control se eligen una a una)" />
                 </th>
               )}
               <th className="py-2 pr-3">Trabajador</th><th className="py-2 pr-3">Ingreso</th><th className="py-2 pr-3">Cese</th>
