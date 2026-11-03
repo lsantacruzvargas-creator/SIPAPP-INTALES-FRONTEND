@@ -4,6 +4,7 @@ import {
   TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear, requiereEstudios, requiereCuenta, puedeGenerar, idsElegibles, esPendiente, nombreZip,
   puedeMarcar, idsMarcables, excluidosDeMarcar, seleccionablesEnMasa, resumenProblemas, bajasDeAltaSinControl, puedeAnularAlta, puedeNuevoVinculo,
   paisEmisorBloqueado, lineaEdicion, tramitesPendientesEnMes, mensajeCorreo, puedeGenerarAltaSinControl, tipoMarcarPorDefecto,
+  puedeElegir, puedeSctr, idsSctr, sinControlSeleccionables,
 } from "./tregistro.js";
 import { TRABAJADOR_VACIO, formularioDeTrabajador, cuerpoDeTrabajador, validarTrabajador } from "./planilla.js";
 
@@ -364,4 +365,47 @@ test("trámites pendientes del mes: solo cuenta si el vínculo actual tiene día
   const reingreso = { ...fila("pendiente", "ninguna"), fechaIngreso: "2026-06-15", vinculos: [{ ingreso: "2026-01-01", cese: "2026-03-31" }, { ingreso: "2026-06-15", cese: "" }] };
   assert.equal(tramitesPendientesEnMes([reingreso], "202603"), 0);
   assert.equal(tramitesPendientesEnMes([reingreso], "202606"), 1);
+});
+
+const conSctr = (alta, baja, sctr = "pendiente", fechaCese = "") => ({ ...fila(alta, baja, fechaCese), estado: { alta, baja, sctr } });
+
+test("puedeElegir: trámite por generar, alta sin control para marcar o SCTR pendiente que el servidor acepta", () => {
+  assert.equal(puedeElegir(fila("pendiente", "ninguna")), true);
+  assert.equal(puedeElegir(fila("registrada", "pendiente", "2026-03-31")), true);
+  assert.equal(puedeElegir(fila("sin control", "ninguna")), true);
+  assert.equal(puedeElegir(fila("registrada", "ninguna")), false);
+  assert.equal(puedeElegir(conSctr("registrada", "ninguna")), true);
+  assert.equal(puedeElegir(conSctr("sin control", "ninguna")), true);
+  assert.equal(puedeElegir(conSctr("registrada", "ninguna", "ninguna")), false);
+  assert.equal(puedeElegir(conSctr("registrada", "registrada", "pendiente", "2026-03-31")), false);
+  assert.equal(puedeElegir(conSctr("pendiente", "ninguna")), true);
+  assert.equal(puedeSctr(conSctr("pendiente", "ninguna")), false);
+  assert.equal(puedeElegir(undefined), false);
+});
+
+test("idsSctr: solo lo elegido con SCTR pendiente, alta no pendiente y baja no registrada", () => {
+  const lista = [
+    { ...conSctr("registrada", "ninguna"), _id: "a" },
+    { ...conSctr("pendiente", "ninguna"), _id: "b" },
+    { ...conSctr("registrada", "registrada", "pendiente", "2026-03-31"), _id: "c" },
+    { ...conSctr("registrada", "ninguna", "ninguna"), _id: "d" },
+    { ...conSctr("sin control", "ninguna"), _id: "e" },
+    { ...conSctr("registrada", "ninguna"), _id: "f" },
+  ];
+  assert.deepEqual(idsSctr(lista, new Set(["a", "b", "c", "d", "e"])), ["a", "e"]);
+  assert.deepEqual(idsSctr(lista, new Set()), []);
+});
+
+test("sinControlSeleccionables toma las altas sin control; «Seleccionar todo» sigue sin incluirlas", () => {
+  const lista = [
+    { ...fila("sin control", "ninguna"), _id: "s" },
+    { ...fila("sin control", "pendiente", "2026-10-31"), _id: "v" },
+    { ...fila("pendiente", "ninguna"), _id: "n" },
+    { ...fila("registrada", "ninguna"), _id: "r" },
+  ];
+  assert.deepEqual(sinControlSeleccionables(lista).map((t) => t._id), ["s", "v"]);
+  assert.deepEqual(sinControlSeleccionables([]), []);
+  assert.deepEqual(seleccionablesEnMasa(lista).map((t) => t._id), ["v", "n"]);
+  assert.deepEqual(idsElegibles(lista, new Set(["s"]), "alta"), []);
+  assert.deepEqual(idsMarcables(lista, new Set(["s"]), "alta"), ["s"]);
 });

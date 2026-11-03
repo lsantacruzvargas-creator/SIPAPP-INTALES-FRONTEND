@@ -60,6 +60,11 @@ export const puedeGenerar = (t, tipo) => (tipo === "alta"
 
 export const puedeGenerarAltaSinControl = (t) => t?.estado?.alta === "sin control" && !t.fechaCese && t.estado.baja === "ninguna";
 
+// El servidor rechaza la modificación SCTR con el alta pendiente (va en el archivo de alta) o la baja ya registrada.
+export const puedeSctr = (t) => t?.estado?.sctr === "pendiente" && t.estado.alta !== "pendiente" && t.estado.baja !== "registrada";
+
+export const puedeElegir = (t) => puedeGenerar(t, "alta") || puedeGenerar(t, "baja") || puedeMarcar(t, "alta") || puedeSctr(t);
+
 export const idsElegibles = (trabajadores, seleccion, tipo) =>
   trabajadores.filter((t) => seleccion.has(t._id) && puedeGenerar(t, tipo)).map((t) => t._id);
 
@@ -73,6 +78,9 @@ export const puedeMarcar = (t, tipo) => (tipo === "alta"
 
 export const idsMarcables = (trabajadores, seleccion, tipo) =>
   trabajadores.filter((t) => seleccion.has(t._id) && puedeMarcar(t, tipo)).map((t) => t._id);
+
+export const idsSctr = (trabajadores, seleccion) =>
+  trabajadores.filter((t) => seleccion.has(t._id) && puedeSctr(t)).map((t) => t._id);
 
 const motivoNoMarcable = (t, tipo) => {
   const { alta, baja } = t.estado ?? {};
@@ -95,6 +103,9 @@ export const tipoMarcarPorDefecto = (trabajadores, seleccion) => {
   if (elegidos.some((t) => t.estado?.baja === "pendiente" && puedeMarcar(t, "baja"))) return "baja";
   return elegidos.some((t) => puedeMarcar(t, "alta")) ? "alta" : "baja";
 };
+
+// Acción explícita aparte de «Seleccionar todo»: marca las altas sin control para darlas de alta o marcarlas como registradas.
+export const sinControlSeleccionables = (trabajadores) => trabajadores.filter((t) => t.estado?.alta === "sin control");
 
 export const esPendiente = (t) => t?.estado?.alta === "pendiente" || ["pendiente", "incompleta"].includes(t?.estado?.baja);
 
