@@ -1,16 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
-import { fetchAuth } from "../../utils/fetchAuth";
+import { fetchAuth, getUsuario } from "../../utils/fetchAuth";
 import { money } from "../../utils/compras";
 import { nombreTrabajador, textoPension, REGIMENES_SALUD, TRABAJADOR_VACIO, formularioDeTrabajador, validarTrabajador, cuerpoDeTrabajador } from "../../utils/planilla";
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
+import ConfirmacionAccion from "../ConfirmacionAccion";
+import FichaTRegistro from "./FichaTRegistro";
+import { TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear } from "../../utils/tregistro";
 
 const INP = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
+const textoTramite = (estado) => {
+  if (!estado) return null;
+  const { alta, baja } = estadoTexto(estado);
+  return <>Alta: {alta}{estado.baja !== "ninguna" && <span className="block">Baja: {baja}</span>}</>;
+};
 const fecha = (iso) => (iso ? iso.split("-").reverse().join("/") : "");
 
 function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClose, onGuardado }) {
-  const [form, setForm] = useState(() => (trabajador ? formularioDeTrabajador(trabajador) : TRABAJADOR_VACIO));
+  const [form, setForm] = useState(() => (trabajador ? formularioDeTrabajador(trabajador) : { ...TRABAJADOR_VACIO, tregistro: TREGISTRO_VACIO(catalogos.tregistroConfig) }));
   const [error, setError] = useState("");
+  const [confirmaDesbloqueo, setConfirmaDesbloqueo] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const setPension = (k) => (e) => setForm((f) => ({ ...f, pension: { ...f.pension, [k]: e.target.value } }));
@@ -18,6 +27,11 @@ function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClos
   const quitar = (campo, i) => setForm((f) => ({ ...f, [campo]: f[campo].filter((_, j) => j !== i) }));
   const agregar = (campo, vacia) => setForm((f) => ({ ...f, [campo]: [...f[campo], vacia] }));
   const fijos = catalogos.conceptos.filter((c) => c.tipo === "ingreso");
+  const rol = getUsuario()?.rol;
+  const bloqueados = camposBloqueados(trabajador, rol);
+  const hayBloqueo = bloqueados.documento || bloqueados.ingreso || bloqueados.cese;
+  const abierto = form.desbloqueo === true;
+  const sinDocumento = bloqueados.documento && !abierto, sinIngreso = bloqueados.ingreso && !abierto, sinCese = bloqueados.cese && !abierto;
 
   const guardar = async () => {
     const falta = validarTrabajador(form);
@@ -42,15 +56,26 @@ function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClos
     <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 p-4 overflow-y-auto">
       <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-3xl space-y-4 my-6">
         <h3 className="font-semibold text-gray-800">{trabajador ? nombreTrabajador(trabajador) : "Nuevo trabajador"}</h3>
+        {hayBloqueo && editable && (
+          <div className="flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2">
+            <span className="flex-1">
+              {abierto ? "Desbloqueado: SUNAT no se actualiza, corrige también el dato en T-Registro."
+                : `Ya registrado en SUNAT: corrige también el dato en T-Registro.${puedeDesbloquear(rol) ? "" : " Solo el contador puede editarlo."}`}
+            </span>
+            {!abierto && puedeDesbloquear(rol) && (
+              <button type="button" onClick={() => setConfirmaDesbloqueo(true)} className="text-xs text-purple-600 hover:underline">Editar</button>
+            )}
+          </div>
+        )}
         <fieldset disabled={!editable} className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <label className="text-xs text-gray-500">Documento
-              <select value={form.tipoDoc} onChange={set("tipoDoc")} className={INP}>
+              <select value={form.tipoDoc} onChange={set("tipoDoc")} disabled={sinDocumento} className={INP}>
                 {Object.entries(catalogos.tiposDocumento).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </label>
             <label className="text-xs text-gray-500">Número
-              <input value={form.numDoc} onChange={set("numDoc")} maxLength={15} className={INP} />
+              <input value={form.numDoc} onChange={set("numDoc")} maxLength={15} readOnly={sinDocumento} className={INP} />
             </label>
             <label className="text-xs text-gray-500">Apellido paterno
               <input value={form.apellidoPaterno} onChange={set("apellidoPaterno")} maxLength={40} className={INP} />
@@ -71,10 +96,10 @@ function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClos
               </select>
             </label>
             <label className="text-xs text-gray-500">Fecha de ingreso
-              <input type="date" value={form.fechaIngreso} onChange={set("fechaIngreso")} className={INP} />
+              <input type="date" value={form.fechaIngreso} onChange={set("fechaIngreso")} readOnly={sinIngreso} className={INP} />
             </label>
             <label className="text-xs text-gray-500">Fecha de cese
-              <input type="date" value={form.fechaCese} onChange={set("fechaCese")} className={INP} />
+              <input type="date" value={form.fechaCese} onChange={set("fechaCese")} readOnly={sinCese} className={INP} />
             </label>
             <label className="text-xs text-gray-500">Remuneración básica (S/ al mes)
               <input value={form.remuneracionBasica} onChange={set("remuneracionBasica")} inputMode="decimal" className={`${INP} text-right`} />
@@ -146,6 +171,8 @@ function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClos
             ))}
             <button type="button" onClick={() => agregar("quintaAnterior", { mes: "", ingresos: "", retencion: "" })} className="text-xs text-purple-600 hover:underline">+ Mes anterior</button>
           </div>
+
+          <FichaTRegistro form={form} setForm={setForm} catalogos={catalogos} bloqueados={bloqueados} />
         </fieldset>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-3">
@@ -157,6 +184,10 @@ function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClos
           )}
         </div>
       </div>
+      {confirmaDesbloqueo && (
+        <ConfirmacionAccion mensaje="SUNAT no se actualiza: corrige también el dato en T-Registro. ¿Desbloquear para editar?" textoConfirmar="Desbloquear"
+          onCancelar={() => setConfirmaDesbloqueo(false)} onConfirmar={() => { setForm((f) => ({ ...f, desbloqueo: true })); setConfirmaDesbloqueo(false); }} />
+      )}
     </div>
   );
 }
@@ -164,13 +195,17 @@ function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClos
 // Ficha de los trabajadores en planilla. No se borran: un trabajador sale con su fecha de cese.
 export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscribir }) {
   const [lista, setLista] = useState([]);
+  const [estados, setEstados] = useState({});
   const [modal, setModal] = useState(null); // { trabajador? }
   const [aviso, setAviso] = useState("");
   const [verCesados, setVerCesados] = useState(false);
 
-  const cargar = useCallback(() => fetchAuth("/planilla/trabajadores").then(async (r) => {
+  const cargar = useCallback(() => Promise.all([fetchAuth("/planilla/trabajadores"), fetchAuth("/planilla/tregistro/trabajadores")]).then(async ([r, rt]) => {
     const d = await r.json().catch(() => ({}));
-    if (r.ok) setLista(d); else setAviso(d.mensaje || "No se pudieron cargar los trabajadores.");
+    if (!r.ok) return setAviso(d.mensaje || "No se pudieron cargar los trabajadores.");
+    const tramites = await rt.json().catch(() => []);
+    setLista(d);
+    setEstados(rt.ok && Array.isArray(tramites) ? Object.fromEntries(tramites.map((x) => [x._id, x.estado])) : {});
   }).catch(() => setAviso("Error de conexión con el servidor.")), []);
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -191,7 +226,7 @@ export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscrib
           <thead>
             <tr className="text-left text-xs text-gray-500 border-b">
               <th className="py-2 pr-3">Trabajador</th><th className="py-2 pr-3">Cargo</th><th className="py-2 pr-3">Centro de costo</th><th className="py-2 pr-3">Ingreso</th>
-              <th className="py-2 pr-3 text-right">Básico</th><th className="py-2 pr-3">Pensión</th><th className="py-2 pr-3">Salud</th><th className="py-2" />
+              <th className="py-2 pr-3 text-right">Básico</th><th className="py-2 pr-3">Pensión</th><th className="py-2 pr-3">Salud</th><th className="py-2 pr-3">Trámite T-Registro</th><th className="py-2" />
             </tr>
           </thead>
           <tbody>
@@ -204,10 +239,11 @@ export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscrib
                 <td className="py-1.5 pr-3 text-right tabular-nums">{money(t.remuneracionBasica)}{t.asignacionFamiliar && <span className="block text-xs text-gray-400">+ asig. familiar</span>}</td>
                 <td className="py-1.5 pr-3 text-xs">{textoPension(t.pension, catalogos.afps)}</td>
                 <td className="py-1.5 pr-3 text-xs">{REGIMENES_SALUD[t.salud]}</td>
+                <td className="py-1.5 pr-3 text-xs">{textoTramite(estados[t._id])}</td>
                 <td className="py-1.5 text-right"><button onClick={() => setModal({ trabajador: t })} className="text-xs text-purple-600 hover:underline">{puedeEscribir ? "Editar" : "Ver"}</button></td>
               </tr>
             ))}
-            {visibles.length === 0 && <tr><td colSpan={8} className="py-6 text-center text-gray-400 text-sm">Sin trabajadores registrados</td></tr>}
+            {visibles.length === 0 && <tr><td colSpan={9} className="py-6 text-center text-gray-400 text-sm">Sin trabajadores registrados</td></tr>}
           </tbody>
         </table>
       </TablaScroll>
