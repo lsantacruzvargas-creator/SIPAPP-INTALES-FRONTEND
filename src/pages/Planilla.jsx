@@ -6,10 +6,14 @@ import PanelTrabajadores from "../components/planilla/PanelTrabajadores";
 import PanelParametrosPlanilla from "../components/planilla/PanelParametrosPlanilla";
 import PanelPlame from "../components/planilla/PanelPlame";
 import PanelCuentasPlanilla from "../components/planilla/PanelCuentasPlanilla";
+import PanelTRegistro from "../components/planilla/PanelTRegistro";
+import PanelConfigTRegistro from "../components/planilla/PanelConfigTRegistro";
 
 const TABS = [
   { id: "mes", label: "Planilla del mes" },
   { id: "trabajadores", label: "Trabajadores" },
+  { id: "tregistro", label: "T-Registro" },
+  { id: "configtr", label: "Config. T-Registro" },
   { id: "parametros", label: "Parámetros" },
   { id: "plame", label: "PLAME" },
   { id: "cuentas", label: "Cuentas contables" },
@@ -34,6 +38,14 @@ export default function Planilla() {
     }).catch(() => setError("Error de conexión con el servidor."));
   }, []);
 
+  // Las fichas nuevas toman sus valores por defecto de catalogos.tregistroConfig.
+  const refrescarCatalogos = async () => {
+    try {
+      const r = await fetchAuth("/planilla/catalogos");
+      if (r.ok) setCatalogos(await r.json());
+    } catch { /* la configuración ya se guardó; los valores nuevos llegan al recargar */ }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
       <div>
@@ -55,6 +67,8 @@ export default function Planilla() {
         <>
           {tab === "mes" && <PanelPlanillaMes mes={mes} setMes={setMes} catalogos={catalogos} puedeEscribir={puedeEscribir} />}
           {tab === "trabajadores" && <PanelTrabajadores catalogos={catalogos} centrosCosto={centrosCosto} puedeEscribir={puedeEscribir} />}
+          {tab === "tregistro" && <PanelTRegistro puedeEscribir={puedeEscribir} />}
+          {tab === "configtr" && <PanelConfigTRegistro catalogos={catalogos} puedeEscribir={puedeEscribir} onGuardado={refrescarCatalogos} />}
           {tab === "parametros" && <PanelParametrosPlanilla mes={mes} setMes={setMes} catalogos={catalogos} puedeEscribir={puedeEscribir} />}
           {tab === "plame" && <PanelPlame mes={mes} setMes={setMes} />}
           {tab === "cuentas" && <PanelCuentasPlanilla cuentas={cuentas} catalogos={catalogos} puedeEscribir={puedeEscribir} />}

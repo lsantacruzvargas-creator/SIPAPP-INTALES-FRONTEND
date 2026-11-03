@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear, requiereEstudios, requiereCuenta } from "./tregistro.js";
+import { TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear, requiereEstudios, requiereCuenta, puedeGenerar, idsElegibles, esPendiente, nombreZip } from "./tregistro.js";
 import { TRABAJADOR_VACIO, formularioDeTrabajador, cuerpoDeTrabajador, validarTrabajador } from "./planilla.js";
 
 const CONFIG = { codigoEstablecimiento: "0001", tipoContrato: "01", periodicidad: "1", tipoPago: "2", jornadaMaxima: true, situacionEducativa: "07", categoriaOcupacional: "03", ocupacion: "123456" };
@@ -95,4 +95,44 @@ test("validación de T-Registro: formato del correo y de los códigos numéricos
   assert.match(validarTrabajador(con({ establecimiento: "12" })), /establecimiento/i);
   assert.match(validarTrabajador(con({ estudios: { ...f.tregistro.estudios, anioEgreso: "20" } })), /año de egreso/i);
   assert.equal(validarTrabajador(con({ correo: "ana@x.pe", telefono: "987654321", establecimiento: "0001" })), "");
+});
+
+const fila = (alta, baja, fechaCese = "") => ({ _id: `${alta}-${baja}`, fechaCese, estado: { alta, baja } });
+
+test("quién puede descargarse o marcarse como alta o baja", () => {
+  for (const a of ["pendiente", "sin control"]) assert.equal(puedeGenerar(fila(a, "ninguna"), "alta"), true, a);
+  assert.equal(puedeGenerar(fila("registrada", "ninguna"), "alta"), false);
+  for (const b of ["pendiente", "incompleta", "sin control"]) assert.equal(puedeGenerar(fila("registrada", b, "2026-03-31"), "baja"), true, b);
+  assert.equal(puedeGenerar(fila("registrada", "registrada", "2026-03-31"), "baja"), false);
+  assert.equal(puedeGenerar(fila("registrada", "ninguna"), "baja"), false);
+  assert.equal(puedeGenerar(fila("registrada", "sin control"), "baja"), false);
+  assert.equal(puedeGenerar({}, "alta"), false);
+});
+
+test("ids elegibles dentro de la selección, en el orden de la lista", () => {
+  const lista = [
+    { ...fila("pendiente", "ninguna"), _id: "a" },
+    { ...fila("registrada", "pendiente", "2026-03-31"), _id: "b" },
+    { ...fila("registrada", "ninguna"), _id: "c" },
+    { ...fila("sin control", "ninguna"), _id: "d" },
+  ];
+  assert.deepEqual(idsElegibles(lista, new Set(["d", "a", "b", "c"]), "alta"), ["a", "d"]);
+  assert.deepEqual(idsElegibles(lista, new Set(["d", "a", "b", "c"]), "baja"), ["b"]);
+  assert.deepEqual(idsElegibles(lista, new Set(), "alta"), []);
+  assert.deepEqual(idsElegibles(lista, new Set(["c"]), "alta"), []);
+});
+
+test("pendiente es lo que requiere acción del usuario, no el «sin control»", () => {
+  assert.equal(esPendiente(fila("pendiente", "ninguna")), true);
+  assert.equal(esPendiente(fila("registrada", "pendiente", "2026-03-31")), true);
+  assert.equal(esPendiente(fila("registrada", "incompleta", "2026-03-31")), true);
+  assert.equal(esPendiente(fila("sin control", "ninguna")), false);
+  assert.equal(esPendiente(fila("registrada", "registrada", "2026-03-31")), false);
+});
+
+test("nombre del zip: el del servidor o uno por defecto", () => {
+  assert.equal(nombreZip('attachment; filename="t-registro-alta-20261102.zip"', "alta"), "t-registro-alta-20261102.zip");
+  assert.equal(nombreZip("attachment; filename=otro.zip", "baja"), "otro.zip");
+  assert.equal(nombreZip(null, "baja"), "t-registro-baja.zip");
+  assert.equal(nombreZip("attachment", "alta"), "t-registro-alta.zip");
 });

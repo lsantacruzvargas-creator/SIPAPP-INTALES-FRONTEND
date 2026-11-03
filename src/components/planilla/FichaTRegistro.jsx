@@ -20,7 +20,7 @@ function Seccion({ titulo, children }) {
   );
 }
 
-function Texto({ etiqueta, valor, onChange, max, ayuda, ancho = "", ...resto }) {
+export function Texto({ etiqueta, valor, onChange, max, ayuda, ancho = "", ...resto }) {
   return (
     <label className={`text-xs text-gray-500 ${ancho}`}>{etiqueta}
       <input value={valor} onChange={onChange} maxLength={max} className={INP} {...resto} />
@@ -29,7 +29,7 @@ function Texto({ etiqueta, valor, onChange, max, ayuda, ancho = "", ...resto }) 
   );
 }
 
-function Lista({ etiqueta, valor, onChange, opciones, vacio = "Elegir…", ancho = "" }) {
+export function Lista({ etiqueta, valor, onChange, opciones, vacio = "Elegir…", ancho = "" }) {
   return (
     <label className={`text-xs text-gray-500 ${ancho}`}>{etiqueta}
       <select value={valor} onChange={onChange} className={INP}>
@@ -40,7 +40,7 @@ function Lista({ etiqueta, valor, onChange, opciones, vacio = "Elegir…", ancho
   );
 }
 
-function Casilla({ etiqueta, valor, onChange }) {
+export function Casilla({ etiqueta, valor, onChange }) {
   return (
     <label className="text-sm text-gray-700 flex items-center gap-2">
       <input type="checkbox" checked={valor} onChange={onChange} />{etiqueta}
@@ -85,7 +85,7 @@ function Buscador({ titulo, ruta, onElegir, onCerrar }) {
 }
 
 // `ruta` es el endpoint de búsqueda; null si todavía no se puede buscar (ej. falta la categoría de la ocupación).
-function CampoBuscador({ etiqueta, valor, ruta, onElegir, ancho = "", ayuda }) {
+export function CampoBuscador({ etiqueta, valor, ruta, onElegir, ancho = "", ayuda }) {
   const [abierto, setAbierto] = useState(false);
   const [conocido, setConocido] = useState({ codigo: "", nombre: "" });
   useEffect(() => {

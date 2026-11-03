@@ -33,3 +33,17 @@ export const puedeDesbloquear = (rol) => rol === "contador";
 export const requiereEstudios = (situacionEducativa) => ESTUDIOS_SUPERIORES.test(situacionEducativa ?? "");
 
 export const requiereCuenta = (tipoPago) => tipoPago === "2";
+
+const ALTA_GENERABLE = ["pendiente", "sin control"];
+const BAJA_GENERABLE = ["pendiente", "incompleta", "sin control"];
+
+export const puedeGenerar = (t, tipo) => (tipo === "alta"
+  ? ALTA_GENERABLE.includes(t?.estado?.alta)
+  : Boolean(t?.fechaCese) && BAJA_GENERABLE.includes(t?.estado?.baja));
+
+export const idsElegibles = (trabajadores, seleccion, tipo) =>
+  trabajadores.filter((t) => seleccion.has(t._id) && puedeGenerar(t, tipo)).map((t) => t._id);
+
+export const esPendiente = (t) => t?.estado?.alta === "pendiente" || ["pendiente", "incompleta"].includes(t?.estado?.baja);
+
+export const nombreZip = (contentDisposition, tipo) => contentDisposition?.match(/filename="?([^";]+)"?/i)?.[1] ?? `t-registro-${tipo}.zip`;

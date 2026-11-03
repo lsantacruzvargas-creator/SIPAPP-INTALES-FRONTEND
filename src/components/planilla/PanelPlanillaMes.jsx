@@ -21,13 +21,19 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
   const [procesando, setProcesando] = useState(false);
   const [confirmando, setConfirmando] = useState(null); // "cerrar" | "reabrir"
   const [boleta, setBoleta] = useState(null);
+  const [altasPendientes, setAltasPendientes] = useState(0);
 
   const cargar = useCallback(async () => {
     if (!/^\d{6}$/.test(periodo)) return;
     try {
-      const r = await fetchAuth(`/planilla/${periodo}`);
+      const [r, rt] = await Promise.all([
+        fetchAuth(`/planilla/${periodo}`),
+        fetchAuth("/planilla/tregistro/trabajadores").catch(() => null),
+      ]);
       const d = await r.json().catch(() => ({}));
       if (r.ok) setCargado(d); else setAviso(d.mensaje || "No se pudo cargar la planilla.");
+      const lista = rt?.ok ? await rt.json().catch(() => []) : [];
+      setAltasPendientes(Array.isArray(lista) ? lista.filter((t) => t.estado?.alta === "pendiente").length : 0);
     } catch {
       setAviso("Error de conexión con el servidor.");
     }
@@ -90,6 +96,11 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
       {datos && !datos.parametrosGuardados && (
         <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           Antes de generar, revisa y guarda los parámetros de {textoPeriodo(periodo)} en la pestaña «Parámetros» (las tasas de AFP cambian cada mes).
+        </p>
+      )}
+      {altasPendientes > 0 && (
+        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          {altasPendientes} trabajador(es) con alta pendiente en T-Registro (se calculan igual en la planilla).
         </p>
       )}
       {cerrada && (
