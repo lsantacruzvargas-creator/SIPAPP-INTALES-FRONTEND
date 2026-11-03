@@ -19,7 +19,7 @@ function Chip({ estado, texto }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${CHIP[estado] ?? ""}`}>{texto}</span>;
 }
 
-function ModalMarcar({ trabajadores, marcando, onCerrar, onMarcado }) {
+function ModalMarcar({ trabajadores, marcando, onCerrar, onMarcado, onConflicto }) {
   const [form, setForm] = useState(() => ({
     tipo: marcando.tipo ?? (idsElegibles(trabajadores, new Set(marcando.ids), "alta").length ? "alta" : "baja"),
     fecha: fechaHoyLima(), ticket: "",
@@ -39,7 +39,10 @@ function ModalMarcar({ trabajadores, marcando, onCerrar, onMarcado }) {
         method: "POST", body: JSON.stringify({ tipo: form.tipo, ids, fecha: form.fecha, ticket: form.ticket.trim() }),
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) return setError(d.mensaje || "No se pudo marcar como registrados.");
+      if (!r.ok) {
+        if (r.status === 409) onConflicto();
+        return setError(d.mensaje || "No se pudo marcar como registrados.");
+      }
       onMarcado(ids);
     } catch {
       setError("Error de conexión con el servidor.");
@@ -162,7 +165,7 @@ function BuscadorErrores() {
 // sube en SOL; después se marcan como registrados aquí.
 export default function PanelTRegistro({ puedeEscribir }) {
   const [trabajadores, setTrabajadores] = useState(null);
-  const [filtro, setFiltro] = useState("pendientes");
+  const [filtro, setFiltro] = useState("todos");
   const [seleccion, setSeleccion] = useState(() => new Set());
   const [abiertos, setAbiertos] = useState(() => new Set());
   const [descargando, setDescargando] = useState("");
@@ -184,8 +187,9 @@ export default function PanelTRegistro({ puedeEscribir }) {
   const visibles = (trabajadores ?? []).filter((t) => filtro === "todos" || esPendiente(t));
   const elegibles = visibles.filter((t) => puedeGenerar(t, "alta") || puedeGenerar(t, "baja"));
   const todosElegidos = elegibles.length > 0 && elegibles.every((t) => seleccion.has(t._id));
-  const idsAlta = idsElegibles(trabajadores ?? [], seleccion, "alta");
-  const idsBaja = idsElegibles(trabajadores ?? [], seleccion, "baja");
+  const seleccionVisible = visibles.filter((t) => seleccion.has(t._id)).map((t) => t._id);
+  const idsAlta = idsElegibles(visibles, seleccion, "alta");
+  const idsBaja = idsElegibles(visibles, seleccion, "baja");
 
   const alternar = (id) => setSeleccion((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const alternarTodos = () => setSeleccion((s) => {
@@ -250,14 +254,14 @@ export default function PanelTRegistro({ puedeEscribir }) {
         <div className="flex-1" />
         {puedeEscribir && (
           <>
-            <span className="text-xs text-gray-500">{seleccion.size} seleccionado(s)</span>
+            <span className="text-xs text-gray-500">{seleccionVisible.length} seleccionado(s)</span>
             <button onClick={() => descargar("alta", idsAlta)} disabled={!idsAlta.length || Boolean(descargando)} className={BOTON}>
               {descargando === "alta" ? "Generando…" : `Descargar altas (${idsAlta.length})`}
             </button>
             <button onClick={() => descargar("baja", idsBaja)} disabled={!idsBaja.length || Boolean(descargando)} className={BOTON}>
               {descargando === "baja" ? "Generando…" : `Descargar bajas (${idsBaja.length})`}
             </button>
-            <button onClick={() => setMarcando({ ids: [...seleccion] })} disabled={!idsAlta.length && !idsBaja.length}
+            <button onClick={() => setMarcando({ ids: seleccionVisible })} disabled={!idsAlta.length && !idsBaja.length}
               className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
               Marcar como registrados
             </button>
@@ -331,7 +335,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
 
       <BuscadorErrores />
 
-      {marcando && <ModalMarcar trabajadores={trabajadores ?? []} marcando={marcando} onCerrar={() => setMarcando(null)} onMarcado={marcado} />}
+      {marcando && <ModalMarcar trabajadores={trabajadores ?? []} marcando={marcando} onCerrar={() => setMarcando(null)} onMarcado={marcado} onConflicto={cargar} />}
       {problemas && <ModalProblemas problemas={problemas} onCerrar={() => setProblemas(null)} />}
       {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
     </div>

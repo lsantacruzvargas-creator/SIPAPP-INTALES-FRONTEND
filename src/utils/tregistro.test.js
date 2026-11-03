@@ -136,3 +136,9 @@ test("nombre del zip: el del servidor o uno por defecto", () => {
   assert.equal(nombreZip(null, "baja"), "t-registro-baja.zip");
   assert.equal(nombreZip("attachment", "alta"), "t-registro-alta.zip");
 });
+
+test("los ids elegibles se calculan sobre las filas dadas: lo seleccionado y oculto no cuenta", () => {
+  const lista = [{ ...fila("pendiente", "ninguna"), _id: "a" }, { ...fila("sin control", "ninguna"), _id: "d" }];
+  const visibles = lista.filter(esPendiente);
+  assert.deepEqual(idsElegibles(visibles, new Set(["a", "d"]), "alta"), ["a"]);
+});
