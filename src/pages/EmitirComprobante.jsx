@@ -20,6 +20,8 @@ import {
   calcularLineaComprobante,
   documentoValido,
   serieValida,
+  parsearGuiaRemision,
+  formatearGuiaRemision,
 } from "../utils/catalogosSunat";
 
 const RECEPTOR_VACIO = { schemeID: "6", numDoc: "", nombre: "" };
@@ -68,6 +70,12 @@ export default function EmitirComprobante() {
   const [retencionAplica, setRetencionAplica] = useState(false);
   const [retencionPorcentaje, setRetencionPorcentaje] = useState("3");
   const [numeroOrdenCompra, setNumeroOrdenCompra] = useState("");
+  // GRE relacionada (cac:DespatchDocumentReference en el XML), texto libre "SERIE-CORRELATIVO".
+  const [guiaRelacionada, setGuiaRelacionada] = useState("");
+  const [mostrarBuscadorGuia, setMostrarBuscadorGuia] = useState(false);
+  const [guiasDisponibles, setGuiasDisponibles] = useState([]);
+  const [buscandoGuia, setBuscandoGuia] = useState(false);
+  const [filtroGuia, setFiltroGuia] = useState("");
   const [ordenCompraId, setOrdenCompraId] = useState("");
   const [mostrarBuscadorOC, setMostrarBuscadorOC] = useState(false);
   const [ordenesCompra, setOrdenesCompra] = useState([]);
@@ -314,10 +322,42 @@ export default function EmitirComprobante() {
     setMostrarBuscadorOC(false);
   };
 
+  const otsDeGuia = (g) => (g.ordenesTrabajo || []).filter((o) => o && typeof o === "object").map((o) => o.numeroOT || o.codigo).filter(Boolean);
+  const guiasFiltradas = guiasDisponibles.filter((g) => {
+    if (!filtroGuia.trim()) return true;
+    const q = filtroGuia.trim().toLowerCase();
+    return (
+      formatearGuiaRemision(g).toLowerCase().includes(q) ||
+      (g.destinatario?.nombre || "").toLowerCase().includes(q) ||
+      otsDeGuia(g).some((ot) => ot.toLowerCase().includes(q))
+    );
+  });
+
+  const abrirBuscadorGuia = async () => {
+    setMostrarBuscadorGuia(true);
+    if (guiasDisponibles.length) return;
+    setBuscandoGuia(true);
+    try {
+      const res  = await fetchAuth("/guias?estado=ACEPTADO&limit=200");
+      const data = await res.json();
+      setGuiasDisponibles(data?.data || []);
+    } finally {
+      setBuscandoGuia(false);
+    }
+  };
+
+  const elegirGuia = (g) => {
+    setGuiaRelacionada(formatearGuiaRemision(g));
+    setMostrarBuscadorGuia(false);
+  };
+
   const validar = () => {
     if (!rucEmisor) return "Selecciona la empresa emisora.";
     if (!serie.trim()) return "La serie es requerida.";
     if (!serieValida(serie)) return "La serie debe tener exactamente 4 caracteres (ej. F001, B001, FC01).";
+    if (!esNota && guiaRelacionada.trim() && !parsearGuiaRemision(guiaRelacionada)) {
+      return "La guía de remisión relacionada debe tener el formato SERIE-NÚMERO (ej. T001-00001234).";
+    }
     if (!receptor.numDoc.trim() || !receptor.nombre.trim()) return "Los datos del receptor son requeridos.";
     if (tipoDoc === "01" && receptor.schemeID !== "6") return "La factura requiere un receptor con RUC.";
     if (!documentoValido(receptor.schemeID, receptor.numDoc)) {
@@ -432,6 +472,7 @@ export default function EmitirComprobante() {
           observaciones: observaciones.trim(),
           informacionRelacionada: informacionRelacionada.trim(),
           numeroOrdenCompra: numeroOrdenCompra.trim(),
+          ...(parsearGuiaRemision(guiaRelacionada) ? { guiaRelacionada: parsearGuiaRemision(guiaRelacionada) } : {}),
           ...(ordenCompraId ? { ordenCompra: ordenCompraId } : {}),
           ...(detraccionAplica ? {
             detraccion: {
@@ -519,6 +560,7 @@ export default function EmitirComprobante() {
     setRetencionAplica(false);
     setRetencionPorcentaje("3");
     setNumeroOrdenCompra("");
+    setGuiaRelacionada("");
     setOrdenCompraId("");
     setOcOrigen(null);
     setFacturaInterna(null);
@@ -1031,6 +1073,22 @@ export default function EmitirComprobante() {
                   )}
                 </div>
               </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <label className="block text-xs font-medium text-gray-500 mb-1">N° Guía de Remisión relacionada (opcional)</label>
+                <div className="flex gap-2">
+                  <input value={guiaRelacionada} placeholder="Ej. T001-00001234" maxLength={13}
+                    onChange={(e) => setGuiaRelacionada(e.target.value.toUpperCase())}
+                    disabled={ro}
+                    className="flex-1 input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
+                  {!ro && (
+                    <button type="button" onClick={abrirBuscadorGuia}
+                      className="px-4 py-2 rounded-lg text-sm border border-gray-300 text-gray-500 hover:text-gray-800 transition">
+                      Buscar
+                    </button>
+                  )}
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -1105,6 +1163,33 @@ export default function EmitirComprobante() {
                   className="w-full text-left px-3 py-2 hover:bg-gray-50 transition text-sm">
                   <div className="font-medium text-gray-800">{o.numeroOrden || o.codigo} — {o.titulo}</div>
                   <div className="text-xs text-gray-400">{o.empresa?.razonSocial || "—"} · S/ {Number(o.monto).toFixed(2)}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mostrarBuscadorGuia && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold text-gray-800">Buscar Guía de Remisión</h3>
+              <button type="button" onClick={() => setMostrarBuscadorGuia(false)} className="text-gray-400 hover:text-gray-800">✕</button>
+            </div>
+            <input value={filtroGuia} onChange={(e) => setFiltroGuia(e.target.value)}
+              placeholder="Buscar por serie-correlativo, destinatario o N° de OT..."
+              className="w-full input-field w-auto mb-3" />
+            <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+              {buscandoGuia && <p className="text-sm text-gray-400 py-4 text-center">Cargando…</p>}
+              {!buscandoGuia && guiasFiltradas.length === 0 && (
+                <p className="text-sm text-gray-400 py-4 text-center">Sin resultados.</p>
+              )}
+              {guiasFiltradas.map((g) => (
+                <button key={g._id} type="button" onClick={() => elegirGuia(g)}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-50 transition text-sm">
+                  <div className="font-medium text-gray-800">{formatearGuiaRemision(g)} — {g.destinatario?.nombre || g.tipoGuia}</div>
+                  <div className="text-xs text-gray-400">{otsDeGuia(g).length ? `OT: ${otsDeGuia(g).join(", ")}` : g.tipoGuia}</div>
                 </button>
               ))}
             </div>
