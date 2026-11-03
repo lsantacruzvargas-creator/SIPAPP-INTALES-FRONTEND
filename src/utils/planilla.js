@@ -1,5 +1,5 @@
 // Planilla de remuneraciones: textos, formulario del trabajador y hojas de Excel. El cálculo lo hace el servidor.
-import { TREGISTRO_VACIO } from "./tregistro.js";
+import { TREGISTRO_VACIO, requiereEstudios } from "./tregistro.js";
 
 export const TIPOS_CONCEPTO = { ingreso: "Ingresos", descuento: "Descuentos", aporteTrabajador: "Aportes del trabajador", aporteEmpleador: "Aportes del empleador" };
 export const REGIMENES_SALUD = { essalud: "EsSalud", eps: "EsSalud + EPS", sis: "SIS (microempresa)" };
@@ -54,7 +54,7 @@ function validarTregistro(tr) {
   if (tr.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tr.correo.trim())) return "El correo electrónico no es válido.";
   if (tr.telefono && !/^\d{1,9}$/.test(tr.telefono.trim())) return "El teléfono solo admite dígitos (hasta 9).";
   if (tr.establecimiento && !/^\d{4}$/.test(tr.establecimiento.trim())) return "El código de establecimiento debe tener 4 dígitos.";
-  if (tr.estudios?.anioEgreso && !/^\d{4}$/.test(tr.estudios.anioEgreso.trim())) return "El año de egreso debe tener 4 dígitos.";
+  if (requiereEstudios(tr.situacionEducativa) && tr.estudios?.anioEgreso && !/^\d{4}$/.test(tr.estudios.anioEgreso.trim())) return "El año de egreso debe tener 4 dígitos.";
   return "";
 }
 
@@ -71,8 +71,11 @@ export function validarTrabajador(f) {
   return validarTregistro(f.tregistro);
 }
 
+// Sin estudios exigidos no se envía la sección: oculta, un año a medias no debe impedir guardar ni pisar lo guardado.
+const tregistroDeCuerpo = ({ estudios, ...resto }) => (requiereEstudios(resto.situacionEducativa) ? { ...resto, estudios } : resto);
+
 export const cuerpoDeTrabajador = ({ desbloqueo, ...f }) => ({
-  ...f, ...(desbloqueo === true && { desbloqueo }), centroCosto: f.centroCosto || null, remuneracionBasica: Number(f.remuneracionBasica),
+  ...f, tregistro: tregistroDeCuerpo(f.tregistro), ...(desbloqueo === true && { desbloqueo }), centroCosto: f.centroCosto || null, remuneracionBasica: Number(f.remuneracionBasica),
   conceptosFijos: f.conceptosFijos.map((c) => ({ codigo: c.codigo, monto: Number(c.monto) })),
   quintaAnterior: f.quintaAnterior.map((q) => ({ periodo: q.mes.replace("-", ""), ingresos: Number(q.ingresos) || 0, retencion: Number(q.retencion) || 0 })),
 });

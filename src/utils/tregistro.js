@@ -11,7 +11,7 @@ export const TREGISTRO_VACIO = (config = {}) => ({
   categoriaOcupacional: config.categoriaOcupacional ?? "", ocupacion: config.ocupacion ?? "", situacionEducativa: config.situacionEducativa ?? "",
   tipoContrato: config.tipoContrato ?? "", periodicidad: config.periodicidad ?? "", tipoPago: config.tipoPago ?? "",
   discapacidad: false, sindicalizado: false, jornadaMaxima: config.jornadaMaxima === true, horarioNocturno: false, regimenAlternativo: false,
-  situacionEspecial: "", eps: "",
+  situacionEspecial: "0", eps: "",
   estudios: { completaEnPeru: true, institucion: "", carrera: "", anioEgreso: "" },
   cuenta: { entidad: "", numero: "" },
   establecimiento: "",

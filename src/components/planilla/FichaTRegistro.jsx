@@ -154,9 +154,12 @@ export default function FichaTRegistro({ form, setForm, catalogos, bloqueados })
               <option value="">Elegir…</option><option value="1">Masculino</option><option value="2">Femenino</option>
             </select>
           </label>
-          <Texto etiqueta="Nacionalidad" valor={t.nacionalidad} onChange={set("nacionalidad")} max={4} />
-          <Texto etiqueta="País emisor del documento" valor={t.paisEmisor} onChange={set("paisEmisor")} max={4} />
-          <p className="col-span-2 md:col-span-4 -mt-2 text-[11px] text-gray-400">Código de la Tabla 4 / Tabla 26 de SUNAT; con DNI déjalo vacío.</p>
+          <Lista etiqueta="Nacionalidad" valor={t.nacionalidad} onChange={set("nacionalidad")} opciones={cat.nacionalidades} ancho="col-span-2" />
+          <Lista etiqueta="País emisor del documento" valor={t.paisEmisor} onChange={set("paisEmisor")} opciones={cat.paisesEmisores} ancho="col-span-2" />
+          <p className="col-span-2 md:col-span-4 -mt-2 text-[11px] text-gray-400">
+            La nacionalidad es obligatoria con carné de extranjería, pasaporte, carné de refugio, de RR.EE., permiso temporal o documento extranjero.
+            El país emisor solo se pide con pasaporte o documento de identidad extranjero; con los demás documentos déjalo vacío.
+          </p>
           <Texto etiqueta="Teléfono móvil" valor={t.telefono} onChange={set("telefono", true)} max={9} inputMode="numeric" />
           <Texto etiqueta="Correo electrónico" valor={t.correo} onChange={set("correo")} max={50} type="email" ancho="col-span-2" />
         </div>
@@ -188,7 +191,7 @@ export default function FichaTRegistro({ form, setForm, catalogos, bloqueados })
           <Lista etiqueta="Tipo de contrato" valor={t.tipoContrato} onChange={set("tipoContrato")} opciones={cat.contratos} ancho="col-span-2" />
           <Lista etiqueta="Periodicidad de la remuneración" valor={t.periodicidad} onChange={set("periodicidad")} opciones={cat.periodicidades} ancho="col-span-2" />
           <Lista etiqueta="Tipo de pago" valor={t.tipoPago} onChange={set("tipoPago")} opciones={cat.tiposPago} ancho="col-span-2" />
-          <Lista etiqueta="Situación especial" valor={t.situacionEspecial} onChange={set("situacionEspecial")} opciones={cat.situacionesEspeciales} vacio="Ninguna" ancho="col-span-2" />
+          <Lista etiqueta="Situación especial" valor={t.situacionEspecial} onChange={set("situacionEspecial")} opciones={cat.situacionesEspeciales} ancho="col-span-2" />
           {form.salud === "eps" && <Lista etiqueta="EPS" valor={t.eps} onChange={set("eps")} opciones={cat.eps} ancho="col-span-2" />}
           <Texto etiqueta="Establecimiento (opcional)" valor={t.establecimiento} onChange={set("establecimiento", true)} max={4} inputMode="numeric"
             placeholder={catalogos.tregistroConfig?.codigoEstablecimiento ?? ""} />

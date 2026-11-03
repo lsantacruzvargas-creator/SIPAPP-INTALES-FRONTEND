@@ -66,7 +66,7 @@ test("ficha existente: ida y vuelta de T-Registro sin enviar lo que escribe el s
   const del_servidor = {
     _id: "x", tipoDoc: "01", numDoc: "12345678", apellidoPaterno: "Quispe", nombres: "Ana", fechaIngreso: "2026-01-05", remuneracionBasica: 2500,
     tregistro: {
-      fechaNacimiento: "1990-05-17", sexo: "2", telefono: "987654321", discapacidad: true, direccion: { tipoVia: "01", nombreVia: "Los Olivos", ubigeo: "150101" },
+      fechaNacimiento: "1990-05-17", sexo: "2", telefono: "987654321", discapacidad: true, situacionEducativa: "14", direccion: { tipoVia: "01", nombreVia: "Los Olivos", ubigeo: "150101" },
       estudios: { institucion: "123", anioEgreso: "2012" }, cuenta: { entidad: "002", numero: "1234" },
       alta: { estado: "registrada", fechaRegistro: "2026-01-06", registradaPor: "Ana", ticket: "T1" },
       baja: { estado: "pendiente", motivo: "", ticket: "T2" }, ediciones: [{ por: "x", campos: ["numDoc"] }],
@@ -77,6 +77,28 @@ test("ficha existente: ida y vuelta de T-Registro sin enviar lo que escribe el s
   const { tregistro: tr } = cuerpoDeTrabajador(f);
   assert.deepEqual([tr.fechaNacimiento, tr.sexo, tr.discapacidad, tr.direccion.ubigeo, tr.estudios.institucion, tr.cuenta.entidad], ["1990-05-17", "2", true, "150101", "123", "002"]);
   assert.deepEqual([tr.alta, tr.ediciones, tr.baja], [undefined, undefined, { motivo: "" }]);
+});
+
+test("situación especial nace en 0 y las fichas antiguas sin ella la cargan en 0", () => {
+  assert.equal(TREGISTRO_VACIO().situacionEspecial, "0");
+  assert.equal(TREGISTRO_VACIO(CONFIG).situacionEspecial, "0");
+  assert.equal(TRABAJADOR_VACIO.tregistro.situacionEspecial, "0");
+  const antigua = { _id: "x", tipoDoc: "01", numDoc: "12345678", apellidoPaterno: "Quispe", nombres: "Ana", fechaIngreso: "2026-01-05", remuneracionBasica: 2500 };
+  assert.equal(formularioDeTrabajador(antigua).tregistro.situacionEspecial, "0");
+  assert.equal(formularioDeTrabajador({ ...antigua, tregistro: { sexo: "1" } }).tregistro.situacionEspecial, "0");
+  assert.equal(formularioDeTrabajador({ ...antigua, tregistro: { situacionEspecial: "3" } }).tregistro.situacionEspecial, "3");
+  assert.equal(cuerpoDeTrabajador(formularioDeTrabajador(antigua)).tregistro.situacionEspecial, "0");
+});
+
+test("los estudios solo se validan y se envían cuando la situación educativa los exige", () => {
+  const f = { ...TRABAJADOR_VACIO, numDoc: "12345678", apellidoPaterno: "Quispe", nombres: "Ana", fechaIngreso: "2026-01-05", remuneracionBasica: "2500" };
+  const con = (situacionEducativa) => ({ ...f, tregistro: { ...f.tregistro, situacionEducativa, estudios: { completaEnPeru: true, institucion: "140337915", carrera: "812015", anioEgreso: "20" } } });
+  assert.equal(validarTrabajador(con("10")), "");
+  assert.equal(validarTrabajador(con("")), "");
+  assert.match(validarTrabajador(con("11")), /año de egreso/i);
+  assert.match(validarTrabajador(con("21")), /año de egreso/i);
+  assert.equal("estudios" in cuerpoDeTrabajador(con("10")).tregistro, false);
+  assert.deepEqual(cuerpoDeTrabajador(con("14")).tregistro.estudios, { completaEnPeru: true, institucion: "140337915", carrera: "812015", anioEgreso: "20" });
 });
 
 test("el desbloqueo solo viaja cuando el contador eligió editar", () => {
@@ -93,7 +115,7 @@ test("validación de T-Registro: formato del correo y de los códigos numéricos
   assert.match(validarTrabajador(con({ correo: "sin-arroba" })), /correo/i);
   assert.match(validarTrabajador(con({ telefono: "12ab" })), /teléfono/i);
   assert.match(validarTrabajador(con({ establecimiento: "12" })), /establecimiento/i);
-  assert.match(validarTrabajador(con({ estudios: { ...f.tregistro.estudios, anioEgreso: "20" } })), /año de egreso/i);
+  assert.match(validarTrabajador(con({ situacionEducativa: "14", estudios: { ...f.tregistro.estudios, anioEgreso: "20" } })), /año de egreso/i);
   assert.equal(validarTrabajador(con({ correo: "ana@x.pe", telefono: "987654321", establecimiento: "0001" })), "");
 });
 
