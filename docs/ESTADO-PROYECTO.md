@@ -228,6 +228,7 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   (6) rentas de 5.ª de otros empleadores (`.or5`) y recálculo de la 5.ª al cese (art. 41); (7) subsidios de EsSalud
   (0915/0916) y prima AFP de mayores de 65; (8) confirmar con el contador lo marcado [Confirmar] en `utils/planilla.js`.
 - **Pendiente (2026-11-02, decisión del usuario)**: llevar el módulo de planilla a la rama `conta-percepcion` (hoy vive solo en `contabilidadoficial`). Se hace después.
+- **Pendiente (2026-11-03, decisión del usuario)**: imprimir las boletas de pago en masa (todas las del mes en un solo PDF o lote). Hoy el PDF sale boleta por boleta desde «Planilla del mes». Se hace después.
 
 **T-Registro (alta y baja de trabajadores) (2026-11-02, rama `contabilidadoficial`):**
 - **Qué cubre**: la ficha del trabajador se amplía con la sección T-Registro (datos personales, domicilio, régimen, salud y
