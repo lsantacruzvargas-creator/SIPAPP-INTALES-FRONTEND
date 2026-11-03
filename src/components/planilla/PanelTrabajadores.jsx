@@ -20,18 +20,20 @@ function ModalNuevoVinculo({ trabajador, onCerrar, onAbierto }) {
   const [fechaIngreso, setFechaIngreso] = useState("");
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
-  const minimo = trabajador.fechaCese || trabajador.fechaIngreso;
+  const [avisos, setAvisos] = useState([]);
+  const minimo = trabajador.fechaCese;
 
   const confirmar = async () => {
+    if (!minimo) return setError("Registra primero la fecha de cese del vínculo anterior en esta ficha.");
     if (!fechaIngreso) return setError("Indica la fecha de ingreso del nuevo vínculo.");
-    if (fechaIngreso <= minimo) return setError(`El nuevo ingreso debe ser posterior al ${trabajador.fechaCese ? "cese" : "ingreso"} anterior (${fecha(minimo)}).`);
+    if (fechaIngreso <= minimo) return setError(`El nuevo ingreso debe ser posterior al cese anterior (${fecha(minimo)}).`);
     setGuardando(true);
     setError("");
     try {
       const r = await fetchAuth("/planilla/tregistro/nuevo-vinculo", { method: "POST", body: JSON.stringify({ id: trabajador._id, fechaIngreso }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) return setError(d.mensaje || "No se pudo abrir el nuevo vínculo.");
-      onAbierto();
+      if (d.avisos?.length) setAvisos(d.avisos); else onAbierto();
     } catch {
       setError("Error de conexión con el servidor.");
     } finally {
@@ -47,16 +49,29 @@ function ModalNuevoVinculo({ trabajador, onCerrar, onAbierto }) {
           El vínculo actual ({fecha(trabajador.fechaIngreso)}{trabajador.fechaCese ? ` – ${fecha(trabajador.fechaCese)}` : ""}) queda en el historial con sus trámites y
           se abre un alta pendiente. Los datos personales y laborales de la ficha se conservan.
         </p>
-        <label className="text-xs text-gray-500 block">Fecha de ingreso del nuevo vínculo
-          <input type="date" value={fechaIngreso} min={minimo} onChange={(e) => setFechaIngreso(e.target.value)} className={INP} />
-        </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={onCerrar} disabled={guardando} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
-          <button type="button" onClick={confirmar} disabled={guardando} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
-            {guardando ? "Guardando…" : "Abrir vínculo"}
-          </button>
-        </div>
+        {avisos.length > 0 ? (
+          <>
+            <p className="text-sm text-green-700">Nuevo vínculo abierto.</p>
+            {avisos.map((a) => <p key={a} className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{a}</p>)}
+            <div className="flex justify-end">
+              <button type="button" onClick={onAbierto} className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-700">Entendido</button>
+            </div>
+          </>
+        ) : (
+          <>
+            {!minimo && <p className="text-sm text-amber-700">Registra primero la fecha de cese del vínculo anterior en esta ficha.</p>}
+            <label className="text-xs text-gray-500 block">Fecha de ingreso del nuevo vínculo
+              <input type="date" value={fechaIngreso} min={minimo || undefined} disabled={!minimo} onChange={(e) => setFechaIngreso(e.target.value)} className={INP} />
+            </label>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={onCerrar} disabled={guardando} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+              <button type="button" onClick={confirmar} disabled={guardando || !minimo} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
+                {guardando ? "Guardando…" : "Abrir vínculo"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

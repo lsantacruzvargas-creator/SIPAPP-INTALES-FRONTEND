@@ -1,5 +1,5 @@
 // Planilla de remuneraciones: textos, formulario del trabajador y hojas de Excel. El cálculo lo hace el servidor.
-import { TREGISTRO_VACIO, requiereEstudios, mensajeCorreo } from "./tregistro.js";
+import { TREGISTRO_VACIO, requiereEstudios } from "./tregistro.js";
 
 export const TIPOS_CONCEPTO = { ingreso: "Ingresos", descuento: "Descuentos", aporteTrabajador: "Aportes del trabajador", aporteEmpleador: "Aportes del empleador" };
 export const REGIMENES_SALUD = { essalud: "EsSalud", eps: "EsSalud + EPS", sis: "SIS (microempresa)" };
@@ -51,8 +51,6 @@ export const formularioDeTrabajador = (t) => ({
 
 function validarTregistro(tr) {
   if (!tr) return "";
-  const correo = mensajeCorreo(tr.correo);
-  if (correo) return correo;
   if (tr.telefono && !/^\d{1,9}$/.test(tr.telefono.trim())) return "El teléfono solo admite dígitos (hasta 9).";
   if (tr.establecimiento && !/^\d{4}$/.test(tr.establecimiento.trim())) return "El código de establecimiento debe tener 4 dígitos.";
   if (requiereEstudios(tr.situacionEducativa) && tr.estudios?.anioEgreso && !/^\d{4}$/.test(tr.estudios.anioEgreso.trim())) return "El año de egreso debe tener 4 dígitos.";

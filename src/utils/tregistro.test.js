@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear, requiereEstudios, requiereCuenta, puedeGenerar, idsElegibles, esPendiente, nombreZip,
   puedeMarcar, idsMarcables, excluidosDeMarcar, seleccionablesEnMasa, resumenProblemas, bajasDeAltaSinControl, puedeAnularAlta, puedeNuevoVinculo,
-  paisEmisorBloqueado, lineaEdicion, tramitesPendientesEnMes, mensajeCorreo,
+  paisEmisorBloqueado, lineaEdicion, tramitesPendientesEnMes, mensajeCorreo, puedeGenerarAltaSinControl, tipoMarcarPorDefecto,
 } from "./tregistro.js";
 import { TRABAJADOR_VACIO, formularioDeTrabajador, cuerpoDeTrabajador, validarTrabajador } from "./planilla.js";
 
@@ -116,7 +116,7 @@ test("validación de T-Registro: formato del correo y de los códigos numéricos
   const f = { ...TRABAJADOR_VACIO, numDoc: "12345678", apellidoPaterno: "Quispe", nombres: "Ana", fechaIngreso: "2026-01-05", remuneracionBasica: "2500" };
   assert.equal(validarTrabajador(f), "");
   const con = (cambio) => ({ ...f, tregistro: { ...f.tregistro, ...cambio } });
-  assert.match(validarTrabajador(con({ correo: "sin-arroba" })), /correo/i);
+  assert.equal(validarTrabajador(con({ correo: "sin-arroba" })), "");
   assert.match(validarTrabajador(con({ telefono: "12ab" })), /teléfono/i);
   assert.match(validarTrabajador(con({ establecimiento: "12" })), /establecimiento/i);
   assert.match(validarTrabajador(con({ situacionEducativa: "14", estudios: { ...f.tregistro.estudios, anioEgreso: "20" } })), /año de egreso/i);
@@ -126,7 +126,8 @@ test("validación de T-Registro: formato del correo y de los códigos numéricos
 const fila = (alta, baja, fechaCese = "") => ({ _id: `${alta}-${baja}`, fechaCese, estado: { alta, baja } });
 
 test("quién puede descargarse o marcarse como alta o baja", () => {
-  for (const a of ["pendiente", "sin control"]) assert.equal(puedeGenerar(fila(a, "ninguna"), "alta"), true, a);
+  assert.equal(puedeGenerar(fila("pendiente", "ninguna"), "alta"), true);
+  assert.equal(puedeGenerar(fila("sin control", "ninguna"), "alta"), false);
   assert.equal(puedeGenerar(fila("registrada", "ninguna"), "alta"), false);
   for (const b of ["pendiente", "incompleta", "sin control"]) assert.equal(puedeGenerar(fila("registrada", b, "2026-03-31"), "baja"), true, b);
   assert.equal(puedeGenerar(fila("registrada", "registrada", "2026-03-31"), "baja"), false);
@@ -142,7 +143,7 @@ test("ids elegibles dentro de la selección, en el orden de la lista", () => {
     { ...fila("registrada", "ninguna"), _id: "c" },
     { ...fila("sin control", "ninguna"), _id: "d" },
   ];
-  assert.deepEqual(idsElegibles(lista, new Set(["d", "a", "b", "c"]), "alta"), ["a", "d"]);
+  assert.deepEqual(idsElegibles(lista, new Set(["d", "a", "b", "c"]), "alta"), ["a"]);
   assert.deepEqual(idsElegibles(lista, new Set(["d", "a", "b", "c"]), "baja"), ["b"]);
   assert.deepEqual(idsElegibles(lista, new Set(), "alta"), []);
   assert.deepEqual(idsElegibles(lista, new Set(["c"]), "alta"), []);
@@ -300,8 +301,8 @@ test("trámites pendientes de un mes: altas y bajas pendientes o incompletas de 
     { ...fila("anulada", "ninguna"), fechaIngreso: "2026-03-01" },
     { ...fila("pendiente", "ninguna"), fechaIngreso: "2026-06-15", vinculos: [{ ingreso: "2026-01-01", cese: "2026-03-31" }, { ingreso: "2026-06-15", cese: "" }] },
   ];
-  assert.equal(tramitesPendientesEnMes(lista, "202603"), 1 + 1 + 2 + 1);
-  assert.equal(tramitesPendientesEnMes(lista, "202602"), 1 + 2 + 1 + 1);
+  assert.equal(tramitesPendientesEnMes(lista, "202603"), 1 + 1 + 2);
+  assert.equal(tramitesPendientesEnMes(lista, "202602"), 1 + 2 + 1);
   assert.equal(tramitesPendientesEnMes(lista, "202604"), 2);
   assert.equal(tramitesPendientesEnMes(lista, "202605"), 2);
   assert.equal(tramitesPendientesEnMes(lista, "202607"), 3);
@@ -315,6 +316,52 @@ test("correo según el manual del PVS: mismo criterio que el servidor", () => {
   assert.match(mensajeCorreo("juan@gob.pe"), /servidor/i);
   assert.equal(mensajeCorreo(""), "");
   const f = { ...TRABAJADOR_VACIO, numDoc: "12345678", apellidoPaterno: "Quispe", nombres: "Ana", fechaIngreso: "2026-01-05", remuneracionBasica: "2500" };
-  assert.match(validarTrabajador({ ...f, tregistro: { ...f.tregistro, correo: "jp@gmail.com" } }), /correo/i);
+  assert.equal(validarTrabajador({ ...f, tregistro: { ...f.tregistro, correo: "jp@gmail.com" } }), "");
   assert.equal(validarTrabajador({ ...f, tregistro: { ...f.tregistro, correo: "juan.perez@gmail.com" } }), "");
+});
+
+test("un alta sin control nunca entra por selección: solo se genera con la acción explícita de la fila", () => {
+  const lista = [
+    { ...fila("sin control", "pendiente", "2026-10-31"), _id: "v", nombre: "Viejo" },
+    { ...fila("pendiente", "ninguna"), _id: "n", nombre: "Nuevo" },
+    { ...fila("sin control", "ninguna"), _id: "s", nombre: "Sin control" },
+  ];
+  const seleccion = new Set(seleccionablesEnMasa(lista).map((t) => t._id));
+  assert.deepEqual([...seleccion].sort(), ["n", "v"]);
+  assert.deepEqual(idsElegibles(lista, seleccion, "alta"), ["n"]);
+  assert.deepEqual(idsElegibles(lista, seleccion, "baja"), ["v"]);
+  assert.deepEqual(idsElegibles(lista, new Set(["s"]), "alta"), []);
+
+  assert.equal(puedeGenerarAltaSinControl(lista[2]), true);
+  assert.equal(puedeGenerarAltaSinControl(lista[0]), false);
+  assert.equal(puedeGenerarAltaSinControl(lista[1]), false);
+  assert.equal(puedeGenerarAltaSinControl(fila("sin control", "ninguna", "2026-10-31")), false);
+  assert.equal(puedeGenerarAltaSinControl(fila("sin control", "sin control", "2026-10-31")), false);
+  assert.equal(puedeGenerarAltaSinControl(fila("registrada", "ninguna")), false);
+});
+
+test("el modal de marcar parte del trámite pendiente de lo elegido, no del alta sin control", () => {
+  const lista = [
+    { ...fila("sin control", "pendiente", "2026-10-31"), _id: "v" },
+    { ...fila("pendiente", "ninguna"), _id: "n" },
+    { ...fila("sin control", "ninguna"), _id: "s" },
+    { ...fila("registrada", "incompleta", "2026-10-31"), _id: "i" },
+  ];
+  assert.equal(tipoMarcarPorDefecto(lista, new Set(["v"])), "baja");
+  assert.equal(tipoMarcarPorDefecto(lista, new Set(["n"])), "alta");
+  assert.equal(tipoMarcarPorDefecto(lista, new Set(["v", "n"])), "alta");
+  assert.equal(tipoMarcarPorDefecto(lista, new Set(["s"])), "alta");
+  assert.equal(tipoMarcarPorDefecto(lista, new Set(["i"])), "baja");
+  assert.equal(tipoMarcarPorDefecto(lista, new Set()), "baja");
+});
+
+test("con el alta anulada no hay problemas que mostrar", () => {
+  const p = [{ codigo: "X" }];
+  assert.deepEqual(resumenProblemas({ estado: { alta: "anulada", baja: "ninguna" }, problemasAlta: p, problemasBaja: [] }), { activos: 0, atenuados: 0 });
+});
+
+test("trámites pendientes del mes: solo cuenta si el vínculo actual tiene días en el mes", () => {
+  const reingreso = { ...fila("pendiente", "ninguna"), fechaIngreso: "2026-06-15", vinculos: [{ ingreso: "2026-01-01", cese: "2026-03-31" }, { ingreso: "2026-06-15", cese: "" }] };
+  assert.equal(tramitesPendientesEnMes([reingreso], "202603"), 0);
+  assert.equal(tramitesPendientesEnMes([reingreso], "202606"), 1);
 });

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
-import { requiereEstudios, requiereCuenta, paisEmisorBloqueado } from "../../utils/tregistro";
+import { requiereEstudios, requiereCuenta, paisEmisorBloqueado, mensajeCorreo } from "../../utils/tregistro";
 
 const INP = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
 const GRID = "grid grid-cols-2 md:grid-cols-4 gap-3";
@@ -162,7 +162,8 @@ export default function FichaTRegistro({ form, setForm, catalogos, bloqueados })
             El país emisor solo se pide con pasaporte o documento de identidad extranjero; con los demás documentos déjalo vacío.
           </p>
           <Texto etiqueta="Teléfono móvil" valor={t.telefono} onChange={set("telefono", true)} max={9} inputMode="numeric" />
-          <Texto etiqueta="Correo electrónico" valor={t.correo} onChange={set("correo")} max={50} type="email" ancho="col-span-2" />
+          <Texto etiqueta="Correo electrónico" valor={t.correo} onChange={set("correo")} max={50} type="email" ancho="col-span-2"
+            ayuda={mensajeCorreo(t.correo) && `Aviso (no impide guardar): ${mensajeCorreo(t.correo)}`} />
         </div>
         <div className={GRID}>
           <Lista etiqueta="Tipo de vía" valor={d.tipoVia} onChange={setIn("direccion", "tipoVia")} opciones={cat.tiposVia} />

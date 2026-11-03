@@ -51,12 +51,14 @@ export const requiereEstudios = (situacionEducativa) => ESTUDIOS_SUPERIORES.test
 
 export const requiereCuenta = (tipoPago) => tipoPago === "2";
 
-const ALTA_GENERABLE = ["pendiente", "sin control"];
 const BAJA_GENERABLE = ["pendiente", "incompleta", "sin control"];
 
+// Por selección solo se genera el alta pendiente: la «sin control» se asume hecha a mano y se genera con la acción de su fila.
 export const puedeGenerar = (t, tipo) => (tipo === "alta"
-  ? ALTA_GENERABLE.includes(t?.estado?.alta)
+  ? t?.estado?.alta === "pendiente"
   : Boolean(t?.fechaCese) && BAJA_GENERABLE.includes(t?.estado?.baja));
+
+export const puedeGenerarAltaSinControl = (t) => t?.estado?.alta === "sin control" && !t.fechaCese && t.estado.baja === "ninguna";
 
 export const idsElegibles = (trabajadores, seleccion, tipo) =>
   trabajadores.filter((t) => seleccion.has(t._id) && puedeGenerar(t, tipo)).map((t) => t._id);
@@ -86,6 +88,14 @@ export const excluidosDeMarcar = (trabajadores, seleccion, tipo) => trabajadores
   .filter((t) => seleccion.has(t._id) && !puedeMarcar(t, tipo))
   .map((t) => ({ nombre: t.nombre, motivo: motivoNoMarcable(t, tipo) }));
 
+// El trámite que el usuario suele querer marcar: el alta pendiente, luego la baja pendiente, y al final el alta sin control.
+export const tipoMarcarPorDefecto = (trabajadores, seleccion) => {
+  const elegidos = trabajadores.filter((t) => seleccion.has(t._id));
+  if (elegidos.some((t) => t.estado?.alta === "pendiente")) return "alta";
+  if (elegidos.some((t) => t.estado?.baja === "pendiente" && puedeMarcar(t, "baja"))) return "baja";
+  return elegidos.some((t) => puedeMarcar(t, "alta")) ? "alta" : "baja";
+};
+
 export const esPendiente = (t) => t?.estado?.alta === "pendiente" || ["pendiente", "incompleta"].includes(t?.estado?.baja);
 
 // «Seleccionar todo» solo toma lo que tiene un trámite por hacer; las filas sin control se eligen una a una.
@@ -96,17 +106,17 @@ export const seleccionablesEnMasa = (trabajadores) =>
 export const resumenProblemas = (t) => {
   const alta = t.problemasAlta?.length ?? 0;
   const baja = t.problemasBaja?.length ?? 0;
+  if (t.estado?.alta === "anulada") return { activos: baja, atenuados: 0 };
   return t.estado?.alta === "sin control" ? { activos: baja, atenuados: alta } : { activos: alta + baja, atenuados: 0 };
 };
 
 export const bajasDeAltaSinControl = (trabajadores, ids) => trabajadores
   .filter((t) => ids.includes(t._id) && t.estado?.alta === "sin control").map((t) => t.nombre);
 
-const vinculosDe = (t) => t.vinculos ?? [{ ingreso: t.fechaIngreso, cese: t.fechaCese }];
-
+// Los trámites pendientes son del vínculo actual: los de vínculos anteriores ya están cerrados.
 const conVinculoEn = (t, periodo) => {
   const mes = `${periodo.slice(0, 4)}-${periodo.slice(4)}`;
-  return vinculosDe(t).some((v) => v.ingreso && v.ingreso <= `${mes}-31` && (!v.cese || v.cese >= `${mes}-01`));
+  return Boolean(t.fechaIngreso) && t.fechaIngreso <= `${mes}-31` && (!t.fechaCese || t.fechaCese >= `${mes}-01`);
 };
 
 export const tramitesPendientesEnMes = (trabajadores, periodo) => trabajadores.filter((t) => conVinculoEn(t, periodo))

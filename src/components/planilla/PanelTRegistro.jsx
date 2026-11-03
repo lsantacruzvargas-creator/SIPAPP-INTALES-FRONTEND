@@ -3,7 +3,7 @@ import { fetchAuth, getUsuario } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
 import {
   estadoTexto, puedeGenerar, idsElegibles, esPendiente, nombreZip, idsMarcables, excluidosDeMarcar, seleccionablesEnMasa, resumenProblemas,
-  bajasDeAltaSinControl, puedeAnularAlta,
+  bajasDeAltaSinControl, puedeAnularAlta, puedeGenerarAltaSinControl, tipoMarcarPorDefecto,
 } from "../../utils/tregistro";
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
@@ -24,7 +24,7 @@ function Chip({ estado, texto }) {
 
 function ModalMarcar({ trabajadores, marcando, onCerrar, onMarcado, onConflicto }) {
   const [form, setForm] = useState(() => ({
-    tipo: marcando.tipo ?? (idsMarcables(trabajadores, new Set(marcando.ids), "alta").length ? "alta" : "baja"),
+    tipo: marcando.tipo ?? tipoMarcarPorDefecto(trabajadores, new Set(marcando.ids)),
     fecha: fechaHoyLima(), ticket: "",
   }));
   const [error, setError] = useState("");
@@ -128,7 +128,7 @@ function ModalAnular({ anulando, onCerrar, onAnulada }) {
       <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md space-y-4">
         <h3 className="font-semibold text-gray-800">Anular el alta de {anulando.nombre}</h3>
         <p className="text-sm text-gray-600">
-          Úsalo cuando el alta no debe registrarse en SUNAT (por ejemplo, se registró dos veces). El trabajador sigue en la planilla con sus fechas de ingreso y cese.
+          Úsalo cuando el alta no debe registrarse en SUNAT (por ejemplo, el ingreso no se concretó o la ficha se creó por error). El trabajador sigue en la planilla con sus fechas de ingreso y cese.
         </p>
         <label className="text-xs text-gray-500 block">Motivo de la anulación
           <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={120} rows={3} className={`${INP} w-full`} />
@@ -298,6 +298,9 @@ export default function PanelTRegistro({ puedeEscribir }) {
             {tipos.length === 1 ? "Ya registrado en SUNAT" : `${TIPOS[tipo]}: ya registrado en SUNAT`}
           </button>
         ))}
+        {puedeEscribir && puedeGenerarAltaSinControl(t) && (
+          <button onClick={() => descargar("alta", [t._id])} disabled={Boolean(descargando)} className="block text-xs text-purple-600 hover:underline whitespace-nowrap ml-auto disabled:opacity-50">Generar alta</button>
+        )}
         {puedeAnularAlta(rol, t) && (
           <button onClick={() => setAnulando(t)} className="block text-xs text-red-600 hover:underline whitespace-nowrap ml-auto">Anular alta</button>
         )}
