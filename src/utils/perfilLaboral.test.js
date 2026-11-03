@@ -58,3 +58,18 @@ test("cambiaSctrRegistrado: solo si la casilla SCTR cambió y el alta ya está r
   assert.equal(cambiaSctrRegistrado(guardado(false, "anulada"), form(true)), false);
   assert.equal(cambiaSctrRegistrado({ estado: { alta: "registrada" } }, form(false)), false);
 });
+
+test("cambiaSctrRegistrado: con la baja registrada el servidor no crea modificación", () => {
+  const form = { aportes: { senati: false, sctr: true } };
+  const guardado = (alta, baja) => ({ aportes: { senati: false, sctr: false }, estado: { alta, baja } });
+  assert.equal(cambiaSctrRegistrado(guardado("registrada", "registrada"), form), false);
+  assert.equal(cambiaSctrRegistrado(guardado("sin control", "registrada"), form), false);
+  assert.equal(cambiaSctrRegistrado(guardado("registrada", "pendiente"), form), true);
+  assert.equal(cambiaSctrRegistrado(guardado("registrada", "ninguna"), form), true);
+});
+
+test("aplicarPrecarga: sin perfil (aún no cargó) no falla y usa la categoría sola", () => {
+  const form = { tregistro: { categoriaOcupacional: "01" }, aportes: { senati: false, sctr: false } };
+  assert.deepEqual(aplicarPrecarga(form, {}, null).aportes, { senati: true, sctr: true });
+  assert.deepEqual(aplicarPrecarga(form, undefined, undefined).aportes, { senati: true, sctr: true });
+});

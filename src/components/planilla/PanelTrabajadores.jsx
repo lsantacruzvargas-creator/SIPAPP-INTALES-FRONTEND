@@ -7,12 +7,14 @@ import AvisoAccion from "../AvisoAccion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
 import FichaTRegistro from "./FichaTRegistro";
 import { TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear, puedeNuevoVinculo, lineaEdicion } from "../../utils/tregistro";
+import { aplicarPrecarga, cambiaSctrRegistrado } from "../../utils/perfilLaboral";
+import { fechaHoyLima } from "../../utils/fecha";
 
 const INP = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
 const textoTramite = (estado) => {
   if (!estado) return null;
   const { alta, baja } = estadoTexto(estado);
-  return <>Alta: {alta}{estado.baja !== "ninguna" && <span className="block">Baja: {baja}</span>}</>;
+  return <>Alta: {alta}{estado.baja !== "ninguna" && <span className="block">Baja: {baja}</span>}{estado.sctr === "pendiente" && <span className="block text-amber-700">SCTR pendiente</span>}</>;
 };
 const fecha = (iso) => (iso ? iso.split("-").reverse().join("/") : "");
 
@@ -77,8 +79,13 @@ function ModalNuevoVinculo({ trabajador, onCerrar, onAbierto }) {
   );
 }
 
-function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClose, onGuardado }) {
-  const [form, setForm] = useState(() => (trabajador ? formularioDeTrabajador(trabajador) : { ...TRABAJADOR_VACIO, tregistro: TREGISTRO_VACIO(catalogos.tregistroConfig) }));
+function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, editable, onClose, onGuardado }) {
+  const [form, setForm] = useState(() => {
+    const base = trabajador ? formularioDeTrabajador(trabajador) : { ...TRABAJADOR_VACIO, tregistro: TREGISTRO_VACIO(catalogos.tregistroConfig) };
+    return { ...base, aportes: { senati: base.aportes?.senati === true, sctr: base.aportes?.sctr === true }, vidaLeyPrima: base.vidaLeyPrima == null ? "" : String(base.vidaLeyPrima) };
+  });
+  const [tocados, setTocados] = useState({});
+  const [sctrFecha, setSctrFecha] = useState(fechaHoyLima);
   const [error, setError] = useState("");
   const [confirmaDesbloqueo, setConfirmaDesbloqueo] = useState(false);
   const [nuevoVinculo, setNuevoVinculo] = useState(false);
@@ -95,16 +102,30 @@ function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClos
   const abierto = form.desbloqueo === true;
   const ediciones = trabajador?.tregistro?.ediciones ?? [];
   const vinculosAnteriores = trabajador?.tregistro?.vinculosAnteriores ?? [];
+  // En la ficha nueva las casillas siguen a la categoría ocupacional hasta que el usuario toca alguna.
+  const ficha = trabajador ? form : aplicarPrecarga(form, tocados, perfil);
+  const riesgo = perfil?.sctr?.actividadRiesgo === true;
+  const muestraSenati = perfil?.senati?.aporta === true || perfil?.actividadIndustrial === true;
+  const cambiaSctr = Boolean(trabajador) && riesgo && cambiaSctrRegistrado({ ...trabajador, estado }, ficha);
+  const setAporte = (k) => (e) => {
+    const marcada = e.target.checked;
+    setTocados((t) => ({ ...t, [k]: true }));
+    setForm((f) => ({ ...f, aportes: { ...f.aportes, [k]: marcada } }));
+  };
   const sinDocumento = bloqueados.documento && !abierto, sinIngreso = bloqueados.ingreso && !abierto, sinCese = bloqueados.cese && !abierto;
 
   const guardar = async () => {
     const falta = validarTrabajador(form);
     if (falta) return setError(falta);
+    const prima = String(form.vidaLeyPrima).trim();
+    if (prima !== "" && !(Number(prima) >= 0)) return setError("La prima de vida ley debe ser un monto de 0 o más.");
+    if (cambiaSctr && (!sctrFecha || sctrFecha > fechaHoyLima())) return setError("Indica la fecha del cambio de SCTR en SUNAT (no puede ser futura).");
     setGuardando(true);
     setError("");
     try {
       const r = await fetchAuth(trabajador ? `/planilla/trabajadores/${trabajador._id}` : "/planilla/trabajadores", {
-        method: trabajador ? "PUT" : "POST", body: JSON.stringify(cuerpoDeTrabajador(form)),
+        method: trabajador ? "PUT" : "POST",
+        body: JSON.stringify({ ...cuerpoDeTrabajador(form), aportes: ficha.aportes, vidaLeyPrima: prima === "" ? null : Number(prima), ...(cambiaSctr && { sctrFecha }) }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) return setError(d.mensaje || "No se pudo guardar el trabajador.");
@@ -260,6 +281,31 @@ function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClos
             <button type="button" onClick={() => agregar("quintaAnterior", { mes: "", ingresos: "", retencion: "" })} className="text-xs text-purple-600 hover:underline">+ Mes anterior</button>
           </div>
 
+          <div className="space-y-2">
+            <h4 className="text-xs font-bold text-gray-600 uppercase">Aportes del empleador</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+              {muestraSenati && (
+                <label className="text-sm text-gray-700 flex items-center gap-2">
+                  <input type="checkbox" checked={ficha.aportes.senati} onChange={setAporte("senati")} />Aporta a SENATI
+                </label>
+              )}
+              {riesgo && (
+                <label className="text-sm text-gray-700 flex items-center gap-2">
+                  <input type="checkbox" checked={ficha.aportes.sctr} onChange={setAporte("sctr")} />Expuesto a riesgo (SCTR)
+                </label>
+              )}
+              <label className="text-xs text-gray-500">Prima de vida ley propia (opcional)
+                <input value={form.vidaLeyPrima} onChange={set("vidaLeyPrima")} placeholder="S/ al mes" inputMode="decimal" className={`${INP} text-right`} />
+              </label>
+              {cambiaSctr && (
+                <label className="text-xs text-gray-500">Fecha del cambio en SUNAT
+                  <input type="date" value={sctrFecha} max={fechaHoyLima()} onChange={(e) => setSctrFecha(e.target.value)} className={INP} />
+                </label>
+              )}
+            </div>
+            {cambiaSctr && <p className="text-[11px] text-gray-400">El cambio de SCTR queda como modificación pendiente en T-Registro con esta fecha.</p>}
+          </div>
+
           <FichaTRegistro form={form} setForm={setForm} catalogos={catalogos} bloqueados={bloqueados} />
         </fieldset>
         {error && <p className="text-sm text-red-600">{error}</p>}
@@ -285,15 +331,17 @@ function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClos
 export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscribir }) {
   const [lista, setLista] = useState([]);
   const [estados, setEstados] = useState({});
+  const [perfil, setPerfil] = useState(null);
   const [modal, setModal] = useState(null); // { trabajador? }
   const [aviso, setAviso] = useState("");
   const [verCesados, setVerCesados] = useState(false);
 
-  const cargar = useCallback(() => Promise.all([fetchAuth("/planilla/trabajadores"), fetchAuth("/planilla/tregistro/trabajadores")]).then(async ([r, rt]) => {
+  const cargar = useCallback(() => Promise.all([fetchAuth("/planilla/trabajadores"), fetchAuth("/planilla/tregistro/trabajadores"), fetchAuth("/planilla/perfil")]).then(async ([r, rt, rp]) => {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) return setAviso(d.mensaje || "No se pudieron cargar los trabajadores.");
     const tramites = await rt.json().catch(() => []);
     setLista(d);
+    setPerfil(rp.ok ? (await rp.json().catch(() => ({}))).perfil ?? null : null);
     setEstados(rt.ok && Array.isArray(tramites) ? Object.fromEntries(tramites.map((x) => [x._id, x.estado])) : {});
   }).catch(() => setAviso("Error de conexión con el servidor.")), []);
   useEffect(() => { cargar(); }, [cargar]);
@@ -337,7 +385,7 @@ export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscrib
         </table>
       </TablaScroll>
       {modal && (
-        <ModalTrabajador trabajador={modal.trabajador} catalogos={catalogos} centrosCosto={centrosCosto} editable={puedeEscribir}
+        <ModalTrabajador trabajador={modal.trabajador} estado={estados[modal.trabajador?._id]} perfil={perfil} catalogos={catalogos} centrosCosto={centrosCosto} editable={puedeEscribir}
           onClose={() => setModal(null)} onGuardado={() => { setModal(null); cargar(); }} />
       )}
       {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}

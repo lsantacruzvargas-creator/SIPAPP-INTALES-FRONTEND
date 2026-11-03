@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchAuth, getUsuario } from "../../utils/fetchAuth";
 import { fechaHoyLima } from "../../utils/fecha";
 import {
-  estadoTexto, puedeGenerar, idsElegibles, esPendiente, nombreZip, idsMarcables, excluidosDeMarcar, seleccionablesEnMasa, resumenProblemas,
-  bajasDeAltaSinControl, puedeAnularAlta, puedeGenerarAltaSinControl, tipoMarcarPorDefecto,
+  estadoTexto, idsElegibles, esPendiente, nombreZip, idsMarcables, excluidosDeMarcar, seleccionablesEnMasa, resumenProblemas,
+  bajasDeAltaSinControl, puedeAnularAlta, puedeGenerarAltaSinControl, tipoMarcarPorDefecto, puedeElegir, puedeSctr, sinControlSeleccionables, idsSctr,
 } from "../../utils/tregistro";
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
@@ -14,8 +14,13 @@ const CHIP = {
   registrada: "bg-green-100 text-green-700", pendiente: "bg-amber-100 text-amber-700",
   incompleta: "bg-orange-100 text-orange-700", "sin control": "bg-gray-100 text-gray-600", anulada: "bg-red-100 text-red-700",
 };
-const TIPOS = { alta: "Alta", baja: "Baja" };
+const TIPOS = { alta: "Alta", baja: "Baja", sctr: "Modificación SCTR" };
 const fecha = (iso) => (iso ? iso.split("-").reverse().join("/") : "—");
+const motivoSinSctr = (t) => {
+  if (t.estado?.sctr !== "pendiente") return "no tiene una modificación de SCTR pendiente";
+  return t.estado.alta === "pendiente" ? "su alta sigue pendiente: el SCTR va en el archivo de alta" : "la baja ya está registrada";
+};
+const textoSctr = ({ antes, despues } = {}) => (!antes ? "alta de cobertura" : !despues ? "baja de cobertura" : "cambio de cobertura");
 const lineaProblema = (p) => `${p.codigo} — ${p.mensaje}${p.campo ? ` (${p.campo})` : ""}`;
 
 function Chip({ estado, texto }) {
@@ -23,16 +28,20 @@ function Chip({ estado, texto }) {
 }
 
 function ModalMarcar({ trabajadores, marcando, onCerrar, onMarcado, onConflicto }) {
-  const [form, setForm] = useState(() => ({
-    tipo: marcando.tipo ?? tipoMarcarPorDefecto(trabajadores, new Set(marcando.ids)),
-    fecha: fechaHoyLima(), ticket: "",
-  }));
+  const [form, setForm] = useState(() => {
+    const elegidos = new Set(marcando.ids);
+    const soloSctr = !idsMarcables(trabajadores, elegidos, "alta").length && !idsMarcables(trabajadores, elegidos, "baja").length && idsSctr(trabajadores, elegidos).length > 0;
+    return { tipo: marcando.tipo ?? (soloSctr ? "sctr" : tipoMarcarPorDefecto(trabajadores, elegidos)), fecha: fechaHoyLima(), ticket: "" };
+  });
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
   const elegidos = new Set(marcando.ids);
-  const ids = idsMarcables(trabajadores, elegidos, form.tipo);
-  const excluidos = excluidosDeMarcar(trabajadores, elegidos, form.tipo);
+  const esSctr = form.tipo === "sctr";
+  const ids = esSctr ? idsSctr(trabajadores, elegidos) : idsMarcables(trabajadores, elegidos, form.tipo);
+  const excluidos = esSctr
+    ? trabajadores.filter((t) => elegidos.has(t._id) && !puedeSctr(t)).map((t) => ({ nombre: t.nombre, motivo: motivoSinSctr(t) }))
+    : excluidosDeMarcar(trabajadores, elegidos, form.tipo);
 
   const confirmar = async () => {
     if (!form.fecha) return setError("Indica la fecha de registro.");
@@ -67,6 +76,7 @@ function ModalMarcar({ trabajadores, marcando, onCerrar, onMarcado, onConflicto 
             <select name="tipo" value={form.tipo} onChange={handleChange} className={`${INP} w-full`}>
               <option value="alta">Alta (inscripción)</option>
               <option value="baja">Baja (cese)</option>
+              <option value="sctr">Modificación SCTR</option>
             </select>
           </label>
         )}
@@ -79,8 +89,8 @@ function ModalMarcar({ trabajadores, marcando, onCerrar, onMarcado, onConflicto 
         {!marcando.tipo && (
           <p className="text-xs text-gray-500">
             {ids.length
-              ? `${ids.length} trabajador(es) de los seleccionados se marcarán con ${form.tipo === "alta" ? "el alta" : "la baja"} registrada.`
-              : `Ninguno de los seleccionados tiene ${form.tipo === "alta" ? "un alta" : "una baja"} por registrar.`}
+              ? `${ids.length} trabajador(es) de los seleccionados se marcarán con ${{ alta: "el alta", baja: "la baja", sctr: "la modificación de SCTR" }[form.tipo]} registrada.`
+              : `Ninguno de los seleccionados tiene ${{ alta: "un alta", baja: "una baja", sctr: "una modificación de SCTR" }[form.tipo]} por registrar.`}
           </p>
         )}
         {!marcando.tipo && excluidos.length > 0 && (
@@ -248,7 +258,9 @@ export default function PanelTRegistro({ puedeEscribir }) {
   const idsAlta = idsElegibles(visibles, seleccion, "alta");
   const idsBaja = idsElegibles(visibles, seleccion, "baja");
   const sinAltaPropia = bajasDeAltaSinControl(visibles, idsBaja);
-  const hayMarcables = idsMarcables(visibles, seleccion, "alta").length > 0 || idsMarcables(visibles, seleccion, "baja").length > 0;
+  const idsModificacionSctr = idsSctr(visibles, seleccion);
+  const hayMarcables = idsMarcables(visibles, seleccion, "alta").length > 0 || idsMarcables(visibles, seleccion, "baja").length > 0 || idsModificacionSctr.length > 0;
+  const sinControl = sinControlSeleccionables(visibles);
   const rol = getUsuario()?.rol;
 
   const alternar = (id) => setSeleccion((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -257,6 +269,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
     for (const t of elegibles) { if (todosElegidos) n.delete(t._id); else n.add(t._id); }
     return n;
   });
+  const agregarSinControl = () => setSeleccion((s) => new Set([...s, ...sinControl.map((t) => t._id)]));
   const alternarProblemas = (id) => setAbiertos((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   const descargar = async (tipo, ids) => {
@@ -308,7 +321,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
     );
   };
 
-  const columnas = puedeEscribir ? 8 : 6;
+  const columnas = puedeEscribir ? 9 : 7;
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">
@@ -330,6 +343,12 @@ export default function PanelTRegistro({ puedeEscribir }) {
             </button>
             <button onClick={() => descargar("baja", idsBaja)} disabled={!idsBaja.length || Boolean(descargando)} className={BOTON}>
               {descargando === "baja" ? "Generando…" : `Descargar bajas (${idsBaja.length})`}
+            </button>
+            <button onClick={() => descargar("sctr", idsModificacionSctr)} disabled={!idsModificacionSctr.length || Boolean(descargando)} className={BOTON}>
+              {descargando === "sctr" ? "Generando…" : `Descargar modificaciones SCTR (${idsModificacionSctr.length})`}
+            </button>
+            <button onClick={agregarSinControl} disabled={!sinControl.length} className={BOTON} title="Agrega a la selección las altas que se asumen hechas a mano en SUNAT, para marcarlas como registradas en lote">
+              Seleccionar sin control ({sinControl.length})
             </button>
             <button onClick={() => setMarcando({ ids: seleccionVisible })} disabled={!hayMarcables}
               className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
@@ -355,7 +374,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
                 </th>
               )}
               <th className="py-2 pr-3">Trabajador</th><th className="py-2 pr-3">Ingreso</th><th className="py-2 pr-3">Cese</th>
-              <th className="py-2 pr-3">Alta</th><th className="py-2 pr-3">Baja</th><th className="py-2 pr-3">Problemas</th>
+              <th className="py-2 pr-3">Alta</th><th className="py-2 pr-3">Baja</th><th className="py-2 pr-3">SCTR</th><th className="py-2 pr-3">Problemas</th>
               {puedeEscribir && <th className="py-2" />}
             </tr>
           </thead>
@@ -369,7 +388,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
                   {puedeEscribir && (
                     <td className="py-1.5 pr-3">
                       <input type="checkbox" checked={seleccion.has(t._id)} onChange={() => alternar(t._id)}
-                        disabled={!puedeGenerar(t, "alta") && !puedeGenerar(t, "baja")} aria-label={`Elegir a ${t.nombre}`} />
+                        disabled={!puedeElegir(t)} aria-label={`Elegir a ${t.nombre}`} />
                     </td>
                   )}
                   <td className="py-1.5 pr-3">{t.nombre}<span className="block text-xs text-gray-400">{t.numDoc}</span></td>
@@ -377,6 +396,15 @@ export default function PanelTRegistro({ puedeEscribir }) {
                   <td className="py-1.5 pr-3 tabular-nums">{fecha(t.fechaCese)}</td>
                   <td className="py-1.5 pr-3"><Chip estado={t.estado.alta} texto={texto.alta} /></td>
                   <td className="py-1.5 pr-3">{t.estado.baja === "ninguna" ? <span className="text-gray-300">—</span> : <Chip estado={t.estado.baja} texto={texto.baja} />}</td>
+                  <td className="py-1.5 pr-3">
+                    {t.estado.sctr === "pendiente" ? (
+                      <>
+                        <Chip estado="pendiente" texto="SCTR pendiente" />
+                        {t.sctr && <span className="block text-xs text-gray-400">{textoSctr(t.sctr)} · {fecha(t.sctr.fecha)}</span>}
+                        {!puedeSctr(t) && <span className="block text-xs text-gray-400">{motivoSinSctr(t)}</span>}
+                      </>
+                    ) : <span className="text-gray-300">—</span>}
+                  </td>
                   <td className="py-1.5 pr-3 min-w-56">
                     {activos + atenuados === 0 ? <span className="text-xs text-gray-300">—</span> : (
                       <>

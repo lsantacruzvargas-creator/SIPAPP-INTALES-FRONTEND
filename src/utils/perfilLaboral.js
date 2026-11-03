@@ -22,15 +22,16 @@ export const precargaAportes = (categoriaOcupacional, { actividadIndustrial } = 
 
 // `tocados` dice qué casillas ya eligió el usuario en esta ficha: esas se respetan.
 export const aplicarPrecarga = (form, tocados, perfil) => {
-  const precarga = precargaAportes(form.tregistro?.categoriaOcupacional, perfil);
+  const precarga = precargaAportes(form.tregistro?.categoriaOcupacional, perfil ?? {});
   const aportes = { ...form.aportes };
   for (const k of ["senati", "sctr"]) if (!tocados?.[k]) aportes[k] = precarga[k];
   return { ...form, aportes };
 };
 
-// Cambiar la casilla SCTR de un trabajador ya dado de alta en SUNAT genera una modificación en T-Registro.
+// Cambiar la casilla SCTR de un trabajador ya dado de alta en SUNAT genera una modificación en T-Registro; con la baja
+// registrada el servidor no crea ninguna.
 export const cambiaSctrRegistrado = (trabajadorGuardado, form) => {
   if (Boolean(trabajadorGuardado?.aportes?.sctr) === Boolean(form?.aportes?.sctr)) return false;
-  const alta = trabajadorGuardado?.estado?.alta;
-  return !alta || alta === "registrada" || alta === "sin control";
+  const { alta, baja } = trabajadorGuardado?.estado ?? {};
+  return baja !== "registrada" && (!alta || alta === "registrada" || alta === "sin control");
 };
