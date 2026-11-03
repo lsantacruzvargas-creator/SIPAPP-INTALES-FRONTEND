@@ -28,7 +28,7 @@ function ModalTrabajador({ trabajador, catalogos, centrosCosto, editable, onClos
   const agregar = (campo, vacia) => setForm((f) => ({ ...f, [campo]: [...f[campo], vacia] }));
   const fijos = catalogos.conceptos.filter((c) => c.tipo === "ingreso");
   const rol = getUsuario()?.rol;
-  const bloqueados = camposBloqueados(trabajador, rol);
+  const bloqueados = camposBloqueados(trabajador);
   const hayBloqueo = bloqueados.documento || bloqueados.ingreso || bloqueados.cese;
   const abierto = form.desbloqueo === true;
   const sinDocumento = bloqueados.documento && !abierto, sinIngreso = bloqueados.ingreso && !abierto, sinCese = bloqueados.cese && !abierto;

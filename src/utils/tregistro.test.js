@@ -20,11 +20,11 @@ test("solo el contador puede desbloquear datos ya registrados", () => {
 
 test("campos bloqueados por alta o baja registrada", () => {
   const ficha = (alta, baja) => ({ tregistro: { alta: { estado: alta }, baja: { estado: baja } } });
-  assert.deepEqual(camposBloqueados(ficha("registrada"), "admin"), { documento: true, ingreso: true, cese: false });
-  assert.deepEqual(camposBloqueados(ficha("pendiente", "registrada"), "admin"), { documento: false, ingreso: false, cese: true });
-  assert.deepEqual(camposBloqueados(ficha("registrada", "registrada"), "contador"), { documento: true, ingreso: true, cese: true });
-  assert.deepEqual(camposBloqueados({}, "admin"), { documento: false, ingreso: false, cese: false });
-  assert.deepEqual(camposBloqueados({ tregistro: {} }, "admin"), { documento: false, ingreso: false, cese: false });
+  assert.deepEqual(camposBloqueados(ficha("registrada")), { documento: true, ingreso: true, cese: false });
+  assert.deepEqual(camposBloqueados(ficha("pendiente", "registrada")), { documento: false, ingreso: false, cese: true });
+  assert.deepEqual(camposBloqueados(ficha("registrada", "registrada")), { documento: true, ingreso: true, cese: true });
+  assert.deepEqual(camposBloqueados({}), { documento: false, ingreso: false, cese: false });
+  assert.deepEqual(camposBloqueados({ tregistro: {} }), { documento: false, ingreso: false, cese: false });
 });
 
 test("textos de estado del trámite", () => {

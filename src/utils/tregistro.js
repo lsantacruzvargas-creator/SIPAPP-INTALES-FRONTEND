@@ -23,7 +23,7 @@ const TEXTO_BAJA = { ninguna: "ninguna", "sin control": "sin control", pendiente
 
 export const estadoTexto = (estado) => ({ alta: TEXTO_ALTA[estado?.alta] ?? "", baja: TEXTO_BAJA[estado?.baja] ?? "" });
 
-export const camposBloqueados = (t, _rol) => {
+export const camposBloqueados = (t) => {
   const altaRegistrada = t?.tregistro?.alta?.estado === "registrada";
   return { documento: altaRegistrada, ingreso: altaRegistrada, cese: t?.tregistro?.baja?.estado === "registrada" };
 };
