@@ -224,7 +224,7 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   Probado en el navegador (alta de trabajador, parámetros, generar, editar boleta, PDF, cerrar y descarga del `.rem`).
 - **Pendiente**: (1) importar los archivos en el PDT PLAME real — no se ha probado contra el validador de SUNAT;
   (2) gratificaciones, CTS, vacaciones truncas y liquidación (hoy la gratificación se digita como concepto 0406 + 0312);
-  (3) provisiones mensuales de beneficios en el asiento; (4) T-Registro: la carga masiva de altas y bajas ya está hecha (entrega de abajo, 2026-11-02); quedan la modificación de datos ya registrados, practicantes, prestadores de servicios y derechohabientes; (5) SCTR, SENATI y vida ley;
+  (3) provisiones mensuales de beneficios en el asiento; (4) T-Registro: la carga masiva de altas y bajas ya está hecha (entrega de abajo, 2026-11-02); quedan la modificación de datos ya registrados (la de SCTR ya está, ver «Perfil laboral»), practicantes, prestadores de servicios y derechohabientes; (5) SCTR, SENATI y vida ley: hecho el 2026-11-03, ver «Perfil laboral del empleador» más abajo;
   (6) rentas de 5.ª de otros empleadores (`.or5`) y recálculo de la 5.ª al cese (art. 41); (7) subsidios de EsSalud
   (0915/0916) y prima AFP de mayores de 65; (8) confirmar con el contador lo marcado [Confirmar] en `utils/planilla.js`.
 - **Pendiente (2026-11-02, decisión del usuario)**: llevar el módulo de planilla a la rama `conta-percepcion` (hoy vive solo en `contabilidadoficial`). Se hace después.
@@ -252,8 +252,8 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   `tregistro.vinculosAnteriores`; la ficha queda con el nuevo ingreso, sin cese, alta `pendiente` y sin baja, y se anota «nuevo vínculo»
   en `tregistro.ediciones`. El vínculo anterior debe tener fecha de cese (con el alta anulada el cese se puede editar):
   sin ella responde 409 «registra primero la fecha de cese del vínculo anterior»; con la baja «sin control» pide marcarla primero como
-  registrada. El nuevo ingreso debe ser posterior a ese cese. Si el mes del nuevo ingreso ya tiene la planilla cerrada, la respuesta trae un
-  aviso (`avisos`) que el modal muestra: reabre la planilla si debe incluir el reingreso. Un DNI repetido al crear una ficha orienta a usar
+  registrada. El nuevo ingreso debe ser posterior a ese cese. Si alguna planilla desde el mes del nuevo ingreso ya está cerrada, la respuesta trae un
+  aviso (`avisos`) que las lista todas («Las planillas de 09/2026, 11/2026 ya están cerradas…») y que el modal muestra: reabre las que deban incluir el reingreso. Un DNI repetido al crear una ficha orienta a usar
   «Nuevo vínculo». La planilla suma los días de todos los vínculos con días en el mes
   (`diasDeVinculos`: si los vínculos cubren todos los días calendario del mes son 30; la boleta guarda en `datos.vinculos` los del mes y en `fechaIngreso`/`fechaCese` los del último), así que los meses del
   vínculo anterior se siguen generando y los del intervalo no tienen boleta. Solo la gratificación y la 5.ª usan las fechas del último
@@ -281,7 +281,7 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   La nacionalidad no se exige en la baja porque el `.per` no la lleva. **Confirmar en el PVS**: la situación especial
   (ETR21.1) acepta el catálogo completo (Tabla 35, 0–8) pero el manual solo menciona 0, 1 y 2; si el PVS rechaza el teletrabajo (3–8),
   restringir la lista a 0, 1 y 2 (la corrección del error ya lo orienta); y que el PVS acepte un alta sin dirección con DNI.
-  (2) modificación de datos ya registrados en T-Registro (fuera de alcance). (3) SCTR pensión configurable.
+  (2) modificación de datos ya registrados en T-Registro: solo la de SCTR está hecha (entrega «Perfil laboral»); el resto sigue fuera de alcance. (3) SCTR pensión configurable: hecho (ONP o compañía privada en el perfil).
   (4) practicantes, prestadores de servicios y derechohabientes. (5) llevar la planilla y el T-Registro a `conta-percepcion`
   (ya anotado arriba).
   (6) Menores diferidos de las revisiones: `existe("constructor", …)` lanza TypeError (usar `Object.hasOwn`); offsets
@@ -313,11 +313,56 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   concurrencia en el PUT bloqueado. El reingreso ya se resuelve con «Nuevo vínculo» (el alta nueva del PVS exige cerrar el
   período anterior: CIP1.6); un reingreso con el alta anulada del vínculo previo no se ha probado en el PVS.
   (7 bis) Sin hacer del reingreso: la gratificación y la 5.ª de un mes con dos vínculos usan solo el último. Un alta «sin control» no
-  entra a «Descargar altas» por selección (ni masiva ni a mano): se genera con «Generar alta» en su fila, y solo si la fila no tiene cese
-  ni trámite de baja; el modal «Marcar» parte del trámite pendiente de lo elegido. El correo estricto del manual es solo un aviso en la
+  entra a «Descargar altas» (se genera con «Generar alta» en su fila, y solo si la fila no tiene cese ni trámite de baja), pero desde el
+  2026-11-03 el botón «Seleccionar sin control» las agrega a la selección para «Marcar como registrados» en lote; el modal «Marcar» parte
+  del trámite pendiente de lo elegido. El correo estricto del manual es solo un aviso en la
   ficha: no impide guardar y el validador lo reporta al generar el alta.
   (8) `contaConcar` (`SIPAPP-INTALES-venta-compra-contaConcar`) es el único otro proyecto con módulo de planilla y no tiene
-  T-Registro: pendiente, lo decide el usuario (no se tocó ese proyecto).
+  T-Registro ni perfil laboral: pendiente, lo decide el usuario (no se tocó su código; solo se anotó el pendiente en su ESTADO).
+
+**Perfil laboral del empleador (SENATI, SCTR, vida ley) (2026-11-03, rama `contabilidadoficial`):**
+- **Qué hace**: el ERP se instala una vez por empresa y lo que cambia de una a otra se elige en **Planilla → «Perfil laboral»**
+  (admin y contador; `Configuracion.perfilLaboral`, rutas `GET/PUT /api/planilla/perfil`): régimen laboral (sale de Tesorería →
+  Configuración), REMYPE, CIIU y actividad industrial, SENATI, SCTR y vida ley, con historial de cambios. Dos casillas por
+  trabajador (`aportes.senati`, `aportes.sctr`; precarga por categoría: obrero marcado, empleado y ejecutivo no) y `vidaLeyPrima` opcional.
+  La planilla del mes guarda una foto del perfil con que se calculó.
+- **SENATI**: 0,75 % (Ley 26272) sobre las remuneraciones de los trabajadores marcados, solo si la empresa tuvo más de 20 en el año
+  anterior; se paga mensual al SENATI. Evaluación anual al generar la primera planilla del año (con 12 meses de datos se aplica sola; con menos,
+  avisa para que el contador confirme). Concepto 0807 en la boleta, el `.rem` y el asiento (gasto 6277 contra 4033).
+- **SCTR**: salud (EsSalud 0806 o EPS 0810) y pensión (ONP 0813 o compañía privada 0805) con las tasas del perfil. El 0806 lo calcula el
+  PLAME con el archivo nuevo **`.tas`** (estructura 25); el `.rem` no lo lleva. T-Registro: columna 9 del `.tra` y período tipo 5 del
+  `.per` en el alta, y trámite de **modificación SCTR** para trabajadores ya registrados (pestaña T-Registro: «Descargar modificaciones
+  SCTR» y «Marcar como registrados»; fecha del cambio digitada con los límites del PVS, +30 días al iniciar y +5 al cerrar; validaciones ETR17.9, ETR17.12 y categoría ocupacional).
+- **Vida ley**: obligatoria desde el primer día en todo régimen; la prima por trabajador (tasa o monto de la póliza, o la prima propia
+  de la ficha) va en el 0803 de la boleta y del `.rem`. No genera asiento: el gasto entra con la factura de la aseguradora por Compras (6274).
+  Al asiento de planilla solo entran 0807, 0806 y 0813; 0803, 0805 y 0810 son informativos.
+- **Avisos en pantalla**: perfil o SENATI cambiado («los archivos del T-Registro y del PLAME se generarán con estos cambios»), póliza vencida
+  o por vencer, actividad de riesgo sin marcados, SENATI por confirmar y modificaciones SCTR pendientes.
+- **Detalles A y B del T-Registro** (hechos aquí): el reingreso avisa de todas las planillas cerradas desde su mes; «Seleccionar sin control»
+  marca altas sin control en lote. Marcar la baja descarta la modificación SCTR pendiente.
+- **Commits**: Backend `6bdfa7a..7d32fad` (sin `977ddf1`, que es otro cambio); Frontend `6ec03426..671627fd` (sin `6f55df5b`).
+  Spec `docs/superpowers/specs/2026-11-03-perfil-laboral-design.md`, plan `docs/superpowers/plans/2026-11-03-perfil-laboral.md`.
+  Tests: Backend `perfilLaboral.test.js`, `planillaPerfil.test.js` y ampliados `planilla.test.js` y `tregistro*.test.js`; Frontend
+  `utils/perfilLaboral.test.js` y `utils/tregistro.test.js`. Sin prueba manual en el navegador de las pantallas nuevas.
+- **Nota de despliegue**: en instalaciones existentes correr `node src/scripts/seedPcge.js` (crea 4033, 6273, 6274 y 6277). `PUT /api/configuracion`
+  ya no acepta `regimenLaboral` (responde 400; se edita en Planilla → Perfil laboral). Confirmar con el contador 4033 y 6277 contra el PCGE 2019 del MEF.
+  Los trabajadores existentes quedan con las dos casillas en `false` (la planilla sale igual que antes hasta que se marquen).
+- **[Probar en PDT]** el `.rem` ahora importa los aportes del empleador 0803, 0805, 0807, 0810 y 0813 (antes no importaba ninguno) y se genera
+  el `.tas` (E25). Si el PDT rechaza o duplica alguno, agregarlo a `NO_IMPORTAR` en `utils/plame.js`.
+- **[Probar en PVS]** archivos de modificación SCTR: `.tra` con solo la columna 9; cambio solo de pensión sin `.per`; **ETR17.21** (baja de
+  cobertura con período activo: la UI avisa que, si el PVS la rechaza, se hace en T-Registro en línea y luego se marca) y **ETR17.3** (columna 9 = «0»).
+- **Siguiente entrega (diseñada, sin construir)**: archivo de texto para **AFPnet** (ancho fijo, 141 caracteres por línea) y **boletas en masa**
+  (un `.zip` con un PDF por trabajador llamado «DNI NOMBRE» y un PDF único; descargables como BORRADOR con la planilla abierta). Reglas acordadas:
+  sin CPP; «U» (excepción de aportar) solo en los días 21/22 con `bases.afp` = 0 y en blanco en los demás casos (contador, 2026-11-03); tipo de
+  trabajo N. Borrador del diseño: `docs/superpowers/specs/2026-11-03-afpnet-boletas-borrador.md`. Incluye el pendiente «imprimir boletas en masa» de arriba.
+- **Pendiente de seguridad (CPE, preexistente, a la espera del OK del usuario)**: la `serie` del propio comprobante no se valida en el backend antes de
+  interpolarse en el XML firmado (`emitirFacturaBoleta` en `comprobante.controller.js`). Arreglo: la misma regla del formulario, `/^[A-Z0-9]{4}$/`.
+- **Prueba inestable ajena**: `test/bancos.test.js` «carrera: un movimiento y el cierre…» falla a veces por `0` contra `-0`; pasa al re-ejecutar.
+- **Menores diferidos que se conservan**: tasa de vida ley con 4 decimales (hoy se redondea a 2 sin avisar); `tramitesPendientesEnMes` (aviso de
+  `PanelPlanillaMes`) no cuenta las modificaciones SCTR pendientes; la primera generación de una planilla de un año anterior, sin foto guardada, tras
+  avanzar `senati.anio` toma `senati = false`; `fusionarModificacionSctr` conserva solo la última fecha (un alta en X más un cambio de entidad en Y antes
+  de registrar pierde la cobertura X..Y−1); activar SCTR con un marcado registrado cuyo ingreso es posterior a `sctrFecha` da 400 (podría usarse el
+  máximo con el ingreso); la baja borra la pendiente SCTR sin dejar traza en `tregistro.ediciones`; falta un test de la omisión de `senati` en el `$set` del PUT.
 
 **Asientos automáticos editables (2026-10-05, decisión del usuario: el automático es la base y se completa a mano):**
 - `PUT /api/contabilidad/asientos/:id` edita también los automáticos, en borrador o contabilizados (admin y contador). No
