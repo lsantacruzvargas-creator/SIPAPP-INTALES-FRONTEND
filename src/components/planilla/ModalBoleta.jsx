@@ -4,6 +4,7 @@ import { money } from "../../utils/compras";
 import { TIPOS_CONCEPTO, textoPension } from "../../utils/planilla";
 import { generarBoletaPdf } from "../../utils/boletaPdf";
 
+const SE_PAGAN_CON_FACTURA = ["0803", "0805", "0810"];
 const INP = "border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
 
 // Boleta de un trabajador: se digitan la asistencia y los conceptos del mes; el servidor recalcula al guardar.
@@ -109,7 +110,7 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, onCl
                   <tbody>
                     {lista.map((c) => (
                       <tr key={c.codigo} className="border-b border-gray-100">
-                        <td className="py-1 pr-2"><span className="font-mono text-xs text-gray-400 mr-1">{/^\d/.test(c.codigo) ? c.codigo : ""}</span>{c.nombre}</td>
+                        <td className="py-1 pr-2"><span className="font-mono text-xs text-gray-400 mr-1">{/^\d/.test(c.codigo) ? c.codigo : ""}</span>{c.nombre}{SE_PAGAN_CON_FACTURA.includes(c.codigo) && <span className="block text-[11px] text-gray-400">se paga con la factura de la aseguradora</span>}</td>
                         <td className="py-1 text-right tabular-nums whitespace-nowrap">{money(c.monto)}</td>
                       </tr>
                     ))}

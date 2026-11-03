@@ -9,6 +9,8 @@ const CUENTAS = [
     ["gratificaciones", "Gratificaciones (ej. 6214; vacía: la de remuneraciones)"],
     ["salud", "EsSalud (ej. 6271)", true],
     ["eps", "EPS (vacía: la de EsSalud)"],
+    ["senati", "SENATI (ej. 6277; solo si la empresa aporta)"],
+    ["sctr", "SCTR (ej. 6273; solo si hay trabajadores expuestos)"],
   ]],
   ["Por pagar", [
     ["porPagar", "Remuneraciones por pagar (ej. 4111)", true],
@@ -18,10 +20,11 @@ const CUENTAS = [
     ["afp", "AFP (ej. 407)", true],
     ["epsPorPagar", "EPS (solo si hay trabajadores con EPS)"],
     ["descuentos", "Adelantos y otros descuentos al trabajador (ej. 141)"],
+    ["senatiPorPagar", "SENATI por pagar (ej. 4033)"],
   ]],
 ];
 
-// Cuentas del asiento de la planilla (PCGE 2019). El régimen laboral se cambia en Tesorería → Configuración.
+// Cuentas del asiento de la planilla (PCGE 2019). El régimen laboral se cambia en Planilla → Perfil laboral.
 export default function PanelCuentasPlanilla({ cuentas, catalogos, puedeEscribir }) {
   const [form, setForm] = useState(null);
   const [error, setError] = useState("");
@@ -56,7 +59,7 @@ export default function PanelCuentasPlanilla({ cuentas, catalogos, puedeEscribir
     <div className="space-y-5 max-w-3xl">
       <p className="text-sm text-gray-600">
         Régimen laboral de la empresa: <b>{catalogos.regimenes[catalogos.regimenLaboral]?.nombre}</b>
-        <span className="text-xs text-gray-400"> — lo cambia el administrador en Tesorería → Configuración.</span>
+        <span className="text-xs text-gray-400"> — se edita en la pestaña Perfil laboral.</span>
       </p>
       {form && CUENTAS.map(([titulo, campos]) => (
         <section key={titulo} className="space-y-2">

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { money } from "../../utils/compras";
 import { formatearFecha } from "../../utils/fecha";
+import { Link } from "react-router-dom";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
 const VACIA = { nombre: "", tipo: "banco", moneda: "PEN", saldoInicial: "", fechaSaldoInicial: "" };
@@ -9,6 +10,7 @@ const fecha = (d) => formatearFecha(d, { day: "2-digit", month: "2-digit", year:
 const fechaIso = (d) => (d ? new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" }).format(new Date(d)) : "");
 const conSaldoInicial = ({ saldoInicial, fechaSaldoInicial, ...resto }) =>
   (saldoInicial === "" ? resto : { ...resto, saldoInicial: Number(saldoInicial), fechaSaldoInicial });
+const REGIMENES = { general: "Régimen general", pequena: "Pequeña empresa (REMYPE)", micro: "Microempresa (REMYPE)" };
 const TIPOS = { banco: "Banco", caja: "Caja", detracciones: "Detracciones (Banco de la Nación)" };
 
 export default function PanelConfiguracion({ onCambio }) {
@@ -76,11 +78,10 @@ export default function PanelConfiguracion({ onCambio }) {
             <option value="compra">Compra</option><option value="venta">Venta</option>
           </select>
         </label>
-        <label className="text-xs text-gray-500">Régimen laboral (planilla)
-          <select value={config.regimenLaboral || "general"} disabled={guardando} onChange={(e) => guardar("/configuracion", "PUT", { regimenLaboral: e.target.value })} className={`${INP} block`}>
-            <option value="general">Régimen general</option><option value="pequena">Pequeña empresa (REMYPE)</option><option value="micro">Microempresa (REMYPE)</option>
-          </select>
-        </label>
+        <div className="text-xs text-gray-500">Régimen laboral (planilla)
+          <p className="text-sm text-gray-800 py-2">{REGIMENES[config.regimenLaboral] || REGIMENES.general}</p>
+          <Link to="/planilla" state={{ tab: "perfil" }} className="text-purple-600 hover:underline">Se edita en Planilla → Perfil laboral</Link>
+        </div>
         <label className="text-xs text-gray-500">Coeficiente de pago a cuenta de renta (%)
           <input type="number" step="0.01" min="0" max="10" disabled={guardando}
             value={coeficiente ?? String(Math.round((config.coeficienteRenta ?? 0.015) * 10000) / 100)}
@@ -89,7 +90,7 @@ export default function PanelConfiguracion({ onCambio }) {
             className={`${INP} block w-32`} />
         </label>
       </div>
-      <p className="text-[11px] text-gray-400 -mt-4">Por defecto, cobros al TC compra y pagos al TC venta (práctica de CONCAR/StarSoft); confirmar con el contador. El régimen laboral define las gratificaciones que proyecta la planilla (general: completas; pequeña empresa: la mitad; microempresa: ninguna) y aplica desde la siguiente vez que se calcule un mes.</p>
+      <p className="text-[11px] text-gray-400 -mt-4">Por defecto, cobros al TC compra y pagos al TC venta (práctica de CONCAR/StarSoft); confirmar con el contador. El régimen laboral (Planilla → Perfil laboral) define las gratificaciones que proyecta la planilla (general: completas; pequeña empresa: la mitad; microempresa: ninguna) y aplica desde la siguiente vez que se calcule un mes.</p>
       <div className="space-y-2">
         <h3 className="text-sm font-bold text-gray-700 uppercase">Cuentas de tesorería</h3>
         <table className="w-full text-sm bg-white rounded-xl border border-gray-100">
