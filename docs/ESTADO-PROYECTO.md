@@ -224,10 +224,53 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   Probado en el navegador (alta de trabajador, parámetros, generar, editar boleta, PDF, cerrar y descarga del `.rem`).
 - **Pendiente**: (1) importar los archivos en el PDT PLAME real — no se ha probado contra el validador de SUNAT;
   (2) gratificaciones, CTS, vacaciones truncas y liquidación (hoy la gratificación se digita como concepto 0406 + 0312);
-  (3) provisiones mensuales de beneficios en el asiento; (4) carga masiva al T-Registro; (5) SCTR, SENATI y vida ley;
+  (3) provisiones mensuales de beneficios en el asiento; (4) T-Registro: la carga masiva de altas y bajas ya está hecha (entrega de abajo, 2026-11-02); quedan la modificación de datos ya registrados, practicantes, prestadores de servicios y derechohabientes; (5) SCTR, SENATI y vida ley;
   (6) rentas de 5.ª de otros empleadores (`.or5`) y recálculo de la 5.ª al cese (art. 41); (7) subsidios de EsSalud
   (0915/0916) y prima AFP de mayores de 65; (8) confirmar con el contador lo marcado [Confirmar] en `utils/planilla.js`.
 - **Pendiente (2026-11-02, decisión del usuario)**: llevar el módulo de planilla a la rama `conta-percepcion` (hoy vive solo en `contabilidadoficial`). Se hace después.
+
+**T-Registro (alta y baja de trabajadores) (2026-11-02, rama `contabilidadoficial`):**
+- **Qué cubre**: la ficha del trabajador se amplía con la sección T-Registro (datos personales, domicilio, régimen, salud y
+  pensión, estudios, cuenta, etc.). Cada trámite (alta y baja) tiene estado `sin control` / `pendiente` / `registrada`.
+  Archivos de importación del PVS: alta = `.ide .tra .per .est`, más `.edu` si la situación educativa es 11 o 13–21 y
+  `.cta` si el tipo de pago es depósito en cuenta; baja = una fila `.per` tipo 1 sin fecha de inicio, con fin y motivo.
+  Alta y baja van en archivos y `.zip` distintos. Se descarga un `.zip` de `.txt` con nombre fechado para abrirlo en el PVS
+  T-Registro (el PVS genera el `.zip` que se sube en SOL). «Marcar como registrado» cierra el trámite; con el trámite
+  registrado se bloquean documento, ingreso (alta) y cese (baja), y solo el rol contador ve el botón «Editar» (queda
+  registro de ediciones). Catálogos SUNAT (Anexo 2) generados como datos; catálogo de 377 códigos de error del PVS con
+  buscador y corrección sugerida; configuración de valores por defecto (`Configuracion.tregistro`); aviso no bloqueante en
+  la planilla del mes para los trabajadores con trámite pendiente.
+- **Archivos principales**: Backend `routes/planillaTRegistro.js`, `utils/tregistro.js` (armado de archivos),
+  `utils/tregistroCatalogos.js`, `utils/tregistroValidacion.js` (`estadoTramite`, `validarParaTRegistro` con códigos del PVS),
+  `utils/erroresTRegistro.js` + `data/tregistro/`, `scripts/generarCatalogosTRegistro.mjs` y `generarErroresTRegistro.mjs`
+  (regeneran los datos desde el Anexo 2 y el manual del PVS). Frontend `components/planilla/FichaTRegistro.jsx`,
+  `PanelTRegistro.jsx`, `PanelConfigTRegistro.jsx` (integrados en `PanelTrabajadores` y `PanelPlanillaMes`) y
+  `utils/tregistro.js`.
+- Tests: Backend `test/tregistro.test.js` (20, rutas), `tregistroArchivos.test.js` (16), `tregistroCatalogos.test.js` (13) y
+  `tregistroValidacion.test.js` (36); Frontend `utils/tregistro.test.js` (14).
+- **Pendiente T-Registro**: (1) probar los archivos en el PVS T-Registro real y corregir — el usuario decidió entregar sin
+  probar. Riesgos concretos: la columna 21 del `.tra` (categoría ocupacional) se envía siempre; si el PVS la rechaza para
+  tipo de trabajador 19/20/21, vaciarla en `utils/tregistro.js`; si en la baja también hay que cerrar los tipos 2–4 del
+  `.per`; nacionalidad y país emisor se digitan como código de las Tablas 4 y 26 (aún no hay catálogo).
+  (2) modificación de datos ya registrados en T-Registro (fuera de alcance). (3) SCTR pensión configurable.
+  (4) practicantes, prestadores de servicios y derechohabientes. (5) llevar la planilla y el T-Registro a `conta-percepcion`
+  (ya anotado abajo).
+  (6) Menores diferidos de las revisiones: `existe("constructor", …)` lanza TypeError (usar `Object.hasOwn`); offsets
+  `slice` frágiles y sin conteo mínimo en `generarCatalogosTRegistro.mjs`, que tampoco falla fuerte ante un cambio de
+  layout del manual (ni `generarErroresTRegistro.mjs`); 72 carreras con grafías duplicadas conservan la primera;
+  ETR16.47 repetido en el manual (se conserva la primera) y ETR14.3 sin mensaje; abreviaturas del manual en los mensajes de
+  error; `buscarError` sin ranking por relevancia ni búsqueda en `correccion`; enums de sexo/estados rechazan `""`
+  (borrar el campo antes de guardar); `establecimiento` sin `match /^\d{4}$/`; sin test persistente de modelos; validador
+  sin largo/formato de `numDoc` por tipo de documento (EPE1.2) y `fechaIso` solo acepta ISO; rutas con carrera
+  lectura→escritura en el bloqueo y «marcar» no atómico (agregar `tregistro.alta.estado`/`baja.estado` al filtro del update y
+  responder 409); «marcar» acepta fechas futuras; reponer `fechaCese` tras quitarla desbloqueado no abre una baja nueva
+  (confirmar con el usuario); `camposBloqueados` ignora el rol a propósito (la UI desbloquea con `form.desbloqueo`);
+  `validarTregistro` sin largos máximos (la UI pone `maxLength`); `estudios.anioEgreso` se valida aunque la sección
+  Estudios esté oculta (debería validarse solo si `requiereEstudios`) y las secciones `<details>` cerradas ocultan el campo
+  con error; campos `readOnly` sin estilo apagado, buscador sin Escape, sin `<label>` y con errores de red mostrados como
+  «Sin resultados»; `baja.motivo` se conserva al borrar `fechaCese`; el `error` del buscador de errores y de la
+  configuración no se limpia al editar; sin indicador de carga ni reintento en la carga inicial; `PanelPlanillaMes` recarga
+  la lista T-Registro en cada cambio de mes.
 
 **Asientos automáticos editables (2026-10-05, decisión del usuario: el automático es la base y se completa a mano):**
 - `PUT /api/contabilidad/asientos/:id` edita también los automáticos, en borrador o contabilizados (admin y contador). No
