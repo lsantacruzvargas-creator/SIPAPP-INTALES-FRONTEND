@@ -227,6 +227,7 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   (3) provisiones mensuales de beneficios en el asiento; (4) carga masiva al T-Registro; (5) SCTR, SENATI y vida ley;
   (6) rentas de 5.ª de otros empleadores (`.or5`) y recálculo de la 5.ª al cese (art. 41); (7) subsidios de EsSalud
   (0915/0916) y prima AFP de mayores de 65; (8) confirmar con el contador lo marcado [Confirmar] en `utils/planilla.js`.
+- **Pendiente (2026-11-02, decisión del usuario)**: llevar el módulo de planilla a la rama `conta-percepcion` (hoy vive solo en `contabilidadoficial`). Se hace después.
 
 **Asientos automáticos editables (2026-10-05, decisión del usuario: el automático es la base y se completa a mano):**
 - `PUT /api/contabilidad/asientos/:id` edita también los automáticos, en borrador o contabilizados (admin y contador). No
