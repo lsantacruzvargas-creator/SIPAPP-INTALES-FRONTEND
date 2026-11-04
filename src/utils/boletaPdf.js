@@ -1,13 +1,13 @@
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { textoPension } from "./planilla";
+import { textoPension } from "./planilla.js";
+import { nombreArchivoBoletas, nombrePdfTrabajador, nombresUnicos } from "./boletasMasa.js";
 
 const importe = (n) => Number(n || 0).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fecha = (iso) => (iso ? iso.split("-").reverse().join("/") : "");
 
 // Boleta de pago del mes (D.S. 001-98-TR): empleador, trabajador, días y horas, ingresos, descuentos y aportes.
-export function generarBoletaPdf(boleta, { empleador = {}, afps = {} } = {}) {
-  const doc = new jsPDF();
+export function dibujarBoleta(doc, boleta, { empleador = {}, afps = {}, borrador = false } = {}) {
   const margen = 14;
   const d = boleta.datos;
   const periodo = `${boleta.periodo.slice(4)}/${boleta.periodo.slice(0, 4)}`;
@@ -56,5 +56,58 @@ export function generarBoletaPdf(boleta, { empleador = {}, afps = {} } = {}) {
   doc.line(120, y, 185, y);
   doc.text("Empleador", margen + 42, y + 5, { align: "center" });
   doc.text("Trabajador", 152, y + 5, { align: "center" });
-  doc.save(`boleta-${boleta.periodo}-${d.numDoc}.pdf`);
+  if (borrador) marcaBorrador(doc);
+}
+
+// Se dibuja al final de la página y restaura opacidad, color y fuente para no alterar lo que siga.
+function marcaBorrador(doc) {
+  doc.saveGraphicsState();
+  doc.setGState(new doc.GState({ opacity: 0.15 }));
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(80);
+  doc.setTextColor(120);
+  const medio = doc.getTextWidth("BORRADOR") / 2 * Math.SQRT1_2;
+  doc.text("BORRADOR", 105 - medio, 148 + medio, { angle: 45 });
+  doc.restoreGraphicsState();
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(0);
+}
+
+export function generarBoletaPdf(boleta, opciones = {}) {
+  const doc = new jsPDF();
+  dibujarBoleta(doc, boleta, opciones);
+  doc.save(`boleta-${boleta.periodo}-${boleta.datos.numDoc}.pdf`);
+}
+
+// Una boleta por página, en el orden recibido.
+export function generarBoletasPdf(boletas, { periodo, guardar = true, ...opciones } = {}) {
+  const doc = new jsPDF();
+  boletas.forEach((b, i) => {
+    if (i > 0) doc.addPage();
+    dibujarBoleta(doc, b, opciones);
+  });
+  if (guardar) doc.save(nombreArchivoBoletas(periodo, { borrador: opciones.borrador }));
+  return doc;
+}
+
+// Un PDF por trabajador dentro de un zip; los PDF internos no llevan sufijo BORRADOR, solo el zip.
+export async function generarBoletasZip(boletas, { periodo, ...opciones } = {}) {
+  const { default: JSZip } = await import("jszip");
+  const zip = new JSZip();
+  const nombres = nombresUnicos(boletas.map(nombrePdfTrabajador));
+  boletas.forEach((b, i) => {
+    const doc = new jsPDF();
+    dibujarBoleta(doc, b, opciones);
+    zip.file(nombres[i], doc.output("arraybuffer"));
+  });
+  const blob = await zip.generateAsync({ type: "blob" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombreArchivoBoletas(periodo, { borrador: opciones.borrador, zip: true });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
