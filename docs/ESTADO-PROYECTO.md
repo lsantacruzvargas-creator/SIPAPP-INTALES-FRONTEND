@@ -1,6 +1,6 @@
 # Estado del proyecto SIPAPP-INTALES — punto de entrada para agentes
 
-**Actualizado:** 2026-10-02 · **Idéntico en** `docs/` de los repos Backend y Frontend (y en `docs/` de la carpeta raíz).
+**Actualizado:** 2026-11-04 · **Idéntico en** `docs/` de los repos Backend y Frontend (y en `docs/` de la carpeta raíz).
 
 Léelo antes de tocar código. Responde al usuario **en español, conciso**; él decide lo de negocio y pide el merge a
 `main` explícitamente (nunca mergear ni subir `main` sin su OK).
@@ -351,28 +351,35 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   el `.tas` (E25). Si el PDT rechaza o duplica alguno, agregarlo a `NO_IMPORTAR` en `utils/plame.js`.
 - **[Probar en PVS]** archivos de modificación SCTR: `.tra` con solo la columna 9; cambio solo de pensión sin `.per`; **ETR17.21** (baja de
   cobertura con período activo: la UI avisa que, si el PVS la rechaza, se hace en T-Registro en línea y luego se marca) y **ETR17.3** (columna 9 = «0»).
-- **Siguiente entrega (diseñada, sin construir)**: archivo de texto para **AFPnet** (ancho fijo, 141 caracteres por línea) y **boletas en masa**
-  (un `.zip` con un PDF por trabajador llamado «DNI NOMBRE» y un PDF único; descargables como BORRADOR con la planilla abierta). Reglas acordadas:
-  sin CPP; «U» (excepción de aportar) solo en los días 21/22 con `bases.afp` = 0 y en blanco en los demás casos (contador, 2026-11-03); tipo de
-  trabajo N. Diseño: `docs/superpowers/specs/2026-11-04-afpnet-boletas-design.md` (detalle en `2026-11-03-afpnet-boletas-borrador.md`),
-  pendiente de aprobación del usuario. Incluye el pendiente «imprimir boletas en masa» de arriba.
-  - Decisiones mías a revisar: mes sin remuneración con varios motivos → el de más días (empate U > L > O); reingreso en el mes → una línea con
-    Cese «S» solo si el último vínculo termina en el mes; Ñ en latin1; vencimiento referencial (5.º día útil); con CPP el TXT sale sin esas líneas
+- **AFPnet (hecho, 2026-11-04)**: archivo de texto de ancho fijo (141 caracteres por línea) para la bandeja de AFPnet, con vista previa y descarga en
+  Planilla → PLAME (sección «AFPnet (aportes AFP)»). Backend `cf1246e` (`utils/afpnet.js`) y `fec7647` (rutas `GET /planilla/:periodo/afpnet` y `/afpnet/txt`);
+  Frontend `feat(planilla): sección AFPnet en la pestaña PLAME`. Solo planilla cerrada y boletas en AFP. Reglas acordadas: sin CPP (la línea no
+  sale y hay aviso); «U» (excepción de aportar) solo en los días 21/22 con `bases.afp` = 0 y en blanco en los demás casos (contador, 2026-11-03);
+  tipo de trabajo N. Diseño: `docs/superpowers/specs/2026-11-04-afpnet-boletas-design.md` (detalle en `2026-11-03-afpnet-boletas-borrador.md`).
+- **Boletas en masa (siguiente entrega, plan listo)**: un `.zip` con un PDF por trabajador llamado «DNI NOMBRE» y un PDF único; descargables como
+  BORRADOR con la planilla abierta. Plan: `docs/superpowers/plans/2026-11-04-boletas-en-masa.md`. Incluye el pendiente «imprimir boletas en masa» de arriba.
+  - Decisiones mías a revisar (AFPnet): mes sin remuneración con varios motivos → el de más días (empate U > L > O); reingreso en el mes → una línea con
+    Cese «S» solo si el último vínculo termina en el mes; Ñ en latin1; vencimiento referencial (5.º día hábil, sin feriados); con CPP el TXT sale sin esas líneas
     y con aviso; SUNAT 24 → AFPnet 8 sin confirmar; sin ficha, nombres desde la boleta; `-BORRADOR` solo en el nombre del zip.
   - **[Probar en AFPnet]** cargar el TXT en la bandeja sin presentar: nombre de archivo libre, Ñ, CRLF.
   - Fuera de esta entrega (pendientes): semanas contributivas (pesqueros); aportes voluntarios (0609/0801, columnas M–O); pensionados por
     jubilación o invalidez (J/I) y dejar de calcular su aporte; código P (ingreso después del cierre); versión Excel del archivo AFPnet;
     pagos después del cese (RL = N); CPP (código 10 de AFPnet no cabe en el TXT: consultar a la mesa de ayuda de AFPnet); cruce con la consulta
     masiva de afiliados de AFPnet (ONP marcados que están en AFP); apellidos y nombres separados en la foto de la boleta (`fotoDe`).
-  - **Envío de boletas por correo**: requiere firma digital y constancia de recepción (D. Leg. 1310); en investigación (servicios y costos).
+  - **Envío de boletas por correo**: requiere firma digital y constancia de recepción (D. Leg. 1310). Investigación y opción mínima en
+    `docs/superpowers/specs/2026-11-04-boletas-correo-investigacion.md`: acuerdo previo y escrito del trabajador; firma digital del representante con
+    software acreditado (ReFirma/Watana); certificado digital S/ 133–177 al año; correo por Resend/SES; portal del trabajador con acuse de recibo.
 - **Serie del comprobante validada en el backend (hecho, 2026-11-03, `f78c83f`)**: `/^[A-Z0-9]{4}$/` antes de reservar el correlativo en factura,
   boleta, NC, ND y GRE. Pendiente aparte: `documentosRelacionados[].numero` de la GRE va al XML sin escapar (su formato depende del catálogo 61).
 - **Descarga de trámites del T-Registro (propuesta sin decidir)**: hoy siempre baja un `.zip` y hay que descomprimirlo antes del PVS; propuesta:
   si el trámite tiene un solo archivo (baja, modificación SCTR solo de salud) bajar el `.per` suelto, y en el zip avisar «descomprime antes del PVS».
   El PVS solo muestra los `RP_<RUC>.*` del RUC con que se ingresó.
 - **Gratificación, CTS, vacaciones y liquidación (siguiente tema)**: hoy la gratificación se digita (0406 + 0312) y solo se proyecta para la 5.ª;
-  vacaciones solo el goce (suspensión 23 → 0118); CTS, truncas, indemnización vacacional, liquidación de cese y provisiones no existen. Reglas en
-  verificación contra normas oficiales; el usuario pidió al contador sus Excel de liquidación y de CTS como formato y caso de prueba.
+  vacaciones solo el goce (suspensión 23 → 0118); CTS, truncas, indemnización vacacional, liquidación de cese y provisiones no existen. Reglas verificadas
+  y respuestas del contador en `docs/superpowers/specs/2026-11-04-beneficios-sociales-reglas.md`; falta el Excel del contador (liquidación y CTS) como
+  formato y caso de prueba.
+- **RMV S/ 1 230 desde 01/10/2026** (D.S. 015-2026-TR): actualizar los Parámetros de oct/nov 2026 (reabrir y regenerar la planilla si ya están cerradas).
+  El valor inicial de `PARAMETROS_INICIALES` ya es 1230.
 - **Prueba inestable ajena**: `test/bancos.test.js` «carrera: un movimiento y el cierre…» falla a veces por `0` contra `-0`; pasa al re-ejecutar.
 - **Menores diferidos que se conservan**: tasa de vida ley con 4 decimales (hoy se redondea a 2 sin avisar); `tramitesPendientesEnMes` (aviso de
   `PanelPlanillaMes`) no cuenta las modificaciones SCTR pendientes; la primera generación de una planilla de un año anterior, sin foto guardada, tras

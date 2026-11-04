@@ -109,7 +109,7 @@ export default function Planilla() {
           {tab === "configtr" && <PanelConfigTRegistro catalogos={catalogos} puedeEscribir={puedeEscribir} onGuardado={refrescarCatalogos} />}
           {tab === "perfil" && <PanelPerfilLaboral catalogos={catalogos} puedeEscribir={puedeEscribir} onGuardado={(d) => { aplicarAvisos(d); refrescarCatalogos(); }} />}
           {tab === "parametros" && <PanelParametrosPlanilla mes={mes} setMes={setMes} catalogos={catalogos} puedeEscribir={puedeEscribir} />}
-          {tab === "plame" && <PanelPlame mes={mes} setMes={setMes} />}
+          {tab === "plame" && <PanelPlame mes={mes} setMes={setMes} catalogos={catalogos} />}
           {tab === "cuentas" && <PanelCuentasPlanilla cuentas={cuentas} catalogos={catalogos} puedeEscribir={puedeEscribir} />}
         </>
       )}
