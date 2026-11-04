@@ -15,7 +15,7 @@ export default function PanelPlame({ mes, setMes, catalogos }) {
   const [afpnet, setAfpnet] = useState(null);
   const [aviso, setAviso] = useState("");
   const [bajando, setBajando] = useState("");
-  const nombreAfp = (k) => catalogos?.afps?.[k] || k;
+  const nombreAfp = (k) => catalogos?.afps?.[k] || k || "(sin AFP)";
 
   const cargar = useCallback(async () => {
     if (!/^\d{6}$/.test(periodo)) return;
@@ -122,7 +122,7 @@ export default function PanelPlame({ mes, setMes, catalogos }) {
                   <tbody>
                     <tr className="border-b border-gray-100">
                       <td className="py-1.5 pr-3 font-mono text-xs">{afpnet.archivo}</td>
-                      <td className="py-1.5 pr-3">{afpnet.registros || "Sin registros"}</td>
+                      <td className="py-1.5 pr-3">{afpnet.registros ? `${afpnet.registros} registro(s)` : "Sin registros"}</td>
                       <td className="py-1.5 text-right">
                         {afpnet.registros > 0 && <button onClick={descargarAfpnet} disabled={!!bajando} className="text-xs text-purple-600 hover:underline disabled:opacity-50">Descargar</button>}
                       </td>
