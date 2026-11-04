@@ -5,7 +5,8 @@ import { periodoDeMes, textoPeriodo } from "../../utils/bancos";
 import { totalesPlanilla, filasExcelPlanilla, textoPension } from "../../utils/planilla";
 import { tramitesPendientesEnMes } from "../../utils/tregistro";
 import { exportarHoja } from "../../utils/exportarTabla";
-import { generarBoletaPdf } from "../../utils/boletaPdf";
+import { generarBoletaPdf, generarBoletasPdf, generarBoletasZip } from "../../utils/boletaPdf";
+import { avisosDescargaBoletas } from "../../utils/boletasMasa";
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
@@ -23,6 +24,9 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
   const [confirmando, setConfirmando] = useState(null); // "cerrar" | "reabrir"
   const [boleta, setBoleta] = useState(null);
   const [tramitesPendientes, setTramitesPendientes] = useState(0);
+  const [generando, setGenerando] = useState(null); // "zip" | "pdf" mientras se arman las boletas
+  const [avisosBoletas, setAvisosBoletas] = useState([]);
+  const [errorBoletas, setErrorBoletas] = useState("");
 
   const cargar = useCallback(async () => {
     if (!/^\d{6}$/.test(periodo)) return;
@@ -67,6 +71,23 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
     "Trabajador": "TOTAL", "Total ingresos": totales.ingresos, "Descuentos": totales.descuentos, "Neto a pagar": totales.neto, "EsSalud y EPS": totales.aportesEmpleador,
   }]);
 
+  const borrador = !cerrada;
+  const descargarBoletas = async (formato) => {
+    setAvisosBoletas(avisosDescargaBoletas(boletas, { cerrada }));
+    setErrorBoletas("");
+    setGenerando(formato);
+    // Cede el hilo para que se pinte «Generando…» antes de que jsPDF bloquee la pantalla.
+    await new Promise((r) => setTimeout(r, 30));
+    try {
+      const opciones = { empleador: catalogos.empleador, afps: catalogos.afps, borrador, periodo };
+      if (formato === "zip") await generarBoletasZip(boletas, opciones); else generarBoletasPdf(boletas, opciones);
+    } catch {
+      setErrorBoletas("No se pudieron generar las boletas. Vuelve a intentarlo.");
+    } finally {
+      setGenerando(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
@@ -81,6 +102,16 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
         )}
         <div className="flex-1" />
         {boletas.length > 0 && <button onClick={exportar} className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50">Exportar Excel</button>}
+        {boletas.length > 0 && (
+          <>
+            <button onClick={() => descargarBoletas("zip")} disabled={!!generando} className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">
+              {generando === "zip" ? "Generando…" : "Descargar boletas (.zip)"}
+            </button>
+            <button onClick={() => descargarBoletas("pdf")} disabled={!!generando} className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">
+              {generando === "pdf" ? "Generando…" : "Imprimir todas (PDF)"}
+            </button>
+          </>
+        )}
         {puedeEscribir && !cerrada && (
           <button onClick={() => accion("generar", "No se pudo generar la planilla.")} disabled={procesando || !datos}
             className="border border-purple-300 text-purple-700 px-3 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50">
@@ -100,6 +131,13 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
           Antes de generar, revisa y guarda los parámetros de {textoPeriodo(periodo)} en la pestaña «Parámetros» (las tasas de AFP cambian cada mes).
         </p>
       )}
+      {avisosBoletas.length > 0 && (
+        <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex gap-3">
+          <ul className="flex-1 list-disc pl-5">{avisosBoletas.map((a) => <li key={a}>{a}</li>)}</ul>
+          <button onClick={() => setAvisosBoletas([])} className="text-xs underline self-start">Cerrar</button>
+        </div>
+      )}
+      {errorBoletas && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errorBoletas}</p>}
       {tramitesPendientes > 0 && (
         <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           {tramitesPendientes} trámite(s) pendientes en T-Registro (no bloquea la planilla).
@@ -134,7 +172,7 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
                 <td className="py-1.5 pr-3 text-right tabular-nums">{money(b.totales.aportesEmpleador)}</td>
                 <td className="py-1.5 text-right whitespace-nowrap">
                   <button onClick={() => setBoleta(b)} className="text-xs text-purple-600 hover:underline mr-3">{puedeEscribir && !cerrada ? "Editar" : "Ver"}</button>
-                  <button onClick={() => generarBoletaPdf(b, { empleador: catalogos.empleador, afps: catalogos.afps })} className="text-xs text-gray-600 hover:underline">PDF</button>
+                  <button onClick={() => generarBoletaPdf(b, { empleador: catalogos.empleador, afps: catalogos.afps, borrador })} className="text-xs text-gray-600 hover:underline">PDF</button>
                 </td>
               </tr>
             ))}
@@ -161,7 +199,7 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
       </TablaScroll>
 
       {boleta && (
-        <ModalBoleta key={boleta._id} boleta={boleta} catalogos={catalogos} editable={puedeEscribir && !cerrada}
+        <ModalBoleta key={boleta._id} boleta={boleta} catalogos={catalogos} editable={puedeEscribir && !cerrada} borrador={borrador}
           onClose={() => setBoleta(null)} onCambio={cargar} />
       )}
       {confirmando && (

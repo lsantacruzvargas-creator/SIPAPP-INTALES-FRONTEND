@@ -9,6 +9,7 @@ const fecha = (iso) => (iso ? iso.split("-").reverse().join("/") : "");
 // Boleta de pago del mes (D.S. 001-98-TR): empleador, trabajador, días y horas, ingresos, descuentos y aportes.
 export function dibujarBoleta(doc, boleta, { empleador = {}, afps = {}, borrador = false } = {}) {
   const margen = 14;
+  const primeraPagina = doc.getNumberOfPages();
   const d = boleta.datos;
   const periodo = `${boleta.periodo.slice(4)}/${boleta.periodo.slice(0, 4)}`;
 
@@ -56,11 +57,21 @@ export function dibujarBoleta(doc, boleta, { empleador = {}, afps = {}, borrador
   doc.line(120, y, 185, y);
   doc.text("Empleador", margen + 42, y + 5, { align: "center" });
   doc.text("Trabajador", 152, y + 5, { align: "center" });
-  if (borrador) marcaBorrador(doc);
+  if (borrador) marcaBorrador(doc, primeraPagina);
 }
 
-// Se dibuja al final de la página y restaura opacidad, color y fuente para no alterar lo que siga.
-function marcaBorrador(doc) {
+// Si la boleta se desbordó a más páginas, todas llevan la marca; al terminar se vuelve a la última.
+function marcaBorrador(doc, primeraPagina) {
+  const ultima = doc.getNumberOfPages();
+  for (let p = primeraPagina; p <= ultima; p++) {
+    doc.setPage(p);
+    dibujarMarca(doc);
+  }
+  doc.setPage(ultima);
+}
+
+// Restaura opacidad, color y fuente para no alterar lo que siga.
+function dibujarMarca(doc) {
   doc.saveGraphicsState();
   doc.setGState(new doc.GState({ opacity: 0.15 }));
   doc.setFont("helvetica", "bold");

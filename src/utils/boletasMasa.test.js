@@ -54,3 +54,11 @@ test("generarBoletasPdf: la marca BORRADOR solo sale en borrador (cerrada: ningu
   assert.equal(cerrada.includes("BORRADOR"), false);
   assert.equal(borrador.split("(BORRADOR)").length - 1, 2);
 });
+
+test("generarBoletasPdf: una boleta que se desborda a varias páginas lleva la marca BORRADOR en todas", () => {
+  const larga = boleta("5", { conceptos: Array.from({ length: 80 }, (_, i) => ({ tipo: "ingreso", nombre: `Concepto ${i + 1}`, monto: 10 })) });
+  const doc = generarBoletasPdf([larga, boleta("6")], { periodo: "202610", borrador: true, guardar: false });
+  const paginas = doc.getNumberOfPages();
+  assert.ok(paginas > 2);
+  assert.equal(doc.output().split("(BORRADOR)").length - 1, paginas);
+});

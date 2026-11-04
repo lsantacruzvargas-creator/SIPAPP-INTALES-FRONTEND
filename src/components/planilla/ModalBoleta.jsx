@@ -8,7 +8,7 @@ const SE_PAGAN_CON_FACTURA = ["0803", "0805", "0810"];
 const INP = "border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
 
 // Boleta de un trabajador: se digitan la asistencia y los conceptos del mes; el servidor recalcula al guardar.
-export default function ModalBoleta({ boleta: inicial, catalogos, editable, onClose, onCambio }) {
+export default function ModalBoleta({ boleta: inicial, catalogos, editable, borrador, onClose, onCambio }) {
   const [boleta, setBoleta] = useState(inicial);
   const [form, setForm] = useState(() => ({
     suspensiones: (inicial.asistencia?.suspensiones || []).map((s) => ({ tipo: s.tipo, dias: String(s.dias) })),
@@ -57,7 +57,7 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, onCl
               {d.numDoc} · {d.cargo || "Sin cargo"} · Básico {money(d.remuneracionBasica)}{d.asignacionFamiliar ? " + asignación familiar" : ""} · {textoPension(d.pension, catalogos.afps)}
             </p>
           </div>
-          <button onClick={() => generarBoletaPdf(boleta, { empleador: catalogos.empleador, afps: catalogos.afps })}
+          <button onClick={() => generarBoletaPdf(boleta, { empleador: catalogos.empleador, afps: catalogos.afps, borrador })}
             className="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm hover:bg-gray-50">Boleta PDF</button>
         </div>
 

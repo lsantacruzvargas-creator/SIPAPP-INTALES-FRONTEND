@@ -8,7 +8,7 @@ export function nombreArchivoBoletas(periodo, { borrador = false, zip = false } 
 export function nombrePdfTrabajador(boleta) {
   const { numDoc, nombre } = boleta.datos;
   const limpio = `${numDoc} ${nombre}`
-    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .replace(/[/\\:*?"<>|]/g, " ")
     .replace(/\s+/g, " ").trim();
   return `${limpio}.pdf`;

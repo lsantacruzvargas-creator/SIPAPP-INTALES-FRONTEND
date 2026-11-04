@@ -228,7 +228,7 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   (6) rentas de 5.ª de otros empleadores (`.or5`) y recálculo de la 5.ª al cese (art. 41); (7) subsidios de EsSalud
   (0915/0916) y prima AFP de mayores de 65; (8) confirmar con el contador lo marcado [Confirmar] en `utils/planilla.js`.
 - **Pendiente (2026-11-02, decisión del usuario)**: llevar el módulo de planilla a la rama `conta-percepcion` (hoy vive solo en `contabilidadoficial`). Se hace después.
-- **Pendiente (2026-11-03, decisión del usuario)**: imprimir las boletas de pago en masa (todas las del mes en un solo PDF o lote). Hoy el PDF sale boleta por boleta desde «Planilla del mes». Se hace después.
+- **Hecho (2026-11-04)**: imprimir las boletas de pago en masa (pendiente del 2026-11-03); ver «Boletas en masa» más abajo.
 
 **T-Registro (alta y baja de trabajadores) (2026-11-02, rama `contabilidadoficial`):**
 - **Qué cubre**: la ficha del trabajador se amplía con la sección T-Registro (datos personales, domicilio, régimen, salud y
@@ -356,8 +356,12 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   Frontend `feat(planilla): sección AFPnet en la pestaña PLAME`. Solo planilla cerrada y boletas en AFP. Reglas acordadas: sin CPP (la línea no
   sale y hay aviso); «U» (excepción de aportar) solo en los días 21/22 con `bases.afp` = 0 y en blanco en los demás casos (contador, 2026-11-03);
   tipo de trabajo N. Diseño: `docs/superpowers/specs/2026-11-04-afpnet-boletas-design.md` (detalle en `2026-11-03-afpnet-boletas-borrador.md`).
-- **Boletas en masa (siguiente entrega, plan listo)**: un `.zip` con un PDF por trabajador llamado «DNI NOMBRE» y un PDF único; descargables como
-  BORRADOR con la planilla abierta. Plan: `docs/superpowers/plans/2026-11-04-boletas-en-masa.md`. Incluye el pendiente «imprimir boletas en masa» de arriba.
+- **Boletas en masa (hecho, 2026-11-04)**: en Planilla → «Planilla del mes», junto a «Exportar Excel», «Descargar boletas (.zip)» (un PDF por trabajador llamado
+  «DNI NOMBRE», sin tildes) e «Imprimir todas (PDF)» (una boleta por página). Con la planilla abierta salen como BORRADOR: marca «BORRADOR» en diagonal en cada
+  página (también la boleta individual y los enlaces «PDF» de cada fila; si una boleta ocupa varias páginas, en todas) y `-BORRADOR` solo en el nombre del zip
+  o del PDF único. Antes de descargar se muestran en pantalla avisos (neto negativo, sin ingresos, borrador) sin bloquear. Solo Frontend: Frontend `a36cf949`
+  (utilidades `boletasMasa.js` y `boletaPdf.js`) y `feat(planilla): descarga de todas las boletas del mes` (botones y marca en la boleta individual).
+  Plan: `docs/superpowers/plans/2026-11-04-boletas-en-masa.md`.
   - Decisiones mías a revisar (AFPnet): mes sin remuneración con varios motivos → el de más días (empate U > L > O); reingreso en el mes → una línea con
     Cese «S» solo si el último vínculo termina en el mes; Ñ en latin1; vencimiento referencial (5.º día hábil, sin feriados); con CPP el TXT sale sin esas líneas
     y con aviso; SUNAT 24 → AFPnet 8 sin confirmar; sin ficha, nombres desde la boleta; `-BORRADOR` solo en el nombre del zip.
