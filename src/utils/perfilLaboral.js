@@ -14,6 +14,13 @@ export const PERFIL_VACIO = {
   cambios: [],
 };
 
+// El aviso del cambio del perfil se esconde con «Entendido» hasta que el servidor informe uno más reciente.
+export const mostrarCambioPerfil = (cambio, vistoFecha) => {
+  if (!cambio?.fecha) return false;
+  const visto = Date.parse(vistoFecha);
+  return Number.isNaN(visto) || Date.parse(cambio.fecha) > visto;
+};
+
 // Obrero (01) → marcadas; empleado (02) y ejecutivo (03) → desmarcadas. En una empresa industrial SENATI va para todos.
 export const precargaAportes = (categoriaOcupacional, { actividadIndustrial } = {}) => {
   const obrero = categoriaOcupacional === "01";

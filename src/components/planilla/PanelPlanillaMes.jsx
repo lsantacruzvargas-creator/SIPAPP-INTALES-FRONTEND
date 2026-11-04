@@ -15,7 +15,7 @@ const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-n
 
 // Planilla de un mes: se genera con los trabajadores vigentes, se completa boleta por boleta y se cierra. Cerrada,
 // de ella salen los archivos del PLAME y el asiento contable (Contabilidad → Automáticos).
-export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir }) {
+export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir, refrescarAvisos }) {
   const periodo = periodoDeMes(mes);
   const [cargado, setCargado] = useState(null);
   const [aviso, setAviso] = useState("");
@@ -51,6 +51,7 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
       if (!r.ok) return setAviso(d.mensaje || textoError);
       if (d.avisos?.length) setAviso(d.avisos.join(" · "));
       await cargar();
+      refrescarAvisos?.();
     } catch {
       setAviso("Error de conexión con el servidor.");
     } finally {

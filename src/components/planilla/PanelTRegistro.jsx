@@ -225,7 +225,7 @@ function BuscadorErrores() {
 
 // Altas y bajas de los trabajadores ante SUNAT: se descarga el .zip con los archivos del PVS T-Registro, se valida y se
 // sube en SOL; después se marcan como registrados aquí.
-export default function PanelTRegistro({ puedeEscribir }) {
+export default function PanelTRegistro({ puedeEscribir, refrescarAvisos }) {
   const [trabajadores, setTrabajadores] = useState(null);
   const [filtro, setFiltro] = useState("todos");
   const [seleccion, setSeleccion] = useState(() => new Set());
@@ -246,6 +246,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
     }
   }, []);
   useEffect(() => { const t = setTimeout(cargar, 0); return () => clearTimeout(t); }, [cargar]);
+  const recargar = () => { cargar(); refrescarAvisos?.(); };
 
   const visibles = (trabajadores ?? []).filter((t) => filtro === "todos" || esPendiente(t));
   const elegibles = seleccionablesEnMasa(visibles);
@@ -286,6 +287,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      refrescarAvisos?.();
     } catch {
       setAviso("Error de conexión con el servidor.");
     } finally {
@@ -296,7 +298,7 @@ export default function PanelTRegistro({ puedeEscribir }) {
   const marcado = (ids) => {
     setMarcando(null);
     setSeleccion((s) => { const n = new Set(s); ids.forEach((id) => n.delete(id)); return n; });
-    cargar();
+    recargar();
   };
 
   const accionesFila = (t) => {
@@ -443,8 +445,8 @@ export default function PanelTRegistro({ puedeEscribir }) {
 
       <BuscadorErrores />
 
-      {marcando && <ModalMarcar trabajadores={trabajadores ?? []} marcando={marcando} onCerrar={() => setMarcando(null)} onMarcado={marcado} onConflicto={cargar} />}
-      {anulando && <ModalAnular anulando={anulando} onCerrar={() => setAnulando(null)} onAnulada={() => { setAnulando(null); cargar(); }} />}
+      {marcando && <ModalMarcar trabajadores={trabajadores ?? []} marcando={marcando} onCerrar={() => setMarcando(null)} onMarcado={marcado} onConflicto={recargar} />}
+      {anulando && <ModalAnular anulando={anulando} onCerrar={() => setAnulando(null)} onAnulada={() => { setAnulando(null); recargar(); }} />}
       {problemas && <ModalProblemas problemas={problemas} onCerrar={() => setProblemas(null)} />}
       {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
     </div>

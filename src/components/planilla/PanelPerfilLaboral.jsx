@@ -63,7 +63,7 @@ export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardad
     setForm(aFormulario(d));
     setBase(d.perfil.sctr);
     setConteo(d.conteo);
-    setAvisos(d.avisos);
+    setAvisos([...(d.cambioPerfil ? [d.cambioPerfil.texto] : []), ...d.avisos]);
     setSenatiTocado(false);
     setSctrFecha(fechaHoyLima());
   };
@@ -130,7 +130,7 @@ export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardad
       if (!r.ok) return setError(d.mensaje || "No se pudo guardar el perfil laboral.");
       recibir(d);
       setGuardado(true);
-      onGuardado?.(d.avisos);
+      onGuardado?.(d);
     } catch {
       setError("Error de conexión con el servidor.");
     } finally {

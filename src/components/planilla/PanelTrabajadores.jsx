@@ -327,7 +327,7 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
 }
 
 // Ficha de los trabajadores en planilla. No se borran: un trabajador sale con su fecha de cese.
-export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscribir }) {
+export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscribir, refrescarAvisos }) {
   const [lista, setLista] = useState([]);
   const [estados, setEstados] = useState({});
   const [perfil, setPerfil] = useState(null);
@@ -385,7 +385,7 @@ export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscrib
       </TablaScroll>
       {modal && (
         <ModalTrabajador trabajador={modal.trabajador} estado={estados[modal.trabajador?._id]} perfil={perfil} catalogos={catalogos} centrosCosto={centrosCosto} editable={puedeEscribir}
-          onClose={() => setModal(null)} onGuardado={() => { setModal(null); cargar(); }} />
+          onClose={() => setModal(null)} onGuardado={() => { setModal(null); cargar(); refrescarAvisos?.(); }} />
       )}
       {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
     </div>

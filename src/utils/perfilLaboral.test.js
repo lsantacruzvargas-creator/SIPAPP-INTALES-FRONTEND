@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PERFIL_VACIO, precargaAportes, aplicarPrecarga, cambiaSctrRegistrado, limiteFechaSctr, errorFechaSctr } from "./perfilLaboral.js";
+import { PERFIL_VACIO, precargaAportes, aplicarPrecarga, cambiaSctrRegistrado, limiteFechaSctr, errorFechaSctr, mostrarCambioPerfil } from "./perfilLaboral.js";
 
 test("PERFIL_VACIO: misma forma que el del servidor, con textos vacíos en los inputs", () => {
   assert.deepEqual(Object.keys(PERFIL_VACIO), ["remype", "ciiu", "actividadIndustrial", "senati", "sctr", "vidaLey", "cambios"]);
@@ -89,4 +89,16 @@ test("errorFechaSctr: acepta hasta el límite, rechaza el día siguiente y la fe
   assert.match(errorFechaSctr("2026-11-09", hoy, { cierra: true }), /5 días/);
   assert.equal(errorFechaSctr("2026-10-01", hoy, { cierra: true }), "");
   assert.match(errorFechaSctr("", hoy, { cierra: false }), /Indica la fecha/);
+});
+
+test("mostrarCambioPerfil: se esconde al marcarlo visto y reaparece con un cambio más reciente", () => {
+  const cambio = { fecha: "2026-11-02T20:00:00.000Z", texto: "x" };
+  assert.equal(mostrarCambioPerfil(null, ""), false);
+  assert.equal(mostrarCambioPerfil(undefined, "2026-01-01T00:00:00.000Z"), false);
+  assert.equal(mostrarCambioPerfil(cambio, ""), true);
+  assert.equal(mostrarCambioPerfil(cambio, null), true);
+  assert.equal(mostrarCambioPerfil(cambio, "basura"), true);
+  assert.equal(mostrarCambioPerfil(cambio, "2026-11-02T19:59:59.000Z"), true);
+  assert.equal(mostrarCambioPerfil(cambio, cambio.fecha), false);
+  assert.equal(mostrarCambioPerfil(cambio, "2026-11-03T08:00:00.000Z"), false);
 });

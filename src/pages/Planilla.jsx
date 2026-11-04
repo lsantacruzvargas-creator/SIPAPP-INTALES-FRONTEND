@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { fechaHoyLima } from "../utils/fecha";
+import { mostrarCambioPerfil } from "../utils/perfilLaboral";
 import PanelPlanillaMes from "../components/planilla/PanelPlanillaMes";
 import PanelTrabajadores from "../components/planilla/PanelTrabajadores";
 import PanelParametrosPlanilla from "../components/planilla/PanelParametrosPlanilla";
@@ -22,6 +23,10 @@ const TABS = [
   { id: "cuentas", label: "Cuentas contables" },
 ];
 
+const CLAVE_VISTO = "planilla.cambioPerfil.visto";
+const leerVisto = () => { try { return localStorage.getItem(CLAVE_VISTO) || ""; } catch { return ""; } };
+const guardarVisto = (fecha) => { try { localStorage.setItem(CLAVE_VISTO, fecha); } catch { /* sin almacenamiento el aviso reaparece al recargar */ } };
+
 // Ven admin, jefatura y contador (sueldos); escriben admin y contador.
 export default function Planilla() {
   const location = useLocation();
@@ -33,6 +38,8 @@ export default function Planilla() {
   const [centrosCosto, setCentrosCosto] = useState([]);
   const [error, setError] = useState("");
   const [avisosPerfil, setAvisosPerfil] = useState([]);
+  const [cambioPerfil, setCambioPerfil] = useState(null);
+  const [cambioVisto, setCambioVisto] = useState(leerVisto);
 
   useEffect(() => {
     Promise.all([fetchAuth("/planilla/catalogos"), fetchAuth("/contabilidad/cuentas"), fetchAuth("/centros-costo")]).then(async ([rc, rp, rk]) => {
@@ -43,11 +50,19 @@ export default function Planilla() {
     }).catch(() => setError("Error de conexión con el servidor."));
   }, []);
 
-  useEffect(() => {
-    fetchAuth("/planilla/perfil").then(async (r) => {
-      if (r.ok) setAvisosPerfil((await r.json()).avisos || []);
-    }).catch(() => { /* los avisos son informativos: sin ellos la planilla sigue funcionando */ });
+  const aplicarAvisos = (d) => { setAvisosPerfil(d.avisos || []); setCambioPerfil(d.cambioPerfil || null); };
+
+  // Lo cambian las fichas, la generación o cierre de la planilla y los trámites de T-Registro.
+  const refrescarAvisos = useCallback(async () => {
+    try {
+      const r = await fetchAuth("/planilla/perfil");
+      if (r.ok) aplicarAvisos(await r.json());
+    } catch { /* los avisos son informativos: sin ellos la planilla sigue funcionando */ }
   }, []);
+  useEffect(() => { const t = setTimeout(refrescarAvisos, 0); return () => clearTimeout(t); }, [refrescarAvisos]);
+
+  const entendido = () => { guardarVisto(cambioPerfil.fecha); setCambioVisto(cambioPerfil.fecha); };
+  const verCambio = mostrarCambioPerfil(cambioPerfil, cambioVisto);
 
   // Las fichas nuevas toman sus valores por defecto de catalogos.tregistroConfig.
   const refrescarCatalogos = async () => {
@@ -74,19 +89,25 @@ export default function Planilla() {
         ))}
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      {avisosPerfil.length > 0 && tab !== "perfil" && (
+      {(avisosPerfil.length > 0 || verCambio) && tab !== "perfil" && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800 space-y-1">
+          {verCambio && (
+            <p>
+              {cambioPerfil.texto}{" "}
+              <button onClick={entendido} className="text-xs underline font-medium hover:text-amber-900">Entendido</button>
+            </p>
+          )}
           {avisosPerfil.map((a, i) => <p key={i}>{a}</p>)}
           <button onClick={() => setTab("perfil")} className="text-xs underline font-medium hover:text-amber-900">Ir al perfil laboral</button>
         </div>
       )}
       {catalogos && (
         <>
-          {tab === "mes" && <PanelPlanillaMes mes={mes} setMes={setMes} catalogos={catalogos} puedeEscribir={puedeEscribir} />}
-          {tab === "trabajadores" && <PanelTrabajadores catalogos={catalogos} centrosCosto={centrosCosto} puedeEscribir={puedeEscribir} />}
-          {tab === "tregistro" && <PanelTRegistro puedeEscribir={puedeEscribir} />}
+          {tab === "mes" && <PanelPlanillaMes mes={mes} setMes={setMes} catalogos={catalogos} puedeEscribir={puedeEscribir} refrescarAvisos={refrescarAvisos} />}
+          {tab === "trabajadores" && <PanelTrabajadores catalogos={catalogos} centrosCosto={centrosCosto} puedeEscribir={puedeEscribir} refrescarAvisos={refrescarAvisos} />}
+          {tab === "tregistro" && <PanelTRegistro puedeEscribir={puedeEscribir} refrescarAvisos={refrescarAvisos} />}
           {tab === "configtr" && <PanelConfigTRegistro catalogos={catalogos} puedeEscribir={puedeEscribir} onGuardado={refrescarCatalogos} />}
-          {tab === "perfil" && <PanelPerfilLaboral catalogos={catalogos} puedeEscribir={puedeEscribir} onGuardado={(avisos) => { setAvisosPerfil(avisos); refrescarCatalogos(); }} />}
+          {tab === "perfil" && <PanelPerfilLaboral catalogos={catalogos} puedeEscribir={puedeEscribir} onGuardado={(d) => { aplicarAvisos(d); refrescarCatalogos(); }} />}
           {tab === "parametros" && <PanelParametrosPlanilla mes={mes} setMes={setMes} catalogos={catalogos} puedeEscribir={puedeEscribir} />}
           {tab === "plame" && <PanelPlame mes={mes} setMes={setMes} />}
           {tab === "cuentas" && <PanelCuentasPlanilla cuentas={cuentas} catalogos={catalogos} puedeEscribir={puedeEscribir} />}
