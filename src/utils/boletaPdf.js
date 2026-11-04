@@ -112,7 +112,7 @@ export async function generarBoletasZip(boletas, { periodo, ...opciones } = {}) 
     dibujarBoleta(doc, b, opciones);
     zip.file(nombres[i], doc.output("arraybuffer"));
   });
-  const blob = await zip.generateAsync({ type: "blob" });
+  const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -120,5 +120,5 @@ export async function generarBoletasZip(boletas, { periodo, ...opciones } = {}) 
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }

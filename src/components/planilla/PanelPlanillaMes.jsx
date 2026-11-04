@@ -25,8 +25,7 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
   const [boleta, setBoleta] = useState(null);
   const [tramitesPendientes, setTramitesPendientes] = useState(0);
   const [generando, setGenerando] = useState(null); // "zip" | "pdf" mientras se arman las boletas
-  const [avisosBoletas, setAvisosBoletas] = useState([]);
-  const [errorBoletas, setErrorBoletas] = useState("");
+  const [resultadoBoletas, setResultadoBoletas] = useState({ clave: "", avisos: [], error: "" });
 
   const cargar = useCallback(async () => {
     if (!/^\d{6}$/.test(periodo)) return;
@@ -71,18 +70,23 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
     "Trabajador": "TOTAL", "Total ingresos": totales.ingresos, "Descuentos": totales.descuentos, "Neto a pagar": totales.neto, "EsSalud y EPS": totales.aportesEmpleador,
   }]);
 
+  // Los avisos y el error de la descarga son de ese mes y estado: al cambiar alguno ya no se muestran.
+  const claveBoletas = `${periodo}|${planilla?.estado}`;
+  const { avisos: avisosBoletas, error: errorBoletas } = resultadoBoletas.clave === claveBoletas ? resultadoBoletas : { avisos: [], error: "" };
+
   const borrador = !cerrada;
   const descargarBoletas = async (formato) => {
-    setAvisosBoletas(avisosDescargaBoletas(boletas, { cerrada }));
-    setErrorBoletas("");
+    const clave = claveBoletas;
+    setResultadoBoletas({ clave, avisos: avisosDescargaBoletas(boletas, { cerrada }), error: "" });
     setGenerando(formato);
     // Cede el hilo para que se pinte «Generando…» antes de que jsPDF bloquee la pantalla.
     await new Promise((r) => setTimeout(r, 30));
     try {
       const opciones = { empleador: catalogos.empleador, afps: catalogos.afps, borrador, periodo };
       if (formato === "zip") await generarBoletasZip(boletas, opciones); else generarBoletasPdf(boletas, opciones);
-    } catch {
-      setErrorBoletas("No se pudieron generar las boletas. Vuelve a intentarlo.");
+    } catch (e) {
+      console.error(e);
+      setResultadoBoletas((r) => ({ ...r, clave, error: "No se pudieron generar las boletas. Vuelve a intentarlo." }));
     } finally {
       setGenerando(null);
     }
@@ -134,7 +138,7 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
       {avisosBoletas.length > 0 && (
         <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex gap-3">
           <ul className="flex-1 list-disc pl-5">{avisosBoletas.map((a) => <li key={a}>{a}</li>)}</ul>
-          <button onClick={() => setAvisosBoletas([])} className="text-xs underline self-start">Cerrar</button>
+          <button onClick={() => setResultadoBoletas((r) => ({ ...r, avisos: [] }))} className="text-xs underline self-start">Cerrar</button>
         </div>
       )}
       {errorBoletas && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errorBoletas}</p>}
