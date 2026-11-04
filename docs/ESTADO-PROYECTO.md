@@ -354,9 +354,25 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
 - **Siguiente entrega (diseñada, sin construir)**: archivo de texto para **AFPnet** (ancho fijo, 141 caracteres por línea) y **boletas en masa**
   (un `.zip` con un PDF por trabajador llamado «DNI NOMBRE» y un PDF único; descargables como BORRADOR con la planilla abierta). Reglas acordadas:
   sin CPP; «U» (excepción de aportar) solo en los días 21/22 con `bases.afp` = 0 y en blanco en los demás casos (contador, 2026-11-03); tipo de
-  trabajo N. Borrador del diseño: `docs/superpowers/specs/2026-11-03-afpnet-boletas-borrador.md`. Incluye el pendiente «imprimir boletas en masa» de arriba.
-- **Pendiente de seguridad (CPE, preexistente, a la espera del OK del usuario)**: la `serie` del propio comprobante no se valida en el backend antes de
-  interpolarse en el XML firmado (`emitirFacturaBoleta` en `comprobante.controller.js`). Arreglo: la misma regla del formulario, `/^[A-Z0-9]{4}$/`.
+  trabajo N. Diseño: `docs/superpowers/specs/2026-11-04-afpnet-boletas-design.md` (detalle en `2026-11-03-afpnet-boletas-borrador.md`),
+  pendiente de aprobación del usuario. Incluye el pendiente «imprimir boletas en masa» de arriba.
+  - Decisiones mías a revisar: mes sin remuneración con varios motivos → el de más días (empate U > L > O); reingreso en el mes → una línea con
+    Cese «S» solo si el último vínculo termina en el mes; Ñ en latin1; vencimiento referencial (5.º día útil); con CPP el TXT sale sin esas líneas
+    y con aviso; SUNAT 24 → AFPnet 8 sin confirmar; sin ficha, nombres desde la boleta; `-BORRADOR` solo en el nombre del zip.
+  - **[Probar en AFPnet]** cargar el TXT en la bandeja sin presentar: nombre de archivo libre, Ñ, CRLF.
+  - Fuera de esta entrega (pendientes): semanas contributivas (pesqueros); aportes voluntarios (0609/0801, columnas M–O); pensionados por
+    jubilación o invalidez (J/I) y dejar de calcular su aporte; código P (ingreso después del cierre); versión Excel del archivo AFPnet;
+    pagos después del cese (RL = N); CPP (código 10 de AFPnet no cabe en el TXT: consultar a la mesa de ayuda de AFPnet); cruce con la consulta
+    masiva de afiliados de AFPnet (ONP marcados que están en AFP); apellidos y nombres separados en la foto de la boleta (`fotoDe`).
+  - **Envío de boletas por correo**: requiere firma digital y constancia de recepción (D. Leg. 1310); en investigación (servicios y costos).
+- **Serie del comprobante validada en el backend (hecho, 2026-11-03, `f78c83f`)**: `/^[A-Z0-9]{4}$/` antes de reservar el correlativo en factura,
+  boleta, NC, ND y GRE. Pendiente aparte: `documentosRelacionados[].numero` de la GRE va al XML sin escapar (su formato depende del catálogo 61).
+- **Descarga de trámites del T-Registro (propuesta sin decidir)**: hoy siempre baja un `.zip` y hay que descomprimirlo antes del PVS; propuesta:
+  si el trámite tiene un solo archivo (baja, modificación SCTR solo de salud) bajar el `.per` suelto, y en el zip avisar «descomprime antes del PVS».
+  El PVS solo muestra los `RP_<RUC>.*` del RUC con que se ingresó.
+- **Gratificación, CTS, vacaciones y liquidación (siguiente tema)**: hoy la gratificación se digita (0406 + 0312) y solo se proyecta para la 5.ª;
+  vacaciones solo el goce (suspensión 23 → 0118); CTS, truncas, indemnización vacacional, liquidación de cese y provisiones no existen. Reglas en
+  verificación contra normas oficiales; el usuario pidió al contador sus Excel de liquidación y de CTS como formato y caso de prueba.
 - **Prueba inestable ajena**: `test/bancos.test.js` «carrera: un movimiento y el cierre…» falla a veces por `0` contra `-0`; pasa al re-ejecutar.
 - **Menores diferidos que se conservan**: tasa de vida ley con 4 decimales (hoy se redondea a 2 sin avisar); `tramitesPendientesEnMes` (aviso de
   `PanelPlanillaMes`) no cuenta las modificaciones SCTR pendientes; la primera generación de una planilla de un año anterior, sin foto guardada, tras
