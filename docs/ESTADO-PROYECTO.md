@@ -399,7 +399,10 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   (ni el goce ni la venta se rechazan por falta de saldo); **carga inicial** = días pendientes de cada periodo ganado antes de la primera planilla del
   sistema (mes de corte), que se guarda como ajustes «Carga inicial» (botón visible siempre, resaltado mientras no se haya cargado); **tope de venta =
   derecho / 2** (15 días, 7,5 en MYPE), **confirmado por el contador**; **base del 0117 confirmada por el contador** = básico + asignación familiar + fijos
-  afectos a EsSalud; un periodo anterior al corte con ajuste deja de estar «liquidado» y se comporta como un periodo normal. Fuera de alcance: vacaciones
+  afectos a EsSalud; un periodo anterior al corte con ajuste deja de estar «liquidado» y se comporta como un periodo normal. La carga inicial **ancla
+  el corte por trabajador** (`vacaciones.cargaInicial.corte`): sus saldos se calculan siempre contra ese mes aunque se reabra la primera planilla cerrada
+  o pase el mes sin planillas cerradas (marcas antiguas sin corte usan el global); solo acepta periodos ganados antes de ese corte y una diferencia de
+  hasta ±60 días por periodo. Los **reingresos** ignoran las boletas de meses anteriores al nuevo ingreso. Fuera de alcance: vacaciones
   truncas, liquidación de cese y provisión (siguen en «Gratificación, CTS, vacaciones y liquidación»). Commits: Backend `fcc041f..b9ac096`; Frontend
   `feat(planilla): pestaña de vacaciones y venta de vacaciones en la boleta` (`PanelVacaciones`, `utils/vacaciones.js`, `ModalBoleta`, `Planilla`).
 - **RMV S/ 1 230 desde 01/10/2026** (D.S. 015-2026-TR): actualizar los Parámetros de oct/nov 2026 (reabrir y regenerar la planilla si ya están cerradas).
