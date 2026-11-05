@@ -55,6 +55,23 @@ test("formulario del trabajador: validación y cuerpo para el servidor", () => {
   assert.deepEqual([vuelta.remuneracionBasica, vuelta.centroCosto, vuelta.pension.comision, vuelta.conceptosFijos[0].monto, vuelta.quintaAnterior[0].mes], ["2500", "", "flujo", "150.5", "2026-08"]);
 });
 
+test("formulario del trabajador: plan EPS", () => {
+  const f = { ...TRABAJADOR_VACIO, numDoc: "12345678", apellidoPaterno: "Quispe", nombres: "Ana", fechaIngreso: "2026-01-05", remuneracionBasica: "2500", salud: "eps" };
+  // Sin plan, la EPS no descuenta nada: se guarda igual.
+  assert.equal(validarTrabajador(f), "");
+  assert.equal(cuerpoDeTrabajador(f).planEps, null);
+  const plan = { nombre: "Oro", primaTotal: "180", aporteEmpresa: "120", aporteTrabajador: "60" };
+  assert.equal(validarTrabajador({ ...f, planEps: plan }), "");
+  assert.match(validarTrabajador({ ...f, planEps: { ...plan, aporteTrabajador: "50" } }), /sumar la prima total/);
+  assert.match(validarTrabajador({ ...f, planEps: { ...plan, primaTotal: "" } }), /montos del plan EPS/);
+  assert.deepEqual(cuerpoDeTrabajador({ ...f, planEps: plan }).planEps, { nombre: "Oro", primaTotal: 180, aporteEmpresa: 120, aporteTrabajador: 60 });
+  // Con otro régimen de salud el plan no se valida ni se envía.
+  assert.equal(validarTrabajador({ ...f, salud: "essalud", planEps: { ...plan, primaTotal: "x" } }), "");
+  assert.equal(cuerpoDeTrabajador({ ...f, salud: "essalud", planEps: plan }).planEps, null);
+  assert.deepEqual(formularioDeTrabajador({ ...f, planEps: { nombre: "Oro", primaTotal: 180, aporteEmpresa: 120, aporteTrabajador: 60 } }).planEps, plan);
+  assert.deepEqual(formularioDeTrabajador({ ...f, planEps: null }).planEps, TRABAJADOR_VACIO.planEps);
+});
+
 test("parámetros del mes: formulario, cuerpo y aviso de tasas de AFP sin llenar", () => {
   const p = { uit: 5500, rmv: 1130, essalud: 9, onp: 13, afp: { aporte: 10, prima: 0, tope: 0, comisiones: { integra: { flujo: 1.55, mixta: 0 } } } };
   const f = formularioDeParametros(p, AFPS);

@@ -92,6 +92,7 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
   const [guardando, setGuardando] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const setPension = (k) => (e) => setForm((f) => ({ ...f, pension: { ...f.pension, [k]: e.target.value } }));
+  const setPlanEps = (k) => (e) => setForm((f) => ({ ...f, planEps: { ...f.planEps, [k]: e.target.value } }));
   const fila = (campo, i, parche) => setForm((f) => ({ ...f, [campo]: f[campo].map((x, j) => (j === i ? { ...x, ...parche } : x)) }));
   const quitar = (campo, i) => setForm((f) => ({ ...f, [campo]: f[campo].filter((_, j) => j !== i) }));
   const agregar = (campo, vacia) => setForm((f) => ({ ...f, [campo]: [...f[campo], vacia] }));
@@ -247,6 +248,22 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
                 {Object.entries(REGIMENES_SALUD).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </label>
+            {form.salud === "eps" && (
+              <>
+                <label className="text-xs text-gray-500">Plan EPS
+                  <input value={form.planEps.nombre} onChange={setPlanEps("nombre")} maxLength={60} placeholder="Ej. Corporativo Oro" className={INP} />
+                </label>
+                <label className="text-xs text-gray-500">Prima total al mes
+                  <input value={form.planEps.primaTotal} onChange={setPlanEps("primaTotal")} placeholder="S/" inputMode="decimal" className={`${INP} text-right`} />
+                </label>
+                <label className="text-xs text-gray-500">Aporte de la empresa
+                  <input value={form.planEps.aporteEmpresa} onChange={setPlanEps("aporteEmpresa")} placeholder="S/" inputMode="decimal" className={`${INP} text-right`} />
+                </label>
+                <label className="text-xs text-gray-500">Aporte del trabajador (se descuenta en su boleta)
+                  <input value={form.planEps.aporteTrabajador} onChange={setPlanEps("aporteTrabajador")} placeholder="S/" inputMode="decimal" className={`${INP} text-right`} />
+                </label>
+              </>
+            )}
           </div>
 
           <div className="space-y-2">

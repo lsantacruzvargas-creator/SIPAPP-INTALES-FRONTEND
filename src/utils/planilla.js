@@ -34,8 +34,9 @@ export function filasExcelPlanilla(boletas, afps = {}) {
 export const TRABAJADOR_VACIO = {
   tipoDoc: "01", numDoc: "", apellidoPaterno: "", apellidoMaterno: "", nombres: "", cargo: "", centroCosto: "", fechaIngreso: "", fechaCese: "",
   remuneracionBasica: "", asignacionFamiliar: false, conceptosFijos: [], pension: { regimen: "onp", afp: "", comision: "flujo", cuspp: "" },
-  salud: "essalud", quintaAnterior: [], tregistro: TREGISTRO_VACIO(), desbloqueo: false,
+  salud: "essalud", planEps: { nombre: "", primaTotal: "", aporteEmpresa: "", aporteTrabajador: "" }, quintaAnterior: [], tregistro: TREGISTRO_VACIO(), desbloqueo: false,
 };
+const MONTOS_EPS = ["primaTotal", "aporteEmpresa", "aporteTrabajador"];
 
 // Copia solo las claves del formulario vacío: lo que escribe el servidor (alta, estado de baja, ediciones) no entra al formulario.
 const mezclarTregistro = (base, origen) => Object.fromEntries(Object.entries(base).map(([k, d]) => (
@@ -45,6 +46,7 @@ const mezclarTregistro = (base, origen) => Object.fromEntries(Object.entries(bas
 export const formularioDeTrabajador = (t) => ({
   ...TRABAJADOR_VACIO, ...t, tregistro: { ...mezclarTregistro(TREGISTRO_VACIO(), t.tregistro), nacionalidad: t.tregistro?.nacionalidad ?? "" }, desbloqueo: false, centroCosto: t.centroCosto || "", fechaCese: t.fechaCese || "", remuneracionBasica: String(t.remuneracionBasica ?? ""),
   pension: { ...TRABAJADOR_VACIO.pension, ...t.pension },
+  planEps: t.planEps ? { nombre: t.planEps.nombre || "", ...Object.fromEntries(MONTOS_EPS.map((k) => [k, String(t.planEps[k] ?? "")])) } : TRABAJADOR_VACIO.planEps,
   conceptosFijos: (t.conceptosFijos || []).map((c) => ({ codigo: c.codigo, monto: String(c.monto) })),
   quintaAnterior: (t.quintaAnterior || []).map((q) => ({ mes: `${q.periodo.slice(0, 4)}-${q.periodo.slice(4)}`, ingresos: String(q.ingresos), retencion: String(q.retencion) })),
 });
@@ -67,8 +69,16 @@ export function validarTrabajador(f) {
   if (f.pension.regimen === "afp" && !f.pension.afp) return "Elige la AFP del trabajador.";
   if (f.conceptosFijos.some((c) => !c.codigo || !(Number(c.monto) > 0))) return "Completa o quita los conceptos fijos vacíos.";
   if (f.quintaAnterior.some((q) => !/^\d{4}-\d{2}$/.test(q.mes))) return "Indica el mes de cada fila de renta de 5.ª anterior.";
+  if (conPlanEps(f)) {
+    const [prima, empresa, trabajador] = MONTOS_EPS.map((k) => Number(f.planEps[k]));
+    if (MONTOS_EPS.some((k) => String(f.planEps[k]).trim() === "" || !(Number(f.planEps[k]) >= 0))) return "Completa los montos del plan EPS (0 o más) o déjalos todos vacíos.";
+    if (Math.abs(empresa + trabajador - prima) > 0.005) return "El aporte de la empresa y el del trabajador deben sumar la prima total de la EPS.";
+  }
   return validarTregistro(f.tregistro);
 }
+
+// Un plan EPS sin ningún dato no se envía: el trabajador con EPS queda sin descuento.
+const conPlanEps = (f) => f.salud === "eps" && Boolean(f.planEps) && Object.values(f.planEps).some((v) => String(v).trim() !== "");
 
 // Sin estudios exigidos no se envía la sección: oculta, un año a medias no debe impedir guardar ni pisar lo guardado.
 const tregistroDeCuerpo = ({ estudios, ...resto }) => (requiereEstudios(resto.situacionEducativa) ? { ...resto, estudios } : resto);
@@ -77,6 +87,7 @@ export const cuerpoDeTrabajador = ({ desbloqueo, ...f }) => ({
   ...f, tregistro: tregistroDeCuerpo(f.tregistro), ...(desbloqueo === true && { desbloqueo }), centroCosto: f.centroCosto || null, remuneracionBasica: Number(f.remuneracionBasica),
   conceptosFijos: f.conceptosFijos.map((c) => ({ codigo: c.codigo, monto: Number(c.monto) })),
   quintaAnterior: f.quintaAnterior.map((q) => ({ periodo: q.mes.replace("-", ""), ingresos: Number(q.ingresos) || 0, retencion: Number(q.retencion) || 0 })),
+  planEps: conPlanEps(f) ? { nombre: f.planEps.nombre.trim(), ...Object.fromEntries(MONTOS_EPS.map((k) => [k, Number(f.planEps[k])])) } : null,
 });
 
 // Parámetros del mes ↔ formulario (los inputs trabajan con texto).
