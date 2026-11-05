@@ -11,10 +11,12 @@ import PanelCuentasPlanilla from "../components/planilla/PanelCuentasPlanilla";
 import PanelTRegistro from "../components/planilla/PanelTRegistro";
 import PanelConfigTRegistro from "../components/planilla/PanelConfigTRegistro";
 import PanelPerfilLaboral from "../components/planilla/PanelPerfilLaboral";
+import PanelVacaciones from "../components/planilla/PanelVacaciones";
 
 const TABS = [
   { id: "mes", label: "Planilla del mes" },
   { id: "trabajadores", label: "Trabajadores" },
+  { id: "vacaciones", label: "Vacaciones" },
   { id: "tregistro", label: "T-Registro" },
   { id: "configtr", label: "Config. T-Registro" },
   { id: "perfil", label: "Perfil laboral" },
@@ -40,6 +42,7 @@ export default function Planilla() {
   const [avisosPerfil, setAvisosPerfil] = useState([]);
   const [cambioPerfil, setCambioPerfil] = useState(null);
   const [cambioVisto, setCambioVisto] = useState(leerVisto);
+  const [avisosVacaciones, setAvisosVacaciones] = useState(0);
 
   useEffect(() => {
     Promise.all([fetchAuth("/planilla/catalogos"), fetchAuth("/contabilidad/cuentas"), fetchAuth("/centros-costo")]).then(async ([rc, rp, rk]) => {
@@ -60,6 +63,15 @@ export default function Planilla() {
     } catch { /* los avisos son informativos: sin ellos la planilla sigue funcionando */ }
   }, []);
   useEffect(() => { const t = setTimeout(refrescarAvisos, 0); return () => clearTimeout(t); }, [refrescarAvisos]);
+
+  // El contador de la pestaña se carga una vez; el panel de vacaciones lo actualiza cuando cambia el saldo.
+  useEffect(() => {
+    let vigente = true;
+    fetchAuth("/planilla/vacaciones")
+      .then(async (r) => { if (r.ok && vigente) setAvisosVacaciones((await r.json()).avisos.length); })
+      .catch(() => { /* el contador es informativo: sin él la pestaña sigue funcionando */ });
+    return () => { vigente = false; };
+  }, []);
 
   const entendido = () => { guardarVisto(cambioPerfil.fecha); setCambioVisto(cambioPerfil.fecha); };
   const verCambio = mostrarCambioPerfil(cambioPerfil, cambioVisto);
@@ -85,6 +97,7 @@ export default function Planilla() {
               tab === t.id ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}>
             {t.label}
+            {t.id === "vacaciones" && avisosVacaciones > 0 && <span className="ml-1.5 bg-amber-500 text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5">{avisosVacaciones}</span>}
           </button>
         ))}
       </div>
@@ -105,6 +118,7 @@ export default function Planilla() {
         <>
           {tab === "mes" && <PanelPlanillaMes mes={mes} setMes={setMes} catalogos={catalogos} puedeEscribir={puedeEscribir} refrescarAvisos={refrescarAvisos} />}
           {tab === "trabajadores" && <PanelTrabajadores catalogos={catalogos} centrosCosto={centrosCosto} puedeEscribir={puedeEscribir} refrescarAvisos={refrescarAvisos} />}
+          {tab === "vacaciones" && <PanelVacaciones puedeEscribir={puedeEscribir} onAvisos={setAvisosVacaciones} />}
           {tab === "tregistro" && <PanelTRegistro puedeEscribir={puedeEscribir} refrescarAvisos={refrescarAvisos} />}
           {tab === "configtr" && <PanelConfigTRegistro catalogos={catalogos} puedeEscribir={puedeEscribir} onGuardado={refrescarCatalogos} />}
           {tab === "perfil" && <PanelPerfilLaboral catalogos={catalogos} puedeEscribir={puedeEscribir} onGuardado={(d) => { aplicarAvisos(d); refrescarCatalogos(); }} />}

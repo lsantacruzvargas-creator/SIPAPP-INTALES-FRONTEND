@@ -384,7 +384,7 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   si el trámite tiene un solo archivo (baja, modificación SCTR solo de salud) bajar el `.per` suelto, y en el zip avisar «descomprime antes del PVS».
   El PVS solo muestra los `RP_<RUC>.*` del RUC con que se ingresó.
 - **Gratificación, CTS, vacaciones y liquidación (siguiente tema)**: hoy la gratificación se digita (0406 + 0312) y solo se proyecta para la 5.ª;
-  vacaciones solo el goce (suspensión 23 → 0118); CTS, truncas, indemnización vacacional, liquidación de cese y provisiones no existen. Reglas verificadas
+  vacaciones ya tienen saldo, venta y ajustes (ver «Vacaciones»); CTS, truncas, indemnización vacacional, liquidación de cese y provisiones no existen. Reglas verificadas
   y respuestas del contador en `docs/superpowers/specs/2026-11-04-beneficios-sociales-reglas.md`; falta el Excel del contador (liquidación y CTS) como
   formato y caso de prueba.
 - **Reporte mensual de la planilla pagada (pendiente, pedido del usuario 2026-11-04)**: récord del mes por trabajador con lo pagado y la asistencia
@@ -392,7 +392,16 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
 - **Archivo de abono de sueldos al banco (pendiente)**: banco y formato configurables por cuenta cargo; método de abono por trabajador (mismo banco,
   interbancario con CCI, efectivo o cheque fuera del archivo). Formatos en investigación (`specs/2026-11-04-abono-sueldos-formatos-investigacion.md`);
   los que no se confirmen esperan el layout que entregue el banco del cliente (al final).
-- **Vacaciones (en diseño)**: `specs/2026-11-04-vacaciones-design.md`.
+- **Vacaciones (entregado 2026-11-04)**: diseño en `specs/2026-11-04-vacaciones-design.md`. Pestaña «Vacaciones» de Planilla: saldo por trabajador activo
+  y periodo (cada aniversario de ingreso; 30 días en régimen general, 15 en pequeña y microempresa), con goce imputado desde los días de vacaciones de las
+  boletas, venta con `asistencia.diasVendidos` (entero 0–15, campo «Días de vacaciones vendidos» de la boleta; se paga como compensación 0117), ajustes
+  manuales por periodo (`AjusteVacaciones`, con motivo y quien los hizo) y avisos con contador en la pestaña. Decisiones: el sistema **avisa y no bloquea**
+  (ni el goce ni la venta se rechazan por falta de saldo); **carga inicial** = días pendientes de cada periodo ganado antes de la primera planilla del
+  sistema (mes de corte), que se guarda como ajustes «Carga inicial» (botón visible siempre, resaltado mientras no se haya cargado); **tope de venta =
+  derecho / 2** (15 días, 7,5 en MYPE), **confirmado por el contador**; **base del 0117 confirmada por el contador** = básico + asignación familiar + fijos
+  afectos a EsSalud; un periodo anterior al corte con ajuste deja de estar «liquidado» y se comporta como un periodo normal. Fuera de alcance: vacaciones
+  truncas, liquidación de cese y provisión (siguen en «Gratificación, CTS, vacaciones y liquidación»). Commits: Backend `fcc041f..b9ac096`; Frontend
+  `feat(planilla): pestaña de vacaciones y venta de vacaciones en la boleta` (`PanelVacaciones`, `utils/vacaciones.js`, `ModalBoleta`, `Planilla`).
 - **RMV S/ 1 230 desde 01/10/2026** (D.S. 015-2026-TR): actualizar los Parámetros de oct/nov 2026 (reabrir y regenerar la planilla si ya están cerradas).
   El valor inicial de `PARAMETROS_INICIALES` ya es 1230.
 - **Prueba inestable ajena**: `test/bancos.test.js` «carrera: un movimiento y el cierre…» falla a veces por `0` contra `-0`; pasa al re-ejecutar.

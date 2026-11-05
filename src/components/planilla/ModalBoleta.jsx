@@ -3,6 +3,7 @@ import { fetchAuth } from "../../utils/fetchAuth";
 import { money } from "../../utils/compras";
 import { TIPOS_CONCEPTO, textoPension } from "../../utils/planilla";
 import { generarBoletaPdf } from "../../utils/boletaPdf";
+import { validarDiasVendidos } from "../../utils/vacaciones";
 
 const SE_PAGAN_CON_FACTURA = ["0803", "0805", "0810"];
 const INP = "border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
@@ -13,6 +14,7 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
   const [form, setForm] = useState(() => ({
     suspensiones: (inicial.asistencia?.suspensiones || []).map((s) => ({ tipo: s.tipo, dias: String(s.dias) })),
     horasExtras25: String(inicial.asistencia?.horasExtras25 || ""), horasExtras35: String(inicial.asistencia?.horasExtras35 || ""),
+    diasVendidos: String(inicial.asistencia?.diasVendidos || ""),
     adicionales: (inicial.adicionales || []).map((a) => ({ codigo: a.codigo, monto: String(a.monto) })),
   }));
   const [guardando, setGuardando] = useState(false);
@@ -27,11 +29,13 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
     if (form.suspensiones.some((s) => !s.tipo || !(Number(s.dias) >= 1)) || form.adicionales.some((a) => !a.codigo || !(Number(a.monto) > 0))) {
       return setError("Completa o quita las filas vacías.");
     }
+    const errorVenta = validarDiasVendidos(form.diasVendidos);
+    if (errorVenta) return setError(errorVenta);
     setGuardando(true);
     setError("");
     try {
       const r = await fetchAuth(`/planilla/boletas/${boleta._id}`, { method: "PUT", body: JSON.stringify({
-        asistencia: { suspensiones: form.suspensiones.map((s) => ({ tipo: s.tipo, dias: Number(s.dias) })), horasExtras25: Number(form.horasExtras25) || 0, horasExtras35: Number(form.horasExtras35) || 0 },
+        asistencia: { suspensiones: form.suspensiones.map((s) => ({ tipo: s.tipo, dias: Number(s.dias) })), horasExtras25: Number(form.horasExtras25) || 0, horasExtras35: Number(form.horasExtras35) || 0, diasVendidos: Number(form.diasVendidos) || 0 },
         adicionales: form.adicionales.map((a) => ({ codigo: a.codigo, monto: Number(a.monto) })),
       }) });
       const d = await r.json().catch(() => ({}));
@@ -75,15 +79,18 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
               </div>
             ))}
             {editable && <button onClick={() => cambiar("suspensiones", [...form.suspensiones, { tipo: "", dias: "" }])} className="text-xs text-purple-600 hover:underline">+ Días no laborados (faltas, vacaciones, licencias)</button>}
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               <label className="text-xs text-gray-500">Horas extras al 25 %
                 <input value={form.horasExtras25} disabled={!editable} onChange={(e) => cambiar("horasExtras25", e.target.value)} inputMode="decimal" className={`${INP} block w-28 text-right`} />
               </label>
               <label className="text-xs text-gray-500">Horas extras al 35 %
                 <input value={form.horasExtras35} disabled={!editable} onChange={(e) => cambiar("horasExtras35", e.target.value)} inputMode="decimal" className={`${INP} block w-28 text-right`} />
               </label>
+              <label className="text-xs text-gray-500">Días de vacaciones vendidos
+                <input value={form.diasVendidos} disabled={!editable} onChange={(e) => cambiar("diasVendidos", e.target.value.replace(/\D/g, ""))} inputMode="numeric" className={`${INP} block w-28 text-right`} />
+              </label>
             </div>
-            <p className="text-[11px] text-gray-400">Las dos primeras horas extras del día van al 25 % y las siguientes al 35 %.</p>
+            <p className="text-[11px] text-gray-400">Las dos primeras horas extras del día van al 25 % y las siguientes al 35 %. Los días vendidos se pagan como compensación vacacional (0117).</p>
 
             <h4 className="text-xs font-bold text-gray-600 uppercase pt-2">Otros conceptos del mes</h4>
             {form.adicionales.map((a, i) => (
