@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ESTADOS_PERIODO, validarAjuste, filasExcelVacaciones, validarDiasVendidos } from "./vacaciones.js";
+import { ESTADOS_PERIODO, validarAjuste, filasExcelVacaciones, validarDiasVendidos, periodosCargaInicial } from "./vacaciones.js";
 
 test("ESTADOS_PERIODO: un texto y una clase por cada estado del servidor", () => {
   assert.deepEqual(Object.keys(ESTADOS_PERIODO), ["en curso", "liquidado", "gozado", "vigente", "por vencer", "vencido"]);
@@ -37,4 +37,24 @@ test("filasExcelVacaciones: fechas dd/mm/aaaa, avisos unidos y guion sin vencimi
   const [sin] = filasExcelVacaciones([{ ...t, proximoVencimiento: null, avisos: [] }]);
   assert.equal(sin["Próximo vencimiento"], "—");
   assert.equal(sin.Avisos, "");
+});
+
+test("periodosCargaInicial: ganados antes del mes de corte, con liquidado incluido y el saldo base como valor inicial", () => {
+  const p = (inicio, fin, o = {}) => ({ inicio, fin, ganado: true, liquidado: false, derecho: 30, gozados: 0, vendidos: 0, ajustes: 0, saldo: 0, ...o });
+  const detalle = {
+    corte: "202609",
+    periodos: [
+      p("2023-03-16", "2024-03-15", { liquidado: true }),
+      p("2024-03-16", "2025-03-15", { ajustes: 10, saldo: 10 }),
+      p("2025-03-16", "2026-03-15", { gozados: 5, vendidos: 3, saldo: 12, ajustes: 0 }),
+      p("2026-03-16", "2027-03-15", { saldo: 30 }),
+      p("2027-03-16", "2028-03-15", { ganado: false, saldo: 30 }),
+    ],
+  };
+  assert.deepEqual(periodosCargaInicial(detalle), [
+    { periodoInicio: "2023-03-16", inicio: "2023-03-16", fin: "2024-03-15", gozados: 0, vendidos: 0, pendientes: "0" },
+    { periodoInicio: "2024-03-16", inicio: "2024-03-16", fin: "2025-03-15", gozados: 0, vendidos: 0, pendientes: "10" },
+    { periodoInicio: "2025-03-16", inicio: "2025-03-16", fin: "2026-03-15", gozados: 5, vendidos: 3, pendientes: "20" },
+  ]);
+  assert.deepEqual(periodosCargaInicial({ corte: "202609", periodos: [] }), []);
 });

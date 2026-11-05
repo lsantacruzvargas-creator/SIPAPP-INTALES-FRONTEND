@@ -10,7 +10,7 @@ export const ESTADOS_PERIODO = {
 // Fechas internas "AAAA-MM-DD" → dd/mm/aaaa sin pasar por Date (no hay huso que corregir).
 export const fechaDMA = (f) => (f ? f.split("-").reverse().join("/") : "—");
 
-const esEntero = (v) => /^-?\d+$/.test(String(v).trim());
+export const esEntero = (v) => /^-?\d+$/.test(String(v).trim());
 
 export function validarAjuste({ periodoInicio, dias, motivo }) {
   if (!periodoInicio) return "Elige el periodo.";
@@ -34,3 +34,16 @@ export const filasExcelVacaciones = (trabajadores) =>
     "Próximo vencimiento": fechaDMA(t.proximoVencimiento),
     Avisos: (t.avisos || []).join(" | "),
   }));
+
+// Periodos que la carga inicial deja llenar: los ganados antes del mes de corte, liquidados o no (el servidor llama
+// «liquidado» a todo periodo viejo sin ajustes, justo los que hay que cargar). El valor inicial es el mismo `base` del
+// servidor (saldo + gozados + vendidos): guardar sin tocar nada no crea ajustes. `derecho` no sirve: antes del corte la base efectiva es 0.
+export function periodosCargaInicial({ corte, periodos }) {
+  const primerDia = `${corte.slice(0, 4)}-${corte.slice(4)}-01`;
+  return periodos
+    .filter((p) => p.ganado && p.fin < primerDia)
+    .map((p) => ({
+      periodoInicio: p.inicio, inicio: p.inicio, fin: p.fin, gozados: p.gozados, vendidos: p.vendidos,
+      pendientes: String(p.saldo + p.gozados + p.vendidos),
+    }));
+}

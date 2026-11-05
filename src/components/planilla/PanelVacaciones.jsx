@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha } from "../../utils/fecha";
-import { ESTADOS_PERIODO, fechaDMA, validarAjuste, filasExcelVacaciones } from "../../utils/vacaciones";
+import { ESTADOS_PERIODO, fechaDMA, validarAjuste, filasExcelVacaciones, esEntero, periodosCargaInicial } from "../../utils/vacaciones";
 import TablaScroll from "../TablaScroll";
 import ConfirmacionAccion from "../ConfirmacionAccion";
 
@@ -13,7 +13,7 @@ const MENSAJE_RED = "Error de conexión con el servidor.";
 const dias = (n) => String(n).replace(".", ",");
 const mesDMA = (p) => `${p.slice(4)}/${p.slice(0, 4)}`;
 const textoMes = (p) => `${MESES[Number(p.slice(4)) - 1]} de ${p.slice(0, 4)}`;
-const entero = (v) => /^-?\d+$/.test(String(v).trim()) && Math.abs(Number(v)) <= 60;
+const enRango = (v) => esEntero(v) && Math.abs(Number(v)) <= 60;
 
 function Estado({ valor }) {
   const e = ESTADOS_PERIODO[valor] || { texto: valor, clase: "bg-gray-100 text-gray-600" };
@@ -85,15 +85,14 @@ function ModalAjuste({ detalle, onCerrar, onGuardado }) {
 
 // Lo que quedaba pendiente por periodo antes de la primera planilla del sistema; el goce y la venta del sistema se descuentan después.
 function ModalCargaInicial({ detalle, onCerrar, onGuardado }) {
-  const primerDia = `${detalle.corte.slice(0, 4)}-${detalle.corte.slice(4)}-01`;
-  const periodos = detalle.periodos.filter((p) => p.ganado && !p.liquidado && p.fin < primerDia);
-  const [valores, setValores] = useState(() => Object.fromEntries(periodos.map((p) => [p.inicio, String(p.derecho + p.ajustes)])));
+  const periodos = periodosCargaInicial(detalle);
+  const [valores, setValores] = useState(() => Object.fromEntries(periodos.map((p) => [p.inicio, p.pendientes])));
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
   const { cargaInicial } = detalle.trabajador;
 
   const guardar = async () => {
-    if (periodos.some((p) => !entero(valores[p.inicio]))) return setError("Los días pendientes de cada periodo deben ser enteros entre -60 y 60.");
+    if (periodos.some((p) => !enRango(valores[p.inicio]))) return setError("Los días pendientes de cada periodo deben ser enteros entre -60 y 60.");
     setGuardando(true);
     setError("");
     try {
@@ -129,7 +128,6 @@ function ModalCargaInicial({ detalle, onCerrar, onGuardado }) {
               <thead>
                 <tr className="text-left text-xs text-gray-500 border-b">
                   <th className="py-1 pr-2">Periodo</th>
-                  <th className="pr-2 text-right">Derecho</th>
                   <th className="pr-2 text-right">Gozado en el sistema</th>
                   <th className="pr-2 text-right">Vendido en el sistema</th>
                   <th className="text-right">Pendientes antes de {textoMes(detalle.corte)}</th>
@@ -139,7 +137,6 @@ function ModalCargaInicial({ detalle, onCerrar, onGuardado }) {
                 {periodos.map((p) => (
                   <tr key={p.inicio} className="border-b border-gray-100">
                     <td className="py-1.5 pr-2 whitespace-nowrap">{fechaDMA(p.inicio)} – {fechaDMA(p.fin)}</td>
-                    <td className="pr-2 text-right tabular-nums">{dias(p.derecho)}</td>
                     <td className="pr-2 text-right tabular-nums">{dias(p.gozados)}</td>
                     <td className="pr-2 text-right tabular-nums">{dias(p.vendidos)}</td>
                     <td className="text-right">
