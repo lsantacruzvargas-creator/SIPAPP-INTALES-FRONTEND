@@ -336,6 +336,11 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
 - **Vida ley**: obligatoria desde el primer día en todo régimen; la prima por trabajador (tasa o monto de la póliza, o la prima propia
   de la ficha) va en el 0803 de la boleta y del `.rem`. No genera asiento: el gasto entra con la factura de la aseguradora por Compras (6274).
   Al asiento de planilla solo entran 0807, 0806 y 0813; 0803, 0805 y 0810 son informativos.
+- **Plan EPS del trabajador** (2026-11-04, Backend `3c80130`, Frontend `f6d72dd0`): con salud EPS, la ficha guarda plan, prima total,
+  aporte de la empresa y del trabajador (montos; deben sumar la prima). La boleta descuenta el aporte del trabajador con **0706**
+  («Aporte EPS – <plan>»), completo en todo mes con días de vínculo (sin prorratear); el asiento lo abona a **EPS por pagar** y el
+  contador carga esa parte al registrar la factura de la EPS en Compras. El aporte de la empresa es solo dato. El `.rem` suma los
+  códigos repetidos de un trabajador en una línea.
 - **Avisos en pantalla**: perfil o SENATI cambiado («los archivos del T-Registro y del PLAME se generarán con estos cambios»), póliza vencida
   o por vencer, actividad de riesgo sin marcados, SENATI por confirmar y modificaciones SCTR pendientes.
 - **Detalles A y B del T-Registro** (hechos aquí): el reingreso avisa de todas las planillas cerradas desde su mes; «Seleccionar sin control»
