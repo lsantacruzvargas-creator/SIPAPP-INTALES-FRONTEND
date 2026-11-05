@@ -11,14 +11,8 @@
   "lang": "es",
   "icons": [
     {
-      "src": "/assets/logos/huaquian_icon.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/assets/logos/huaquian_icon.png",
-      "sizes": "512x512",
+      "src": "/assets/logos/intales_icon.png",
+      "sizes": "76x73",
       "type": "image/png",
       "purpose": "any"
     }

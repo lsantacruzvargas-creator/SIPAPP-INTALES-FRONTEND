@@ -33,6 +33,11 @@ export default function ListaComprobantes() {
   const [cargando, setCargando] = useState(false);
   const [errorDescarga, setErrorDescarga] = useState("");
   const [consultando, setConsultando] = useState(false);
+  const [aviso, setAviso] = useState("");
+  // Anulación hecha fuera del ERP (NC en SOL/SmartPSE, comunicación de baja): se registra a mano.
+  const [anulando, setAnulando] = useState(null);
+  const [guardandoAnulacion, setGuardandoAnulacion] = useState(false);
+  const [errorAnulacion, setErrorAnulacion] = useState("");
 
   const cargar = async () => {
     setCargando(true);
@@ -93,6 +98,7 @@ export default function ListaComprobantes() {
       const data = await res.json();
       if (!data.ok) { setErrorDescarga(data.error || "No se pudo consultar el estado en SUNAT."); return; }
       setSeleccionado((prev) => ({ ...prev, estado: data.estado, sunat: { ...prev.sunat, mensaje: data.mensaje } }));
+      setAviso(data.aviso || "");
       await cargar();
     } catch {
       setErrorDescarga("Error de conexión al consultar SUNAT.");
@@ -100,6 +106,33 @@ export default function ListaComprobantes() {
       setConsultando(false);
     }
   };
+
+  const registrarAnulacion = async () => {
+    if (!anulando.documento.trim() || !anulando.motivo.trim()) {
+      setErrorAnulacion("Indica el documento de anulación y el motivo.");
+      return;
+    }
+    setGuardandoAnulacion(true);
+    setErrorAnulacion("");
+    try {
+      const res  = await fetchAuth(`/cpe/${seleccionado._id}/anulacion-externa`, {
+        method: "PATCH",
+        body: JSON.stringify({ documento: anulando.documento.trim(), motivo: anulando.motivo.trim() }),
+      });
+      const data = await res.json();
+      if (!data.ok) { setErrorAnulacion(data.error || "No se pudo registrar la anulación."); return; }
+      setSeleccionado((prev) => ({ ...prev, estado: data.estado, anulacionExterna: data.anulacionExterna }));
+      setAviso(data.aviso || "");
+      setAnulando(null);
+      await cargar();
+    } catch {
+      setErrorAnulacion("Error de conexión.");
+    } finally {
+      setGuardandoAnulacion(false);
+    }
+  };
+
+  const cerrarDetalle = () => { setSeleccionado(null); setErrorDescarga(""); setAviso(""); };
 
   return (
     <div className="p-6">
@@ -229,6 +262,19 @@ export default function ListaComprobantes() {
                 {seleccionado.sunat.mensaje}
               </div>
             )}
+            {seleccionado.estado === "ANULADO" && seleccionado.anulacionExterna?.documento && (
+              <div className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg px-4 py-3 mb-4">
+                Anulado en SUNAT con <strong>{seleccionado.anulacionExterna.documento}</strong>: {seleccionado.anulacionExterna.motivo}
+                <span className="block text-xs text-gray-400 mt-1">
+                  Registrado por {seleccionado.anulacionExterna.usuario || "—"} el {formatearFecha(seleccionado.anulacionExterna.fecha)}
+                </span>
+              </div>
+            )}
+            {aviso && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-2 mb-4">
+                {aviso}
+              </div>
+            )}
             {errorDescarga && (
               <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-2 mb-4">
                 {errorDescarga}
@@ -311,6 +357,14 @@ export default function ListaComprobantes() {
                   Emitir Nota de Crédito/Débito
                 </button>
               )}
+              {seleccionado.estado === "ACEPTADO" && (seleccionado.tipoDoc === "01" || seleccionado.tipoDoc === "03") && (
+                <button
+                  onClick={() => { setAnulando({ documento: "", motivo: "" }); setErrorAnulacion(""); }}
+                  className="border border-red-300 text-red-700 px-4 py-2 rounded-lg text-sm hover:bg-red-50 transition"
+                >
+                  Registrar anulación en SUNAT
+                </button>
+              )}
               <button onClick={() => descargar("cdr")} className="border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
                 Descargar CDR
               </button>
@@ -320,8 +374,41 @@ export default function ListaComprobantes() {
               <button onClick={() => generarComprobantePdf(seleccionado)} className="border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
                 Descargar PDF
               </button>
-              <button onClick={() => { setSeleccionado(null); setErrorDescarga(""); }} className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-700 transition">
+              <button onClick={cerrarDetalle} className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-700 transition">
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {anulando && seleccionado && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h3 className="font-semibold text-gray-800 mb-2">Registrar anulación hecha en SUNAT</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Úsalo solo si {seleccionado.serie}-{seleccionado.correlativo} ya se anuló fuera del ERP (Nota de Crédito emitida en
+              SOL o en SmartPSE, comunicación de baja). Pasará a ANULADO junto con su factura interna, salvo que esta tenga pagos.
+            </p>
+            {errorAnulacion && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2 mb-3">{errorAnulacion}</div>
+            )}
+            <label className="block text-xs font-medium text-gray-500 mb-1">Documento de anulación</label>
+            <input value={anulando.documento} maxLength={100} placeholder="Ej. FC01-15 o RA-20261105-1"
+              onChange={(e) => setAnulando({ ...anulando, documento: e.target.value })}
+              className="w-full input-field mb-3" />
+            <label className="block text-xs font-medium text-gray-500 mb-1">Motivo</label>
+            <textarea value={anulando.motivo} maxLength={500} rows={3}
+              onChange={(e) => setAnulando({ ...anulando, motivo: e.target.value })}
+              className="w-full input-field mb-4" />
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setAnulando(null)} disabled={guardandoAnulacion}
+                className="border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
+                Cancelar
+              </button>
+              <button onClick={registrarAnulacion} disabled={guardandoAnulacion}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 transition disabled:opacity-50">
+                {guardandoAnulacion ? "Guardando…" : "Registrar anulación"}
               </button>
             </div>
           </div>

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { fetchAuth } from "../utils/fetchAuth";
+import { formatearFecha } from "../utils/fecha";
 import { precioConDescuento } from "../utils/cotizacionItems";
 import TablaScroll from "../components/TablaScroll";
 import {
@@ -19,6 +20,8 @@ import {
   calcularLineaComprobante,
   documentoValido,
   serieValida,
+  parsearGuiaRemision,
+  formatearGuiaRemision,
 } from "../utils/catalogosSunat";
 
 const RECEPTOR_VACIO = { schemeID: "6", numDoc: "", nombre: "" };
@@ -64,9 +67,20 @@ export default function EmitirComprobante() {
   const [detraccionCodigoBien, setDetraccionCodigoBien] = useState("");
   const [detraccionPorcentaje, setDetraccionPorcentaje] = useState("");
   const [detraccionCuentaBancaria, setDetraccionCuentaBancaria] = useState("");
+  // { valor, fecha, fuente } — TC venta con el que se pasa a soles la detracción de un comprobante
+  // en moneda extranjera (el Banco de la Nación solo recibe soles).
+  const [tcDetraccion, setTcDetraccion] = useState(null);
+  const [cargandoTc, setCargandoTc] = useState(false);
+  const consultandoTc = useRef(false);
   const [retencionAplica, setRetencionAplica] = useState(false);
   const [retencionPorcentaje, setRetencionPorcentaje] = useState("3");
   const [numeroOrdenCompra, setNumeroOrdenCompra] = useState("");
+  // GRE relacionada (cac:DespatchDocumentReference en el XML), texto libre "SERIE-CORRELATIVO".
+  const [guiaRelacionada, setGuiaRelacionada] = useState("");
+  const [mostrarBuscadorGuia, setMostrarBuscadorGuia] = useState(false);
+  const [guiasDisponibles, setGuiasDisponibles] = useState([]);
+  const [buscandoGuia, setBuscandoGuia] = useState(false);
+  const [filtroGuia, setFiltroGuia] = useState("");
   const [ordenCompraId, setOrdenCompraId] = useState("");
   const [mostrarBuscadorOC, setMostrarBuscadorOC] = useState(false);
   const [ordenesCompra, setOrdenesCompra] = useState([]);
@@ -261,8 +275,40 @@ export default function EmitirComprobante() {
   // usuario cambia ítems/porcentaje después de haberlo tipeado a mano). El depósito en el Banco
   // de la Nación va en soles enteros, no en céntimos — mismo redondeo (Math.round, .5 sube al
   // entero superior) que ya usa DetalleOrdenCompra.jsx para la detracción de compra.
-  const detraccionMontoNeto = detraccionAplica
-    ? Math.round(totalGeneral * (Number(detraccionPorcentaje) || 0) / 100).toFixed(2)
+  // En moneda extranjera: la detracción en esa moneda (con céntimos) es la que se descuenta de las cuotas, y el
+  // depósito es ese monto × TC venta del día, redondeado a soles enteros — va así al XML (PEN).
+  const enSoles = moneda === "PEN";
+  const detraccionBruta = totalGeneral * (Number(detraccionPorcentaje) || 0) / 100;
+  const detraccionMontoMoneda = !detraccionAplica ? 0
+    : enSoles ? Math.round(detraccionBruta) : Math.round(detraccionBruta * 100) / 100;
+  const detraccionMontoNeto = !detraccionAplica ? ""
+    : enSoles ? detraccionMontoMoneda.toFixed(2)
+    : tcDetraccion ? Math.round(Math.round(detraccionBruta * tcDetraccion.valor * 100) / 100).toFixed(2) : "";
+
+  useEffect(() => {
+    // Ref y no el state `cargandoTc`: StrictMode corre el efecto dos veces antes de que el state
+    // cambie, y cada consulta a apiperu gasta cuota.
+    if (!detraccionAplica || moneda === "PEN" || tcDetraccion || consultandoTc.current) return;
+    consultandoTc.current = true;
+    setCargandoTc(true);
+    (async () => {
+      try {
+        const r = await fetchAuth("/sunat/tipo-cambio");
+        const d = r.ok ? await r.json() : null;
+        if (d?.venta > 0) { setTcDetraccion({ valor: d.venta, fecha: d.fecha, fuente: "SUNAT" }); return; }
+        // apiperu caído o sin cuota: el TC vigente de la app, para no bloquear la emisión.
+        const r2 = await fetchAuth("/tipo-cambio");
+        const d2 = r2.ok ? await r2.json() : null;
+        if (d2?.valor > 0) setTcDetraccion({ valor: d2.valor, fecha: d2.fechaActualizacion, fuente: "app" });
+      } catch { /* sin TC: la validación de emitir lo informa */ }
+      finally { consultandoTc.current = false; setCargandoTc(false); }
+    })();
+  }, [detraccionAplica, moneda, tcDetraccion]);
+
+  const fechaTc = tcDetraccion?.fecha
+    ? (/^\d{4}-\d{2}-\d{2}$/.test(tcDetraccion.fecha)
+        ? tcDetraccion.fecha.split("-").reverse().join("/")
+        : formatearFecha(tcDetraccion.fecha))
     : "";
 
   // Retención del IGV: la retiene el cliente (agente de retención) al pagar, sobre el total.
@@ -273,7 +319,7 @@ export default function EmitirComprobante() {
 
   // Lo que deben sumar las cuotas: el XML informa como monto neto pendiente el total menos la
   // detracción (va al Banco de la Nación) y menos la retención; el total del comprobante no cambia.
-  const montoNetoPendiente = totalGeneral - (detraccionAplica ? Number(detraccionMontoNeto) || 0 : 0) - retencionMonto;
+  const montoNetoPendiente = totalGeneral - detraccionMontoMoneda - retencionMonto;
 
   const ro = !!resultado?.ok;
 
@@ -307,10 +353,42 @@ export default function EmitirComprobante() {
     setMostrarBuscadorOC(false);
   };
 
+  const otsDeGuia = (g) => (g.ordenesTrabajo || []).filter((o) => o && typeof o === "object").map((o) => o.numeroOT || o.codigo).filter(Boolean);
+  const guiasFiltradas = guiasDisponibles.filter((g) => {
+    if (!filtroGuia.trim()) return true;
+    const q = filtroGuia.trim().toLowerCase();
+    return (
+      formatearGuiaRemision(g).toLowerCase().includes(q) ||
+      (g.destinatario?.nombre || "").toLowerCase().includes(q) ||
+      otsDeGuia(g).some((ot) => ot.toLowerCase().includes(q))
+    );
+  });
+
+  const abrirBuscadorGuia = async () => {
+    setMostrarBuscadorGuia(true);
+    if (guiasDisponibles.length) return;
+    setBuscandoGuia(true);
+    try {
+      const res  = await fetchAuth("/guias?estado=ACEPTADO&limit=200");
+      const data = await res.json();
+      setGuiasDisponibles(data?.data || []);
+    } finally {
+      setBuscandoGuia(false);
+    }
+  };
+
+  const elegirGuia = (g) => {
+    setGuiaRelacionada(formatearGuiaRemision(g));
+    setMostrarBuscadorGuia(false);
+  };
+
   const validar = () => {
     if (!rucEmisor) return "Selecciona la empresa emisora.";
     if (!serie.trim()) return "La serie es requerida.";
     if (!serieValida(serie)) return "La serie debe tener exactamente 4 caracteres (ej. F001, B001, FC01).";
+    if (!esNota && guiaRelacionada.trim() && !parsearGuiaRemision(guiaRelacionada)) {
+      return "La guía de remisión relacionada debe tener el formato SERIE-NÚMERO (ej. T001-00001234).";
+    }
     if (!receptor.numDoc.trim() || !receptor.nombre.trim()) return "Los datos del receptor son requeridos.";
     if (tipoDoc === "01" && receptor.schemeID !== "6") return "La factura requiere un receptor con RUC.";
     if (!documentoValido(receptor.schemeID, receptor.numDoc)) {
@@ -336,6 +414,7 @@ export default function EmitirComprobante() {
     if (!esNota && detraccionAplica) {
       if (!detraccionCodigoBien) return "Selecciona el bien o servicio sujeto a detracción.";
       if (!detraccionPorcentaje || Number(detraccionPorcentaje) <= 0) return "El porcentaje de detracción debe ser mayor a 0.";
+      if (!enSoles && !tcDetraccion) return "No se pudo obtener el tipo de cambio del día para pasar la detracción a soles. Actualízalo en Tipo de Cambio y vuelve a intentar.";
       if (!detraccionMontoNeto || Number(detraccionMontoNeto) <= 0) return "El monto neto a depositar debe ser mayor a 0.";
       if (!detraccionCuentaBancaria.trim()) return "La cuenta del Banco de la Nación es requerida.";
       if (!cuentaDetraccionValida(detraccionCuentaBancaria)) return "La cuenta del Banco de la Nación debe tener 11 dígitos.";
@@ -424,13 +503,17 @@ export default function EmitirComprobante() {
           observaciones: observaciones.trim(),
           informacionRelacionada: informacionRelacionada.trim(),
           numeroOrdenCompra: numeroOrdenCompra.trim(),
+          ...(parsearGuiaRemision(guiaRelacionada) ? { guiaRelacionada: parsearGuiaRemision(guiaRelacionada) } : {}),
           ...(ordenCompraId ? { ordenCompra: ordenCompraId } : {}),
+          // Con respuesta ok el navegador crea la Factura interna (crearFacturaInterna, abajo); si no, el backend.
+          facturaInternaDesdeCliente: !!ocOrigen || tipoDoc === "01",
           ...(detraccionAplica ? {
             detraccion: {
               aplica: true,
               codigoBien: detraccionCodigoBien,
               porcentaje: Number(detraccionPorcentaje),
-              montoNeto: Number(detraccionMontoNeto),
+              montoNeto: detraccionMontoMoneda,
+              ...(enSoles ? {} : { tipoCambio: tcDetraccion.valor }),
               cuentaBancaria: detraccionCuentaBancaria.trim(),
             },
           } : {}),
@@ -513,11 +596,12 @@ export default function EmitirComprobante() {
     setDetraccionAplica(false);
     setDetraccionCodigoBien("");
     setDetraccionPorcentaje("");
-    setDetraccionMontoNeto("");
+    setTcDetraccion(null);
     setDetraccionCuentaBancaria("");
     setRetencionAplica(false);
     setRetencionPorcentaje("3");
     setNumeroOrdenCompra("");
+    setGuiaRelacionada("");
     setOrdenCompraId("");
     setOcOrigen(null);
     setFacturaInterna(null);
@@ -537,10 +621,16 @@ export default function EmitirComprobante() {
           Comprobante <strong>{resultado.serie}</strong> ACEPTADO por SUNAT.
         </div>
       )}
+      {resultado?.aviso && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-3 mb-5">
+          {resultado.aviso}
+        </div>
+      )}
       {resultado?.estado === "EN_PROCESO" && (
         <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-3 mb-5">
           Comprobante <strong>{resultado.serie}</strong> EN PROCESO — SUNAT aún no confirma el resultado.
           Verifica el estado más tarde en la lista de comprobantes.
+          {resultado.mensaje && <span className="block mt-1">{resultado.mensaje}</span>}
         </div>
       )}
       {facturaInterna && (
@@ -967,9 +1057,17 @@ export default function EmitirComprobante() {
                         className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Monto neto a depositar<Oblig /></label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Monto neto a depositar (S/)<Oblig /></label>
                       <input type="number" value={detraccionMontoNeto} placeholder="0.00" disabled required
                         className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
+                      {!enSoles && (
+                        <p className={`text-xs mt-1 ${tcDetraccion ? "text-amber-600" : "text-red-500"}`}>
+                          {cargandoTc ? "Consultando TC del día…"
+                            : tcDetraccion
+                              ? `Calculado con TC ${tcDetraccion.fuente === "SUNAT" ? "venta SUNAT" : "de la app"} del ${fechaTc}: ${tcDetraccion.valor} (${moneda === "USD" ? "US$" : moneda} ${detraccionMontoMoneda.toFixed(2)} × ${tcDetraccion.valor})`
+                              : "Sin tipo de cambio: no se puede calcular en soles."}
+                        </p>
+                      )}
                     </div>
                     <div className="col-span-4">
                       <label className="block text-xs font-medium text-gray-500 mb-1">Cuenta Banco de la Nación<Oblig /></label>
@@ -1030,6 +1128,22 @@ export default function EmitirComprobante() {
                   )}
                 </div>
               </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <label className="block text-xs font-medium text-gray-500 mb-1">N° Guía de Remisión relacionada (opcional)</label>
+                <div className="flex gap-2">
+                  <input value={guiaRelacionada} placeholder="Ej. T001-00001234" maxLength={13}
+                    onChange={(e) => setGuiaRelacionada(e.target.value.toUpperCase())}
+                    disabled={ro}
+                    className="flex-1 input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
+                  {!ro && (
+                    <button type="button" onClick={abrirBuscadorGuia}
+                      className="px-4 py-2 rounded-lg text-sm border border-gray-300 text-gray-500 hover:text-gray-800 transition">
+                      Buscar
+                    </button>
+                  )}
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -1065,8 +1179,11 @@ export default function EmitirComprobante() {
             </p>
             {tipoDoc === "07" && (
               <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
-                Esta Nota de Crédito anulará el comprobante <strong>{referencia.serie}</strong> de forma incondicional
-                (pasará a estado ANULADO), sin importar el motivo seleccionado.
+                {["01", "02"].includes(motivoCodigo) ? (
+                  <>Esta Nota de Crédito anulará el comprobante <strong>{referencia.serie}</strong> (pasará a ANULADO) y su factura interna.</>
+                ) : (
+                  <>El comprobante <strong>{referencia.serie}</strong> solo se anulará si esta nota cubre su total; si es parcial, sigue vigente por el saldo.</>
+                )}
               </p>
             )}
             <div className="flex justify-end gap-3">
@@ -1104,6 +1221,33 @@ export default function EmitirComprobante() {
                   className="w-full text-left px-3 py-2 hover:bg-gray-50 transition text-sm">
                   <div className="font-medium text-gray-800">{o.numeroOrden || o.codigo} — {o.titulo}</div>
                   <div className="text-xs text-gray-400">{o.empresa?.razonSocial || "—"} · S/ {Number(o.monto).toFixed(2)}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mostrarBuscadorGuia && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold text-gray-800">Buscar Guía de Remisión</h3>
+              <button type="button" onClick={() => setMostrarBuscadorGuia(false)} className="text-gray-400 hover:text-gray-800">✕</button>
+            </div>
+            <input value={filtroGuia} onChange={(e) => setFiltroGuia(e.target.value)}
+              placeholder="Buscar por serie-correlativo, destinatario o N° de OT..."
+              className="w-full input-field w-auto mb-3" />
+            <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+              {buscandoGuia && <p className="text-sm text-gray-400 py-4 text-center">Cargando…</p>}
+              {!buscandoGuia && guiasFiltradas.length === 0 && (
+                <p className="text-sm text-gray-400 py-4 text-center">Sin resultados.</p>
+              )}
+              {guiasFiltradas.map((g) => (
+                <button key={g._id} type="button" onClick={() => elegirGuia(g)}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-50 transition text-sm">
+                  <div className="font-medium text-gray-800">{formatearGuiaRemision(g)} — {g.destinatario?.nombre || g.tipoGuia}</div>
+                  <div className="text-xs text-gray-400">{otsDeGuia(g).length ? `OT: ${otsDeGuia(g).join(", ")}` : g.tipoGuia}</div>
                 </button>
               ))}
             </div>

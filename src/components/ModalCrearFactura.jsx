@@ -213,6 +213,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
       body: JSON.stringify({
         tipoDoc: "01",
         serie: SERIE_FACTURA,
+        facturaInternaDesdeCliente: true,
         rucEmisor: RUC_EMISOR,
         receptor: { numDoc: empresaSeleccionada.ruc, nombre: empresaSeleccionada.razonSocial, schemeID: "6" },
         items: [{

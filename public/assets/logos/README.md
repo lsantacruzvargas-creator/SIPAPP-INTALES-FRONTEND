@@ -14,6 +14,8 @@ plantilla real de cotización de Intales, el 2026-09-10. Usados por
   las 3 marcas hermanas de Intales (Lexacaucho, Majuflex, Rodilex). Van
   siempre junto al logo de Intales en el encabezado, sin lógica condicional
   por línea de producto (decisión del usuario, ver spec).
+- `intales_icon.png` — isotipo de Intales (solo el símbolo, 76×73). Usado
+  en el logo del Sidebar, el Login, el favicon y el ícono del manifest PWA.
 - `bcp_logo_intales.png` — logo BCP, junto a las cuentas bancarias reales de
   Intales en el pie del PDF (distinto de `bcp_logo.png`, que sigue siendo el
   de Huaquian — no se tocó).
@@ -35,8 +37,8 @@ cambio:
 - `bcp_logo.png` / `banco_nacion_logo.png` — logos de los bancos, junto a
   los números de cuenta en la sección "MÉTODO DE PAGO".
 
-`logo_huaquian.jpg` y `logo_sip.png` son variantes usadas en otras partes
-de la UI (no en el PDF de cotización).
+`logo_sip.png` es una variante usada en otras partes de la UI (no en el
+PDF de cotización).
 
 No hace falta reiniciar nada: al estar en `public/`, Vite los sirve tal
 cual en `/assets/logos/...`. Si algún archivo no está presente, la
