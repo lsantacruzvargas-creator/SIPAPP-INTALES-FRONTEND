@@ -2,19 +2,30 @@ const { app, BrowserWindow, dialog } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
 
-autoUpdater.autoDownload = false;
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
 
-// huaquian-sac.com (apex, sin "www") no tiene registro DNS configurado — solo
-// resuelve el subdominio www. (verificado: apex da "Could not resolve host",
-// www. responde 200 vía Cloudflare, mismo frontend que sipapp-huaquian-frontend.pages.dev).
-const LOGIN_URL = "https://www.huaquian-sac.com/#/login";
+const LOGIN_URL = "https://intales-sac.com/#/login";
+// La app suele quedar abierta toda la jornada: sin re-chequeo solo se
+// enteraría de una versión nueva al reiniciar.
+const INTERVALO_CHEQUEO_MS = 4 * 60 * 60 * 1000;
+const TITULO = `SIPAPP Intales v${app.getVersion()}`;
 
 let mainWindow;
+
+// Los diálogos nativos a veces no devuelven el foco al BrowserWindow y el
+// formulario queda "congelado" (bug confirmado en SIPAPP-HUAQUIAN).
+function devolverFoco() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.focus();
+  mainWindow.webContents.focus();
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    title: TITULO,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -36,6 +47,9 @@ function createWindow() {
       query: { retry: validatedURL || startUrl },
     });
   });
+
+  // El <title> de la web pisaría el título con la versión instalada.
+  mainWindow.on("page-title-updated", (e) => e.preventDefault());
 
   mainWindow.loadURL(startUrl);
 
@@ -63,30 +77,25 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
   if (app.isPackaged) {
-    autoUpdater.checkForUpdates();
+    autoUpdater.checkForUpdates().catch(() => {});
+    setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), INTERVALO_CHEQUEO_MS);
   }
 });
 
-autoUpdater.on("update-available", (info) => {
+let avisoMostrado = false;
+autoUpdater.on("update-downloaded", (info) => {
+  if (avisoMostrado) return;
+  avisoMostrado = true;
   dialog.showMessageBox(mainWindow, {
     type: "info",
-    title: "Actualización disponible",
-    message: `Versión ${info.version} disponible.\n¿Descargar e instalar ahora?`,
-    buttons: ["Descargar", "Más tarde"],
+    title: "Actualización lista",
+    message: `La versión ${info.version} ya se descargó (tienes la ${app.getVersion()}).\n¿Reiniciar ahora para instalarla? Si eliges "Al cerrar", se instalará la próxima vez que cierres la aplicación.`,
+    buttons: ["Reiniciar ahora", "Al cerrar"],
     defaultId: 0,
+    cancelId: 1,
   }).then(({ response }) => {
-    if (response === 0) autoUpdater.downloadUpdate();
-  });
-});
-
-autoUpdater.on("update-downloaded", () => {
-  dialog.showMessageBox(mainWindow, {
-    type: "info",
-    title: "Lista para instalar",
-    message: "La actualización se descargó correctamente.\nLa aplicación se reiniciará para instalar.",
-    buttons: ["Reiniciar ahora"],
-  }).then(() => {
-    autoUpdater.quitAndInstall();
+    if (response === 0) autoUpdater.quitAndInstall();
+    else devolverFoco();
   });
 });
 
