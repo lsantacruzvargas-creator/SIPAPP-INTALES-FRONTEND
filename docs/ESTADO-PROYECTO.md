@@ -387,6 +387,12 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   vacaciones solo el goce (suspensión 23 → 0118); CTS, truncas, indemnización vacacional, liquidación de cese y provisiones no existen. Reglas verificadas
   y respuestas del contador en `docs/superpowers/specs/2026-11-04-beneficios-sociales-reglas.md`; falta el Excel del contador (liquidación y CTS) como
   formato y caso de prueba.
+- **Reporte mensual de la planilla pagada (pendiente, pedido del usuario 2026-11-04)**: récord del mes por trabajador con lo pagado y la asistencia
+  (horas extras, faltas, vacaciones, tardanzas, licencias, etc.). Hoy las tardanzas solo existen como descuento 0704 en soles, sin minutos.
+- **Archivo de abono de sueldos al banco (pendiente)**: banco y formato configurables por cuenta cargo; método de abono por trabajador (mismo banco,
+  interbancario con CCI, efectivo o cheque fuera del archivo). Formatos en investigación (`specs/2026-11-04-abono-sueldos-formatos-investigacion.md`);
+  los que no se confirmen esperan el layout que entregue el banco del cliente (al final).
+- **Vacaciones (en diseño)**: `specs/2026-11-04-vacaciones-design.md`.
 - **RMV S/ 1 230 desde 01/10/2026** (D.S. 015-2026-TR): actualizar los Parámetros de oct/nov 2026 (reabrir y regenerar la planilla si ya están cerradas).
   El valor inicial de `PARAMETROS_INICIALES` ya es 1230.
 - **Prueba inestable ajena**: `test/bancos.test.js` «carrera: un movimiento y el cierre…» falla a veces por `0` contra `-0`; pasa al re-ejecutar.
