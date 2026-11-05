@@ -72,7 +72,7 @@ const totalesDuales = (c, tipoCambio) => {
   return { pen: total, usd: tc > 0 ? total / tc : null };
 };
 
-function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, tipoCambio, puedeVerPrecios, mostrarEstadoServicio, mostrarTituloOT, otsPorCot, colOtEstrecha }) {
+function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, mostrarEstadoServicio, mostrarTituloOT, otsPorCot, colOtEstrecha }) {
   return (
     <div className="mb-6">
       <div className="flex items-center gap-2 mb-3">
@@ -94,18 +94,15 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, t
               <th className={`${TH} text-left`}>Título cotización</th>
               {mostrarTituloOT && <th className={`${TH} text-left`}>Título orden de trabajo</th>}
               <th className={`${TH} text-left`}>Planta</th>
-              {puedeVerPrecios && <th className={`${TH} text-right`}>Total sin IGV (S/)</th>}
-              {puedeVerPrecios && <th className={`${TH} text-right`}>Total sin IGV (US$)</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {cotizaciones.length === 0 ? (
               <tr>
-                <td colSpan={6 + (puedeVerPrecios ? 2 : 0) + (mostrarEstadoServicio ? 3 : 0) + (mostrarTituloOT ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
+                <td colSpan={6 + (mostrarEstadoServicio ? 3 : 0) + (mostrarTituloOT ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
               </tr>
             ) : (
               cotizaciones.map((c) => {
-                const { pen, usd } = totalesDuales(c, tipoCambio);
                 const otsDeCot = (mostrarEstadoServicio || mostrarTituloOT) ? otsPorCot?.get(c._id) : null;
                 // Solo se usa (y se busca) en la tabla de Pendientes de OC.
                 const otPrincipal = mostrarEstadoServicio ? otsDeCot?.[0] : null;
@@ -161,16 +158,6 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, t
                     </td>
                   )}
                   <td className="px-4 py-3.5 text-gray-600">{c.planta || <span className="text-gray-300">—</span>}</td>
-                  {puedeVerPrecios && (
-                    <td className="px-4 py-3.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">
-                      {pen != null ? pen.toLocaleString("es-PE", { minimumFractionDigits: 2 }) : "—"}
-                    </td>
-                  )}
-                  {puedeVerPrecios && (
-                    <td className="px-4 py-3.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">
-                      {usd != null ? usd.toLocaleString("es-PE", { minimumFractionDigits: 2 }) : "—"}
-                    </td>
-                  )}
                 </tr>
                 );
               })
@@ -357,7 +344,7 @@ export default function ListaCotizaciones() {
   // categorías a la vez, así que en búsqueda esta página se comporta igual.
   const vistaEfectiva = filtros.busqueda ? "todasLasCotizaciones" : vista;
 
-  // Misma columnas que TablaCotizaciones — una hoja por cada tabla visible.
+  // Columnas de TablaCotizaciones más los totales sin IGV (la tabla en pantalla ya no los muestra) — una hoja por cada tabla visible.
   const filaCotizacion = (c) => {
     const { pen, usd } = totalesDuales(c, tipoCambio);
     return {
@@ -501,8 +488,6 @@ export default function ListaCotizaciones() {
           cotizaciones={filtradas}
           onSelect={seleccionarFila}
           vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin cotizaciones registradas"}
-          tipoCambio={tipoCambio}
-          puedeVerPrecios={puedeVerPrecios}
           mostrarEstadoServicio
           mostrarTituloOT
           otsPorCot={otsPorCot}
@@ -517,8 +502,6 @@ export default function ListaCotizaciones() {
           cotizaciones={sinOT}
           onSelect={seleccionarFila}
           vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Todas las cotizaciones ya tienen OT"}
-          tipoCambio={tipoCambio}
-          puedeVerPrecios={puedeVerPrecios}
         />
       )}
 
@@ -529,8 +512,6 @@ export default function ListaCotizaciones() {
           cotizaciones={pendientes}
           onSelect={seleccionarFila}
           vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin cotizaciones pendientes"}
-          tipoCambio={tipoCambio}
-          puedeVerPrecios={puedeVerPrecios}
           mostrarEstadoServicio
           mostrarTituloOT
           otsPorCot={otsPorCot}
@@ -544,8 +525,6 @@ export default function ListaCotizaciones() {
           cotizaciones={conOC}
           onSelect={seleccionarFila}
           vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin cotizaciones con OC"}
-          tipoCambio={tipoCambio}
-          puedeVerPrecios={puedeVerPrecios}
           mostrarTituloOT
           otsPorCot={otsPorCot}
         />
@@ -558,8 +537,6 @@ export default function ListaCotizaciones() {
           cotizaciones={cerradas}
           onSelect={seleccionarFila}
           vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin cotizaciones cerradas"}
-          tipoCambio={tipoCambio}
-          puedeVerPrecios={puedeVerPrecios}
           mostrarTituloOT
           otsPorCot={otsPorCot}
         />
