@@ -38,6 +38,14 @@ export const filasExcelVacaciones = (trabajadores) =>
 // Periodos que la carga inicial deja llenar: los ganados antes del mes de corte, liquidados o no (el servidor llama
 // «liquidado» a todo periodo viejo sin ajustes, justo los que hay que cargar). El valor inicial es el mismo `base` del
 // servidor (saldo + gozados + vendidos): guardar sin tocar nada no crea ajustes. `derecho` no sirve: antes del corte la base efectiva es 0.
+// Al estrenar el módulo todos los trabajadores antiguos salen sin saldo inicial: en el aviso general van en una sola línea.
+const SIN_SALDO = ": sin saldo inicial de vacaciones:";
+export function resumenAvisosVacaciones(avisos) {
+  const sinSaldo = avisos.filter((a) => a.includes(SIN_SALDO));
+  if (sinSaldo.length < 2) return avisos;
+  return [`${sinSaldo.length} trabajadores sin saldo inicial de vacaciones: confírmalo con «Carga inicial» en la pestaña Vacaciones`, ...avisos.filter((a) => !a.includes(SIN_SALDO))];
+}
+
 export function periodosCargaInicial({ corte, periodos }) {
   const primerDia = `${corte.slice(0, 4)}-${corte.slice(4)}-01`;
   return periodos

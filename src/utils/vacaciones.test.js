@@ -1,6 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ESTADOS_PERIODO, validarAjuste, filasExcelVacaciones, validarDiasVendidos, periodosCargaInicial } from "./vacaciones.js";
+import { ESTADOS_PERIODO, validarAjuste, filasExcelVacaciones, validarDiasVendidos, periodosCargaInicial, resumenAvisosVacaciones } from "./vacaciones.js";
+
+test("resumenAvisosVacaciones: junta en una línea a los que no tienen saldo inicial", () => {
+  const sin = (n) => `${n}: sin saldo inicial de vacaciones: revisa y confirma sus días pendientes`;
+  const otro = "ROJAS LUIS: tiene 3 días adelantados (saldo negativo)";
+  assert.deepEqual(resumenAvisosVacaciones([]), []);
+  assert.deepEqual(resumenAvisosVacaciones([sin("QUISPE ANA"), otro]), [sin("QUISPE ANA"), otro]);
+  assert.deepEqual(resumenAvisosVacaciones([sin("QUISPE ANA"), otro, sin("PÉREZ JUAN")]), [
+    "2 trabajadores sin saldo inicial de vacaciones: confírmalo con «Carga inicial» en la pestaña Vacaciones", otro,
+  ]);
+});
 
 test("ESTADOS_PERIODO: un texto y una clase por cada estado del servidor", () => {
   assert.deepEqual(Object.keys(ESTADOS_PERIODO), ["en curso", "liquidado", "gozado", "vigente", "por vencer", "vencido"]);

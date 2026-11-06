@@ -339,7 +339,7 @@ export default function PanelVacaciones({ puedeEscribir, onAvisos }) {
       if (!r.ok) return setError(d.mensaje || "No se pudo cargar las vacaciones.");
       setError("");
       setLista(d);
-      onAvisos?.(d.avisos.length);
+      onAvisos?.(d.avisos);
     } catch {
       setError(MENSAJE_RED);
     }

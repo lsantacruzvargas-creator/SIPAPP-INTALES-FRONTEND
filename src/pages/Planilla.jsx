@@ -12,6 +12,7 @@ import PanelTRegistro from "../components/planilla/PanelTRegistro";
 import PanelConfigTRegistro from "../components/planilla/PanelConfigTRegistro";
 import PanelPerfilLaboral from "../components/planilla/PanelPerfilLaboral";
 import PanelVacaciones from "../components/planilla/PanelVacaciones";
+import { resumenAvisosVacaciones } from "../utils/vacaciones";
 
 const TABS = [
   { id: "mes", label: "Planilla del mes" },
@@ -42,7 +43,7 @@ export default function Planilla() {
   const [avisosPerfil, setAvisosPerfil] = useState([]);
   const [cambioPerfil, setCambioPerfil] = useState(null);
   const [cambioVisto, setCambioVisto] = useState(leerVisto);
-  const [avisosVacaciones, setAvisosVacaciones] = useState(0);
+  const [avisosVacaciones, setAvisosVacaciones] = useState([]);
 
   useEffect(() => {
     Promise.all([fetchAuth("/planilla/catalogos"), fetchAuth("/contabilidad/cuentas"), fetchAuth("/centros-costo")]).then(async ([rc, rp, rk]) => {
@@ -64,14 +65,14 @@ export default function Planilla() {
   }, []);
   useEffect(() => { const t = setTimeout(refrescarAvisos, 0); return () => clearTimeout(t); }, [refrescarAvisos]);
 
-  // El contador de la pestaña se carga una vez; el panel de vacaciones lo actualiza cuando cambia el saldo.
-  useEffect(() => {
-    let vigente = true;
-    fetchAuth("/planilla/vacaciones")
-      .then(async (r) => { if (r.ok && vigente) setAvisosVacaciones((await r.json()).avisos.length); })
-      .catch(() => { /* el contador es informativo: sin él la pestaña sigue funcionando */ });
-    return () => { vigente = false; };
+  // Los avisos de vacaciones cambian con las boletas (goce y venta) y con el panel de vacaciones (ajustes y carga inicial).
+  const refrescarVacaciones = useCallback(async () => {
+    try {
+      const r = await fetchAuth("/planilla/vacaciones");
+      if (r.ok) setAvisosVacaciones((await r.json()).avisos);
+    } catch { /* los avisos son informativos: sin ellos la planilla sigue funcionando */ }
   }, []);
+  useEffect(() => { const t = setTimeout(refrescarVacaciones, 0); return () => clearTimeout(t); }, [refrescarVacaciones, tab]);
 
   const entendido = () => { guardarVisto(cambioPerfil.fecha); setCambioVisto(cambioPerfil.fecha); };
   const verCambio = mostrarCambioPerfil(cambioPerfil, cambioVisto);
@@ -97,7 +98,7 @@ export default function Planilla() {
               tab === t.id ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}>
             {t.label}
-            {t.id === "vacaciones" && avisosVacaciones > 0 && <span className="ml-1.5 bg-amber-500 text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5">{avisosVacaciones}</span>}
+            {t.id === "vacaciones" && avisosVacaciones.length > 0 && <span className="ml-1.5 bg-amber-500 text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5">{avisosVacaciones.length}</span>}
           </button>
         ))}
       </div>
@@ -112,6 +113,12 @@ export default function Planilla() {
           )}
           {avisosPerfil.map((a, i) => <p key={i}>{a}</p>)}
           <button onClick={() => setTab("perfil")} className="text-xs underline font-medium hover:text-amber-900">Ir al perfil laboral</button>
+        </div>
+      )}
+      {avisosVacaciones.length > 0 && tab !== "vacaciones" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800 space-y-1">
+          {resumenAvisosVacaciones(avisosVacaciones).map((a, i) => <p key={i}>{a}</p>)}
+          <button onClick={() => setTab("vacaciones")} className="text-xs underline font-medium hover:text-amber-900">Ir a vacaciones</button>
         </div>
       )}
       {catalogos && (
