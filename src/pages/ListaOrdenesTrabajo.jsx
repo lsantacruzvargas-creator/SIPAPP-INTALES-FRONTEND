@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
-import { formatearFecha } from "../utils/fecha";
+import { formatearFecha, fechaHoyLima } from "../utils/fecha";
 import DetalleDocumento from "../components/DetalleDocumento";
 import ModalNuevaOT from "../components/ModalNuevaOT";
 import ModalImportarExcel, { COLS_OT } from "../components/ModalImportarExcel";
@@ -39,16 +39,54 @@ const TH = "px-4 py-3 font-semibold text-gray-500 whitespace-nowrap";
 // una sola "Estado de Progreso" (decisión del usuario, ver DetalleOrdenTrabajo.jsx).
 const progresoLabel = (o) => (o.encargado?.trim() ? o.estado : "No asignado");
 
-// Días transcurridos desde el ingreso del equipo (fechaRecibida) — las
-// sub-OTs no tienen su propia fechaRecibida (comparten el ingreso de la OT
-// padre), así que reciben la del padre como fallback.
+const diaLima = (fecha) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" }).format(new Date(fecha));
+
+// Días hábiles (lun–vie, sin feriados) desde que se recibió la OC hasta hoy en
+// Lima: los días de fabricación de la OT también son hábiles, y contar días
+// calendario adelantaría el "Atrasado".
 const diasDesdeRecibido = (fecha) => {
   if (!fecha) return null;
-  const ms = Date.now() - new Date(fecha).getTime();
-  return Math.max(0, Math.floor(ms / 86400000));
+  const [y, m, d] = diaLima(fecha).split("-").map(Number);
+  const [hy, hm, hd] = fechaHoyLima().split("-").map(Number);
+  const fin = Date.UTC(hy, hm - 1, hd);
+  let t = Date.UTC(y, m - 1, d);
+  let n = 0;
+  while (t < fin) {
+    t += 86400000;
+    const dia = new Date(t).getUTCDay();
+    if (dia !== 0 && dia !== 6) n++;
+  }
+  return n;
 };
 
-// Rango de fechas (Fecha de Ingreso) del filtro — "desde"/"hasta" son fechas
+const PLAZO = {
+  enFecha:   { label: "En fecha",      clase: "bg-green-100 text-green-700" },
+  cerca:     { label: "Cerca a plazo", clase: "bg-yellow-100 text-yellow-800" },
+  atrasado:  { label: "Atrasado",      clase: "bg-red-100 text-red-700" },
+  terminada: { label: "Terminada",     clase: "bg-gray-100 text-gray-500" },
+};
+
+// Margen restante = (días de fabricación − días desde recibida la OC) / días de
+// fabricación. ≤ 0 % atrasado, < 30 % cerca a plazo, desde 30 % en fecha. Una
+// OT ya completada, entregada o con la cadena cerrada no se evalúa.
+const estadoPlazo = (ot, diasRecibido) => {
+  const df = Number(ot.tiempoFabricacion);
+  if (diasRecibido == null || !(df > 0)) return null;
+  if (["completada", "entregada"].includes(ot.estadoGeneral) || ot.estadoCadena === "cerrado") return "terminada";
+  const margen = ((df - diasRecibido) / df) * 100;
+  if (margen <= 0) return "atrasado";
+  if (margen < 30) return "cerca";
+  return "enFecha";
+};
+
+function ChipPlazo({ ot, diasRecibido }) {
+  const clave = estadoPlazo(ot, diasRecibido);
+  if (!clave) return <span className="text-gray-300">—</span>;
+  const { label, clase } = PLAZO[clave];
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${clase}`}>{label}</span>;
+}
+
+// Rango de fechas (fecha recibida OC) del filtro — "desde"/"hasta" son fechas
 // sin hora (input type=date) ancladas al día calendario de Lima (UTC-5 fijo),
 // mismo criterio que el filtro de Movimientos de Almacén.
 const dentroDeRangoFecha = (fecha, desde, hasta) => {
@@ -62,6 +100,7 @@ const dentroDeRangoFecha = (fecha, desde, hasta) => {
 
 const VACIO = <span className="text-gray-300">—</span>;
 
+// `ocPorNumDoc`: numeroDocumento → { numeroOrden, fecha } de la OC del cliente.
 function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc }) {
   return (
     <div className="mb-6">
@@ -72,7 +111,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc }) 
       </div>
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <TablaScroll className="overflow-x-auto">
-          <table className="w-full text-sm" style={{ minWidth: "1000px" }}>
+          <table className="w-full text-sm" style={{ minWidth: "1100px" }}>
             <thead className="bg-gray-50 text-xs uppercase tracking-wide border-b-2 border-gray-200">
               <tr>
                 <th className={`${TH} text-left`}>N° OT</th>
@@ -83,17 +122,21 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc }) 
                 <th className={`${TH} text-left`}>Descripción</th>
                 <th className={`${TH} text-center`}>Días de fabricación</th>
                 <th className={`${TH} text-left`}>Encargado de Progreso</th>
-                <th className={`${TH} text-center`}>Días desde recibido</th>
-                <th className={`${TH} text-center`}>Fecha de Ingreso</th>
+                <th className={`${TH} text-center`} title="Días hábiles desde la fecha recibida de la OC">Días desde recibido</th>
+                <th className={`${TH} text-center`}>Fecha recibida OC</th>
+                <th className={`${TH} text-center`}>Plazo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {ordenes.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
+                  <td colSpan={11} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
                 </tr>
               ) : (
-                ordenes.flatMap((o) => [
+                ordenes.flatMap((o) => {
+                  const oc = ocPorNumDoc.get(o.numeroDocumento);
+                  const dr = diasDesdeRecibido(oc?.fecha);
+                  return [
                   <tr
                     key={o._id}
                     className={`hover:bg-gray-50 cursor-pointer transition-colors ${o.anulado ? "opacity-50" : ""}`}
@@ -104,7 +147,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc }) 
                     </td>
                     <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
-                        {ocPorNumDoc.get(o.numeroDocumento) || <span className="text-gray-300 font-sans">—</span>}
+                        {oc?.numeroOrden || <span className="text-gray-300 font-sans">—</span>}
                         {o.anulado && (
                           <span title={o.motivoAnulacion} className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 uppercase">
                             Anulada
@@ -127,13 +170,19 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc }) 
                     </td>
                     <td className="px-4 py-3.5 text-gray-600">{o.encargado || VACIO}</td>
                     <td className="px-4 py-3.5 text-center text-gray-600 whitespace-nowrap">
-                      {diasDesdeRecibido(o.fechaRecibida) ?? <span className="text-gray-300">—</span>}
+                      {dr ?? VACIO}
                     </td>
                     <td className="px-4 py-3.5 text-center text-gray-600 whitespace-nowrap">
-                      {o.fechaRecibida ? formatearFecha(o.fechaRecibida) : <span className="text-gray-300">—</span>}
+                      {oc?.fecha ? formatearFecha(oc.fecha) : VACIO}
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <ChipPlazo ot={o} diasRecibido={dr} />
                     </td>
                   </tr>,
-                  ...(o.subOTs || []).map((s) => (
+                  ...(o.subOTs || []).map((s) => {
+                    const ocSub = ocPorNumDoc.get(s.numeroDocumento ?? o.numeroDocumento);
+                    const drSub = diasDesdeRecibido(ocSub?.fecha);
+                    return (
                     <tr
                       key={s._id}
                       className={`hover:bg-gray-50 cursor-pointer transition-colors bg-indigo-50/30 ${s.anulado ? "opacity-50" : ""}`}
@@ -143,7 +192,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc }) 
                         ↳ {s.numeroOT}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-gray-400">
-                        {ocPorNumDoc.get(s.numeroDocumento ?? o.numeroDocumento) || "—"}
+                        {ocSub?.numeroOrden || "—"}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <DotChip chip={badgeOT(progresoLabel(s))} dot={dotOT(progresoLabel(s))}>{progresoLabel(s)}</DotChip>
@@ -160,14 +209,19 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc }) 
                       </td>
                       <td className="px-4 py-3 text-gray-600">{s.encargado || VACIO}</td>
                       <td className="px-4 py-3 text-center text-gray-600 whitespace-nowrap">
-                        {diasDesdeRecibido(s.fechaRecibida ?? o.fechaRecibida) ?? <span className="text-gray-300">—</span>}
+                        {drSub ?? VACIO}
                       </td>
                       <td className="px-4 py-3 text-center text-gray-600 whitespace-nowrap">
-                        {(s.fechaRecibida ?? o.fechaRecibida) ? formatearFecha(s.fechaRecibida ?? o.fechaRecibida) : <span className="text-gray-300">—</span>}
+                        {ocSub?.fecha ? formatearFecha(ocSub.fecha) : VACIO}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <ChipPlazo ot={s} diasRecibido={drSub} />
                       </td>
                     </tr>
-                  )),
-                ])
+                    );
+                  }),
+                  ];
+                })
               )}
             </tbody>
           </table>
@@ -207,8 +261,8 @@ export default function ListaOrdenesTrabajo() {
              .map((f) => [f.numeroDocumento, f.numeroFactura])
       ));
       setOcPorNumDoc(new Map(
-        ocs.filter((oc) => oc.numeroDocumento != null)
-           .map((oc) => [oc.numeroDocumento, oc.numeroOrden])
+        ocs.filter((oc) => oc.numeroDocumento != null && !oc.anulado)
+           .map((oc) => [oc.numeroDocumento, { numeroOrden: oc.numeroOrden, fecha: oc.fecha || oc.createdAt }])
       ));
     });
 
@@ -266,13 +320,13 @@ export default function ListaOrdenesTrabajo() {
     return (
       (!filtros.empresa || o.empresa?._id === filtros.empresa) &&
       (!filtros.planta || o.planta === filtros.planta) &&
-      dentroDeRangoFecha(o.fechaRecibida, filtros.fechaDesde, filtros.fechaHasta) &&
+      dentroDeRangoFecha(ocPorNumDoc.get(o.numeroDocumento)?.fecha, filtros.fechaDesde, filtros.fechaHasta) &&
       (!q ||
         o.titulo?.toLowerCase().includes(q) ||
         o.numeroOT?.toLowerCase().includes(q) ||
         o.cotizacion?.numeroCotizacion?.toLowerCase().includes(q) ||
         o.cotizacion?.codigo?.toLowerCase().includes(q) ||
-        ocPorNumDoc.get(o.numeroDocumento)?.toLowerCase().includes(q) ||
+        ocPorNumDoc.get(o.numeroDocumento)?.numeroOrden?.toLowerCase().includes(q) ||
         facturaPorNumDoc.get(o.numeroDocumento)?.toLowerCase().includes(q) ||
         o.empresa?.razonSocial?.toLowerCase().includes(q) ||
         o.empresa?.ruc?.includes(q) ||
@@ -280,12 +334,14 @@ export default function ListaOrdenesTrabajo() {
     );
   });
 
+  const diasOC = (o) => diasDesdeRecibido(ocPorNumDoc.get(o.numeroDocumento)?.fecha);
+
   filtradas.sort((a, b) => {
     if (sortBy === "numeroOT") return compararTexto(a.numeroOT, b.numeroOT);
-    if (sortBy === "numeroOC") return compararTexto(ocPorNumDoc.get(a.numeroDocumento), ocPorNumDoc.get(b.numeroDocumento));
-    // Descendente: más días esperando primero — sin fechaRecibida (null) va
-    // al final, igual que un valor "menor" a cualquier día real (>= 0).
-    if (sortBy === "diasRecibido") return (diasDesdeRecibido(b.fechaRecibida) ?? -1) - (diasDesdeRecibido(a.fechaRecibida) ?? -1);
+    if (sortBy === "numeroOC") return compararTexto(ocPorNumDoc.get(a.numeroDocumento)?.numeroOrden, ocPorNumDoc.get(b.numeroDocumento)?.numeroOrden);
+    // Descendente: más días esperando primero — sin OC (null) va al final,
+    // igual que un valor "menor" a cualquier día real (>= 0).
+    if (sortBy === "diasRecibido") return (diasOC(b) ?? -1) - (diasOC(a) ?? -1);
     return new Date(b.createdAt) - new Date(a.createdAt);
   });
 
@@ -341,15 +397,16 @@ export default function ListaOrdenesTrabajo() {
   const filaOT = (o) => ({
     "N° OT":          o.numeroOT || "—",
     "Sub-OTs":        o.subOTs?.map((s) => s.numeroOT).join(", ") || "—",
-    "N° OC":          ocPorNumDoc.get(o.numeroDocumento) || "—",
+    "N° OC":          ocPorNumDoc.get(o.numeroDocumento)?.numeroOrden || "—",
     "Estado de Progreso": progresoLabel(o) || "—",
     "Empresa":        o.empresa?.razonSocial || "—",
     "Cotizado por":   o.cotizacion?.creadoPor?.nombre || "—",
     "Descripción":    o.titulo || "—",
     "Días de fabricación":   o.tiempoFabricacion ?? "—",
     "Encargado de Progreso": o.encargado || "—",
-    "Días desde recibido":   diasDesdeRecibido(o.fechaRecibida) ?? "—",
-    "Fecha de Ingreso":      o.fechaRecibida ? formatearFecha(o.fechaRecibida) : "—",
+    "Días desde recibido":   diasOC(o) ?? "—",
+    "Fecha recibida OC":     ocPorNumDoc.get(o.numeroDocumento)?.fecha ? formatearFecha(ocPorNumDoc.get(o.numeroDocumento).fecha) : "—",
+    "Plazo":                 PLAZO[estadoPlazo(o, diasOC(o))]?.label || "—",
   });
 
   const exportarExcel = () => {
@@ -447,10 +504,10 @@ export default function ListaOrdenesTrabajo() {
 
         <div className="flex items-center gap-1.5">
           <input type="date" name="fechaDesde" value={filtros.fechaDesde} onChange={handleFiltro}
-            className={SELECT} title="Fecha de ingreso desde" />
+            className={SELECT} title="Fecha recibida OC desde" />
           <span className="text-gray-400 text-xs">a</span>
           <input type="date" name="fechaHasta" value={filtros.fechaHasta} onChange={handleFiltro}
-            className={SELECT} title="Fecha de ingreso hasta" />
+            className={SELECT} title="Fecha recibida OC hasta" />
         </div>
 
         {/* Botón dedicado (a pedido del usuario) — planner/coordinadora/
