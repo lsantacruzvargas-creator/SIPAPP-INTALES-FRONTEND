@@ -34,9 +34,10 @@
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:build": "npm run build && npx electron-builder",
-    "release:patch": "npm version patch && git push --follow-tags && npm run build && npx electron-builder --publish always",
-    "release:minor": "npm version minor && git push --follow-tags && npm run build && npx electron-builder --publish always",
-    "release:major": "npm version major && git push --follow-tags && npm run build && npx electron-builder --publish always"
+    "release:publicar": "git push --follow-tags && npm run build && node scripts/crear-release.mjs && npx electron-builder --publish always",
+    "release:patch": "npm version patch && npm run release:publicar",
+    "release:minor": "npm version minor && npm run release:publicar",
+    "release:major": "npm version major && npm run release:publicar"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",

@@ -230,7 +230,7 @@ export default function Sidebar() {
         >
           <img src={`${import.meta.env.BASE_URL}assets/logos/intales_icon.png`} alt="Intales"
             className="w-9 h-9 rounded-xl object-contain shrink-0" />
-          <span className={`font-bold text-gray-800 text-base tracking-tight ${colapsado ? "md:hidden" : ""}`}>Metalmecanica</span>
+          <span className={`font-bold text-gray-800 text-base tracking-tight ${colapsado ? "md:hidden" : ""}`}>Intales</span>
         </div>
 
         {/* Bloque 2: navegación */}
