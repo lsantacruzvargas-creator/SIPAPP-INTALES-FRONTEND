@@ -61,13 +61,20 @@ const titulosOT = (ots) =>
 // columna quedaba desactualizada en cotizaciones de formatos que ya no
 // existen (Gloria/Alicorp, con gastos administrativos + utilidad, o
 // descuento global); se mantiene el mismo criterio por consistencia.
+// Se usa `total − igv` (exacto) y no `total / 1.18`: este último arrastra
+// decimales que, multiplicados por el TC, descuadraban la conversión en
+// ±0.01 (reportado por el usuario en HUAQUIAN, 2026-11-06). `/1.18` queda
+// solo de respaldo para filas sin `igv`.
+const r2 = (n) => Math.round(n * 100) / 100;
 const totalesDuales = (c, tipoCambio) => {
-  const total = c.total != null ? (Number(c.total) || 0) / 1.18 : Number(c.subtotal) || 0;
+  const total = Number(c.total) || 0;
+  const igv = Number(c.igv) || 0;
+  const sinIgv = r2(igv > 0 ? total - igv : c.total != null ? total / 1.18 : Number(c.subtotal) || 0);
   const tc = Number(tipoCambio) || 0;
   if (c.moneda === "USD") {
-    return { pen: tc > 0 ? total * tc : null, usd: total };
+    return { pen: tc > 0 ? r2(sinIgv * tc) : null, usd: sinIgv };
   }
-  return { pen: total, usd: tc > 0 ? total / tc : null };
+  return { pen: sinIgv, usd: tc > 0 ? r2(sinIgv / tc) : null };
 };
 
 function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, tipoCambio, puedeVerPrecios, mostrarEstadoServicio, mostrarTituloOT, otsPorCot, colOtEstrecha }) {
