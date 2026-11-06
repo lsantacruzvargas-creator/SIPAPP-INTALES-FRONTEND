@@ -237,7 +237,7 @@ function TablaOC({
 export default function ListaOrdenesCompra() {
   // Administración ve la vista de OC pero no montos/costos — mismo criterio
   // que Cotizaciones (Fase 16).
-  const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(getUsuario()?.rol);
+  const puedeVerPrecios = ["admin", "facturacion", "jefatura", "coordinadora"].includes(getUsuario()?.rol);
   const [ordenes, setOrdenes]       = useState([]);
   const [otGroupMap, setOtGroupMap] = useState({});
   const [factMap, setFactMap]       = useState({});

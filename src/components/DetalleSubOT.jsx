@@ -68,9 +68,9 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   });
   const rolActual = getUsuario()?.rol;
   const puedeEditarCampos = ["admin", "jefatura", "supervisor", "planner", "coordinadora"].includes(rolActual);
-  // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
+  // Anular un documento queda reservado a Admin, Jefatura y Coordinadora — Facturación ya
   // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
-  const puedeAnular = ["admin", "jefatura"].includes(rolActual);
+  const puedeAnular = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   const esAdmin = rolActual === "admin";
   const esTecnico = ["tecnico", "tecnico_prueba", "tecnico_intervencion"].includes(rolActual);
   // Tabla de Servicios Externos: la ven todos los roles menos técnico.

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAuth } from "../utils/fetchAuth";
+import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { formatearFecha } from "../utils/fecha";
 import TablaScroll from "../components/TablaScroll";
 import ModalDetalleGuia from "../components/ModalDetalleGuia";
@@ -62,9 +62,11 @@ export default function ListaGuias() {
             className="text-sm text-blue-600 hover:text-blue-800 underline">
             Ver Comprobantes
           </button>
-          <button onClick={() => navigate("/facturacion-electronica/guias/emitir")} className="btn-primary">
-            + Emitir Guía
-          </button>
+          {getUsuario()?.rol !== "coordinadora" && (
+            <button onClick={() => navigate("/facturacion-electronica/guias/emitir")} className="btn-primary">
+              + Emitir Guía
+            </button>
+          )}
         </div>
       </div>
 

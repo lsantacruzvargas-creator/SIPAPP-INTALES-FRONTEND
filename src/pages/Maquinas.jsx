@@ -6,9 +6,10 @@ const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-n
 
 // A diferencia de Centros de Costo, acá jefatura también gestiona — es quien
 // mantiene la tarifa por hora de cada máquina (ver spec 2026-09-22).
+// Coordinadora igual que jefatura (2026-11-06).
 export default function Maquinas() {
   const rolActual = getUsuario()?.rol;
-  const puedeGestionar = ["admin", "jefatura"].includes(rolActual);
+  const puedeGestionar = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   const [maquinas, setMaquinas] = useState([]);
   const [nombre, setNombre] = useState("");
   const [tarifaHora, setTarifaHora] = useState("");

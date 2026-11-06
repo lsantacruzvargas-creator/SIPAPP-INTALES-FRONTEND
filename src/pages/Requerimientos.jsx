@@ -297,7 +297,7 @@ export default function Requerimientos() {
   const [ordenesCompra, setOrdenesCompra] = useState([]);
   const [tab, setTab] = useState("activos");
   const usuario = getUsuario();
-  const puedeAtender = ["admin", "jefatura", "almacenero"].includes(usuario?.rol);
+  const puedeAtender = ["admin", "jefatura", "coordinadora", "almacenero"].includes(usuario?.rol);
 
   const cargar = useCallback(async () => {
     const [r1, r2] = await Promise.all([

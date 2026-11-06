@@ -212,7 +212,7 @@ function porFecha(arr, campoFecha, ano, mes) {
   });
 }
 
-// ── Dashboard de Planner / Coordinadora ──────────────────────────────────────
+// ── Dashboard de Planner / Administración ────────────────────────────────────
 // Vista específica pedida por el usuario — reemplaza por completo el
 // contenido del dashboard de admin/jefatura para estos dos roles (no se
 // combinan). Los 4 KPIs leen directo el campo `estadoGeneral` (calculado y
@@ -367,10 +367,10 @@ export default function Dashboard() {
     return <div className="p-8 text-sm text-gray-400">Cargando dashboard…</div>;
   }
 
-  // Planner, Coordinadora y Administración ("asistente" es el valor de rol
-  // real, ver Sidebar.jsx) ven un panel completamente distinto (a pedido
-  // explícito del usuario) — nunca el dashboard de admin/jefatura de abajo.
-  if (["planner", "coordinadora", "asistente"].includes(usuario?.rol)) {
+  // Planner y Administración ("asistente" es el valor de rol real, ver
+  // Sidebar.jsx) ven un panel completamente distinto (a pedido explícito del
+  // usuario). Coordinadora ve el de admin/jefatura desde 2026-11-06.
+  if (["planner", "asistente"].includes(usuario?.rol)) {
     return <DashboardPlanner ots={ots} ocs={ocs} />;
   }
 

@@ -460,7 +460,7 @@ export default function ModalCotizacion({ cotizacion: inicial, onClose, onSaved 
             {otCreada && cot.tipo === "servicio" && (
               <span className="text-xs text-emerald-600 font-medium">✓ OT creada</span>
             )}
-            {!["asistente", "coordinadora", "planner"].includes(getUsuario()?.rol) && (
+            {!["asistente", "planner"].includes(getUsuario()?.rol) && (
               <button
                 type="button"
                 onClick={() => exportarCotizacionPdf(cot)}

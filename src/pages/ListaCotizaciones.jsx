@@ -204,9 +204,9 @@ export default function ListaCotizaciones() {
   // vista por defecto al abrir la página — pedido explícito del usuario.
   const [vista, setVista] = useState("todasLasCotizaciones");
   const [tipoCambio, setTipoCambio] = useState(null);
-  // Precios: información sensible, solo Admin/Facturación/Jefatura los ven —
+  // Precios: información sensible, solo Admin/Facturación/Jefatura/Coordinadora los ven —
   // esta lista es compartida también con Planner y Asistente (Administración).
-  const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(getUsuario()?.rol);
+  const puedeVerPrecios = ["admin", "facturacion", "jefatura", "coordinadora"].includes(getUsuario()?.rol);
 
   const buildOtsMap = (ots) => {
     const m = new Map();

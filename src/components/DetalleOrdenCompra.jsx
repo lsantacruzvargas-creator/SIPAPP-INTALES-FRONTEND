@@ -62,30 +62,32 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   const [ordenActual, setOrdenActual] = useState(orden);
   const [guardandoConfirmacion, setGuardandoConfirmacion] = useState("");
   const rolActual = getUsuario()?.rol;
-  const puedeEditar = ["admin", "asistente", "facturacion", "jefatura"].includes(rolActual);
-  // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
+  const puedeEditar = ["admin", "asistente", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
+  // Anular un documento queda reservado a Admin, Jefatura y Coordinadora — Facturación ya
   // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
-  const puedeAnular = ["admin", "jefatura"].includes(rolActual);
+  const puedeAnular = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   const esAdmin = rolActual === "admin";
   const cadenaCerrada = bloqueadoPorCadenaCerrada(orden.estadoCadena, rolActual);
-  const puedeConfirmarHesActa = ["admin", "asistente", "facturacion", "jefatura"].includes(rolActual);
-  // Montos/cálculos exclusivos de admin/jefatura/facturación — mismo criterio
+  const puedeConfirmarHesActa = ["admin", "asistente", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
+  // Montos/cálculos exclusivos de admin/jefatura/coordinadora/facturación — mismo criterio
   // que ListaOrdenesCompra.jsx y que precios de Cotización (Fase 16). Antes
   // era una lista de bloqueo (solo excluía asistente/coordinadora) que
   // dejaba pasar a planner y otros roles por error.
-  const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(rolActual);
+  const puedeVerPrecios = ["admin", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
   // Generar factura es libre (ya no exige confirmar HES/Acta antes) — Admin,
   // Facturación y Jefatura pueden (mismo gate en el backend, POST /facturas
   // puedeCrear en routes/facturas.js; Admin sumado a pedido explícito del
   // usuario, 2026-09-04, revierte la exclusión de la Fase 15).
   const puedeCrearFacturaRol = ["admin", "facturacion", "jefatura"].includes(rolActual);
   // Mismo set de roles que ve el card de GRE en DetalleOrdenTrabajo.jsx.
-  const puedeGenerarGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
-  // Card "Costo de fabricación" (OC vs costo real de la OT) — jefatura y
-  // vendedor, +admin como excepción (mismo criterio que el resto de acciones
-  // restringidas de la app), incluso aunque vendedor no tenga
+  // Coordinadora ve las GRE pero no las emite (2026-11-06).
+  const puedeVerGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
+  const puedeGenerarGRE = puedeVerGRE && rolActual !== "coordinadora";
+  // Card "Costo de fabricación" (OC vs costo real de la OT) — jefatura,
+  // coordinadora y vendedor, +admin como excepción (mismo criterio que el
+  // resto de acciones restringidas de la app), incluso aunque vendedor no tenga
   // puedeVerPrecios general (acá compara, no edita el subtotal).
-  const puedeVerReporte = ["jefatura", "vendedor", "admin"].includes(rolActual);
+  const puedeVerReporte = ["jefatura", "coordinadora", "vendedor", "admin"].includes(rolActual);
   const exigeHes  = !!ordenActual.empresa?.requiereHes;
   const exigeActa = !!ordenActual.empresa?.requiereActaConformidad;
 
@@ -178,7 +180,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
         fetchAuth(`/informes?ordenTrabajo=${found._id}`)
           .then(r => r.ok && r.json())
           .then(infs => setInformes(infs || []));
-        if (puedeGenerarGRE) {
+        if (puedeVerGRE) {
           fetchAuth(`/guias?ordenesTrabajo=${found._id}&estado=ACEPTADO&limit=1000`)
             .then(r => r.ok && r.json())
             .then(data => setGres(data?.ok ? data.data : []));
@@ -500,7 +502,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
               </div>
             </div>
 
-            {/* Cálculos — ocultos para Administración y Coordinadora, que no ven/editan montos */}
+            {/* Cálculos — ocultos para Administración, que no ve/edita montos */}
             {puedeVerPrecios && (
               <div className="rounded-xl bg-gradient-to-br from-gray-50 to-blue-50/40 border border-gray-100 p-4 space-y-4">
                 <div>
@@ -554,9 +556,9 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
               )}
             </TarjetaRelacion>
 
-            {puedeGenerarGRE && ot && (gres.length === 0 ? (
+            {puedeVerGRE && ot && (gres.length === 0 ? (
               <TarjetaRelacion tipo="gre" vacio
-                onCrear={!orden.anulado ? crearGREDesdeOC : undefined} crearLabel="GRE" />
+                onCrear={puedeGenerarGRE && !orden.anulado ? crearGREDesdeOC : undefined} crearLabel="GRE" />
             ) : (
               <TarjetaRelacion tipo="gre"
                 codigo={gres.length === 1 ? codigoDeGuia(gres[0]) : `${gres.length} guías`}
@@ -574,7 +576,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
                     ))}
                   </div>
                 )}
-                {!orden.anulado && (
+                {puedeGenerarGRE && !orden.anulado && (
                   <button type="button"
                     onClick={(e) => { e.stopPropagation(); crearGREDesdeOC(); }}
                     className="text-xs text-blue-600 hover:text-blue-800 underline mt-0.5">
@@ -603,7 +605,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
             <TarjetaRelacion tipo="factura" codigo={factura?.codigo} numero={factura?.numeroFactura} vacio={!factura}
               onClick={factura ? abrirFactura : undefined} cargando={cargandoFactura || cargandoCrearFactura}
               onCrear={!factura && !orden.anulado && puedeCrearFacturaRol ? crearFacturaDesdeOC : undefined} crearLabel="Factura">
-              {puedeVerPrecios && (factura?.totalAPagar || factura?.total) > 0 && (
+              {puedeVerPrecios && rolActual !== "coordinadora" && (factura?.totalAPagar || factura?.total) > 0 && (
                 <p className="text-xs text-gray-500">{money(factura.totalAPagar ?? factura.total, orden.moneda)}</p>
               )}
               {factura?.estadoPago && <Chip className={badgePago(factura.estadoPago)}>{factura.estadoPago}</Chip>}

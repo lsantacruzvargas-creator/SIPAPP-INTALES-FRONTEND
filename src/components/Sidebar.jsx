@@ -152,16 +152,17 @@ export default function Sidebar() {
   // - facturacion: solo Facturas, Fact. Electrónica, Guías y Tipo de Cambio.
   // - jefatura: todo excepto Usuarios.
   // - admin: todo, incluyendo Usuarios.
-  // - coordinadora (nuevo rol): Almacén (nivel almacenero), Inventario,
-  //   OTs (nivel admin), Cotizaciones y Órdenes de Compra de solo lectura
-  //   (sin precios/montos) — ver detalle de permisos en cada página/ruta.
+  // - coordinadora (2026-11-06): mismo nivel que jefatura (precios/montos
+  //   incluidos) excepto Facturas, Fact. Electrónica, Tipo de Cambio y
+  //   Sistema, que no ve; Guías solo en lectura (no emite). Sí ve Reportes y
+  //   el Dashboard de jefatura (confirmado por el usuario el mismo día).
   const NAV_ITEMS = [
     { to: "/dashboard", label: "Dashboard", Icon: IconHome, show: esAdmin || esJefatura || esPlanner || esCoordinadora || esAsistente },
     { to: "/ordenes-trabajo", label: "Orden de Trabajo", Icon: IconClipboard, show: esComercial || esTecnico || esSupervisor || esPlanner || esJefatura || esCoordinadora },
     { to: "/cotizaciones", label: "Cotizaciones", Icon: IconDocument, show: esComercial || esPlanner || esJefatura || esCoordinadora },
     { to: "/ordenes-compra", label: "Órdenes de Compra", Icon: IconCart, show: esComercial || esFacturacion || esJefatura || esCoordinadora },
     { to: "/facturas", label: "Facturas", Icon: IconReceipt, show: esAdmin || esFacturacion || esJefatura },
-    { to: "/reportes", label: "Reportes", Icon: IconChartBar, show: esAdmin || esFacturacion || esJefatura },
+    { to: "/reportes", label: "Reportes", Icon: IconChartBar, show: esAdmin || esFacturacion || esJefatura || esCoordinadora },
     // Administración (asistente) no ve "Fact. Electrónica" — en su lugar
     // tiene "Guías" directamente (a pedido del usuario, reemplaza esa vista).
     { to: "/facturacion-electronica", label: "Fact. Electrónica", Icon: IconBolt, show: esAdmin || esFacturacion || esJefatura },
@@ -174,8 +175,8 @@ export default function Sidebar() {
     { to: "/requerimientos", label: "Requerimientos", Icon: IconClipboardList, show: esAdmin || esAlmacenero || esJefatura || esCoordinadora || esVendedor },
     { to: "/compras", label: "Compras", Icon: IconCart, show: esAdmin || esJefatura || esCoordinadora || esVendedor },
     { to: "/centros-costo", label: "Centros de Costo", Icon: IconTag, show: esAdmin },
-    { to: "/maquinas", label: "Máquinas", Icon: IconServer, show: esAdmin || esJefatura },
-    { to: "/tarifas-personal", label: "Tarifas de Personal", Icon: IconUsers, show: esAdmin || esJefatura },
+    { to: "/maquinas", label: "Máquinas", Icon: IconServer, show: esAdmin || esJefatura || esCoordinadora },
+    { to: "/tarifas-personal", label: "Tarifas de Personal", Icon: IconUsers, show: esAdmin || esJefatura || esCoordinadora },
     { to: "/usuarios", label: "Usuarios", Icon: IconUsers, show: esAdmin },
     { to: "/sistema", label: "Sistema", Icon: IconServer, show: esAdmin || esJefatura },
   ];

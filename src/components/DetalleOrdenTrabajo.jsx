@@ -91,9 +91,9 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   // Supervisor edita los campos de la OT, pero no puede anularla. Igual que
   // técnico, supervisor no ve el resto de la cadena (Cotización/OC/Factura).
   const puedeEditarCampos = ["admin", "jefatura", "supervisor", "planner", "coordinadora"].includes(rolActual);
-  // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
+  // Anular un documento queda reservado a Admin, Jefatura y Coordinadora — Facturación ya
   // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
-  const puedeAnular = ["admin", "jefatura"].includes(rolActual);
+  const puedeAnular = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   const esAdmin = rolActual === "admin";
   const esTecnico = ["tecnico", "tecnico_prueba", "tecnico_intervencion"].includes(rolActual);
   const esVistaLimitada = esTecnico || ["supervisor", "planner"].includes(rolActual);
@@ -103,7 +103,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const puedeNotificarTrabajo = ["supervisor", "admin"].includes(rolActual);
   // Mismo criterio que DetalleCotizacion.jsx/ModalNuevaCotizacion.jsx —
   // Planner puede ver el card de Cotización (ver más abajo) pero nunca su monto.
-  const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(rolActual);
+  const puedeVerPrecios = ["admin", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
   const cadenaCerrada = bloqueadoPorCadenaCerrada(ot.estadoCadena, rolActual);
   // Progreso (Encargado de Progreso) es una card independiente del fieldset
   // principal — un técnico no edita el resto de la OT, solo esta tarjeta si
@@ -118,7 +118,9 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const puedeEditarEncargados = puedeEditarCampos || rolActual === "tecnico";
   // Mismo set de roles que ya tiene acceso a /facturacion-electronica/guias —
   // técnico (y cualquier otro rol sin acceso a esa ruta) no ve este card.
-  const puedeGenerarGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
+  // Coordinadora ve las GRE pero no las emite (2026-11-06).
+  const puedeVerGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
+  const puedeGenerarGRE = puedeVerGRE && rolActual !== "coordinadora";
   const [usuarios, setUsuarios] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [empresasOpen, setEmpresasOpen] = useState(false);
@@ -182,7 +184,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
         ).then(listas => setInformes(listas.flat().sort((a, b) =>
           new Date(a.fechaHoraGuardado || 0) - new Date(b.fechaHoraGuardado || 0)
         )));
-        if (!puedeGenerarGRE) return;
+        if (!puedeVerGRE) return;
         // Qué sub-OTs (o la propia OT, si no tiene hijas) ya salieron en
         // alguna GRE — para el badge en cada card. Solo cuentan las GRE
         // ACEPTADAS por SUNAT: una rechazada/en error/anulada no significa
@@ -748,9 +750,9 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
               )}
             </TarjetaRelacion>
 
-            {puedeGenerarGRE && (misGres.length === 0 ? (
+            {puedeVerGRE && (misGres.length === 0 ? (
               <TarjetaRelacion tipo="gre" vacio
-                onCrear={!ot.anulado ? abrirGenerarGRE : undefined} crearLabel="GRE" />
+                onCrear={puedeGenerarGRE && !ot.anulado ? abrirGenerarGRE : undefined} crearLabel="GRE" />
             ) : (
               <TarjetaRelacion tipo="gre"
                 codigo={misGres.length === 1 ? codigoDeGuia(misGres[0]) : `${misGres.length} guías`}
@@ -768,7 +770,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                     ))}
                   </div>
                 )}
-                {!ot.anulado && (
+                {puedeGenerarGRE && !ot.anulado && (
                   <button type="button"
                     onClick={(e) => { e.stopPropagation(); abrirGenerarGRE(); }}
                     className="text-xs text-blue-600 hover:text-blue-800 underline mt-0.5">
@@ -778,7 +780,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
               </TarjetaRelacion>
             ))}
 
-            {!esVistaLimitada && rolActual !== "coordinadora" && (
+            {!esVistaLimitada && (
               <>
                 <TarjetaRelacion tipo="oc" codigo={oc?.codigo} numero={oc?.numeroOrden} vacio={!oc}
                   onClick={oc ? () => onNavegar?.({ tipo: "oc", data: oc, extra: factura }) : undefined}
@@ -786,13 +788,15 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                   {puedeVerPrecios && oc?.monto > 0 && <p className="text-xs text-gray-500">{money(oc.monto, cot?.moneda)}</p>}
                 </TarjetaRelacion>
 
-                <TarjetaRelacion tipo="factura" codigo={factura?.codigo} numero={factura?.numeroFactura} vacio={!factura}
-                  onClick={factura ? () => onNavegar?.({ tipo: "factura", data: factura }) : undefined}>
-                  {puedeVerPrecios && (factura?.totalAPagar || factura?.total) > 0 && (
-                    <p className="text-xs text-gray-500">{money(factura.totalAPagar ?? factura.total, cot?.moneda)}</p>
-                  )}
-                  {factura?.estadoPago && <Chip className={badgePago(factura.estadoPago)}>{factura.estadoPago}</Chip>}
-                </TarjetaRelacion>
+                {rolActual !== "coordinadora" && (
+                  <TarjetaRelacion tipo="factura" codigo={factura?.codigo} numero={factura?.numeroFactura} vacio={!factura}
+                    onClick={factura ? () => onNavegar?.({ tipo: "factura", data: factura }) : undefined}>
+                    {puedeVerPrecios && (factura?.totalAPagar || factura?.total) > 0 && (
+                      <p className="text-xs text-gray-500">{money(factura.totalAPagar ?? factura.total, cot?.moneda)}</p>
+                    )}
+                    {factura?.estadoPago && <Chip className={badgePago(factura.estadoPago)}>{factura.estadoPago}</Chip>}
+                  </TarjetaRelacion>
+                )}
               </>
             )}
 

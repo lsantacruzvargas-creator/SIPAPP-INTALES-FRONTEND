@@ -13,7 +13,7 @@ const money = (v) => "S/ " + Number(v ?? 0).toLocaleString("es-PE", { minimumFra
 // 2026-09-22, decisión #10).
 export default function ModalDetalleNotificacionTrabajo({ notificacion: inicial, onClose, onActualizada }) {
   const rolActual = getUsuario()?.rol;
-  const puedeGestionar = ["admin", "jefatura"].includes(rolActual);
+  const puedeGestionar = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   const puedeEditar = ["admin", "supervisor"].includes(rolActual);
 
   const [notificacion, setNotificacion] = useState(inicial);

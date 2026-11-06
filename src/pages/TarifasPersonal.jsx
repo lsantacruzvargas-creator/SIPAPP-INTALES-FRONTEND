@@ -5,10 +5,11 @@ import TablaScroll from "../components/TablaScroll";
 // Página aparte de Usuarios.jsx (admin-only a nivel de ruta) — jefatura
 // necesita mantener la tarifa/hora de los técnicos sin abrirle el resto de
 // la gestión de cuentas (rol, contraseña, etc.), ver spec 2026-09-22.
+// Coordinadora igual que jefatura (2026-11-06).
 const ROLES_TECNICO = ["tecnico", "tecnico_prueba", "tecnico_intervencion", "supervisor"];
 
 export default function TarifasPersonal() {
-  const puedeGestionar = ["admin", "jefatura"].includes(getUsuario()?.rol);
+  const puedeGestionar = ["admin", "jefatura", "coordinadora"].includes(getUsuario()?.rol);
   const [usuarios, setUsuarios] = useState([]);
   const [editando, setEditando] = useState({});
 

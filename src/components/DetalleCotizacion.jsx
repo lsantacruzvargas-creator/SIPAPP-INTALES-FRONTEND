@@ -106,13 +106,13 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const [generandoOT, setGenerandoOT] = useState(false);
   const rolActual = getUsuario()?.rol;
   const puedeEditar = ["admin", "asistente", "facturacion", "jefatura", "coordinadora", "planner"].includes(rolActual);
-  // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
+  // Anular un documento queda reservado a Admin, Jefatura y Coordinadora — Facturación ya
   // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
-  const puedeAnular = ["admin", "jefatura"].includes(rolActual);
+  const puedeAnular = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   const esAdmin = rolActual === "admin";
-  // Precios: información sensible, solo Admin/Facturación/Jefatura los ven —
+  // Precios: información sensible, solo Admin/Facturación/Jefatura/Coordinadora los ven —
   // ni Asistente ni Planner, aunque puedan editar/ver el resto de la cotización.
-  const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(rolActual);
+  const puedeVerPrecios = ["admin", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
   // Card de Servicios Externos — visible solo para este set de roles, a
   // pedido explícito del usuario.
   const puedeVerServicios = ["admin", "jefatura", "coordinadora", "planner", "asistente"].includes(rolActual);
@@ -120,7 +120,9 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   // además a Planner (Coordinadora ya está en `puedeEditar`).
   const puedeGenerarOT = ["admin", "asistente", "facturacion", "jefatura", "planner", "coordinadora"].includes(rolActual);
   // Mismo set de roles que ve el card de GRE en DetalleOrdenTrabajo.jsx.
-  const puedeGenerarGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
+  // Coordinadora ve las GRE pero no las emite (2026-11-06).
+  const puedeVerGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
+  const puedeGenerarGRE = puedeVerGRE && rolActual !== "coordinadora";
   const cadenaCerrada = bloqueadoPorCadenaCerrada(cot.estadoCadena, rolActual);
   // Desglose mostrado en el modal de "Cerrar cadena" — mismo criterio de
   // detracción SUNAT que ya usa DetalleOrdenCompra.jsx (12% cuando el total
@@ -137,7 +139,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     ]).then(([otsData, ocs, facts]) => {
       const otsFound = otsData.filter(o => (o.cotizacion?._id || o.cotizacion) === cot._id);
       setOts(otsFound);
-      if (puedeGenerarGRE && otsFound.length > 0) {
+      if (puedeVerGRE && otsFound.length > 0) {
         const ids = otsFound.map(o => o._id);
         fetchAuth(`/guias?ordenesTrabajo=${ids.join(",")}&estado=ACEPTADO&limit=1000`)
           .then(r => r.ok && r.json())
@@ -268,8 +270,8 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const generarOTSeleccionados = async () => {
     setGenerandoOT(true);
     // Solo hace falta persistir cambios pendientes primero si el rol puede
-    // editar ítems (admin/asistente/facturación/jefatura) — Planner y
-    // Coordinadora ven los ítems de solo lectura, así que nunca hay nada
+    // editar ítems (admin/asistente/facturación/jefatura/coordinadora) —
+    // Planner ve los ítems de solo lectura, así que nunca hay nada
     // pendiente que guardar y `cot` ya refleja exactamente lo persistido.
     const guardada = puedeEditar ? await guardarCotizacion() : cot;
     if (!guardada) { setGenerandoOT(false); return; }
@@ -524,7 +526,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               )}
               <Chip className="mt-0.5 bg-white/20 text-white">{cot.tipo}</Chip>
             </div>
-            {!["asistente", "coordinadora", "planner"].includes(rolActual) && (
+            {!["asistente", "planner"].includes(rolActual) && (
               <button onClick={() => exportarCotizacionPdf(datosParaPdf())}
                 className="bg-white/15 text-white text-sm px-4 py-2 rounded-lg hover:bg-white/25 transition font-medium shrink-0">
                 Exportar PDF
@@ -870,9 +872,9 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               </div>
             )}
 
-            {puedeGenerarGRE && ots.length > 0 && (gres.length === 0 ? (
+            {puedeVerGRE && ots.length > 0 && (gres.length === 0 ? (
               <TarjetaRelacion tipo="gre" vacio
-                onCrear={!cot.anulado && ots.length === 1 ? crearGREDesdeCot : undefined} crearLabel="GRE" />
+                onCrear={puedeGenerarGRE && !cot.anulado && ots.length === 1 ? crearGREDesdeCot : undefined} crearLabel="GRE" />
             ) : (
               <TarjetaRelacion tipo="gre"
                 codigo={gres.length === 1 ? codigoDeGuia(gres[0]) : `${gres.length} guías`}
@@ -890,7 +892,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                     ))}
                   </div>
                 )}
-                {!cot.anulado && ots.length === 1 && (
+                {puedeGenerarGRE && !cot.anulado && ots.length === 1 && (
                   <button type="button"
                     onClick={(e) => { e.stopPropagation(); crearGREDesdeCot(); }}
                     className="text-xs text-blue-600 hover:text-blue-800 underline mt-0.5">
@@ -911,13 +913,11 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               )}
             </TarjetaRelacion>
 
-            {rolActual !== "coordinadora" && (
-              <TarjetaRelacion tipo="oc" codigo={oc?.codigo} numero={oc?.numeroOrden} vacio={!oc}
-                onClick={oc ? () => onNavegar?.({ tipo: "oc", data: oc, extra: factura }) : undefined}
-                onCrear={!oc && !cot.anulado ? () => setCrearOCOpen(true) : undefined} crearLabel="OC">
-                {puedeVerPrecios && oc?.monto > 0 && <p className="text-xs text-gray-500">{money(oc.monto, cot.moneda)}</p>}
-              </TarjetaRelacion>
-            )}
+            <TarjetaRelacion tipo="oc" codigo={oc?.codigo} numero={oc?.numeroOrden} vacio={!oc}
+              onClick={oc ? () => onNavegar?.({ tipo: "oc", data: oc, extra: factura }) : undefined}
+              onCrear={!oc && !cot.anulado ? () => setCrearOCOpen(true) : undefined} crearLabel="OC">
+              {puedeVerPrecios && oc?.monto > 0 && <p className="text-xs text-gray-500">{money(oc.monto, cot.moneda)}</p>}
+            </TarjetaRelacion>
 
             {rolActual !== "coordinadora" && (
               <TarjetaRelacion tipo="factura" codigo={factura?.codigo} numero={factura?.numeroFactura} vacio={!factura}
