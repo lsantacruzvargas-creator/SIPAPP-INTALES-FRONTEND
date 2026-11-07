@@ -405,6 +405,22 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   hasta ±60 días por periodo. Los **reingresos** ignoran las boletas de meses anteriores al nuevo ingreso. Fuera de alcance: vacaciones
   truncas, liquidación de cese y provisión (siguen en «Gratificación, CTS, vacaciones y liquidación»). Commits: Backend `fcc041f..b9ac096`; Frontend
   `feat(planilla): pestaña de vacaciones y venta de vacaciones en la boleta` (`PanelVacaciones`, `utils/vacaciones.js`, `ModalBoleta`, `Planilla`).
+- **Liquidación de beneficios sociales y cuentas por área (entregado 2026-11-07)**: diseño en `specs/2026-11-06-liquidacion-design.md`, plan en
+  `plans/2026-11-06-liquidacion.md`. Botón «Liquidación» en Planilla → Trabajadores (cesados): propuesta automática (RC, CTS trunca 0904, vacaciones
+  no gozadas 0118 e indemnización 0504, truncas 0114, gratificación trunca 0407 y bonificación 0313) que el contador edita (bases, meses/días, montos,
+  quitar líneas, agregar conceptos de la Tabla 22, observaciones); al confirmar pasa a la boleta del mes de cese (PLAME y asiento), queda bloqueada y se
+  descarga el PDF con el formato del Excel del contador (el modelo da 2 295,13). Anular solo con la planilla del mes abierta. **5.ª del mes de cese** (desde
+  11/2026, también en diciembre): ajuste final sin proyección y **devolución del exceso** como concepto `DEV5` (no va al `.rem`; asiento al debe de 40173).
+  **Asiento por área**: campo «Área contable» en la ficha y Planilla → Cuentas con columnas General · Administración · Producción · Ventas, filas nuevas
+  asignación familiar, bonificaciones, CTS e indemnizaciones. «Nuevo vínculo» exige la liquidación confirmada del cese (≥ 11/2026). Commits: Backend
+  `df12ed6..461ecad`; Frontend `f9768668..9ffc503b`. **Pendientes**:
+  - [Confirmar con el contador] cuentas de CTS (¿6291x?) e indemnizaciones (¿623/62311?); cómo se declara la devolución de 5.ª en el PDT PLAME
+    (tributo 3051); si la indemnización vacacional es proporcional a los días pendientes; si la «5.ª anterior» de la ficha fue de otro empleador (el
+    PLAME avisa cuando la devolución la incluye); variables ÷ 6 aunque el periodo sea menor (RCTS art. 6); tope de 60 días de subsidio en la CTS (hoy
+    solo aviso).
+  - Probar en el navegador el guardado al salir de un campo del modal (meses, Tab, días, Tab rápido) y abrir un PDF real; probar el PLAME con DEV5 en el PVS.
+  - Menores: reingreso en el mismo mes del cese (anterior a 11/2026) deja la boleta sin el ajuste final; la tabla de cuentas por área no tiene
+    desplazamiento horizontal en pantallas angostas; la dirección del empleador no sale en la cabecera del PDF (tampoco en la boleta).
 - **RMV S/ 1 230 desde 01/10/2026** (D.S. 015-2026-TR): actualizar los Parámetros de oct/nov 2026 (reabrir y regenerar la planilla si ya están cerradas).
   El valor inicial de `PARAMETROS_INICIALES` ya es 1230.
 - **Prueba inestable ajena**: `test/bancos.test.js` «carrera: un movimiento y el cierre…» falla a veces por `0` contra `-0`; pasa al re-ejecutar.
