@@ -95,6 +95,7 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
   const [guardando, setGuardando] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const setPension = (k) => (e) => setForm((f) => ({ ...f, pension: { ...f.pension, [k]: e.target.value } }));
+  const setCuentaCts = (k) => (e) => setForm((f) => ({ ...f, cuentaCts: { ...f.cuentaCts, [k]: e.target.value } }));
   const setPlanEps = (k) => (e) => setForm((f) => ({ ...f, planEps: { ...f.planEps, [k]: e.target.value } }));
   const fila = (campo, i, parche) => setForm((f) => ({ ...f, [campo]: f[campo].map((x, j) => (j === i ? { ...x, ...parche } : x)) }));
   const quitar = (campo, i) => setForm((f) => ({ ...f, [campo]: f[campo].filter((_, j) => j !== i) }));
@@ -213,6 +214,12 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
                 <option value="">Sin área</option>
                 {Object.entries(AREAS).map(([k, n]) => <option key={k} value={k}>{n}</option>)}
               </select>
+            </label>
+            <label className="text-xs text-gray-500">Entidad de la cuenta CTS
+              <input value={form.cuentaCts.entidad} onChange={setCuentaCts("entidad")} maxLength={60} placeholder="Banco o caja" className={INP} />
+            </label>
+            <label className="text-xs text-gray-500">Número de cuenta CTS
+              <input value={form.cuentaCts.numero} onChange={setCuentaCts("numero")} maxLength={30} inputMode="numeric" className={INP} />
             </label>
             <label className="text-xs text-gray-500">Fecha de ingreso
               <input type="date" value={form.fechaIngreso} onChange={set("fechaIngreso")} readOnly={sinIngreso} className={INP} />

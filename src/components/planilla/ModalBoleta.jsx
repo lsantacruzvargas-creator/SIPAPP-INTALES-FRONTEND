@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { money } from "../../utils/compras";
-import { TIPOS_CONCEPTO, textoPension } from "../../utils/planilla";
+import { TIPOS_CONCEPTO, textoPension, detalleGratificacion, etiquetaPeriodoCts, ROTULOS_PROVISION } from "../../utils/planilla";
+import EtiquetaPlame, { LeyendaPlame } from "./EtiquetaPlame";
 import { generarBoletaPdf } from "../../utils/boletaPdf";
 import { validarDiasVendidos } from "../../utils/vacaciones";
 
@@ -51,6 +52,12 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
   };
 
   const d = boleta.datos, q = boleta.quinta;
+  const noImportar = catalogos.plame?.noImportar || [];
+  const grat = detalleGratificacion(boleta.gratificacion);
+  const cts = boleta.ctsDepositada;
+  const provisiones = boleta.provisiones || [], consumos = boleta.consumos || [];
+  const mesAnio = (p) => `${p.slice(4)}/${p.slice(0, 4)}`;
+  const rotulo = (x) => `${ROTULOS_PROVISION[x.tipo] || x.tipo}${x.periodo ? ` (${x.tipo === "cts" ? "depósito" : "pago"} ${mesAnio(x.periodo)})` : ""}`;
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 p-4 overflow-y-auto">
       <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-4xl space-y-4 my-6">
@@ -117,7 +124,15 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
                   <tbody>
                     {lista.map((c) => (
                       <tr key={c.codigo} className="border-b border-gray-100">
-                        <td className="py-1 pr-2"><span className="font-mono text-xs text-gray-400 mr-1">{/^\d/.test(c.codigo) ? c.codigo : ""}</span>{c.nombre}{SE_PAGAN_CON_FACTURA.includes(c.codigo) && <span className="block text-[11px] text-gray-400">se paga con la factura de la aseguradora</span>}</td>
+                        <td className="py-1 pr-2"><span className="font-mono text-xs text-gray-400 mr-1">{/^\d/.test(c.codigo) ? c.codigo : ""}</span>{c.nombre}<EtiquetaPlame codigo={c.codigo} noImportar={noImportar} />{c.calculado && <span className="ml-1.5 text-[10px] text-green-700">calculado</span>}
+                          {SE_PAGAN_CON_FACTURA.includes(c.codigo) && <span className="block text-[11px] text-gray-400">se paga con la factura de la aseguradora</span>}
+                          {c.calculado && c.codigo === "0406" && grat && (
+                            <span className="block text-[11px] text-gray-400">
+                              {grat.formula}
+                              {grat.avisos.map((a, i) => <span key={i} className="block text-amber-700">{a}</span>)}
+                            </span>
+                          )}
+                          {c.calculado && c.codigo === "0312" && grat?.bonificacion && <span className="block text-[11px] text-gray-400">{grat.bonificacion}</span>}</td>
                         <td className="py-1 text-right tabular-nums whitespace-nowrap">{money(c.monto)}</td>
                       </tr>
                     ))}
@@ -126,6 +141,37 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
               ) : null;
             })}
             <p className="text-sm font-semibold text-gray-800 flex justify-between border-t pt-2"><span>Neto a pagar</span><span>{money(boleta.totales.neto)}</span></p>
+            {cts && (
+              <div className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <p className="font-semibold text-gray-800 flex justify-between"><span>Depósito de CTS ({etiquetaPeriodoCts(cts.periodo)})</span><span>{money(cts.monto)}</span></p>
+                <p className="text-[11px] text-gray-500">Informativo: no forma parte de los ingresos, los descuentos ni del neto. Depósito {cts.codigo}.
+                  <EtiquetaPlame destino="no" texto="No va al PLAME (informativo)" /></p>
+              </div>
+            )}
+            {(provisiones.length > 0 || consumos.length > 0) && (
+              <div className="border border-gray-200 rounded-lg px-3 py-2 space-y-1">
+                <p className="text-xs font-bold text-gray-600 uppercase">Provisiones del mes (solo lectura)<EtiquetaPlame destino="no" texto="No va al PLAME (informativo)" /></p>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {provisiones.map((x, i) => (
+                      <tr key={i} className="border-b border-gray-100">
+                        <td className="py-1 pr-2">{rotulo(x)}<span className="block text-[11px] text-gray-400">Acumulado {money(x.devengado)}{x.monto < 0 ? " · reversión del mes" : ""}</span>
+                          {x.aviso && <span className="block text-[11px] text-amber-700">{x.aviso}</span>}</td>
+                        <td className="py-1 text-right tabular-nums whitespace-nowrap">{money(x.monto)}</td>
+                      </tr>
+                    ))}
+                    {consumos.map((x, i) => (
+                      <tr key={`c${i}`} className="border-b border-gray-100 text-gray-600">
+                        <td className="py-1 pr-2">Pagado contra la provisión: {rotulo(x)}{x.reversion ? <span className="block text-[11px] text-gray-400">Saldo devuelto al gasto: {money(x.reversion)}</span> : null}</td>
+                        <td className="py-1 text-right tabular-nums whitespace-nowrap">{money(x.monto)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-[11px] text-gray-400">Son estimaciones contables del gasto: no cambian el neto, las bases ni la boleta que recibe el trabajador.</p>
+              </div>
+            )}
+            <LeyendaPlame />
             {q && (
               <p className="text-[11px] text-gray-400">
                 Renta de 5.ª: proyección anual {money(q.brutaAnual)} (mes y anteriores {money(q.brutaAnual - q.proyectada - q.gratificaciones)}, por cobrar {money(q.proyectada)}, gratificaciones {money(q.gratificaciones)})

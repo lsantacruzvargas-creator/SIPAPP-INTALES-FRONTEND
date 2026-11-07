@@ -11,6 +11,7 @@ export const PERFIL_VACIO = {
     pension: { entidad: "onp", aseguradora: "", tasa: "" },
   },
   vidaLey: { aseguradora: "", poliza: "", vigenciaDesde: "", vigenciaHasta: "", calculo: "tasa", valor: "" },
+  beneficios: { registro: "gasto", desde: "", historial: [] },
   cambios: [],
 };
 
@@ -53,4 +54,37 @@ export const errorFechaSctr = (fecha, hoy, { cierra }) => {
   if (!fecha) return "Indica la fecha del cambio de SCTR en SUNAT.";
   if (fecha <= limiteFechaSctr(hoy, { cierra })) return "";
   return cierra ? "El fin del SCTR no puede ser más de 5 días posterior a hoy." : "El inicio del SCTR no puede ser más de 30 días posterior a hoy.";
+};
+
+// Registro de beneficios sociales. En el formulario el mes va como AAAA-MM (input month); el servidor usa AAAAMM.
+export const beneficiosDeFormulario = (b) => ({
+  registro: b?.registro || "gasto",
+  desde: b?.desde ? `${b.desde.slice(0, 4)}-${b.desde.slice(4)}` : "",
+  historial: b?.historial || [],
+});
+
+const cambioBeneficios = (form, base) => form.registro !== base.registro || form.desde !== base.desde;
+
+// Sin cambio no se envía. Cada cambio manda la elección completa: repetir un mes reescribe desde él.
+export const cuerpoBeneficios = (form, base) => (
+  cambioBeneficios(form, base) ? { registro: form.registro, desde: form.desde.replace("-", "") } : undefined
+);
+
+export const errorBeneficios = (form, base) => (
+  cambioBeneficios(form, base) && !form.desde ? "Indica desde qué mes rige el registro de beneficios sociales." : ""
+);
+
+const ROTULO_REGISTRO = { gasto: "Gasto al pagar", provision: "Provisión mensual" };
+
+export const textoHistorialBeneficios = (historial = []) =>
+  historial.map((h) => `${ROTULO_REGISTRO[h.registro]} desde ${h.desde.slice(4)}/${h.desde.slice(0, 4)}`);
+
+export const avisoBeneficios = (form, base) => {
+  if (!cambioBeneficios(form, base)) return "";
+  if (form.registro === "provision") {
+    return "Si el mes elegido cae a mitad de un periodo (semestre de CTS o de gratificación), la primera planilla provisiona lo acumulado del periodo de una vez.";
+  }
+  return base.registro === "provision"
+    ? "Los saldos provisionados siguen en las cuentas por pagar: al pagar cada beneficio se consumen igual, y el resto se limpia en la liquidación."
+    : "";
 };

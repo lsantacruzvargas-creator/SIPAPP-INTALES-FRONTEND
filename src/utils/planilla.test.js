@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   nombreTrabajador, textoPension, montoDe, totalesPlanilla, filasExcelPlanilla, TRABAJADOR_VACIO, formularioDeTrabajador, validarTrabajador,
   cuerpoDeTrabajador, formularioDeParametros, cuerpoDeParametros, faltanTasasAfp, cuerpoDeCuentas, celdasDeColumna, SUBTITULO_LIQUIDACION, AREAS, CLAVES_GASTO_AREA,
+  destinoPlame, ETIQUETA_PLAME, etiquetaPeriodoCts, detalleGratificacion, ROTULOS_PROVISION,
 } from "./planilla.js";
 
 const AFPS = { integra: "Integra", habitat: "Habitat" };
@@ -107,4 +108,57 @@ test("celdas de la boleta: los conceptos de liquidación van bajo su subtítulo;
   assert.deepEqual(celdasDeColumna([cts, mes, dev5]), [mes, dev5, { subtitulo: SUBTITULO_LIQUIDACION }, cts]);
   assert.deepEqual(celdasDeColumna([mes]), [mes]);
   assert.deepEqual(celdasDeColumna([]), []);
+});
+
+test("destinoPlame: igual que el servidor (rem, pdt o no)", () => {
+  const noImportar = ["0603", "0607", "0804"];
+  assert.equal(destinoPlame("0121", noImportar), "rem");
+  assert.equal(destinoPlame("0406", noImportar), "rem");
+  assert.equal(destinoPlame("0607", noImportar), "pdt");
+  assert.equal(destinoPlame("0804", noImportar), "pdt");
+  assert.equal(destinoPlame("DEV5", noImportar), "no");
+  assert.equal(destinoPlame("", noImportar), "no");
+  assert.equal(destinoPlame(undefined, noImportar), "no");
+  assert.equal(destinoPlame("0121"), "rem");
+  assert.deepEqual(Object.keys(ETIQUETA_PLAME), ["rem", "pdt", "no"]);
+  assert.equal(ETIQUETA_PLAME.rem.texto, "PLAME");
+  assert.equal(ETIQUETA_PLAME.pdt.texto, "PLAME · lo calcula el PDT");
+  assert.equal(ETIQUETA_PLAME.no.texto, "No va al PLAME");
+});
+
+test("ficha del trabajador: la cuenta CTS siempre viaja en el cuerpo", () => {
+  assert.deepEqual(TRABAJADOR_VACIO.cuentaCts, { entidad: "", numero: "" });
+  const f = { ...TRABAJADOR_VACIO, numDoc: "12345678", apellidoPaterno: "Quispe", nombres: "Ana", fechaIngreso: "2026-01-05", remuneracionBasica: "2500" };
+  assert.deepEqual(cuerpoDeTrabajador(f).cuentaCts, { entidad: "", numero: "" });
+  const vuelta = formularioDeTrabajador({ ...cuerpoDeTrabajador(f), _id: "x", cuentaCts: { entidad: "BCP", numero: "191-1234567" } });
+  assert.deepEqual(vuelta.cuentaCts, { entidad: "BCP", numero: "191-1234567" });
+  assert.deepEqual(formularioDeTrabajador({ _id: "y" }).cuentaCts, { entidad: "", numero: "" });
+  assert.deepEqual(cuerpoDeTrabajador({ ...f, cuentaCts: { entidad: " BCP ", numero: " 191 " } }).cuentaCts, { entidad: "BCP", numero: "191" });
+});
+
+test("cuentas de la planilla: las de por pagar de CTS, gratificaciones y vacaciones viajan completas", () => {
+  const cuerpo = cuerpoDeCuentas({ porPagar: "4111", ctsPorPagar: "4151", gratificacionesPorPagar: "4114", vacacionesPorPagar: "4115" });
+  assert.deepEqual([cuerpo.ctsPorPagar, cuerpo.gratificacionesPorPagar, cuerpo.vacacionesPorPagar], ["4151", "4114", "4115"]);
+});
+
+test("etiquetaPeriodoCts: el semestre que cubre el depósito", () => {
+  assert.equal(etiquetaPeriodoCts("202611"), "may–oct 2026");
+  assert.equal(etiquetaPeriodoCts("202605"), "nov 2025–abr 2026");
+  assert.equal(etiquetaPeriodoCts("202608"), "");
+});
+
+test("detalleGratificacion: la fórmula con los datos de la boleta", () => {
+  const g = { rc: 2523, meses: 6, diasNoLaborados: 0, factor: 1, tasaBonificacion: 0.09, monto: 2523, avisos: ["Sin boleta de 11/2026: la remuneración sale de la ficha"] };
+  assert.equal(detalleGratificacion(g).formula, "S/ 2,523.00 × 6 meses ÷ 6");
+  assert.equal(detalleGratificacion({ ...g, diasNoLaborados: 2, factor: 0.5 }).formula, "(S/ 2,523.00 × 6 meses ÷ 6 − S/ 2,523.00 ÷ 180 × 2 días no laborados) × ½");
+  assert.equal(detalleGratificacion({ ...g, meses: 1 }).formula, "S/ 2,523.00 × 1 mes ÷ 6");
+  assert.equal(detalleGratificacion(g).bonificacion, "Bonificación extraordinaria: 9 % de la gratificación");
+  assert.equal(detalleGratificacion({ ...g, tasaBonificacion: 0.0675 }).bonificacion, "Bonificación extraordinaria: 6,75 % de la gratificación");
+  assert.equal(detalleGratificacion({ ...g, tasaBonificacion: 0 }).bonificacion, "");
+  assert.deepEqual(detalleGratificacion(g).avisos, g.avisos);
+  assert.equal(detalleGratificacion(null), null);
+});
+
+test("rótulos de las provisiones mensuales", () => {
+  assert.deepEqual(ROTULOS_PROVISION, { cts: "CTS", gratificacion: "Gratificación", bonificacion: "Bonificación extraordinaria", vacaciones: "Vacaciones" });
 });

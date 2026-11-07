@@ -1,5 +1,6 @@
 // Planilla de remuneraciones: textos, formulario del trabajador y hojas de Excel. El cálculo lo hace el servidor.
 import { TREGISTRO_VACIO, requiereEstudios } from "./tregistro.js";
+import { money } from "./compras.js";
 
 export const TIPOS_CONCEPTO = { ingreso: "Ingresos", descuento: "Descuentos", aporteTrabajador: "Aportes del trabajador", aporteEmpleador: "Aportes del empleador" };
 export const REGIMENES_SALUD = { essalud: "EsSalud", eps: "EsSalud + EPS", sis: "SIS (microempresa)" };
@@ -36,7 +37,7 @@ export function filasExcelPlanilla(boletas, afps = {}) {
 
 export const TRABAJADOR_VACIO = {
   tipoDoc: "01", numDoc: "", apellidoPaterno: "", apellidoMaterno: "", nombres: "", cargo: "", centroCosto: "", area: "", fechaIngreso: "", fechaCese: "",
-  remuneracionBasica: "", asignacionFamiliar: false, conceptosFijos: [], pension: { regimen: "onp", afp: "", comision: "flujo", cuspp: "" },
+  remuneracionBasica: "", cuentaCts: { entidad: "", numero: "" }, asignacionFamiliar: false, conceptosFijos: [], pension: { regimen: "onp", afp: "", comision: "flujo", cuspp: "" },
   salud: "essalud", planEps: { nombre: "", primaTotal: "", aporteEmpresa: "", aporteTrabajador: "" }, quintaAnterior: [], tregistro: TREGISTRO_VACIO(), desbloqueo: false,
 };
 const MONTOS_EPS = ["primaTotal", "aporteEmpresa", "aporteTrabajador"];
@@ -47,7 +48,7 @@ const mezclarTregistro = (base, origen) => Object.fromEntries(Object.entries(bas
 )));
 
 export const formularioDeTrabajador = (t) => ({
-  ...TRABAJADOR_VACIO, ...t, tregistro: { ...mezclarTregistro(TREGISTRO_VACIO(), t.tregistro), nacionalidad: t.tregistro?.nacionalidad ?? "" }, desbloqueo: false, centroCosto: t.centroCosto || "", area: t.area || "", fechaCese: t.fechaCese || "", remuneracionBasica: String(t.remuneracionBasica ?? ""),
+  ...TRABAJADOR_VACIO, ...t, tregistro: { ...mezclarTregistro(TREGISTRO_VACIO(), t.tregistro), nacionalidad: t.tregistro?.nacionalidad ?? "" }, desbloqueo: false, centroCosto: t.centroCosto || "", area: t.area || "", cuentaCts: { entidad: t.cuentaCts?.entidad || "", numero: t.cuentaCts?.numero || "" }, fechaCese: t.fechaCese || "", remuneracionBasica: String(t.remuneracionBasica ?? ""),
   pension: { ...TRABAJADOR_VACIO.pension, ...t.pension },
   planEps: t.planEps ? { nombre: t.planEps.nombre || "", ...Object.fromEntries(MONTOS_EPS.map((k) => [k, String(t.planEps[k] ?? "")])) } : TRABAJADOR_VACIO.planEps,
   conceptosFijos: (t.conceptosFijos || []).map((c) => ({ codigo: c.codigo, monto: String(c.monto) })),
@@ -87,7 +88,7 @@ const conPlanEps = (f) => f.salud === "eps" && Boolean(f.planEps) && Object.valu
 const tregistroDeCuerpo = ({ estudios, ...resto }) => (requiereEstudios(resto.situacionEducativa) ? { ...resto, estudios } : resto);
 
 export const cuerpoDeTrabajador = ({ desbloqueo, ...f }) => ({
-  ...f, tregistro: tregistroDeCuerpo(f.tregistro), ...(desbloqueo === true && { desbloqueo }), centroCosto: f.centroCosto || null, remuneracionBasica: Number(f.remuneracionBasica),
+  ...f, tregistro: tregistroDeCuerpo(f.tregistro), cuentaCts: { entidad: f.cuentaCts.entidad.trim(), numero: f.cuentaCts.numero.trim() }, ...(desbloqueo === true && { desbloqueo }), centroCosto: f.centroCosto || null, remuneracionBasica: Number(f.remuneracionBasica),
   conceptosFijos: f.conceptosFijos.map((c) => ({ codigo: c.codigo, monto: Number(c.monto) })),
   quintaAnterior: f.quintaAnterior.map((q) => ({ periodo: q.mes.replace("-", ""), ingresos: Number(q.ingresos) || 0, retencion: Number(q.retencion) || 0 })),
   planEps: conPlanEps(f) ? { nombre: f.planEps.nombre.trim(), ...Object.fromEntries(MONTOS_EPS.map((k) => [k, Number(f.planEps[k])])) } : null,
@@ -126,3 +127,41 @@ export const celdasDeColumna = (conceptos) => {
   const liquidacion = conceptos.filter((c) => c.liquidacion);
   return liquidacion.length ? [...mes, { subtitulo: SUBTITULO_LIQUIDACION }, ...liquidacion] : mes;
 };
+
+// «¿Va al PLAME?», con la misma regla del servidor (utils/plame.js): un código de 4 dígitos va al .rem salvo los que calcula el PDT
+// (`catalogos.plame.noImportar`); lo demás (DEV5, EPS, CTS depositada, provisiones) no va.
+export const destinoPlame = (codigo, noImportar = []) => {
+  if (!/^\d{4}$/.test(String(codigo ?? ""))) return "no";
+  return noImportar.includes(codigo) ? "pdt" : "rem";
+};
+
+export const ETIQUETA_PLAME = {
+  rem: { texto: "PLAME", ayuda: "Se importa en el archivo .rem del PLAME." },
+  pdt: { texto: "PLAME · lo calcula el PDT", ayuda: "Va al PLAME, pero no se importa: el PDT lo calcula solo." },
+  no: { texto: "No va al PLAME", ayuda: "Es un dato de la boleta o de control interno: no se declara en el PLAME." },
+};
+
+// El depósito de mayo cubre nov–abr (empieza el año anterior) y el de noviembre may–oct.
+export const etiquetaPeriodoCts = (periodo) => {
+  const anio = Number(String(periodo).slice(0, 4)), mes = String(periodo).slice(4);
+  if (mes === "11") return `may–oct ${anio}`;
+  if (mes === "05") return `nov ${anio - 1}–abr ${anio}`;
+  return "";
+};
+
+const tasaTexto = (n) => String(Math.round(n * 10000) / 100).replace(".", ",");
+
+// La fórmula de la gratificación calculada con los datos que guardó la boleta (ver spec §7).
+export const detalleGratificacion = (g) => {
+  if (!g) return null;
+  const base = `${money(g.rc)} × ${g.meses} ${g.meses === 1 ? "mes" : "meses"} ÷ 6`;
+  const conDias = g.diasNoLaborados > 0 ? `(${base} − ${money(g.rc)} ÷ 180 × ${g.diasNoLaborados} ${g.diasNoLaborados === 1 ? "día no laborado" : "días no laborados"})` : base;
+  const factor = g.factor !== 1 ? ` × ${g.factor === 0.5 ? "½" : g.factor}` : "";
+  return {
+    formula: `${conDias}${factor}`,
+    bonificacion: g.tasaBonificacion > 0 ? `Bonificación extraordinaria: ${tasaTexto(g.tasaBonificacion)} % de la gratificación` : "",
+    avisos: g.avisos || [],
+  };
+};
+
+export const ROTULOS_PROVISION = { cts: "CTS", gratificacion: "Gratificación", bonificacion: "Bonificación extraordinaria", vacaciones: "Vacaciones" };

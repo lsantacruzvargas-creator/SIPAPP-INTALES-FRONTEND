@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima, formatearFecha } from "../../utils/fecha";
-import { PERFIL_VACIO, errorFechaSctr, limiteFechaSctr } from "../../utils/perfilLaboral";
+import { PERFIL_VACIO, errorFechaSctr, limiteFechaSctr, beneficiosDeFormulario, cuerpoBeneficios, errorBeneficios, textoHistorialBeneficios, avisoBeneficios } from "../../utils/perfilLaboral";
 import { Texto, Casilla } from "./FichaTRegistro";
 
 const INP = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
@@ -36,6 +36,7 @@ const aFormulario = ({ regimenLaboral, perfil }) => {
   return {
     ...f, ...perfil, regimenLaboral,
     remype: { ...perfil.remype, desde: perfil.remype.desde || "" },
+    beneficios: beneficiosDeFormulario(perfil.beneficios),
     sctr: {
       ...perfil.sctr,
       salud: { ...perfil.sctr.salud, tasa: vacio(perfil.sctr.salud.tasa) },
@@ -51,6 +52,7 @@ const codigosSctr = (s) => (s.actividadRiesgo ? `${s.salud.entidad}/${s.pension.
 export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardado }) {
   const [form, setForm] = useState(() => ({ regimenLaboral: "general", ...structuredClone(PERFIL_VACIO) }));
   const [base, setBase] = useState(null); // lo último guardado: sirve para saber si cambió una entidad del SCTR
+  const [baseBeneficios, setBaseBeneficios] = useState(null);
   const [conteo, setConteo] = useState(null);
   const [avisos, setAvisos] = useState([]);
   const [senatiTocado, setSenatiTocado] = useState(false);
@@ -62,6 +64,7 @@ export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardad
   const recibir = (d) => {
     setForm(aFormulario(d));
     setBase(d.perfil.sctr);
+    setBaseBeneficios(beneficiosDeFormulario(d.perfil.beneficios));
     setConteo(d.conteo);
     setAvisos([...(d.cambioPerfil ? [d.cambioPerfil.texto] : []), ...d.avisos]);
     setSenatiTocado(false);
@@ -102,10 +105,14 @@ export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardad
   const pideFecha = codigosSctr(form.sctr) !== codigosSctr(base);
   // Alta de la cobertura (antes sin SCTR): inicio hasta +30 días. Baja o cambio de entidad cierran la anterior: fin hasta +5.
   const cierra = codigosSctr(base) !== null;
-  const { sctr, vidaLey, senati } = form;
+  const { sctr, vidaLey, senati, beneficios } = form;
+  const avisoBen = avisoBeneficios(beneficios, baseBeneficios);
+  const historialBen = textoHistorialBeneficios(baseBeneficios.historial);
 
   const guardar = async () => {
     if (form.ciiu.codigo && !/^\d{4}$/.test(form.ciiu.codigo)) return setError("El CIIU debe tener 4 dígitos.");
+    const errorBen = errorBeneficios(form.beneficios, baseBeneficios);
+    if (errorBen) return setError(errorBen);
     const errorSctr = pideFecha && errorFechaSctr(sctrFecha, fechaHoyLima(), { cierra });
     if (errorSctr) return setError(errorSctr);
     setGuardando(true);
@@ -123,6 +130,8 @@ export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardad
         },
         vidaLey: { ...vidaLey, valor: Number(vidaLey.valor) || 0 },
       };
+      const cambioBen = cuerpoBeneficios(form.beneficios, baseBeneficios);
+      if (cambioBen) body.beneficios = cambioBen;
       if (senatiTocado) body.senati = { anio: Number(senati.anio) || anioActual, aporta: senati.aporta };
       if (pideFecha) body.sctrFecha = sctrFecha;
       const r = await fetchAuth("/planilla/perfil", { method: "PUT", body: JSON.stringify(body) });
@@ -144,7 +153,7 @@ export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardad
   return (
     <div className="space-y-4 max-w-4xl">
       <p className="text-sm text-gray-500">
-        Datos del empleador que gobiernan la planilla: régimen laboral, SENATI, SCTR y vida ley. Los cambios aplican a las planillas en borrador al regenerarlas;
+        Datos del empleador que gobiernan la planilla: régimen laboral, registro de beneficios sociales, SENATI, SCTR y vida ley. Los cambios aplican a las planillas en borrador al regenerarlas;
         las planillas cerradas no se modifican.
       </p>
       <fieldset disabled={!puedeEscribir || guardando} className="space-y-4 border-0 p-0 m-0 min-w-0">
@@ -159,6 +168,21 @@ export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardad
               <Casilla etiqueta="Actividad industrial (SENATI alcanza a todos los trabajadores)" valor={form.actividadIndustrial} onChange={handleChange("actividadIndustrial")} />
             </div>
           </div>
+        </Seccion>
+
+        <Seccion titulo="Registro de beneficios sociales" ayuda="Cómo se registra el gasto de la CTS, las gratificaciones y las vacaciones. Con provisión, cada planilla mensual devenga el gasto contra las cuentas por pagar; no cambia el neto de la boleta.">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+            <Selector etiqueta="Registro" valor={beneficios.registro} onChange={handleChange("beneficios.registro")} ancho="col-span-2"
+              opciones={[["gasto", "Gasto al pagar"], ["provision", "Provisión mensual"]]} />
+            <Texto etiqueta="Rige desde" type="month" valor={beneficios.desde} onChange={handleChange("beneficios.desde")} />
+          </div>
+          {historialBen.length > 0 ? (
+            <ul className="text-xs text-gray-600 space-y-0.5">
+              {historialBen.map((t, i) => <li key={i}>{t}</li>)}
+            </ul>
+          ) : <p className="text-xs text-gray-400">Sin elección guardada: se registra como gasto al pagar.</p>}
+          {avisoBen && <p className="text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">{avisoBen}</p>}
+          <p className="text-[11px] text-gray-400">Las planillas cerradas no cambian. Elegir otra vez un mes ya guardado reescribe la elección desde ese mes.</p>
         </Seccion>
 
         <Seccion titulo="SENATI" ayuda="Aporte del 0,75 % de la planilla. Obligan más de 20 trabajadores en el promedio del año anterior (Ley 26272, art. 13).">

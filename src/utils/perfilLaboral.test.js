@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PERFIL_VACIO, precargaAportes, aplicarPrecarga, cambiaSctrRegistrado, limiteFechaSctr, errorFechaSctr, mostrarCambioPerfil } from "./perfilLaboral.js";
+import { PERFIL_VACIO, precargaAportes, aplicarPrecarga, cambiaSctrRegistrado, limiteFechaSctr, errorFechaSctr, mostrarCambioPerfil,
+  beneficiosDeFormulario, cuerpoBeneficios, errorBeneficios, textoHistorialBeneficios, avisoBeneficios } from "./perfilLaboral.js";
 
 test("PERFIL_VACIO: misma forma que el del servidor, con textos vacíos en los inputs", () => {
-  assert.deepEqual(Object.keys(PERFIL_VACIO), ["remype", "ciiu", "actividadIndustrial", "senati", "sctr", "vidaLey", "cambios"]);
+  assert.deepEqual(Object.keys(PERFIL_VACIO), ["remype", "ciiu", "actividadIndustrial", "senati", "sctr", "vidaLey", "beneficios", "cambios"]);
   assert.equal(PERFIL_VACIO.sctr.salud.entidad, "essalud");
   assert.equal(PERFIL_VACIO.sctr.pension.entidad, "onp");
   assert.equal(PERFIL_VACIO.sctr.salud.tasa, "");
@@ -101,4 +102,38 @@ test("mostrarCambioPerfil: se esconde al marcarlo visto y reaparece con un cambi
   assert.equal(mostrarCambioPerfil(cambio, "2026-11-02T19:59:59.000Z"), true);
   assert.equal(mostrarCambioPerfil(cambio, cambio.fecha), false);
   assert.equal(mostrarCambioPerfil(cambio, "2026-11-03T08:00:00.000Z"), false);
+});
+
+test("beneficios sociales: del servidor al formulario (mes en formato de input) y de vuelta", () => {
+  assert.deepEqual(PERFIL_VACIO.beneficios, { registro: "gasto", desde: "", historial: [] });
+  assert.deepEqual(beneficiosDeFormulario({ registro: "provision", desde: "202611", historial: [{ registro: "provision", desde: "202611" }] }),
+    { registro: "provision", desde: "2026-11", historial: [{ registro: "provision", desde: "202611" }] });
+  assert.deepEqual(beneficiosDeFormulario(undefined), { registro: "gasto", desde: "", historial: [] });
+  const base = beneficiosDeFormulario({ registro: "gasto", desde: "", historial: [] });
+  assert.equal(cuerpoBeneficios(base, base), undefined);
+  assert.deepEqual(cuerpoBeneficios({ ...base, registro: "provision", desde: "2026-11" }, base), { registro: "provision", desde: "202611" });
+  // Cambiar solo el mes también reescribe desde ese mes: se envía la elección completa.
+  const prov = beneficiosDeFormulario({ registro: "provision", desde: "202611", historial: [] });
+  assert.deepEqual(cuerpoBeneficios({ ...prov, desde: "2026-12" }, prov), { registro: "provision", desde: "202612" });
+  assert.equal(cuerpoBeneficios(prov, prov), undefined);
+});
+
+test("beneficios sociales: el mes es obligatorio al cambiar, también para volver a gasto", () => {
+  const base = beneficiosDeFormulario({ registro: "gasto", desde: "", historial: [] });
+  assert.match(errorBeneficios({ ...base, registro: "provision" }, base), /desde qué mes/);
+  assert.equal(errorBeneficios({ ...base, registro: "provision", desde: "2026-11" }, base), "");
+  assert.equal(errorBeneficios(base, base), "");
+  const prov = beneficiosDeFormulario({ registro: "provision", desde: "202611", historial: [] });
+  assert.match(errorBeneficios({ ...prov, registro: "gasto", desde: "" }, prov), /desde qué mes/);
+});
+
+test("beneficios sociales: historial legible y avisos al cambiar", () => {
+  assert.deepEqual(textoHistorialBeneficios([{ registro: "gasto", desde: "202605" }, { registro: "provision", desde: "202611" }]),
+    ["Gasto al pagar desde 05/2026", "Provisión mensual desde 11/2026"]);
+  assert.deepEqual(textoHistorialBeneficios([]), []);
+  const base = beneficiosDeFormulario({ registro: "gasto", desde: "", historial: [] });
+  assert.match(avisoBeneficios({ ...base, registro: "provision", desde: "2026-11" }, base), /primera planilla.*de una vez/);
+  assert.equal(avisoBeneficios(base, base), "");
+  const prov = beneficiosDeFormulario({ registro: "provision", desde: "202611", historial: [] });
+  assert.match(avisoBeneficios({ ...prov, registro: "gasto", desde: "2027-01" }, prov), /saldos provisionados/);
 });

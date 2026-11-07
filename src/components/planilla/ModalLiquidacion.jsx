@@ -6,6 +6,7 @@ import { fechaDMA } from "../../utils/vacaciones";
 import { formatearFechaHora } from "../../utils/fecha";
 import { totalesEnPantalla, liquidacionVigente, fusionarRespuesta, cuerpoParaEnviar } from "../../utils/liquidacion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
+import EtiquetaPlame from "./EtiquetaPlame";
 
 const INP = "border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
 const MENSAJE_RED = "Error de conexión con el servidor.";
@@ -267,6 +268,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
   };
   const agregarLinea = () => setForm((f) => ({ ...f, lineas: [...f.lineas, { codigo: "", descripcion: "", tipo: "ingreso", monto: "", origen: "manual", editada: false }] }));
 
+  const noImportar = catalogos?.plame?.noImportar || [];
   const descuentosLey = liq ? (liq.estado === "borrador" ? liq.vistaPrevia?.descuentos : liq.descuentos) || [] : [];
   const totales = form ? totalesEnPantalla(form.lineas, descuentosLey) : null;
   const enLetras = liq && !sucio ? (liq.estado === "borrador" ? liq.vistaPrevia?.totalEnLetras : liq.totalEnLetras) : "";
@@ -427,8 +429,9 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
                             {conceptos.map((c) => <option key={c.codigo} value={c.codigo}>{c.codigo} {c.nombre}{c.tipo === "descuento" ? " (descuento)" : ""}</option>)}
                           </select>
                         ) : (
-                          <span><span className="font-mono text-xs text-gray-400 mr-1">{l.codigo}</span>{l.tipo === "descuento" ? "Descuento" : "Ingreso"}{l.origen === "manual" ? " (agregado)" : ""}</span>
+                          <span><span className="font-mono text-xs text-gray-400 mr-1">{l.codigo}</span>{l.tipo === "descuento" ? "Descuento" : "Ingreso"}{l.origen === "manual" ? " (agregado)" : ""}<EtiquetaPlame codigo={l.codigo} noImportar={noImportar} /></span>
                         )}
+                        {l.origen === "manual" && editable && l.codigo && <EtiquetaPlame codigo={l.codigo} noImportar={noImportar} />}
                       </td>
                       <td className="py-1 pr-2">
                         <input value={l.descripcion} maxLength={80} disabled={!editable} onChange={(e) => setLinea(i, { descripcion: e.target.value })} className={`${INP} w-full`} />
@@ -469,7 +472,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
                   <tbody>
                     {descuentosLey.map((d) => (
                       <tr key={d.codigo} className="border-b border-gray-100">
-                        <td className="py-1 pr-2"><span className="font-mono text-xs text-gray-400 mr-1">{d.codigo}</span>{d.nombre}
+                        <td className="py-1 pr-2"><span className="font-mono text-xs text-gray-400 mr-1">{d.codigo}</span>{d.nombre}<EtiquetaPlame codigo={d.codigo} noImportar={noImportar} />
                           <span className="block text-[11px] text-gray-400">Base {money(d.base)}{d.tasa != null ? ` × ${d.tasa} %` : ""}</span>
                         </td>
                         <td className="py-1 text-right tabular-nums">{money(d.monto)}</td>

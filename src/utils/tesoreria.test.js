@@ -310,9 +310,10 @@ test("filasExcelComparacionCarga: con RUC distinto muestra el RUC de SUNAT", asy
 test("conceptos manuales: los cinco del diseño, los pagos de planilla (solo egresos) y su etiqueta", async () => {
   const { conceptosManualesDe } = await import("./tesoreria.js");
   assert.deepEqual(conceptosManualesDe("ingreso").map((c) => c.valor), ["aporte", "prestamo", "retiro", "gasto_bancario", "otros"]);
-  assert.deepEqual(CONCEPTOS_MANUALES.map((c) => c.valor).slice(5), ["pago_remuneraciones", "pago_afp", "pago_essalud", "pago_onp", "pago_quinta"]);
-  assert.equal(conceptosManualesDe("egreso").length, 10);
+  assert.deepEqual(CONCEPTOS_MANUALES.map((c) => c.valor).slice(5), ["pago_remuneraciones", "pago_afp", "pago_essalud", "pago_onp", "pago_quinta", "pago_cts"]);
+  assert.equal(conceptosManualesDe("egreso").length, 11);
   assert.equal(etiquetaConceptoManual("pago_afp"), "Planilla: AFP");
+  assert.equal(etiquetaConceptoManual("pago_cts"), "Planilla: CTS");
   assert.equal(etiquetaConceptoManual("gasto_bancario"), "Gasto bancario");
   assert.equal(etiquetaConceptoManual("prestamo"), "Préstamo");
   assert.equal(etiquetaConceptoManual("transferencia"), "Transferencia entre cuentas");

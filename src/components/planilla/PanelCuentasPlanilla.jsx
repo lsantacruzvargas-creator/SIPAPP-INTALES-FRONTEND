@@ -28,6 +28,9 @@ const CUENTAS = [
     ["epsPorPagar", "EPS (solo si hay trabajadores con EPS)"],
     ["descuentos", "Adelantos y otros descuentos al trabajador (ej. 141)"],
     ["senatiPorPagar", "SENATI por pagar (ej. 4033)"],
+    ["ctsPorPagar", "CTS por pagar (ej. 4151)"],
+    ["gratificacionesPorPagar", "Gratificaciones por pagar (ej. 4114)"],
+    ["vacacionesPorPagar", "Vacaciones por pagar (ej. 4115)"],
   ]],
 ];
 
@@ -107,7 +110,7 @@ export default function PanelCuentasPlanilla({ cuentas, catalogos, puedeEscribir
       ))}
       <p className="text-[11px] text-gray-400">
         El asiento sale al cerrar la planilla y generar los asientos del mes en Contabilidad → Automáticos, y se puede completar a mano
-        (provisiones de gratificación, CTS y vacaciones). Los pagos se registran en Tesorería como egreso manual con el concepto «Planilla».
+        (las provisiones mensuales de CTS, gratificación y vacaciones salen solas si el registro de beneficios del Perfil laboral es «Provisión mensual»). Los pagos se registran en Tesorería como egreso manual con el concepto «Planilla» (remuneraciones, AFP, EsSalud, ONP, renta de 5.ª o CTS).
       </p>
       {error && <p className="text-sm text-red-600">{error}</p>}
       {ok && <p className="text-sm text-green-700">Cuentas guardadas.</p>}
