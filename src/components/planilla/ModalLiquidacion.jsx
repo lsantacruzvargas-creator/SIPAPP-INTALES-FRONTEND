@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { money } from "../../utils/compras";
 import { nombreTrabajador } from "../../utils/planilla";
 import { fechaDMA } from "../../utils/vacaciones";
 import { formatearFechaHora } from "../../utils/fecha";
-import { totalesEnPantalla, validarLinea, liquidacionVigente, lineasParaEnviar, fusionarRespuesta } from "../../utils/liquidacion";
+import { totalesEnPantalla, liquidacionVigente, fusionarRespuesta, cuerpoParaEnviar } from "../../utils/liquidacion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
 
 const INP = "border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
@@ -37,24 +37,6 @@ const formDe = (l) => ({
   quitadas: l.quitadas || [],
   observaciones: l.observaciones || "",
 });
-
-function cuerpoDe(form) {
-  if (Object.values(form.bases).some((v) => !/^\d+(\.\d{1,2})?$/.test(v.trim()))) return { error: "Remuneración computable: escribe importes de 0 o más, con hasta 2 decimales." };
-  if (Object.values(form.bloques).some((b) => Object.values(b).some((v) => !/^\d+$/.test(v.trim())))) return { error: "Meses y días van en números enteros." };
-  for (const [i, l] of form.lineas.entries()) {
-    const error = validarLinea(l);
-    if (error) return { error: `Línea ${i + 1}: ${error}` };
-  }
-  return {
-    cuerpo: {
-      bases: Object.fromEntries(Object.entries(form.bases).map(([k, v]) => [k, Number(v)])),
-      bloques: Object.fromEntries(Object.entries(form.bloques).map(([b, campos]) => [b, Object.fromEntries(Object.entries(campos).map(([c, v]) => [c, Number(v)]))])),
-      lineas: form.lineas.map((l) => ({ ...l, descripcion: (l.descripcion || "").trim(), monto: Number(l.monto) })),
-      quitadas: form.quitadas,
-      observaciones: form.observaciones,
-    },
-  };
-}
 
 function ModalAnular({ codigo, onCancelar, onAnulada, id }) {
   const [motivo, setMotivo] = useState("");
@@ -112,7 +94,23 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
   const [fallo, setFallo] = useState(false);
   const [intento, setIntento] = useState(0);
 
-  const mostrar = (d) => { setLiq(d); setForm(d ? formDe(d) : null); };
+  const [guardando, setGuardando] = useState(false);
+  // Un solo PUT en vuelo: el cuerpo se arma al enviar, contra la última respuesta (liqRef) y el formulario más reciente
+  // (formRef). Armarlo con lo del render haría que un segundo PUT mande montos ya recalculados como ajustados.
+  const liqRef = useRef(null);
+  const formRef = useRef(null);
+  const enVuelo = useRef(null);
+  const pendiente = useRef(null); // "alSalir" | "completo"
+  const enAccion = useRef(false);
+  useLayoutEffect(() => { formRef.current = form; }, [form]);
+
+  const mostrar = (d) => {
+    const f = d ? formDe(d) : null;
+    liqRef.current = d;
+    formRef.current = f;
+    setLiq(d);
+    setForm(f);
+  };
 
   useEffect(() => {
     let vivo = true;
@@ -161,36 +159,86 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
     if (d) mostrar(d);
   };
 
-  // `alSalir`: guardado de una base, meses o días; los montos y filas a medio editar se quedan en pantalla sin guardar.
-  const guardar = async (f = form, { alSalir = false } = {}) => {
-    const { envio, pendientes, montosLocales } = alSalir ? lineasParaEnviar(f.lineas, guardado.lineas) : { envio: f.lineas, pendientes: [], montosLocales: {} };
-    const { error: invalido, cuerpo } = cuerpoDe({ ...f, lineas: envio });
-    if (invalido) return setError(invalido);
-    const d = await pedir(`/planilla/liquidaciones/${liq._id}`, { method: "PUT", body: JSON.stringify(cuerpo) });
-    if (!d) return;
-    setLiq(d);
-    setForm((actual) => fusionarRespuesta({ nuevo: formDe(d), enviado: f, actual, montosLocales, pendientes }));
+  const put = async (cuerpo) => {
+    try {
+      const r = await fetchAuth(`/planilla/liquidaciones/${liqRef.current._id}`, { method: "PUT", body: JSON.stringify(cuerpo) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setError(d.mensaje || "No se pudo guardar la liquidación."); return null; }
+      return d;
+    } catch {
+      setError(MENSAJE_RED);
+      return null;
+    }
   };
 
-  const ejecutar = async () => {
-    const accion = confirmar;
-    setConfirmar(null);
-    if (accion === "eliminar") {
-      if (await pedir(`/planilla/liquidaciones/${liq._id}`, { method: "DELETE" }, { cambia: true })) mostrar(null);
+  // `completo` (Guardar): todo lo que está en pantalla. Si no, es la salida de una base, meses o días: solo se envía si
+  // cambiaron, y los montos y filas a medio editar se quedan en pantalla sin guardar. Mientras corre otra acción no se envía.
+  const enviar = (completo = false) => {
+    if (enAccion.current) return;
+    if (enVuelo.current) {
+      pendiente.current = completo || pendiente.current === "completo" ? "completo" : "alSalir";
       return;
     }
-    const d = await pedir(`/planilla/liquidaciones/${liq._id}/${accion}`, { method: "POST" }, { cambia: true });
-    if (d) mostrar(d);
+    enVuelo.current = (async () => {
+      setGuardando(true);
+      let modo = completo ? "completo" : "alSalir";
+      try {
+        while (modo) {
+          pendiente.current = null;
+          const f = formRef.current;
+          const r = cuerpoParaEnviar({ form: f, guardado: formDe(liqRef.current), alSalir: modo === "alSalir" });
+          if (r.error) setError(r.error);
+          else if (!r.nada) {
+            setError("");
+            const d = await put(r.cuerpo);
+            if (d) {
+              const nuevo = fusionarRespuesta({ nuevo: formDe(d), enviado: f, actual: formRef.current, montosLocales: r.montosLocales, pendientes: r.pendientes });
+              liqRef.current = d;
+              formRef.current = nuevo;
+              setLiq(d);
+              setForm(nuevo);
+            }
+          }
+          modo = pendiente.current;
+        }
+      } finally {
+        enVuelo.current = null;
+        setGuardando(false);
+      }
+    })();
+  };
+
+  // Propuesta, eliminar y confirmar esperan al PUT en vuelo y, mientras corren, los campos no envían nada.
+  const ejecutar = async () => {
+    const tipo = confirmar;
+    setConfirmar(null);
+    enAccion.current = true;
+    try {
+      await enVuelo.current;
+      const id = liqRef.current._id;
+      if (tipo === "eliminar") {
+        if (await pedir(`/planilla/liquidaciones/${id}`, { method: "DELETE" }, { cambia: true })) mostrar(null);
+        return;
+      }
+      const d = await pedir(`/planilla/liquidaciones/${id}/${tipo}`, { method: "POST" }, { cambia: true });
+      if (d) mostrar(d);
+    } finally {
+      enAccion.current = false;
+    }
   };
 
   const editable = puedeEscribir && liq?.estado === "borrador";
   const guardado = liq ? formDe(liq) : null;
   const sucio = Boolean(liq) && JSON.stringify(form) !== JSON.stringify(guardado);
+  const ocupado = procesando || guardando;
+  // En los botones de acción: sin esto, el clic saca el foco del campo, el guardado al salir los desactiva y el clic se pierde.
+  const sinBlur = (e) => e.preventDefault();
+  const ajustada = (l) => l.editada || Number(l.monto) !== Number(guardado.lineas.find((g) => g.clave === l.clave)?.monto ?? l.monto);
 
   const setBase = (k, v) => setForm((f) => ({ ...f, bases: { ...f.bases, [k]: v } }));
   const setBloque = (b, c, v) => setForm((f) => ({ ...f, bloques: { ...f.bloques, [b]: { ...f.bloques[b], [c]: v } } }));
   // Bases, meses y días recalculan las fórmulas en el servidor: se guardan al salir del campo.
-  const alSalir = (cambiado) => { if (cambiado) guardar(form, { alSalir: true }); };
+  const alSalir = () => enviar();
   const setLinea = (i, parche) => setForm((f) => ({ ...f, lineas: f.lineas.map((l, j) => (j === i ? { ...l, ...parche } : l)) }));
   const quitarLinea = (i) => setForm((f) => {
     const l = f.lineas[i];
@@ -199,7 +247,14 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
     const fuera = l.clave === "gratificacion" ? ["gratificacion", "bonificacion"] : [l.clave];
     return { ...f, lineas: f.lineas.filter((x) => !fuera.includes(x.clave)), quitadas: [...new Set([...f.quitadas, l.clave])] };
   });
-  const usarFormula = (i) => guardar({ ...form, lineas: form.lineas.map((l, j) => (j === i ? { ...l, editada: false, monto: String(guardado.lineas.find((g) => g.clave === l.clave)?.monto ?? l.monto) } : l)) });
+  const usarFormula = (clave) => {
+    const montoGuardado = formDe(liqRef.current).lineas.find((g) => g.clave === clave)?.monto;
+    const f = formRef.current;
+    const nuevo = { ...f, lineas: f.lineas.map((l) => (l.clave === clave ? { ...l, editada: false, monto: montoGuardado ?? l.monto } : l)) };
+    formRef.current = nuevo;
+    setForm(nuevo);
+    enviar(true);
+  };
   const conceptos = [...(catalogos?.conceptos || []), CONCEPTO_0118].sort((a, b) => a.codigo.localeCompare(b.codigo));
   const elegirConcepto = (i, codigo) => {
     const c = conceptos.find((x) => x.codigo === codigo);
@@ -217,7 +272,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
     <label key={campo} className="text-xs text-gray-500">{etiqueta}
       <input value={form.bloques[bloque][campo]} disabled={!editable} inputMode="numeric"
         onChange={(e) => setBloque(bloque, campo, e.target.value.replace(/\D/g, ""))}
-        onBlur={() => alSalir(form.bloques[bloque][campo] !== guardado.bloques[bloque][campo])}
+        onBlur={alSalir}
         className={`${INP} block w-24 text-right`} />
     </label>
   );
@@ -302,7 +357,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
                   {BASES.map(([k, etiqueta]) => (
                     <label key={k} className="text-xs text-gray-500">{etiqueta}
                       <input value={form.bases[k]} disabled={!editable} inputMode="decimal"
-                        onChange={(e) => setBase(k, e.target.value)} onBlur={() => alSalir(form.bases[k] !== guardado.bases[k])}
+                        onChange={(e) => setBase(k, e.target.value)} onBlur={alSalir}
                         className={`${INP} block w-32 text-right`} />
                     </label>
                   ))}
@@ -374,8 +429,8 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
                         <input value={l.descripcion} maxLength={80} disabled={!editable} onChange={(e) => setLinea(i, { descripcion: e.target.value })} className={`${INP} w-full`} />
                         {l.origen === "propuesta" && (
                           <p className="text-[11px] text-gray-400 mt-0.5">
-                            {l.editada ? "Monto ajustado por el contador" : formula(l.detalle)}
-                            {l.editada && editable && <button type="button" onClick={() => usarFormula(i)} disabled={procesando} className="ml-2 text-purple-600 hover:underline">Usar la fórmula</button>}
+                            {ajustada(l) ? "Monto ajustado por el contador" : formula(l.detalle)}
+                            {ajustada(l) && editable && <button type="button" onMouseDown={sinBlur} onClick={() => usarFormula(l.clave)} disabled={ocupado} className="ml-2 text-purple-600 hover:underline disabled:opacity-50">Usar la fórmula</button>}
                           </p>
                         )}
                       </td>
@@ -384,7 +439,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
                           className={`${INP} w-full text-right ${l.tipo === "descuento" ? "text-red-700" : ""}`} />
                       </td>
                       <td className="py-1 text-right">
-                        {editable && <button type="button" onClick={() => quitarLinea(i)} disabled={procesando} className="text-xs text-red-600 hover:underline">Quitar</button>}
+                        {editable && <button type="button" onMouseDown={sinBlur} onClick={() => quitarLinea(i)} disabled={procesando} className="text-xs text-red-600 hover:underline">Quitar</button>}
                       </td>
                     </tr>
                   ))}
@@ -392,7 +447,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
                 </tbody>
               </table>
               <div className="flex flex-wrap items-center gap-3">
-                {editable && <button type="button" onClick={agregarLinea} disabled={procesando} className="text-xs text-purple-600 hover:underline">+ Concepto</button>}
+                {editable && <button type="button" onMouseDown={sinBlur} onClick={agregarLinea} disabled={procesando} className="text-xs text-purple-600 hover:underline">+ Concepto</button>}
                 {form.quitadas.length > 0 && <p className="text-[11px] text-gray-400">{form.quitadas.length} línea(s) de la propuesta quitada(s): vuelven con «Volver a la propuesta».</p>}
               </div>
             </section>
@@ -435,17 +490,17 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
         <div className="flex flex-wrap justify-end gap-3">
           {editable && (
             <>
-              <button type="button" onClick={() => setConfirmar("eliminar")} disabled={procesando} className="text-sm text-red-600 hover:underline mr-auto disabled:opacity-50">Eliminar borrador</button>
-              <button type="button" onClick={() => setConfirmar("propuesta")} disabled={procesando} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Volver a la propuesta</button>
+              <button type="button" onMouseDown={sinBlur} onClick={() => setConfirmar("eliminar")} disabled={ocupado} className="text-sm text-red-600 hover:underline mr-auto disabled:opacity-50">Eliminar borrador</button>
+              <button type="button" onMouseDown={sinBlur} onClick={() => setConfirmar("propuesta")} disabled={ocupado} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Volver a la propuesta</button>
             </>
           )}
           <button type="button" onClick={onClose} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">Cerrar</button>
           {editable && (
             <>
-              <button type="button" onClick={() => guardar()} disabled={procesando || !sucio} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
-                {procesando ? "Guardando…" : "Guardar"}
+              <button type="button" onMouseDown={sinBlur} onClick={() => enviar(true)} disabled={ocupado || !sucio} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
+                {guardando ? "Guardando…" : "Guardar"}
               </button>
-              <button type="button" onClick={() => (sucio ? setError("Guarda los cambios antes de confirmar.") : setConfirmar("confirmar"))} disabled={procesando}
+              <button type="button" onMouseDown={sinBlur} onClick={() => (sucio ? setError("Guarda los cambios antes de confirmar.") : setConfirmar("confirmar"))} disabled={ocupado}
                 className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-700 disabled:opacity-50">Confirmar</button>
             </>
           )}

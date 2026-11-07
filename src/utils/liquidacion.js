@@ -59,3 +59,27 @@ export function fusionarRespuesta({ nuevo, enviado, actual, montosLocales = {}, 
     observaciones: actual.observaciones !== enviado.observaciones ? actual.observaciones : nuevo.observaciones,
   };
 }
+
+// Cuerpo del PUT armado al momento de enviar, contra lo último guardado. `alSalir`: guardado de una base, meses o días; si
+// no cambiaron, no hay nada que enviar.
+export function cuerpoParaEnviar({ form, guardado, alSalir = false }) {
+  const igual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  if (alSalir && igual(form.bases, guardado.bases) && igual(form.bloques, guardado.bloques)) return { nada: true };
+  const { envio, pendientes, montosLocales } = alSalir ? lineasParaEnviar(form.lineas, guardado.lineas) : { envio: form.lineas, pendientes: [], montosLocales: {} };
+  if (Object.values(form.bases).some((v) => !/^\d+(\.\d{1,2})?$/.test(v.trim()))) return { error: "Remuneración computable: escribe importes de 0 o más, con hasta 2 decimales." };
+  if (Object.values(form.bloques).some((b) => Object.values(b).some((v) => !/^\d+$/.test(v.trim())))) return { error: "Meses y días van en números enteros." };
+  for (const [i, l] of envio.entries()) {
+    const error = validarLinea(l);
+    if (error) return { error: `Línea ${i + 1}: ${error}` };
+  }
+  return {
+    cuerpo: {
+      bases: Object.fromEntries(Object.entries(form.bases).map(([k, v]) => [k, Number(v)])),
+      bloques: Object.fromEntries(Object.entries(form.bloques).map(([b, campos]) => [b, Object.fromEntries(Object.entries(campos).map(([c, v]) => [c, Number(v)]))])),
+      lineas: envio.map((l) => ({ ...l, descripcion: (l.descripcion || "").trim(), monto: Number(l.monto) })),
+      quitadas: form.quitadas,
+      observaciones: form.observaciones,
+    },
+    pendientes, montosLocales,
+  };
+}

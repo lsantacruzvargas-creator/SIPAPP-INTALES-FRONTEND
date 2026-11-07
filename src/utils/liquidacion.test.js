@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { totalesEnPantalla, validarLinea, liquidacionVigente, lineasParaEnviar, fusionarRespuesta } from "./liquidacion.js";
+import { totalesEnPantalla, validarLinea, liquidacionVigente, lineasParaEnviar, fusionarRespuesta, cuerpoParaEnviar } from "./liquidacion.js";
 
 test("totalesEnPantalla: suma las líneas en pantalla y los descuentos de ley del servidor", () => {
   const lineas = [
@@ -82,4 +82,24 @@ test("fusionarRespuesta: el servidor manda salvo lo cambiado mientras viajaba el
   // Una línea quitada en vuelo no vuelve.
   assert.deepEqual(fusionarRespuesta({ nuevo, enviado, actual: { ...enviado, quitadas: ["truncas"], lineas: [cts("1000"), manual, vacia] } }).lineas.map((l) => l.clave ?? l.codigo),
     ["cts", "0701"]);
+});
+
+test("cuerpoParaEnviar: al salir del campo solo envía si cambiaron bases o bloques, con los montos propuestos guardados", () => {
+  const cts = (monto) => ({ clave: "cts", codigo: "0904", descripcion: " CTS trunca ", tipo: "ingreso", monto, origen: "propuesta", editada: false });
+  const vacia = { codigo: "", descripcion: "", tipo: "ingreso", monto: "", origen: "manual", editada: false };
+  const guardado = { bases: { rcVacaciones: "4467.17" }, bloques: { cts: { meses: "2", dias: "18" } }, lineas: [cts("1129.2")], quitadas: [], observaciones: "" };
+  assert.deepEqual(cuerpoParaEnviar({ form: { ...guardado, lineas: [cts("1000"), vacia] }, guardado, alSalir: true }), { nada: true });
+  const form = { ...guardado, bloques: { cts: { meses: "1", dias: "18" } }, lineas: [cts("1000"), vacia], observaciones: "Nota" };
+  assert.deepEqual(cuerpoParaEnviar({ form, guardado, alSalir: true }), {
+    cuerpo: {
+      bases: { rcVacaciones: 4467.17 }, bloques: { cts: { meses: 1, dias: 18 } },
+      lineas: [{ ...cts(1129.2), descripcion: "CTS trunca" }], quitadas: [], observaciones: "Nota",
+    },
+    pendientes: [vacia], montosLocales: { cts: "1000" },
+  });
+  // Con Guardar van los montos en pantalla y se validan todas las filas.
+  assert.equal(cuerpoParaEnviar({ form, guardado }).error, "Línea 2: Elige el concepto de la línea.");
+  assert.equal(cuerpoParaEnviar({ form: { ...form, lineas: [cts("1000")] }, guardado }).cuerpo.lineas[0].monto, 1000);
+  assert.match(cuerpoParaEnviar({ form: { ...form, bases: { rcVacaciones: "-1" } }, guardado, alSalir: true }).error, /Remuneración computable/);
+  assert.match(cuerpoParaEnviar({ form: { ...form, bloques: { cts: { meses: "", dias: "18" } } }, guardado, alSalir: true }).error, /enteros/);
 });
