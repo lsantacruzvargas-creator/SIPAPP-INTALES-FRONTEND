@@ -100,7 +100,7 @@ function filasSeccion(numero, nombre, lineas, bloques) {
     filas.push(fila(`${l.descripcion}${sufijo}`, l.monto, true));
     if (!l.sinLinea && montoAjustado(l)) filas.push(detalleFila("Monto ajustado por el contador", ""));
     else for (const d of l.detalle || []) filas.push(detalleFila(renglonFormula(d), d.monto));
-    if (l.sinLinea && (l.detalle || []).reduce((s, d) => s + d.monto, 0) <= 0) filas.push(detalleFila("Sin monto a pagar", ""));
+    if (l.sinLinea && (l.detalle || []).reduce((s, d) => s + d.monto, 0) < 0) filas.push(detalleFila("Sin monto a pagar", ""));
   }
   if (lineas.length > 1) filas.push(fila(`Total ${nombre.toLowerCase()}`, lineas.reduce((s, l) => s + l.monto, 0), true));
   return filas;

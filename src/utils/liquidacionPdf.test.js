@@ -145,6 +145,7 @@ test("generarLiquidacionPdf: el modelo con gratificación en 0 muestra las secci
   assert.ok(texto.includes(`(${importe(0)})`));
   assert.ok(texto.includes("(Descuentos)"));
   assert.ok(texto.includes(`${importe(4467.17)} ÷ 6 × 0 meses`));
+  assert.equal(texto.includes("Sin monto a pagar"), false);
 });
 
 test("generarLiquidacionPdf: una gratificación quitada no sale; sin descuentos no hay título «Descuentos»", () => {
