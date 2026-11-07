@@ -6,6 +6,7 @@ import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
 import FichaTRegistro from "./FichaTRegistro";
+import ModalLiquidacion from "./ModalLiquidacion";
 import { TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear, puedeNuevoVinculo, lineaEdicion } from "../../utils/tregistro";
 import { aplicarPrecarga, cambiaSctrRegistrado, errorFechaSctr, limiteFechaSctr } from "../../utils/perfilLaboral";
 import { fechaHoyLima } from "../../utils/fecha";
@@ -350,19 +351,25 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
 }
 
 // Ficha de los trabajadores en planilla. No se borran: un trabajador sale con su fecha de cese.
-export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscribir, refrescarAvisos }) {
+export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscribir, refrescarAvisos, onLiquidacion, verCesadosInicial = false }) {
   const [lista, setLista] = useState([]);
   const [estados, setEstados] = useState({});
   const [perfil, setPerfil] = useState(null);
   const [modal, setModal] = useState(null); // { trabajador? }
   const [aviso, setAviso] = useState("");
-  const [verCesados, setVerCesados] = useState(false);
+  const [verCesados, setVerCesados] = useState(verCesadosInicial);
+  const [liquidaciones, setLiquidaciones] = useState([]);
+  const [liquidando, setLiquidando] = useState(null);
 
-  const cargar = useCallback(() => Promise.all([fetchAuth("/planilla/trabajadores"), fetchAuth("/planilla/tregistro/trabajadores"), fetchAuth("/planilla/perfil")]).then(async ([r, rt, rp]) => {
+  const cargar = useCallback(() => Promise.all([
+    fetchAuth("/planilla/trabajadores"), fetchAuth("/planilla/tregistro/trabajadores"), fetchAuth("/planilla/perfil"), fetchAuth("/planilla/liquidaciones"),
+  ]).then(async ([r, rt, rp, rl]) => {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) return setAviso(d.mensaje || "No se pudieron cargar los trabajadores.");
     const tramites = await rt.json().catch(() => []);
+    const liqs = await rl.json().catch(() => []);
     setLista(d);
+    setLiquidaciones(rl.ok && Array.isArray(liqs) ? liqs : []);
     setPerfil(rp.ok ? (await rp.json().catch(() => ({}))).perfil ?? null : null);
     setEstados(rt.ok && Array.isArray(tramites) ? Object.fromEntries(tramites.map((x) => [x._id, x.estado])) : {});
   }).catch(() => setAviso("Error de conexión con el servidor.")), []);
@@ -370,6 +377,8 @@ export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscrib
 
   const visibles = lista.filter((t) => verCesados || !t.fechaCese);
   const centro = (id) => centrosCosto.find((c) => c._id === id)?.nombre || "";
+  // La lista llega de la más nueva a la más antigua: vale la vigente del cese actual de la ficha.
+  const liquidacionDe = (t) => liquidaciones.find((l) => String(l.trabajador) === t._id && l.fechaCese === t.fechaCese && l.estado !== "anulada");
 
   return (
     <div className="space-y-4">
@@ -399,7 +408,19 @@ export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscrib
                 <td className="py-1.5 pr-3 text-xs">{textoPension(t.pension, catalogos.afps)}</td>
                 <td className="py-1.5 pr-3 text-xs">{REGIMENES_SALUD[t.salud]}</td>
                 <td className="py-1.5 pr-3 text-xs">{textoTramite(estados[t._id])}</td>
-                <td className="py-1.5 text-right"><button onClick={() => setModal({ trabajador: t })} className="text-xs text-purple-600 hover:underline">{puedeEscribir ? "Editar" : "Ver"}</button></td>
+                <td className="py-1.5 text-right whitespace-nowrap">
+                  <button onClick={() => setModal({ trabajador: t })} className="text-xs text-purple-600 hover:underline">{puedeEscribir ? "Editar" : "Ver"}</button>
+                  {t.fechaCese && (
+                    <button onClick={() => setLiquidando(t)} className="block ml-auto text-xs text-purple-600 hover:underline">
+                      Liquidación
+                      {liquidacionDe(t) && (
+                        <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${liquidacionDe(t).estado === "confirmada" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
+                          {liquidacionDe(t).estado}
+                        </span>
+                      )}
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {visibles.length === 0 && <tr><td colSpan={9} className="py-6 text-center text-gray-400 text-sm">Sin trabajadores registrados</td></tr>}
@@ -408,7 +429,11 @@ export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscrib
       </TablaScroll>
       {modal && (
         <ModalTrabajador trabajador={modal.trabajador} estado={estados[modal.trabajador?._id]} perfil={perfil} catalogos={catalogos} centrosCosto={centrosCosto} editable={puedeEscribir}
-          onClose={() => setModal(null)} onGuardado={() => { setModal(null); cargar(); refrescarAvisos?.(); }} />
+          onClose={() => setModal(null)} onGuardado={() => { setModal(null); cargar(); refrescarAvisos?.(); onLiquidacion?.(); }} />
+      )}
+      {liquidando && (
+        <ModalLiquidacion trabajador={liquidando} catalogos={catalogos} puedeEscribir={puedeEscribir}
+          onClose={() => setLiquidando(null)} onCambio={() => { cargar(); onLiquidacion?.(); }} />
       )}
       {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
     </div>

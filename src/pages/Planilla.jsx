@@ -44,6 +44,8 @@ export default function Planilla() {
   const [cambioPerfil, setCambioPerfil] = useState(null);
   const [cambioVisto, setCambioVisto] = useState(leerVisto);
   const [avisosVacaciones, setAvisosVacaciones] = useState([]);
+  const [avisosLiquidacion, setAvisosLiquidacion] = useState([]);
+  const [verCesados, setVerCesados] = useState(false);
 
   useEffect(() => {
     Promise.all([fetchAuth("/planilla/catalogos"), fetchAuth("/contabilidad/cuentas"), fetchAuth("/centros-costo")]).then(async ([rc, rp, rk]) => {
@@ -74,6 +76,16 @@ export default function Planilla() {
   }, []);
   useEffect(() => { const t = setTimeout(refrescarVacaciones, 0); return () => clearTimeout(t); }, [refrescarVacaciones, tab]);
 
+  // Cesados sin liquidación confirmada: cambian con la fecha de cese de las fichas y al confirmar o anular una liquidación.
+  const refrescarLiquidaciones = useCallback(async () => {
+    try {
+      const r = await fetchAuth("/planilla/liquidaciones/avisos");
+      if (r.ok) setAvisosLiquidacion((await r.json()).avisos);
+    } catch { /* los avisos son informativos: sin ellos la planilla sigue funcionando */ }
+  }, []);
+  useEffect(() => { const t = setTimeout(refrescarLiquidaciones, 0); return () => clearTimeout(t); }, [refrescarLiquidaciones, tab]);
+  const irACesados = () => { setVerCesados(true); setTab("trabajadores"); };
+
   const entendido = () => { guardarVisto(cambioPerfil.fecha); setCambioVisto(cambioPerfil.fecha); };
   const verCambio = mostrarCambioPerfil(cambioPerfil, cambioVisto);
 
@@ -93,7 +105,7 @@ export default function Planilla() {
       </div>
       <div className="flex border-b border-gray-200 gap-1 flex-wrap">
         {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)}
+          <button key={t.id} onClick={() => { setTab(t.id); setVerCesados(false); }}
             className={`px-4 py-2.5 text-sm font-medium transition border-b-2 -mb-px ${
               tab === t.id ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}>
@@ -121,10 +133,17 @@ export default function Planilla() {
           <button onClick={() => setTab("vacaciones")} className="text-xs underline font-medium hover:text-amber-900">Ir a vacaciones</button>
         </div>
       )}
+      {avisosLiquidacion.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800 space-y-1">
+          {avisosLiquidacion.map((a, i) => <p key={i}>{a}</p>)}
+          {!(tab === "trabajadores" && verCesados) && <button onClick={irACesados} className="text-xs underline font-medium hover:text-amber-900">Ir a los cesados</button>}
+        </div>
+      )}
       {catalogos && (
         <>
           {tab === "mes" && <PanelPlanillaMes mes={mes} setMes={setMes} catalogos={catalogos} puedeEscribir={puedeEscribir} refrescarAvisos={refrescarAvisos} />}
-          {tab === "trabajadores" && <PanelTrabajadores catalogos={catalogos} centrosCosto={centrosCosto} puedeEscribir={puedeEscribir} refrescarAvisos={refrescarAvisos} />}
+          {tab === "trabajadores" && <PanelTrabajadores key={verCesados ? "cesados" : "activos"} catalogos={catalogos} centrosCosto={centrosCosto} puedeEscribir={puedeEscribir}
+            refrescarAvisos={refrescarAvisos} onLiquidacion={refrescarLiquidaciones} verCesadosInicial={verCesados} />}
           {tab === "vacaciones" && <PanelVacaciones puedeEscribir={puedeEscribir} onAvisos={setAvisosVacaciones} />}
           {tab === "tregistro" && <PanelTRegistro puedeEscribir={puedeEscribir} refrescarAvisos={refrescarAvisos} />}
           {tab === "configtr" && <PanelConfigTRegistro catalogos={catalogos} puedeEscribir={puedeEscribir} onGuardado={refrescarCatalogos} />}
