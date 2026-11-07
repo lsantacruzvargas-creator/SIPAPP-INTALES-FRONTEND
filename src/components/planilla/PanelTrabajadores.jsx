@@ -11,6 +11,7 @@ import { TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear, puede
 import { aplicarPrecarga, cambiaSctrRegistrado, errorFechaSctr, limiteFechaSctr } from "../../utils/perfilLaboral";
 import { fechaHoyLima } from "../../utils/fecha";
 import { liquidacionVigente } from "../../utils/liquidacion";
+import { generarLiquidacionPdf } from "../../utils/liquidacionPdf";
 
 const INP = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
 const textoTramite = (estado) => {
@@ -435,7 +436,8 @@ export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscrib
       )}
       {liquidando && (
         <ModalLiquidacion trabajador={liquidando} catalogos={catalogos} puedeEscribir={puedeEscribir}
-          onClose={() => setLiquidando(null)} onCambio={() => { cargar(); onLiquidacion?.(); }} />
+          onClose={() => setLiquidando(null)} onCambio={() => { cargar(); onLiquidacion?.(); }}
+          onPdf={(liq) => generarLiquidacionPdf(liq, { empleador: catalogos.empleador, afps: catalogos.afps, motivosBaja: catalogos.tregistro?.motivosBaja })} />
       )}
       {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
     </div>

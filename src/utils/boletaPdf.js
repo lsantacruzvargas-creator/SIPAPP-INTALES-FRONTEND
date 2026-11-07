@@ -67,7 +67,7 @@ export function dibujarBoleta(doc, boleta, { empleador = {}, afps = {}, borrador
 }
 
 // Si la boleta se desbordó a más páginas, todas llevan la marca; al terminar se vuelve a la última.
-function marcaBorrador(doc, primeraPagina) {
+export function marcaBorrador(doc, primeraPagina) {
   const ultima = doc.getNumberOfPages();
   for (let p = primeraPagina; p <= ultima; p++) {
     doc.setPage(p);

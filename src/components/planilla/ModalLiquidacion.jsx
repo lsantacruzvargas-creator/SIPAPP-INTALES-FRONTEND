@@ -221,7 +221,10 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
         return;
       }
       const d = await pedir(`/planilla/liquidaciones/${id}/${tipo}`, { method: "POST" }, { cambia: true });
-      if (d) mostrar(d);
+      if (d) {
+        mostrar(d);
+        if (tipo === "confirmar") onPdf?.(d);
+      }
     } finally {
       enAccion.current = false;
     }
