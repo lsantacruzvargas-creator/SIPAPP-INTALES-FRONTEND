@@ -3,6 +3,9 @@ import { TREGISTRO_VACIO, requiereEstudios } from "./tregistro.js";
 
 export const TIPOS_CONCEPTO = { ingreso: "Ingresos", descuento: "Descuentos", aporteTrabajador: "Aportes del trabajador", aporteEmpleador: "Aportes del empleador" };
 export const REGIMENES_SALUD = { essalud: "EsSalud", eps: "EsSalud + EPS", sis: "SIS (microempresa)" };
+export const AREAS = { administracion: "Administración", produccion: "Producción", ventas: "Ventas" };
+// Cuentas de gasto que el servidor acepta por área (porArea) además de la general.
+export const CLAVES_GASTO_AREA = ["remuneraciones", "asignacionFamiliar", "bonificaciones", "vacaciones", "gratificaciones", "salud", "eps", "senati", "sctr", "cts", "indemnizaciones"];
 
 export const nombreTrabajador = (t) => [t.apellidoPaterno, t.apellidoMaterno, t.nombres].filter(Boolean).join(" ");
 
@@ -32,7 +35,7 @@ export function filasExcelPlanilla(boletas, afps = {}) {
 }
 
 export const TRABAJADOR_VACIO = {
-  tipoDoc: "01", numDoc: "", apellidoPaterno: "", apellidoMaterno: "", nombres: "", cargo: "", centroCosto: "", fechaIngreso: "", fechaCese: "",
+  tipoDoc: "01", numDoc: "", apellidoPaterno: "", apellidoMaterno: "", nombres: "", cargo: "", centroCosto: "", area: "", fechaIngreso: "", fechaCese: "",
   remuneracionBasica: "", asignacionFamiliar: false, conceptosFijos: [], pension: { regimen: "onp", afp: "", comision: "flujo", cuspp: "" },
   salud: "essalud", planEps: { nombre: "", primaTotal: "", aporteEmpresa: "", aporteTrabajador: "" }, quintaAnterior: [], tregistro: TREGISTRO_VACIO(), desbloqueo: false,
 };
@@ -44,7 +47,7 @@ const mezclarTregistro = (base, origen) => Object.fromEntries(Object.entries(bas
 )));
 
 export const formularioDeTrabajador = (t) => ({
-  ...TRABAJADOR_VACIO, ...t, tregistro: { ...mezclarTregistro(TREGISTRO_VACIO(), t.tregistro), nacionalidad: t.tregistro?.nacionalidad ?? "" }, desbloqueo: false, centroCosto: t.centroCosto || "", fechaCese: t.fechaCese || "", remuneracionBasica: String(t.remuneracionBasica ?? ""),
+  ...TRABAJADOR_VACIO, ...t, tregistro: { ...mezclarTregistro(TREGISTRO_VACIO(), t.tregistro), nacionalidad: t.tregistro?.nacionalidad ?? "" }, desbloqueo: false, centroCosto: t.centroCosto || "", area: t.area || "", fechaCese: t.fechaCese || "", remuneracionBasica: String(t.remuneracionBasica ?? ""),
   pension: { ...TRABAJADOR_VACIO.pension, ...t.pension },
   planEps: t.planEps ? { nombre: t.planEps.nombre || "", ...Object.fromEntries(MONTOS_EPS.map((k) => [k, String(t.planEps[k] ?? "")])) } : TRABAJADOR_VACIO.planEps,
   conceptosFijos: (t.conceptosFijos || []).map((c) => ({ codigo: c.codigo, monto: String(c.monto) })),
@@ -108,3 +111,18 @@ export const cuerpoDeParametros = (f) => ({
 });
 // Las tasas de AFP se copian cada mes de la SBS: sin prima ni tope el cálculo saldría sin seguro.
 export const faltanTasasAfp = (f) => !(Number(f.afp.prima) > 0) || !(Number(f.afp.tope) > 0);
+
+// El PUT reemplaza las cuentas generales y las de área que no se envían: se manda todo, con "" donde no hay cuenta.
+export const cuerpoDeCuentas = (form) => ({
+  ...form,
+  porArea: Object.fromEntries(CLAVES_GASTO_AREA.map((k) => [k, Object.fromEntries(Object.keys(AREAS).map((a) => [a, form.porArea?.[k]?.[a] || ""]))])),
+});
+
+export const SUBTITULO_LIQUIDACION = "Liquidación de beneficios sociales";
+
+// Celdas de una columna de la boleta: los conceptos del mes y, bajo un subtítulo, los de la liquidación.
+export const celdasDeColumna = (conceptos) => {
+  const mes = conceptos.filter((c) => !c.liquidacion);
+  const liquidacion = conceptos.filter((c) => c.liquidacion);
+  return liquidacion.length ? [...mes, { subtitulo: SUBTITULO_LIQUIDACION }, ...liquidacion] : mes;
+};

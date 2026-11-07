@@ -1,10 +1,16 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { textoPension } from "./planilla.js";
+import { textoPension, celdasDeColumna } from "./planilla.js";
 import { nombreArchivoBoletas, nombrePdfTrabajador, nombresUnicos } from "./boletasMasa.js";
 
 const importe = (n) => Number(n || 0).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fecha = (iso) => (iso ? iso.split("-").reverse().join("/") : "");
+
+const celda = (c) => {
+  if (!c) return ["", ""];
+  if (c.subtitulo) return [{ content: c.subtitulo, colSpan: 2, styles: { fontStyle: "bold", fillColor: [243, 244, 246] } }];
+  return [c.nombre, importe(c.monto)];
+};
 
 // Boleta de pago del mes (D.S. 001-98-TR): empleador, trabajador, días y horas, ingresos, descuentos y aportes.
 export function dibujarBoleta(doc, boleta, { empleador = {}, afps = {}, borrador = false } = {}) {
@@ -34,9 +40,9 @@ export function dibujarBoleta(doc, boleta, { empleador = {}, afps = {}, borrador
   }
 
   const de = (tipos) => boleta.conceptos.filter((c) => tipos.includes(c.tipo));
-  const columnas = [de(["ingreso"]), de(["descuento", "aporteTrabajador"]), de(["aporteEmpleador"])];
+  const columnas = [de(["ingreso"]), de(["descuento", "aporteTrabajador"]), de(["aporteEmpleador"])].map(celdasDeColumna);
   const filas = Array.from({ length: Math.max(...columnas.map((c) => c.length), 1) }, (_, i) =>
-    columnas.flatMap((c) => (c[i] ? [c[i].nombre, importe(c[i].monto)] : ["", ""])));
+    columnas.flatMap((c) => celda(c[i])));
   const t = boleta.totales;
   autoTable(doc, {
     startY: y + 2, margin: { left: margen, right: margen }, theme: "grid",

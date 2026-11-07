@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchAuth, getUsuario } from "../../utils/fetchAuth";
 import { money } from "../../utils/compras";
-import { nombreTrabajador, textoPension, REGIMENES_SALUD, TRABAJADOR_VACIO, formularioDeTrabajador, validarTrabajador, cuerpoDeTrabajador } from "../../utils/planilla";
+import { nombreTrabajador, textoPension, REGIMENES_SALUD, AREAS, TRABAJADOR_VACIO, formularioDeTrabajador, validarTrabajador, cuerpoDeTrabajador } from "../../utils/planilla";
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
@@ -203,6 +203,12 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
               <select value={form.centroCosto} onChange={set("centroCosto")} className={INP}>
                 <option value="">Sin centro</option>
                 {centrosCosto.map((c) => <option key={c._id} value={c._id}>{c.nombre}</option>)}
+              </select>
+            </label>
+            <label className="text-xs text-gray-500">Área contable
+              <select value={form.area} onChange={set("area")} className={INP}>
+                <option value="">Sin área</option>
+                {Object.entries(AREAS).map(([k, n]) => <option key={k} value={k}>{n}</option>)}
               </select>
             </label>
             <label className="text-xs text-gray-500">Fecha de ingreso

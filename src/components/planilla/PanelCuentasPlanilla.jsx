@@ -1,17 +1,24 @@
-import { useState, useEffect } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import BuscadorCuenta from "../contabilidad/BuscadorCuenta";
+import { AREAS, cuerpoDeCuentas } from "../../utils/planilla";
+
+// [clave, etiqueta, general obligatoria, ayuda]. Las columnas de área se completan solo si la empresa separa el gasto por área.
+const GASTO = [
+  ["remuneraciones", "Remuneraciones", true, "6211 / 62111 / 62112 / 62113"],
+  ["asignacionFamiliar", "Asignación familiar", false, "6221x; vacía: la de remuneraciones del área o general"],
+  ["bonificaciones", "Bonificaciones", false, "6222x; vacía: la de remuneraciones del área o general"],
+  ["vacaciones", "Vacaciones", false, "6215x; vacía: la de remuneraciones del área o general"],
+  ["gratificaciones", "Gratificaciones", false, "6214x; vacía: la de remuneraciones del área o general"],
+  ["salud", "EsSalud", true, "6271x"],
+  ["eps", "EPS", false, "vacía: la de EsSalud"],
+  ["senati", "SENATI", false, "6277x; solo si la empresa aporta"],
+  ["sctr", "SCTR", false, "6273x; solo si hay trabajadores expuestos"],
+  ["cts", "CTS", false, "6291x; sin respaldo: obligatoria si una boleta la usa"],
+  ["indemnizaciones", "Indemnizaciones", false, "623 / 62311; sin respaldo: obligatoria si una boleta la usa"],
+];
 
 const CUENTAS = [
-  ["Gasto", [
-    ["remuneraciones", "Remuneraciones (ej. 6211)", true],
-    ["vacaciones", "Vacaciones (ej. 6215; vacía: la de remuneraciones)"],
-    ["gratificaciones", "Gratificaciones (ej. 6214; vacía: la de remuneraciones)"],
-    ["salud", "EsSalud (ej. 6271)", true],
-    ["eps", "EPS (vacía: la de EsSalud)"],
-    ["senati", "SENATI (ej. 6277; solo si la empresa aporta)"],
-    ["sctr", "SCTR (ej. 6273; solo si hay trabajadores expuestos)"],
-  ]],
   ["Por pagar", [
     ["porPagar", "Remuneraciones por pagar (ej. 4111)", true],
     ["quinta", "Renta de 5.ª (ej. 40173)", true],
@@ -43,7 +50,7 @@ export default function PanelCuentasPlanilla({ cuentas, catalogos, puedeEscribir
     setError("");
     setOk(false);
     try {
-      const r = await fetchAuth("/planilla/cuentas", { method: "PUT", body: JSON.stringify(form) });
+      const r = await fetchAuth("/planilla/cuentas", { method: "PUT", body: JSON.stringify(cuerpoDeCuentas(form)) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) return setError(d.mensaje || "No se pudieron guardar las cuentas.");
       setForm(d);
@@ -56,15 +63,39 @@ export default function PanelCuentasPlanilla({ cuentas, catalogos, puedeEscribir
   };
 
   return (
-    <div className="space-y-5 max-w-3xl">
+    <div className="space-y-5 max-w-6xl">
       <p className="text-sm text-gray-600">
         Régimen laboral de la empresa: <b>{catalogos.regimenes[catalogos.regimenLaboral]?.nombre}</b>
         <span className="text-xs text-gray-400"> — se edita en la pestaña Perfil laboral.</span>
       </p>
+      {form && (
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold text-gray-700">Gasto</h3>
+          <p className="text-[11px] text-gray-400">
+            Cada concepto usa la cuenta de su área si está llena; si no, la General; y si la General está vacía, la de respaldo indicada.
+            La columna del área depende del «Área contable» de la ficha del trabajador (sin área usa solo la General).
+          </p>
+          <div className="grid grid-cols-[minmax(9rem,1.2fr)_repeat(4,minmax(0,1fr))] gap-x-2 gap-y-2 items-start">
+            <span />
+            {["General", ...Object.values(AREAS)].map((t) => <span key={t} className="text-xs font-semibold text-gray-600">{t}</span>)}
+            {GASTO.map(([clave, etiqueta, obligatoria, ayuda]) => (
+              <Fragment key={clave}>
+                <span className="text-xs text-gray-600 pt-1.5">{etiqueta}<span className="block text-[10px] text-gray-400">{ayuda}</span></span>
+                <BuscadorCuenta cuentas={cuentas} valor={form[clave] || ""} disabled={!puedeEscribir} permitirVacio={!obligatoria}
+                  onChange={(v) => { setForm((f) => ({ ...f, [clave]: v })); setOk(false); }} />
+                {Object.keys(AREAS).map((area) => (
+                  <BuscadorCuenta key={area} cuentas={cuentas} valor={form.porArea?.[clave]?.[area] || ""} disabled={!puedeEscribir} permitirVacio
+                    onChange={(v) => { setForm((f) => ({ ...f, porArea: { ...f.porArea, [clave]: { ...f.porArea?.[clave], [area]: v } } })); setOk(false); }} />
+                ))}
+              </Fragment>
+            ))}
+          </div>
+        </section>
+      )}
       {form && CUENTAS.map(([titulo, campos]) => (
         <section key={titulo} className="space-y-2">
           <h3 className="text-sm font-semibold text-gray-700">{titulo}</h3>
-          <div className="grid md:grid-cols-2 gap-3">
+          <div className="grid md:grid-cols-2 gap-3 max-w-3xl">
             {campos.map(([clave, etiqueta, obligatoria]) => (
               <label key={clave} className="text-xs text-gray-500">{etiqueta}
                 <BuscadorCuenta cuentas={cuentas} valor={form[clave] || ""} disabled={!puedeEscribir} permitirVacio={!obligatoria}

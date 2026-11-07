@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   nombreTrabajador, textoPension, montoDe, totalesPlanilla, filasExcelPlanilla, TRABAJADOR_VACIO, formularioDeTrabajador, validarTrabajador,
-  cuerpoDeTrabajador, formularioDeParametros, cuerpoDeParametros, faltanTasasAfp,
+  cuerpoDeTrabajador, formularioDeParametros, cuerpoDeParametros, faltanTasasAfp, cuerpoDeCuentas, celdasDeColumna, SUBTITULO_LIQUIDACION, AREAS, CLAVES_GASTO_AREA,
 } from "./planilla.js";
 
 const AFPS = { integra: "Integra", habitat: "Habitat" };
@@ -80,4 +80,31 @@ test("parámetros del mes: formulario, cuerpo y aviso de tasas de AFP sin llenar
   const lleno = { ...f, afp: { ...f.afp, prima: "1.37", tope: "12732.70" } };
   assert.equal(faltanTasasAfp(lleno), false);
   assert.deepEqual(cuerpoDeParametros(lleno).afp, { aporte: 10, prima: 1.37, tope: 12732.7, comisiones: { integra: { flujo: 1.55, mixta: 0 }, habitat: { flujo: 0, mixta: 0 } } });
+});
+
+test("cuerpo de cuentas: solo una cuenta de área y las generales quedan intactas", () => {
+  const cargadas = { remuneraciones: "6211", salud: "6271", porPagar: "4111", cts: "", porArea: { remuneraciones: { administracion: "", produccion: "", ventas: "" } } };
+  const cuerpo = cuerpoDeCuentas({ ...cargadas, porArea: { ...cargadas.porArea, remuneraciones: { ...cargadas.porArea.remuneraciones, produccion: "62112" } } });
+  assert.deepEqual([cuerpo.remuneraciones, cuerpo.salud, cuerpo.porPagar, cuerpo.cts], ["6211", "6271", "4111", ""]);
+  assert.equal(cuerpo.porArea.remuneraciones.produccion, "62112");
+  assert.deepEqual(Object.keys(cuerpo.porArea), CLAVES_GASTO_AREA);
+  for (const k of CLAVES_GASTO_AREA) assert.deepEqual(Object.keys(cuerpo.porArea[k]), Object.keys(AREAS));
+  assert.equal(cuerpo.porArea.salud.ventas, "");
+  assert.equal(cuerpoDeCuentas({ remuneraciones: "6211" }).porArea.cts.ventas, "");
+});
+
+test("ficha del trabajador: el área viaja siempre, vacía si no tiene", () => {
+  assert.equal(TRABAJADOR_VACIO.area, "");
+  assert.equal(formularioDeTrabajador({ numDoc: "1" }).area, "");
+  assert.equal(formularioDeTrabajador({ numDoc: "1", area: "ventas" }).area, "ventas");
+  assert.equal(cuerpoDeTrabajador(formularioDeTrabajador({ numDoc: "1", remuneracionBasica: 1 })).area, "");
+});
+
+test("celdas de la boleta: los conceptos de liquidación van bajo su subtítulo; DEV5 es un ingreso más", () => {
+  const mes = { codigo: "0121", nombre: "Remuneración", tipo: "ingreso", monto: 2500 };
+  const cts = { codigo: "0904", nombre: "CTS trunca", tipo: "ingreso", monto: 900, liquidacion: true };
+  const dev5 = { codigo: "DEV5", nombre: "Devolución de retención de 5.ª categoría", tipo: "ingreso", monto: 80 };
+  assert.deepEqual(celdasDeColumna([cts, mes, dev5]), [mes, dev5, { subtitulo: SUBTITULO_LIQUIDACION }, cts]);
+  assert.deepEqual(celdasDeColumna([mes]), [mes]);
+  assert.deepEqual(celdasDeColumna([]), []);
 });
