@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { totalesEnPantalla, validarLinea } from "./liquidacion.js";
+import { totalesEnPantalla, validarLinea, liquidacionVigente, lineasParaEnviar, fusionarRespuesta } from "./liquidacion.js";
 
 test("totalesEnPantalla: suma las líneas en pantalla y los descuentos de ley del servidor", () => {
   const lineas = [
@@ -25,4 +25,61 @@ test("validarLinea: código obligatorio, descripción hasta 80 y monto mayor que
   assert.notEqual(validarLinea({ ...ok, codigo: "" }), "");
   assert.notEqual(validarLinea({ ...ok, descripcion: "x".repeat(81) }), "");
   for (const monto of [0, "0", "1.234", "", "-5", "abc", "1,5"]) assert.notEqual(validarLinea({ ...ok, monto }), "", `monto ${monto}`);
+});
+
+test("liquidacionVigente: la no anulada del cese actual; si no hay, el borrador más nuevo de otro cese", () => {
+  const conf = { _id: "c", fechaCese: "2025-07-18", estado: "confirmada" };
+  const anul = { _id: "a", fechaCese: "2025-07-18", estado: "anulada" };
+  const borrViejo = { _id: "b", fechaCese: "2025-06-30", estado: "borrador" };
+  assert.equal(liquidacionVigente([anul, conf], "2025-07-18"), conf);
+  assert.equal(liquidacionVigente([anul, borrViejo], "2025-07-18"), borrViejo);
+  assert.equal(liquidacionVigente([borrViejo], ""), borrViejo);
+  assert.equal(liquidacionVigente([{ ...conf, fechaCese: "2024-01-31" }, anul], "2025-07-18"), null);
+  assert.equal(liquidacionVigente([], "2025-07-18"), null);
+});
+
+test("lineasParaEnviar: al salir de un campo, sin filas manuales incompletas y con los montos propuestos guardados", () => {
+  const guardadas = [{ clave: "cts", origen: "propuesta", monto: "1129.2", editada: false }];
+  const lineas = [
+    { clave: "cts", origen: "propuesta", monto: "1000", editada: false },
+    { codigo: "0701", origen: "manual", monto: "100" },
+    { codigo: "", origen: "manual", monto: "50" },
+    { codigo: "0701", origen: "manual", monto: " " },
+  ];
+  assert.deepEqual(lineasParaEnviar(lineas, guardadas), {
+    envio: [{ clave: "cts", origen: "propuesta", monto: "1129.2", editada: false }, { codigo: "0701", origen: "manual", monto: "100" }],
+    pendientes: [lineas[2], lineas[3]],
+    montosLocales: { cts: "1000" },
+  });
+});
+
+test("fusionarRespuesta: el servidor manda salvo lo cambiado mientras viajaba el PUT y lo retenido al salir del campo", () => {
+  const cts = (monto, extra = {}) => ({ clave: "cts", codigo: "0904", descripcion: "CTS trunca", tipo: "ingreso", monto, origen: "propuesta", editada: false, ...extra });
+  const truncas = (monto) => ({ clave: "truncas", codigo: "0114", descripcion: "Vacaciones truncas", tipo: "ingreso", monto, origen: "propuesta", editada: false });
+  const manual = { codigo: "0701", descripcion: "Adelanto", tipo: "descuento", monto: "100", origen: "manual", editada: false };
+  const vacia = { codigo: "", descripcion: "", tipo: "ingreso", monto: "", origen: "manual", editada: false };
+  const enviado = {
+    bases: { rcVacaciones: "5000", sextoGratificacion: "744.53" }, bloques: { cts: { meses: "2", dias: "18" } },
+    lineas: [cts("1000"), truncas("1340.15"), manual, vacia], quitadas: [], observaciones: "",
+  };
+  const nuevo = {
+    bases: { rcVacaciones: "5000", sextoGratificacion: "744.53" }, bloques: { cts: { meses: "2", dias: "18" } },
+    lineas: [cts("1197.85", { detalle: ["nuevo"] }), truncas("1500.11"), { ...manual, descripcion: "Adelanto" }], quitadas: [], observaciones: "",
+  };
+  // Sin cambios en vuelo: valores del servidor, el monto local retenido de la CTS y la fila vacía al final.
+  assert.deepEqual(fusionarRespuesta({ nuevo, enviado, actual: enviado, montosLocales: { cts: "1000" }, pendientes: [vacia] }), {
+    ...nuevo, lineas: [cts("1000", { detalle: ["nuevo"] }), truncas("1500.11"), manual, vacia],
+  });
+  // En vuelo: otra base, el monto de las truncas, una manual nueva y las observaciones.
+  const actual = {
+    ...enviado, bases: { ...enviado.bases, sextoGratificacion: "800" },
+    lineas: [cts("1000"), truncas("1400"), manual, vacia, { ...vacia, codigo: "0118" }], observaciones: "Revisar",
+  };
+  assert.deepEqual(fusionarRespuesta({ nuevo, enviado, actual, montosLocales: { cts: "1000" }, pendientes: [vacia] }), {
+    bases: { rcVacaciones: "5000", sextoGratificacion: "800" }, bloques: nuevo.bloques,
+    lineas: [cts("1000", { detalle: ["nuevo"] }), truncas("1400"), manual, vacia, { ...vacia, codigo: "0118" }], quitadas: [], observaciones: "Revisar",
+  });
+  // Una línea quitada en vuelo no vuelve.
+  assert.deepEqual(fusionarRespuesta({ nuevo, enviado, actual: { ...enviado, quitadas: ["truncas"], lineas: [cts("1000"), manual, vacia] } }).lineas.map((l) => l.clave ?? l.codigo),
+    ["cts", "0701"]);
 });

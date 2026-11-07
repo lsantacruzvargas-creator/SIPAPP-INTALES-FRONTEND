@@ -10,6 +10,7 @@ import ModalLiquidacion from "./ModalLiquidacion";
 import { TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear, puedeNuevoVinculo, lineaEdicion } from "../../utils/tregistro";
 import { aplicarPrecarga, cambiaSctrRegistrado, errorFechaSctr, limiteFechaSctr } from "../../utils/perfilLaboral";
 import { fechaHoyLima } from "../../utils/fecha";
+import { liquidacionVigente } from "../../utils/liquidacion";
 
 const INP = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
 const textoTramite = (estado) => {
@@ -377,8 +378,8 @@ export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscrib
 
   const visibles = lista.filter((t) => verCesados || !t.fechaCese);
   const centro = (id) => centrosCosto.find((c) => c._id === id)?.nombre || "";
-  // La lista llega de la más nueva a la más antigua: vale la vigente del cese actual de la ficha.
-  const liquidacionDe = (t) => liquidaciones.find((l) => String(l.trabajador) === t._id && l.fechaCese === t.fechaCese && l.estado !== "anulada");
+  // La lista llega de la más nueva a la más antigua.
+  const liquidacionDe = (t) => liquidacionVigente(liquidaciones.filter((l) => String(l.trabajador) === t._id), t.fechaCese);
 
   return (
     <div className="space-y-4">
@@ -398,7 +399,7 @@ export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscrib
             </tr>
           </thead>
           <tbody>
-            {visibles.map((t) => (
+            {visibles.map((t) => { const liq = liquidacionDe(t); return (
               <tr key={t._id} className={`border-b border-gray-100 ${t.fechaCese ? "text-gray-400" : ""}`}>
                 <td className="py-1.5 pr-3">{nombreTrabajador(t)}<span className="block text-xs text-gray-400">{t.numDoc}</span></td>
                 <td className="py-1.5 pr-3">{t.cargo}</td>
@@ -410,19 +411,20 @@ export default function PanelTrabajadores({ catalogos, centrosCosto, puedeEscrib
                 <td className="py-1.5 pr-3 text-xs">{textoTramite(estados[t._id])}</td>
                 <td className="py-1.5 text-right whitespace-nowrap">
                   <button onClick={() => setModal({ trabajador: t })} className="text-xs text-purple-600 hover:underline">{puedeEscribir ? "Editar" : "Ver"}</button>
-                  {t.fechaCese && (
+                  {/* Sin fecha de cese puede quedar un borrador de un cese que se borró de la ficha: se abre para eliminarlo. */}
+                  {(t.fechaCese || liq) && (
                     <button onClick={() => setLiquidando(t)} className="block ml-auto text-xs text-purple-600 hover:underline">
                       Liquidación
-                      {liquidacionDe(t) && (
-                        <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${liquidacionDe(t).estado === "confirmada" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
-                          {liquidacionDe(t).estado}
+                      {liq && (
+                        <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${liq.estado === "confirmada" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
+                          {liq.estado}
                         </span>
                       )}
                     </button>
                   )}
                 </td>
               </tr>
-            ))}
+            ); })}
             {visibles.length === 0 && <tr><td colSpan={9} className="py-6 text-center text-gray-400 text-sm">Sin trabajadores registrados</td></tr>}
           </tbody>
         </table>

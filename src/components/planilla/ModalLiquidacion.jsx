@@ -4,7 +4,7 @@ import { money } from "../../utils/compras";
 import { nombreTrabajador } from "../../utils/planilla";
 import { fechaDMA } from "../../utils/vacaciones";
 import { formatearFechaHora } from "../../utils/fecha";
-import { totalesEnPantalla, validarLinea } from "../../utils/liquidacion";
+import { totalesEnPantalla, validarLinea, liquidacionVigente, lineasParaEnviar, fusionarRespuesta } from "../../utils/liquidacion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
 
 const INP = "border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
@@ -26,7 +26,8 @@ const CONCEPTO_0118 = { codigo: "0118", nombre: "REMUNERACIÓN VACACIONAL", tipo
 const cuando = (f) => formatearFechaHora(f, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const mesAnio = (p) => `${p.slice(4)}/${p.slice(0, 4)}`;
 const tramo = (b) => `${fechaDMA(b.desde)} – ${fechaDMA(b.hasta)}`;
-const formula = (detalle) => (detalle || []).map((d) => `${money(d.base)} ÷ ${d.divisor} × ${d.cantidad} ${d.unidad}`).join(" + ");
+const formula = (detalle) => (detalle || [])
+  .map((d, i) => `${d.cantidad < 0 ? (i ? " − " : "− ") : i ? " + " : ""}${money(d.base)} ÷ ${d.divisor} × ${Math.abs(d.cantidad)} ${d.unidad}`).join("");
 
 const formDe = (l) => ({
   bases: Object.fromEntries(BASES.map(([k]) => [k, String(l.bases?.[k] ?? 0)])),
@@ -108,6 +109,8 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
   const [error, setError] = useState("");
   const [confirmar, setConfirmar] = useState(null); // "propuesta" | "eliminar" | "confirmar"
   const [anulando, setAnulando] = useState(false);
+  const [fallo, setFallo] = useState(false);
+  const [intento, setIntento] = useState(0);
 
   const mostrar = (d) => { setLiq(d); setForm(d ? formDe(d) : null); };
 
@@ -118,8 +121,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
         const r = await fetchAuth(`/planilla/liquidaciones?trabajador=${trabajador._id}`);
         const lista = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(lista.mensaje || "No se pudo cargar la liquidación.");
-        const delCese = lista.filter((l) => l.fechaCese === trabajador.fechaCese);
-        const elegida = delCese.find((l) => l.estado !== "anulada") || delCese[0];
+        const elegida = liquidacionVigente(lista, trabajador.fechaCese) || lista.find((l) => trabajador.fechaCese && l.fechaCese === trabajador.fechaCese);
         let d = null;
         if (elegida) {
           const rd = await fetchAuth(`/planilla/liquidaciones/${elegida._id}`);
@@ -128,13 +130,14 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
         }
         if (vivo) mostrar(d);
       } catch (err) {
-        if (vivo) setError(err instanceof TypeError ? MENSAJE_RED : err.message);
+        if (vivo) { setError(err instanceof TypeError ? MENSAJE_RED : err.message); setFallo(true); }
       } finally {
         if (vivo) setCargando(false);
       }
     })();
     return () => { vivo = false; };
-  }, [trabajador._id, trabajador.fechaCese]);
+  }, [trabajador._id, trabajador.fechaCese, intento]);
+  const reintentar = () => { setError(""); setFallo(false); setCargando(true); setIntento((n) => n + 1); };
 
   const pedir = async (ruta, opciones, { cambia = false } = {}) => {
     setProcesando(true);
@@ -158,11 +161,15 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
     if (d) mostrar(d);
   };
 
-  const guardar = async (f = form) => {
-    const { error: invalido, cuerpo } = cuerpoDe(f);
+  // `alSalir`: guardado de una base, meses o días; los montos y filas a medio editar se quedan en pantalla sin guardar.
+  const guardar = async (f = form, { alSalir = false } = {}) => {
+    const { envio, pendientes, montosLocales } = alSalir ? lineasParaEnviar(f.lineas, guardado.lineas) : { envio: f.lineas, pendientes: [], montosLocales: {} };
+    const { error: invalido, cuerpo } = cuerpoDe({ ...f, lineas: envio });
     if (invalido) return setError(invalido);
     const d = await pedir(`/planilla/liquidaciones/${liq._id}`, { method: "PUT", body: JSON.stringify(cuerpo) });
-    if (d) mostrar(d);
+    if (!d) return;
+    setLiq(d);
+    setForm((actual) => fusionarRespuesta({ nuevo: formDe(d), enviado: f, actual, montosLocales, pendientes }));
   };
 
   const ejecutar = async () => {
@@ -172,7 +179,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
       if (await pedir(`/planilla/liquidaciones/${liq._id}`, { method: "DELETE" }, { cambia: true })) mostrar(null);
       return;
     }
-    const d = await pedir(`/planilla/liquidaciones/${liq._id}/${accion}`, { method: "POST" }, { cambia: accion === "confirmar" });
+    const d = await pedir(`/planilla/liquidaciones/${liq._id}/${accion}`, { method: "POST" }, { cambia: true });
     if (d) mostrar(d);
   };
 
@@ -183,7 +190,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
   const setBase = (k, v) => setForm((f) => ({ ...f, bases: { ...f.bases, [k]: v } }));
   const setBloque = (b, c, v) => setForm((f) => ({ ...f, bloques: { ...f.bloques, [b]: { ...f.bloques[b], [c]: v } } }));
   // Bases, meses y días recalculan las fórmulas en el servidor: se guardan al salir del campo.
-  const alSalir = (cambiado) => { if (cambiado) guardar(); };
+  const alSalir = (cambiado) => { if (cambiado) guardar(form, { alSalir: true }); };
   const setLinea = (i, parche) => setForm((f) => ({ ...f, lineas: f.lineas.map((l, j) => (j === i ? { ...l, ...parche } : l)) }));
   const quitarLinea = (i) => setForm((f) => {
     const l = f.lineas[i];
@@ -208,7 +215,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
 
   const campoBloque = (bloque, campo, etiqueta) => (
     <label key={campo} className="text-xs text-gray-500">{etiqueta}
-      <input value={form.bloques[bloque][campo]} disabled={!editable || procesando} inputMode="numeric"
+      <input value={form.bloques[bloque][campo]} disabled={!editable} inputMode="numeric"
         onChange={(e) => setBloque(bloque, campo, e.target.value.replace(/\D/g, ""))}
         onBlur={() => alSalir(form.bloques[bloque][campo] !== guardado.bloques[bloque][campo])}
         className={`${INP} block w-24 text-right`} />
@@ -236,13 +243,20 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
 
         {cargando && <p className="text-sm text-gray-400">Cargando…</p>}
 
-        {!cargando && (!liq || liq.estado === "anulada") && (
+        {fallo && (
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-red-600 flex-1">{error}</p>
+            <button type="button" onClick={reintentar} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">Reintentar</button>
+          </div>
+        )}
+
+        {!cargando && !fallo && (!liq || liq.estado === "anulada") && (
           <div className="border border-dashed border-gray-300 rounded-lg p-4 text-sm text-gray-600 flex flex-wrap items-center gap-3">
             <span className="flex-1">
               {liq ? "Esta liquidación está anulada." : "Este trabajador aún no tiene liquidación."}
               {" "}El sistema arma la propuesta con su ficha, sus boletas y sus vacaciones; requiere los parámetros del mes de cese.
             </span>
-            {puedeEscribir && (
+            {puedeEscribir && trabajador.fechaCese && (
               <button type="button" onClick={crear} disabled={procesando} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
                 {procesando ? "Armando…" : liq ? "Crear otra liquidación" : "Crear liquidación"}
               </button>
@@ -287,7 +301,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
                 <div className="flex flex-wrap gap-3">
                   {BASES.map(([k, etiqueta]) => (
                     <label key={k} className="text-xs text-gray-500">{etiqueta}
-                      <input value={form.bases[k]} disabled={!editable || procesando} inputMode="decimal"
+                      <input value={form.bases[k]} disabled={!editable} inputMode="decimal"
                         onChange={(e) => setBase(k, e.target.value)} onBlur={() => alSalir(form.bases[k] !== guardado.bases[k])}
                         className={`${INP} block w-32 text-right`} />
                     </label>
@@ -348,7 +362,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
                     <tr key={l.clave || `manual-${i}`} className="border-b border-gray-100 align-top">
                       <td className="py-1 pr-2">
                         {l.origen === "manual" && editable ? (
-                          <select value={l.codigo} disabled={procesando} onChange={(e) => elegirConcepto(i, e.target.value)} className={`${INP} w-full`}>
+                          <select value={l.codigo} onChange={(e) => elegirConcepto(i, e.target.value)} className={`${INP} w-full`}>
                             <option value="">Concepto…</option>
                             {conceptos.map((c) => <option key={c.codigo} value={c.codigo}>{c.codigo} {c.nombre}{c.tipo === "descuento" ? " (descuento)" : ""}</option>)}
                           </select>
@@ -357,7 +371,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
                         )}
                       </td>
                       <td className="py-1 pr-2">
-                        <input value={l.descripcion} maxLength={80} disabled={!editable || procesando} onChange={(e) => setLinea(i, { descripcion: e.target.value })} className={`${INP} w-full`} />
+                        <input value={l.descripcion} maxLength={80} disabled={!editable} onChange={(e) => setLinea(i, { descripcion: e.target.value })} className={`${INP} w-full`} />
                         {l.origen === "propuesta" && (
                           <p className="text-[11px] text-gray-400 mt-0.5">
                             {l.editada ? "Monto ajustado por el contador" : formula(l.detalle)}
@@ -366,7 +380,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
                         )}
                       </td>
                       <td className="py-1 pr-2">
-                        <input value={l.monto} disabled={!editable || procesando} inputMode="decimal" onChange={(e) => setLinea(i, { monto: e.target.value })}
+                        <input value={l.monto} disabled={!editable} inputMode="decimal" onChange={(e) => setLinea(i, { monto: e.target.value })}
                           className={`${INP} w-full text-right ${l.tipo === "descuento" ? "text-red-700" : ""}`} />
                       </td>
                       <td className="py-1 text-right">
@@ -386,7 +400,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
             <div className="grid md:grid-cols-2 gap-5">
               <section className="space-y-1">
                 <h4 className="text-xs font-bold text-gray-600 uppercase">Observaciones</h4>
-                <textarea value={form.observaciones} maxLength={1000} rows={4} disabled={!editable || procesando}
+                <textarea value={form.observaciones} maxLength={1000} rows={4} disabled={!editable}
                   onChange={(e) => setForm((f) => ({ ...f, observaciones: e.target.value }))} className={`${INP} w-full resize-none`} />
               </section>
               <section className="space-y-1">
@@ -417,7 +431,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
           </>
         )}
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && !fallo && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex flex-wrap justify-end gap-3">
           {editable && (
             <>
