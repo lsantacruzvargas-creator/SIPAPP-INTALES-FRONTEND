@@ -42,13 +42,17 @@ const seccionDe = (l) => {
   return 6;
 };
 
-// Un bloque en 0 sale con su fórmula y 0,00 (como el modelo); el servidor no manda su línea. Los quitados por el contador no salen.
+// Un bloque sin línea sale con el cálculo real de cada renglón y 0,00 en el total (como el modelo); el servidor no manda su línea
+// porque lo devengado no alcanza (o es 0). Los quitados por el contador no salen.
 export function lineasEnCero({ bases, bloques = {}, lineas = [], quitadas = [] }) {
   const fuera = new Set(quitadas.includes("gratificacion") ? [...quitadas, "bonificacion"] : quitadas);
   const hay = (clave) => lineas.some((l) => l.origen === "propuesta" && l.clave === clave);
   const falta = (clave) => !hay(clave) && !fuera.has(clave);
-  const renglon = (base, divisor, cantidad, unidad, factor = 1) => ({ base, divisor: divisor / factor, cantidad, unidad, monto: 0 });
-  const cero = (clave, descripcion, detalle) => ({ clave, descripcion, tipo: "ingreso", monto: 0, origen: "propuesta", editada: false, detalle });
+  const renglon = (base, divisor, cantidad, unidad, factor = 1) => {
+    const d = divisor / factor;
+    return { base, divisor: d, cantidad, unidad, monto: Math.round(((base / d) * cantidad) * 100) / 100 };
+  };
+  const cero = (clave, descripcion, detalle) => ({ clave, descripcion, tipo: "ingreso", monto: 0, origen: "propuesta", editada: false, detalle, sinLinea: true });
   const salida = [];
   const { cts, truncas, gratificacion } = bloques;
   if (cts && falta("cts")) {
@@ -94,8 +98,9 @@ function filasSeccion(numero, nombre, lineas, bloques) {
   for (const l of lineas) {
     const sufijo = l.clave === "truncas" ? rangoDe(bloques.truncas) : "";
     filas.push(fila(`${l.descripcion}${sufijo}`, l.monto, true));
-    if (montoAjustado(l)) filas.push(detalleFila("Monto ajustado por el contador", ""));
+    if (!l.sinLinea && montoAjustado(l)) filas.push(detalleFila("Monto ajustado por el contador", ""));
     else for (const d of l.detalle || []) filas.push(detalleFila(renglonFormula(d), d.monto));
+    if (l.sinLinea && (l.detalle || []).reduce((s, d) => s + d.monto, 0) <= 0) filas.push(detalleFila("Sin monto a pagar", ""));
   }
   if (lineas.length > 1) filas.push(fila(`Total ${nombre.toLowerCase()}`, lineas.reduce((s, l) => s + l.monto, 0), true));
   return filas;

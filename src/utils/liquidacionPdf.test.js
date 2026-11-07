@@ -117,6 +117,21 @@ test("lineasEnCero: respeta quitadas, el factor de pequeña empresa y los bloque
   assert.deepEqual(sinLineas[0].detalle.map((r) => r.cantidad), [2, 18, -3]);
 });
 
+test("truncas con más días gozados que lo devengado: renglones con su cálculo real, total 0.00 y la nota «Sin monto a pagar»", () => {
+  const m = modelo();
+  const truncas = { ...m.bloques.truncas, meses: 0, dias: 6, usados: 30 };
+  const entrada = { ...m, lineas: m.lineas.filter((l) => l.clave !== "truncas"), bloques: { ...m.bloques, truncas } };
+  const [t] = lineasEnCero(entrada).filter((l) => l.clave === "truncas");
+  assert.equal(t.monto, 0);
+  assert.deepEqual(t.detalle.map((r) => r.monto), [0, 74.45, -4467.17]);
+  const texto = textoPdf(generarLiquidacionPdf(entrada, opciones));
+  assert.ok(texto.includes(`(menos ${importe(4467.17)} ÷ 30 × 30 días gozados o vendidos)`));
+  assert.ok(texto.includes(`(${importe(-4467.17)})`));
+  assert.ok(texto.includes("(Sin monto a pagar)"));
+  const normal = liq({ bloques: { truncas: { ...truncas, usados: 0, meses: 3, dias: 18 } } });
+  assert.equal(textoPdf(generarLiquidacionPdf(normal, opciones)).includes("Sin monto a pagar"), false);
+});
+
 test("generarLiquidacionPdf: el modelo con gratificación en 0 muestra las secciones 1 a 5, el rango y 0.00, en una sola hoja", () => {
   const doc = generarLiquidacionPdf(modelo(), opciones);
   const texto = textoPdf(doc);
