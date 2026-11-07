@@ -223,7 +223,9 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
       const d = await pedir(`/planilla/liquidaciones/${id}/${tipo}`, { method: "POST" }, { cambia: true });
       if (d) {
         mostrar(d);
-        if (tipo === "confirmar") onPdf?.(d);
+        if (tipo === "confirmar") {
+          try { onPdf?.(d); } catch { setError("La liquidación quedó confirmada, pero no se pudo generar el PDF. Descárgalo con el botón PDF."); }
+        }
       }
     } finally {
       enAccion.current = false;

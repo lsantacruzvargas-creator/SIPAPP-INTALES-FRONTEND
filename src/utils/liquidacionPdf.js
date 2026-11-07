@@ -12,10 +12,10 @@ const GRIS = [243, 244, 246];
 
 export const fechaLarga = (iso) => `${Number(iso.slice(8, 10))} de ${MESES[Number(iso.slice(5, 7)) - 1]} de ${iso.slice(0, 4)}`;
 
-// El renglón negativo (días no computables, días gozados) se imprime restando, con la cantidad en positivo.
+// El renglón negativo (días no computables, días gozados) se imprime con «menos» y la cantidad en positivo; el signo del importe va en su columna.
 export function renglonFormula({ base, divisor, cantidad, unidad }) {
   const formula = `${importe(base)} ÷ ${divisor} × ${Math.abs(cantidad)} ${unidad}`;
-  return cantidad < 0 ? `- S/ ${formula}` : formula;
+  return cantidad < 0 ? `menos ${formula}` : formula;
 }
 
 export function textoConformidad({ razonSocial, total, periodo }) {
@@ -42,6 +42,32 @@ const seccionDe = (l) => {
   return 6;
 };
 
+// Un bloque en 0 sale con su fórmula y 0,00 (como el modelo); el servidor no manda su línea. Los quitados por el contador no salen.
+export function lineasEnCero({ bases, bloques = {}, lineas = [], quitadas = [] }) {
+  const fuera = new Set(quitadas.includes("gratificacion") ? [...quitadas, "bonificacion"] : quitadas);
+  const hay = (clave) => lineas.some((l) => l.origen === "propuesta" && l.clave === clave);
+  const falta = (clave) => !hay(clave) && !fuera.has(clave);
+  const renglon = (base, divisor, cantidad, unidad, factor = 1) => ({ base, divisor: divisor / factor, cantidad, unidad, monto: 0 });
+  const cero = (clave, descripcion, detalle) => ({ clave, descripcion, tipo: "ingreso", monto: 0, origen: "propuesta", editada: false, detalle });
+  const salida = [];
+  const { cts, truncas, gratificacion } = bloques;
+  if (cts && falta("cts")) {
+    const detalle = [renglon(bases.rcCts, 12, cts.meses, "meses", cts.factor), renglon(bases.rcCts, 360, cts.dias, "días", cts.factor)];
+    if (cts.noComputables > 0) detalle.push(renglon(bases.rcCts, 360, -cts.noComputables, "días no computables", cts.factor));
+    salida.push(cero("cts", "CTS trunca", detalle));
+  }
+  if (truncas && falta("truncas")) {
+    const detalle = [renglon(bases.rcVacaciones, 12, truncas.meses, "meses", truncas.factor), renglon(bases.rcVacaciones, 360, truncas.dias, "días", truncas.factor)];
+    if (truncas.usados > 0) detalle.push(renglon(bases.rcVacaciones, 30, -truncas.usados, "días gozados o vendidos"));
+    salida.push(cero("truncas", "Vacaciones truncas", detalle));
+  }
+  if (gratificacion && gratificacion.factor > 0) {
+    if (falta("gratificacion")) salida.push(cero("gratificacion", "Gratificación trunca", [renglon(bases.rcGratificacion, 6, gratificacion.meses, "meses", gratificacion.factor)]));
+    if (falta("bonificacion")) salida.push(cero("bonificacion", "Bonificación extraordinaria trunca", [renglon(0, 100, gratificacion.tasaBonificacion, "%")]));
+  }
+  return salida;
+}
+
 const rangoDe = (b) => (b?.desde && b?.hasta ? ` (${fecha(b.desde)} al ${fecha(b.hasta)})` : "");
 
 const titulo = (content) => [{ content, colSpan: 2, styles: { fontStyle: "bold", fillColor: GRIS } }];
@@ -50,7 +76,7 @@ const fila = (nombre, monto, negrita = false) => [
   { content: importe(monto), styles: { halign: "right", fontStyle: negrita ? "bold" : "normal" } },
 ];
 const detalleFila = (texto, monto) => [
-  { content: texto, styles: { textColor: 90, cellPadding: { top: 0.8, bottom: 0.8, left: 6, right: 1.5 } } },
+  { content: texto, styles: { textColor: 90, cellPadding: { top: 0.3, bottom: 0.3, left: 6, right: 1.5 } } },
   { content: monto === "" ? "" : importe(monto), styles: { halign: "right", textColor: 90 } },
 ];
 
@@ -112,7 +138,7 @@ export function dibujarLiquidacion(doc, liq, { empleador = {}, afps = {}, motivo
     y += 5;
   }
 
-  const ingresos = liq.lineas.filter((l) => l.tipo === "ingreso");
+  const ingresos = [...liq.lineas, ...lineasEnCero({ bases: liq.bases, bloques, lineas: liq.lineas, quitadas: liq.quitadas })].filter((l) => l.tipo === "ingreso");
   const delaSeccion = (n) => ingresos.filter((l) => seccionDe(l) === n);
   const filas = [
     ...filasRemuneracion({ bases: liq.bases, bloques }),
@@ -121,28 +147,34 @@ export function dibujarLiquidacion(doc, liq, { empleador = {}, afps = {}, motivo
     ...filasSeccion(4, `Gratificación trunca${rangoDe(bloques.gratificacion)}`, delaSeccion(4), bloques),
     ...filasSeccion(5, "Bonificación extraordinaria", delaSeccion(5), bloques),
     ...filasSeccion(6, "Otros conceptos", delaSeccion(6), bloques),
+    fila("TOTAL INGRESOS", totales.ingresos, true),
   ];
   const tabla = {
-    margin: { left: margen, right: margen }, theme: "grid", styles: { fontSize: 8, cellPadding: 1.5 },
+    margin: { left: margen, right: margen }, theme: "grid", styles: { fontSize: 7.5, cellPadding: 0.8 },
     columnStyles: { 0: { cellWidth: "auto" }, 1: { cellWidth: 30 } },
   };
   autoTable(doc, { ...tabla, startY: y + 2, body: filas });
 
   const manuales = liq.lineas.filter((l) => l.tipo === "descuento");
-  const filasDescuentos = [
-    titulo("Descuentos"),
-    ...(descuentos || []).map((x) => fila(x.tasa != null ? `${x.nombre} (${x.tasa} % de ${importe(x.base)})` : x.nombre, x.monto)),
-    ...manuales.map((l) => fila(l.descripcion, l.monto)),
-    fila("Total ingresos", totales.ingresos, true),
-    fila("Total descuentos", totales.descuentos + totales.leyes, true),
-  ];
-  autoTable(doc, { ...tabla, startY: doc.lastAutoTable.finalY + 4, body: filasDescuentos });
+  if ((descuentos || []).length || manuales.length) {
+    autoTable(doc, {
+      ...tabla, startY: doc.lastAutoTable.finalY + 3,
+      body: [
+        titulo("Descuentos"),
+        ...(descuentos || []).map((x) => fila(x.tasa != null ? `${x.nombre} (${x.tasa} % de ${importe(x.base)})` : x.nombre, x.monto)),
+        ...manuales.map((l) => fila(l.descripcion, l.monto)),
+        fila("TOTAL DESCUENTOS", totales.descuentos + totales.leyes, true),
+      ],
+    });
+  }
 
-  const espacio = (alto) => {
-    if (y + alto > 280) { doc.addPage(); y = 20; }
-  };
+  // TOTAL A RECIBIR, SON, observaciones, conformidad y firma van juntos: si no caben enteros en la hoja, pasan todos a la siguiente.
+  const LINEA = 4.5;
+  const observaciones = liq.observaciones ? doc.splitTextToSize(`Observaciones: ${liq.observaciones}`, 182) : [];
+  const conformidad = doc.splitTextToSize(textoConformidad({ razonSocial: empleador.razonSocial || "", total: totales.neto, periodo: liq.periodo }), 182);
+  const alto = 6 + (enLetras ? 6 : 0) + (observaciones.length ? 4 + observaciones.length * LINEA : 0) + 6 + conformidad.length * LINEA + 6 + 18 + 10;
   y = doc.lastAutoTable.finalY + 8;
-  espacio(40);
+  if (y + alto > 285) { doc.addPage(); y = 20; }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.text(`TOTAL A RECIBIR: S/ ${importe(totales.neto)}`, margen, y);
@@ -152,21 +184,16 @@ export function dibujarLiquidacion(doc, liq, { empleador = {}, afps = {}, motivo
     doc.text(`SON: ${enLetras}`, margen, y);
   }
   doc.setFont("helvetica", "normal");
-  if (liq.observaciones) {
-    const lineas = doc.splitTextToSize(`Observaciones: ${liq.observaciones}`, 182);
-    y += 7;
-    espacio(lineas.length * 4.5);
-    doc.text(lineas, margen, y);
-    y += lineas.length * 4.5 - 4.5;
+  if (observaciones.length) {
+    y += 8;
+    doc.text(observaciones, margen, y);
+    y += (observaciones.length - 1) * LINEA;
   }
-
-  const conformidad = doc.splitTextToSize(textoConformidad({ razonSocial: empleador.razonSocial || "", total: totales.neto, periodo: liq.periodo }), 182);
   y += 10;
-  espacio(conformidad.length * 4.5 + 45);
   doc.text(conformidad, margen, y);
-  y += conformidad.length * 4.5 + 6;
+  y += conformidad.length * LINEA + 6;
   doc.text(`Lima, ${fechaLarga(fechaDoc)}`, margen, y);
-  y += 24;
+  y += 18;
   doc.line(margen + 50, y, margen + 130, y);
   doc.text(d.nombre, 105, y + 5, { align: "center" });
   doc.text(`Documento: ${d.numDoc}`, 105, y + 10, { align: "center" });
