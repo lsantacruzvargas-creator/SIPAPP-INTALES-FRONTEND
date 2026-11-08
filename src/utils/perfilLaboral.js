@@ -65,6 +65,10 @@ export const beneficiosDeFormulario = (b) => ({
 
 const cambioBeneficios = (form, base) => form.registro !== base.registro || form.desde !== base.desde;
 
+// Otro registro vacía «Rige desde»: con el mes anterior, el cambio reescribiría el historial desde ese mes sin que el usuario
+// lo eligiera. Volver al registro guardado recupera su mes.
+export const conRegistroBeneficios = (form, registro, base) => ({ ...form, registro, desde: registro === base.registro ? base.desde : "" });
+
 // Sin cambio no se envía. Cada cambio manda la elección completa: repetir un mes reescribe desde él.
 export const cuerpoBeneficios = (form, base) => (
   cambioBeneficios(form, base) ? { registro: form.registro, desde: form.desde.replace("-", "") } : undefined

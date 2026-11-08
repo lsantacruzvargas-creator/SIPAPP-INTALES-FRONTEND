@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima, formatearFecha } from "../../utils/fecha";
-import { PERFIL_VACIO, errorFechaSctr, limiteFechaSctr, beneficiosDeFormulario, cuerpoBeneficios, errorBeneficios, textoHistorialBeneficios, avisoBeneficios } from "../../utils/perfilLaboral";
+import { PERFIL_VACIO, errorFechaSctr, limiteFechaSctr, beneficiosDeFormulario, cuerpoBeneficios, errorBeneficios, textoHistorialBeneficios, avisoBeneficios, conRegistroBeneficios } from "../../utils/perfilLaboral";
 import { Texto, Casilla } from "./FichaTRegistro";
 
 const INP = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
@@ -172,7 +172,7 @@ export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardad
 
         <Seccion titulo="Registro de beneficios sociales" ayuda="Cómo se registra el gasto de la CTS, las gratificaciones y las vacaciones. Con provisión, cada planilla mensual devenga el gasto contra las cuentas por pagar; no cambia el neto de la boleta.">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
-            <Selector etiqueta="Registro" valor={beneficios.registro} onChange={handleChange("beneficios.registro")} ancho="col-span-2"
+            <Selector etiqueta="Registro" valor={beneficios.registro} onChange={(e) => poner("beneficios", conRegistroBeneficios(beneficios, e.target.value, baseBeneficios))} ancho="col-span-2"
               opciones={[["gasto", "Gasto al pagar"], ["provision", "Provisión mensual"]]} />
             <Texto etiqueta="Rige desde" type="month" valor={beneficios.desde} onChange={handleChange("beneficios.desde")} />
           </div>

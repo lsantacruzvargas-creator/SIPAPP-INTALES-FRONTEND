@@ -40,3 +40,12 @@ test("boleta PDF: no lleva etiquetas del PLAME ni provisiones", () => {
   assert.ok(!/PLAME/.test(todo));
   assert.ok(!/rovisi/.test(todo));
 });
+
+test("boleta PDF: bajo la 0406 calculada va el detalle del cálculo; digitada, no", () => {
+  const gratificacion = { rc: 2523, meses: 5, diasNoLaborados: 2, factor: 1, tasaBonificacion: 0.09, monto: 2074.37, avisos: [] };
+  const conceptos = [...boleta().conceptos, { codigo: "0406", nombre: "GRATIFICACIÓN DE DICIEMBRE", tipo: "ingreso", monto: 2074.37, calculado: true }];
+  const todo = textos(boleta({ periodo: "202612", conceptos, gratificacion })).join(" ").replace(/\s+/g, " ");
+  assert.ok(todo.includes("GRATIFICACIÓN DE DICIEMBRE (S/ 2,523.00 × 5 meses ÷ 6 - S/ 2,523.00 ÷ 180 × 2 días no laborados)"), todo);
+  const digitada = conceptos.map((c) => (c.codigo === "0406" ? { ...c, calculado: false } : c));
+  assert.ok(!textos(boleta({ periodo: "202612", conceptos: digitada, gratificacion })).join(" ").includes("÷ 6"));
+});

@@ -1,6 +1,6 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { textoPension, celdasDeColumna, etiquetaPeriodoCts } from "./planilla.js";
+import { textoPension, celdasDeColumna, etiquetaPeriodoCts, detalleGratificacion } from "./planilla.js";
 import { nombreArchivoBoletas, nombrePdfTrabajador, nombresUnicos } from "./boletasMasa.js";
 
 const importe = (n) => Number(n || 0).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -9,7 +9,7 @@ const fecha = (iso) => (iso ? iso.split("-").reverse().join("/") : "");
 const celda = (c) => {
   if (!c) return ["", ""];
   if (c.subtitulo) return [{ content: c.subtitulo, colSpan: 2, styles: { fontStyle: "bold", fillColor: [243, 244, 246] } }];
-  return [c.nombre, importe(c.monto)];
+  return [c.detalle ? `${c.nombre}\n${c.detalle}` : c.nombre, importe(c.monto)];
 };
 
 // Boleta de pago del mes (D.S. 001-98-TR): empleador, trabajador, días y horas, ingresos, descuentos y aportes.
@@ -39,7 +39,10 @@ export function dibujarBoleta(doc, boleta, { empleador = {}, afps = {}, borrador
     y += 5;
   }
 
-  const de = (tipos) => boleta.conceptos.filter((c) => tipos.includes(c.tipo));
+  // Bajo la 0406 calculada va su fórmula, como en el detalle de la boleta. La fuente estándar no tiene el signo menos (U+2212).
+  const formula = detalleGratificacion(boleta.gratificacion)?.formula.replaceAll("−", "-");
+  const conDetalle = (c) => (c.calculado && c.codigo === "0406" && formula ? { ...c, detalle: formula } : c);
+  const de = (tipos) => boleta.conceptos.filter((c) => tipos.includes(c.tipo)).map(conDetalle);
   const columnas = [de(["ingreso"]), de(["descuento", "aporteTrabajador"]), de(["aporteEmpleador"])].map(celdasDeColumna);
   const filas = Array.from({ length: Math.max(...columnas.map((c) => c.length), 1) }, (_, i) =>
     columnas.flatMap((c) => celda(c[i])));

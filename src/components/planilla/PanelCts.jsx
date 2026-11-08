@@ -288,7 +288,7 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
             {actual.confirmadoEn && <p>Confirmado por {actual.confirmadoPor} el {cuando(actual.confirmadoEn)}.</p>}
             {actual.estado === "anulado" && <p className="text-gray-600">Anulado por {actual.anuladoPor} el {cuando(actual.anuladoEn)}: {actual.motivoAnulacion}</p>}
             {actual.estado === "confirmado" && (
-              <p>{textoAsiento(actual.asiento)}</p>
+              <p>{textoAsiento(actual.asiento, actual.sinAjuste)}</p>
             )}
             {actual.provision && <p>Con provisión de CTS: el depósito consume el saldo provisionado.</p>}
           </div>

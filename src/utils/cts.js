@@ -30,7 +30,9 @@ export function estadoTrasGuardar(estado, deposito, parte) {
   return { ...filas, ...fecha };
 }
 
-export function textoAsiento(asiento) {
+// `sinAjuste` (del servidor): la provisión del semestre coincide con lo depositado y el depósito no lleva asiento.
+export function textoAsiento(asiento, sinAjuste = false) {
+  if (!asiento && sinAjuste) return "Sin asiento de ajuste: la provisión coincide con el depósito.";
   if (!asiento) return "Aún sin asiento: sale en Contabilidad → Automáticos al generar los asientos del mes.";
   if (asiento.estado === "contabilizado") return `Asiento contabilizado (${asiento.cuo}).`;
   return `Asiento ${asiento.estado}: se contabiliza en Contabilidad → Automáticos.`;

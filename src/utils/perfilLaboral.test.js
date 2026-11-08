@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PERFIL_VACIO, precargaAportes, aplicarPrecarga, cambiaSctrRegistrado, limiteFechaSctr, errorFechaSctr, mostrarCambioPerfil,
-  beneficiosDeFormulario, cuerpoBeneficios, errorBeneficios, textoHistorialBeneficios, avisoBeneficios } from "./perfilLaboral.js";
+  beneficiosDeFormulario, cuerpoBeneficios, errorBeneficios, textoHistorialBeneficios, avisoBeneficios, conRegistroBeneficios } from "./perfilLaboral.js";
 
 test("PERFIL_VACIO: misma forma que el del servidor, con textos vacíos en los inputs", () => {
   assert.deepEqual(Object.keys(PERFIL_VACIO), ["remype", "ciiu", "actividadIndustrial", "senati", "sctr", "vidaLey", "beneficios", "cambios"]);
@@ -136,4 +136,15 @@ test("beneficios sociales: historial legible y avisos al cambiar", () => {
   assert.equal(avisoBeneficios(base, base), "");
   const prov = beneficiosDeFormulario({ registro: "provision", desde: "202611", historial: [] });
   assert.match(avisoBeneficios({ ...prov, registro: "gasto", desde: "2027-01" }, prov), /saldos provisionados/);
+});
+
+test("beneficios sociales: cambiar el registro vacía «Rige desde» y exige elegirlo; volver al guardado recupera su mes", () => {
+  const base = beneficiosDeFormulario({ registro: "provision", desde: "202606", historial: [{ registro: "provision", desde: "202606" }] });
+  const gasto = conRegistroBeneficios(base, "gasto", base);
+  assert.deepEqual([gasto.registro, gasto.desde, gasto.historial], ["gasto", "", base.historial]);
+  assert.equal(errorBeneficios(gasto, base), "Indica desde qué mes rige el registro de beneficios sociales.");
+  assert.deepEqual(cuerpoBeneficios({ ...gasto, desde: "2026-12" }, base), { registro: "gasto", desde: "202612" });
+  const vuelta = conRegistroBeneficios(gasto, "provision", base);
+  assert.equal(vuelta.desde, "2026-06");
+  assert.equal(cuerpoBeneficios(vuelta, base), undefined);
 });

@@ -47,6 +47,8 @@ test("textoAsiento: una sola frase por caso", () => {
   assert.equal(textoAsiento(null), "Aún sin asiento: sale en Contabilidad → Automáticos al generar los asientos del mes.");
   assert.equal(textoAsiento({ estado: "contabilizado", cuo: "00000012" }), "Asiento contabilizado (00000012).");
   assert.equal(textoAsiento({ estado: "borrador" }), "Asiento borrador: se contabiliza en Contabilidad → Automáticos.");
+  assert.equal(textoAsiento(null, true), "Sin asiento de ajuste: la provisión coincide con el depósito.");
+  assert.equal(textoAsiento({ estado: "contabilizado", cuo: "00000012" }, true), "Asiento contabilizado (00000012).");
 });
 
 test("filaEditable: textos para los campos y sin marcas de edición", () => {
