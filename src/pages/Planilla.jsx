@@ -12,12 +12,14 @@ import PanelTRegistro from "../components/planilla/PanelTRegistro";
 import PanelConfigTRegistro from "../components/planilla/PanelConfigTRegistro";
 import PanelPerfilLaboral from "../components/planilla/PanelPerfilLaboral";
 import PanelVacaciones from "../components/planilla/PanelVacaciones";
+import PanelCts from "../components/planilla/PanelCts";
 import { resumenAvisosVacaciones } from "../utils/vacaciones";
 
 const TABS = [
   { id: "mes", label: "Planilla del mes" },
   { id: "trabajadores", label: "Trabajadores" },
   { id: "vacaciones", label: "Vacaciones" },
+  { id: "cts", label: "CTS" },
   { id: "tregistro", label: "T-Registro" },
   { id: "configtr", label: "Config. T-Registro" },
   { id: "perfil", label: "Perfil laboral" },
@@ -45,6 +47,7 @@ export default function Planilla() {
   const [cambioVisto, setCambioVisto] = useState(leerVisto);
   const [avisosVacaciones, setAvisosVacaciones] = useState([]);
   const [avisosLiquidacion, setAvisosLiquidacion] = useState([]);
+  const [avisosCts, setAvisosCts] = useState([]);
   // Cada «Ir a los cesados» remonta el panel de trabajadores con «Ver cesados» marcado; 0 = entrada normal.
   const [irCesados, setIrCesados] = useState(0);
 
@@ -85,6 +88,14 @@ export default function Planilla() {
     } catch { /* los avisos son informativos: sin ellos la planilla sigue funcionando */ }
   }, []);
   useEffect(() => { const t = setTimeout(refrescarLiquidaciones, 0); return () => clearTimeout(t); }, [refrescarLiquidaciones, tab]);
+  // Plazo del depósito de CTS (1 al 15 de mayo y noviembre): cambia al confirmar, eliminar o anular un depósito.
+  const refrescarCts = useCallback(async () => {
+    try {
+      const r = await fetchAuth("/planilla/cts/avisos");
+      if (r.ok) setAvisosCts((await r.json()).avisos);
+    } catch { /* los avisos son informativos: sin ellos la planilla sigue funcionando */ }
+  }, []);
+  useEffect(() => { const t = setTimeout(refrescarCts, 0); return () => clearTimeout(t); }, [refrescarCts, tab]);
   const irACesados = () => { setIrCesados((n) => n + 1); setTab("trabajadores"); };
 
   const entendido = () => { guardarVisto(cambioPerfil.fecha); setCambioVisto(cambioPerfil.fecha); };
@@ -111,6 +122,7 @@ export default function Planilla() {
               tab === t.id ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}>
             {t.label}
+            {t.id === "cts" && avisosCts.length > 0 && <span className="ml-1.5 bg-amber-500 text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5">{avisosCts.length}</span>}
             {t.id === "vacaciones" && avisosVacaciones.length > 0 && <span className="ml-1.5 bg-amber-500 text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5">{avisosVacaciones.length}</span>}
           </button>
         ))}
@@ -134,6 +146,12 @@ export default function Planilla() {
           <button onClick={() => setTab("vacaciones")} className="text-xs underline font-medium hover:text-amber-900">Ir a vacaciones</button>
         </div>
       )}
+      {avisosCts.length > 0 && tab !== "cts" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800 space-y-1">
+          {avisosCts.map((a, i) => <p key={i}>{a}</p>)}
+          <button onClick={() => setTab("cts")} className="text-xs underline font-medium hover:text-amber-900">Ir a CTS</button>
+        </div>
+      )}
       {avisosLiquidacion.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800 space-y-1">
           {avisosLiquidacion.map((a, i) => <p key={i}>{a}</p>)}
@@ -146,6 +164,7 @@ export default function Planilla() {
           {tab === "trabajadores" && <PanelTrabajadores key={irCesados} catalogos={catalogos} centrosCosto={centrosCosto} puedeEscribir={puedeEscribir}
             refrescarAvisos={refrescarAvisos} onLiquidacion={refrescarLiquidaciones} verCesadosInicial={irCesados > 0} />}
           {tab === "vacaciones" && <PanelVacaciones puedeEscribir={puedeEscribir} onAvisos={setAvisosVacaciones} />}
+          {tab === "cts" && <PanelCts catalogos={catalogos} puedeEscribir={puedeEscribir} onCambio={refrescarCts} />}
           {tab === "tregistro" && <PanelTRegistro puedeEscribir={puedeEscribir} refrescarAvisos={refrescarAvisos} />}
           {tab === "configtr" && <PanelConfigTRegistro catalogos={catalogos} puedeEscribir={puedeEscribir} onGuardado={refrescarCatalogos} />}
           {tab === "perfil" && <PanelPerfilLaboral catalogos={catalogos} puedeEscribir={puedeEscribir} onGuardado={(d) => { aplicarAvisos(d); refrescarCatalogos(); }} />}
