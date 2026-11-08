@@ -10,9 +10,13 @@ const fecha = (iso) => (iso ? iso.split("-").reverse().join("/") : "");
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 const margen = 14;
 const GRIS = [243, 244, 246];
+const LINEA = 4.5;
 
 export const nombreArchivoHojasCts = (periodo, { borrador = false, zip = false } = {}) =>
   `cts-${periodo}${borrador ? "-BORRADOR" : ""}.${zip ? "zip" : "pdf"}`;
+
+export const nombreArchivoHojaCts = (periodo, numDoc, { borrador = false } = {}) =>
+  `cts-${periodo}-${numDoc}${borrador ? "-BORRADOR" : ""}.pdf`;
 
 // La RC y el sexto salen de la fila: detalleRc se calculó al armar el depósito y no sigue a una edición de la RC, así que su
 // desglose solo se imprime mientras la RC es la calculada. Con el monto ajustado no hay fórmula que mostrar.
@@ -69,16 +73,15 @@ export function dibujarHojaCts(doc, deposito, f, { empleador = {} } = {}) {
   doc.text(`${deposito.codigo || ""}  ·  ${h.periodo}`, 105, 34, { align: "center" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  const datos = [
-    [`Apellidos y nombres: ${h.nombre}`, `Documento: ${h.documento}`],
-    [`Cargo: ${h.cargo || "-"}`, `Fecha de ingreso: ${h.ingreso}`],
-  ];
-  let y = 42;
-  for (const [izquierda, derecha] of datos) {
-    doc.text(izquierda, margen, y);
-    doc.text(derecha, 130, y);
-    y += 5;
-  }
+  // Cada texto largo se parte en el ancho de su columna para no pisar el campo de al lado.
+  const par = (izquierda, derecha, xDerecha, y) => {
+    const a = doc.splitTextToSize(izquierda, xDerecha - margen - 8), b = doc.splitTextToSize(derecha, 196 - xDerecha);
+    doc.text(a, margen, y);
+    doc.text(b, xDerecha, y);
+    return y + Math.max(a.length, b.length) * LINEA;
+  };
+  let y = par(`Apellidos y nombres: ${h.nombre}`, `Documento: ${h.documento}`, 130, 42);
+  y = par(`Cargo: ${h.cargo || "-"}`, `Fecha de ingreso: ${h.ingreso}`, 130, y);
 
   const tabla = {
     margin: { left: margen, right: margen }, theme: "grid", styles: { fontSize: 8, cellPadding: 0.8 },
@@ -103,10 +106,7 @@ export function dibujarHojaCts(doc, deposito, f, { empleador = {} } = {}) {
   doc.text(`MONTO DEPOSITADO: S/ ${importe(h.monto)}`, margen, y);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  y += 7;
-  doc.text(`Entidad financiera: ${h.entidad || "No registrada"}`, margen, y);
-  doc.text(`Número de cuenta: ${h.cuenta || "No registrado"}`, 110, y);
-  y += 6;
+  y = par(`Entidad financiera: ${h.entidad || "No registrada"}`, `Número de cuenta: ${h.cuenta || "No registrado"}`, 110, y + 7) + 1.5;
   doc.text("Fecha de depósito:", margen, y);
   if (h.fechaDeposito) doc.text(h.fechaDeposito, margen + 31, y);
   else doc.line(margen + 31, y, margen + 65, y);
@@ -116,15 +116,16 @@ export function dibujarHojaCts(doc, deposito, f, { empleador = {} } = {}) {
   doc.line(120, y, 185, y);
   doc.text("Empleador", margen + 42, y + 5, { align: "center" });
   doc.text("Trabajador", 152, y + 5, { align: "center" });
-  doc.text(h.nombre, 152, y + 10, { align: "center" });
-  doc.text(`Documento: ${h.documento}`, 152, y + 15, { align: "center" });
+  const firmante = doc.splitTextToSize(h.nombre, 70);
+  doc.text(firmante, 152, y + 10, { align: "center" });
+  doc.text(`Documento: ${h.documento}`, 152, y + 10 + firmante.length * LINEA, { align: "center" });
   if (borrador) marcaBorrador(doc, primeraPagina);
 }
 
 export function generarHojaCtsPdf(deposito, trabajador, { guardar = true, ...opciones } = {}) {
   const doc = new jsPDF();
   dibujarHojaCts(doc, deposito, trabajador, opciones);
-  if (guardar) doc.save(`cts-${deposito.periodo}-${trabajador.datos.numDoc}.pdf`);
+  if (guardar) doc.save(nombreArchivoHojaCts(deposito.periodo, trabajador.datos.numDoc, { borrador: deposito.estado !== "confirmado" }));
   return doc;
 }
 

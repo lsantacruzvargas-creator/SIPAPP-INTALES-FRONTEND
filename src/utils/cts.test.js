@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { opcionesDeposito, totalesCts, filaEditable, validarFilaCts, cuerpoGuardarCts, hayCambiosCts, hojasDisponibles, avisosDescargaHojasCts } from "./cts.js";
+import { opcionesDeposito, totalesCts, tieneHoja, estadoTrasGuardar, textoAsiento, filaEditable, validarFilaCts, cuerpoGuardarCts, hayCambiosCts, hojasDisponibles, avisosDescargaHojasCts } from "./cts.js";
 
 const fila = (extra = {}) => ({
   trabajador: "a1", datos: { nombre: "QUISPE MAMANI ANA", numDoc: "12345678" },
@@ -18,8 +18,35 @@ test("opcionesDeposito: mayo y noviembre del año, el más reciente primero, con
 
 test("totalesCts: suma solo las filas incluidas, redondeada, y cuenta las excluidas", () => {
   const t = totalesCts([fila({ monto: 1470.92 }), fila({ trabajador: "b", monto: 100.1 }), fila({ trabajador: "c", monto: 999, excluido: true, motivoExclusion: "x" })]);
-  assert.deepEqual(t, { incluidos: 2, excluidos: 1, total: 1571.02 });
-  assert.deepEqual(totalesCts([]), { incluidos: 0, excluidos: 0, total: 0 });
+  assert.deepEqual(t, { incluidos: 2, excluidos: 1, sinMonto: 0, total: 1571.02 });
+  assert.deepEqual(totalesCts([]), { incluidos: 0, excluidos: 0, sinMonto: 0, total: 0 });
+});
+
+test("totalesCts y tieneHoja: una fila con monto 0 no cuenta como incluida (como el servidor) ni lleva hoja", () => {
+  const t = totalesCts([fila(), fila({ trabajador: "b", monto: 0 }), fila({ trabajador: "c", monto: 0, excluido: true, motivoExclusion: "x" })]);
+  assert.deepEqual(t, { incluidos: 1, excluidos: 1, sinMonto: 1, total: 1470.92 });
+  assert.equal(tieneHoja(fila({ monto: 0 })), false);
+  assert.equal(tieneHoja(fila()), true);
+});
+
+test("estadoTrasGuardar: guardar la fecha conserva las filas editadas y guardar las filas conserva la fecha escrita", () => {
+  const guardado = { trabajadores: [fila()], fechaDeposito: "2026-11-14" };
+  const enPantalla = { editables: [{ ...filaEditable(fila()), rc: "9999" }], fechaDeposito: "2026-11-20" };
+  const trasFecha = estadoTrasGuardar(enPantalla, guardado, "fecha");
+  assert.equal(trasFecha.editables[0].rc, "9999");
+  assert.equal(trasFecha.fechaDeposito, "2026-11-14");
+  const trasFilas = estadoTrasGuardar(enPantalla, guardado, "filas");
+  assert.equal(trasFilas.editables[0].rc, "2523");
+  assert.equal(trasFilas.fechaDeposito, "2026-11-20");
+  const todo = estadoTrasGuardar(enPantalla, guardado, "todo");
+  assert.equal(todo.editables[0].rc, "2523");
+  assert.equal(todo.fechaDeposito, "2026-11-14");
+});
+
+test("textoAsiento: una sola frase por caso", () => {
+  assert.equal(textoAsiento(null), "Aún sin asiento: sale en Contabilidad → Automáticos al generar los asientos del mes.");
+  assert.equal(textoAsiento({ estado: "contabilizado", cuo: "00000012" }), "Asiento contabilizado (00000012).");
+  assert.equal(textoAsiento({ estado: "borrador" }), "Asiento borrador: se contabiliza en Contabilidad → Automáticos.");
 });
 
 test("filaEditable: textos para los campos y sin marcas de edición", () => {
@@ -81,6 +108,7 @@ test("hojasDisponibles: las filas no excluidas de un depósito no anulado", () =
   assert.equal(hojasDisponibles({ estado: "borrador", trabajadores: filas }).length, 1);
   assert.equal(hojasDisponibles({ estado: "confirmado", trabajadores: filas }).length, 1);
   assert.equal(hojasDisponibles({ estado: "anulado", trabajadores: filas }).length, 0);
+  assert.equal(hojasDisponibles({ estado: "confirmado", trabajadores: [...filas, fila({ trabajador: "c", monto: 0 })] }).length, 1);
 });
 
 test("avisosDescargaHojasCts: borrador, sin cuenta CTS y sin fecha de depósito", () => {

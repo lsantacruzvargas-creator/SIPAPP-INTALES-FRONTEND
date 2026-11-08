@@ -11,9 +11,29 @@ export const opcionesDeposito = (anio) => ["11", "05"].map((mes) => ({
   periodo: `${anio}${mes}`, texto: `${MESES[mes]} ${anio} (${etiquetaPeriodoCts(`${anio}${mes}`)})`,
 }));
 
+// Igual que el servidor: una fila con monto 0 no se deposita ni lleva hoja.
+export const tieneHoja = (f) => !f.excluido && f.monto > 0;
+
 export function totalesCts(filas) {
-  const incluidas = filas.filter((f) => !f.excluido);
-  return { incluidos: incluidas.length, excluidos: filas.length - incluidas.length, total: round2(incluidas.reduce((s, f) => s + f.monto, 0)) };
+  const incluidas = filas.filter(tieneHoja);
+  const excluidos = filas.filter((f) => f.excluido).length;
+  return { incluidos: incluidas.length, excluidos, sinMonto: filas.length - incluidas.length - excluidos, total: round2(incluidas.reduce((s, f) => s + f.monto, 0)) };
+}
+
+// Cada guardado reemplaza solo su parte de lo que hay en pantalla: guardar la fecha no descarta filas sin guardar y guardar
+// las filas no revierte una fecha escrita. «todo» (carga o documento nuevo) reemplaza ambas.
+export function estadoTrasGuardar(estado, deposito, parte) {
+  const filas = { editables: deposito.trabajadores.map(filaEditable) };
+  const fecha = { fechaDeposito: deposito.fechaDeposito || "" };
+  if (parte === "fecha") return { ...estado, ...fecha };
+  if (parte === "filas") return { ...estado, ...filas };
+  return { ...filas, ...fecha };
+}
+
+export function textoAsiento(asiento) {
+  if (!asiento) return "Aún sin asiento: sale en Contabilidad → Automáticos al generar los asientos del mes.";
+  if (asiento.estado === "contabilizado") return `Asiento contabilizado (${asiento.cuo}).`;
+  return `Asiento ${asiento.estado}: se contabiliza en Contabilidad → Automáticos.`;
 }
 
 // `montoTocado` y `volverAFormula` deciden qué se manda: el monto solo si el usuario lo escribió, para que el servidor lo
@@ -54,7 +74,7 @@ export function cuerpoGuardarCts(editables) {
 export const hayCambiosCts = (editables, filas) =>
   editables.length !== filas.length || JSON.stringify(editables) !== JSON.stringify(filas.map(filaEditable));
 
-export const hojasDisponibles = (deposito) => (deposito.estado === "anulado" ? [] : deposito.trabajadores.filter((f) => !f.excluido));
+export const hojasDisponibles = (deposito) => (deposito.estado === "anulado" ? [] : deposito.trabajadores.filter(tieneHoja));
 
 export function avisosDescargaHojasCts(deposito) {
   const hojas = hojasDisponibles(deposito);

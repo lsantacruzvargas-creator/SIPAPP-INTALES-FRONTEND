@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { filasHojaCts, nombreArchivoHojasCts, generarHojaCtsPdf } from "./ctsPdf.js";
+import { filasHojaCts, nombreArchivoHojasCts, nombreArchivoHojaCts, generarHojaCtsPdf } from "./ctsPdf.js";
 
 const dep = (extra = {}) => ({ codigo: "CTS-0001", periodo: "202611", estado: "confirmado", fechaDeposito: "2026-11-14", ...extra });
 const fila = (extra = {}) => ({
@@ -92,4 +92,20 @@ test("generarHojaCtsPdf: título, empleador, trabajador, cuenta y monto; sin mar
 test("generarHojaCtsPdf: un borrador lleva la marca y sin fecha ni cuenta no lanza", () => {
   const doc = generarHojaCtsPdf(dep({ estado: "borrador", fechaDeposito: "" }), fila({ datos: { ...fila().datos, cuentaCts: undefined, cargo: "" } }), { empleador, guardar: false });
   assert.equal(doc.output().split("(BORRADOR)").length - 1, doc.getNumberOfPages());
+});
+
+test("nombreArchivoHojaCts: el PDF individual de un borrador lleva el sufijo BORRADOR como el zip", () => {
+  assert.equal(nombreArchivoHojaCts("202611", "12345678"), "cts-202611-12345678.pdf");
+  assert.equal(nombreArchivoHojaCts("202611", "12345678", { borrador: true }), "cts-202611-12345678-BORRADOR.pdf");
+});
+
+test("generarHojaCtsPdf: un nombre y una entidad muy largos se parten en líneas (no se solapan con el campo de la derecha)", () => {
+  const nombre = "HUAMANCHUMO DE LA CRUZ VILLANUEVA QUISPE MAMANI SANCHEZ CARRANZA DEL AGUILA FERNANDEZ ZZFINNOMBRE";
+  const entidad = "CAJA MUNICIPAL DE AHORRO Y CREDITO DE LA PROVINCIA CONSTITUCIONAL DEL CALLAO ZZFINENTIDAD";
+  const doc = generarHojaCtsPdf(dep(), fila({ datos: { ...fila().datos, nombre, cuentaCts: { entidad, numero: "191-1234567" } } }), { empleador, guardar: false });
+  const t = textoPdf(doc);
+  assert.equal(t.includes(nombre), false);
+  assert.equal(t.includes(entidad), false);
+  assert.ok(t.includes("ZZFINNOMBRE"));
+  assert.ok(t.includes("ZZFINENTIDAD"));
 });

@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { money } from "../../utils/compras";
 import { fechaHoyLima, formatearFechaHora } from "../../utils/fecha";
-import { opcionesDeposito, totalesCts, filaEditable, cuerpoGuardarCts, hayCambiosCts, hojasDisponibles, avisosDescargaHojasCts } from "../../utils/cts";
+import { opcionesDeposito, totalesCts, tieneHoja, estadoTrasGuardar, textoAsiento, cuerpoGuardarCts, hayCambiosCts, hojasDisponibles, avisosDescargaHojasCts } from "../../utils/cts";
 import { generarHojaCtsPdf, zipHojasCts } from "../../utils/ctsPdf";
 import TablaScroll from "../TablaScroll";
 import ConfirmacionAccion from "../ConfirmacionAccion";
@@ -71,8 +71,10 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
   const [lista, setLista] = useState(null);
   const [idAnulado, setIdAnulado] = useState("");
   const [doc, setDoc] = useState(null);
-  const [editables, setEditables] = useState([]);
-  const [fechaDeposito, setFechaDeposito] = useState("");
+  // Lo que se edita en pantalla: las filas y la fecha se guardan por separado (ver estadoTrasGuardar).
+  const [pantalla, setPantalla] = useState({ editables: [], fechaDeposito: "" });
+  const { editables, fechaDeposito } = pantalla;
+  const anioVigente = useRef(anio);
   const [error, setError] = useState("");
   const [avisos, setAvisos] = useState([]);
   const [procesando, setProcesando] = useState(false);
@@ -86,38 +88,47 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
   const actual = doc && doc._id === idActivo ? doc : null;
   const editable = puedeEscribir && actual?.estado === "borrador";
 
-  const aplicar = useCallback((d) => {
+  const aplicar = useCallback((d, parte = "todo") => {
     setDoc(d);
-    setEditables(d.trabajadores.map(filaEditable));
-    setFechaDeposito(d.fechaDeposito || "");
+    setPantalla((p) => estadoTrasGuardar(p, d, parte));
   }, []);
+  const setEditables = (f) => setPantalla((p) => ({ ...p, editables: f(p.editables) }));
+  const setFechaDeposito = (fechaDeposito) => setPantalla((p) => ({ ...p, fechaDeposito }));
 
-  const cargarLista = useCallback(async () => {
+  // Una respuesta de otro año (o de un efecto ya reemplazado) no pisa lo que se ve ahora.
+  const cargarLista = useCallback(async (vigenteAun = () => true) => {
     try {
       const r = await fetchAuth(`/planilla/cts?anio=${anio}`);
       const d = await r.json().catch(() => ({}));
+      if (!vigenteAun() || anioVigente.current !== anio) return;
       if (r.ok) setLista(d); else setError(d.mensaje || "No se pudo cargar los depósitos de CTS.");
     } catch {
-      setError(MENSAJE_RED);
+      if (vigenteAun() && anioVigente.current === anio) setError(MENSAJE_RED);
     }
   }, [anio]);
-  useEffect(() => { const t = setTimeout(cargarLista, 0); return () => clearTimeout(t); }, [cargarLista]);
+  useEffect(() => {
+    let cancelado = false;
+    const t = setTimeout(() => cargarLista(() => !cancelado), 0);
+    return () => { cancelado = true; clearTimeout(t); };
+  }, [cargarLista]);
 
   useEffect(() => {
     if (!idActivo) return undefined;
+    let cancelado = false;
     const t = setTimeout(async () => {
       try {
         const r = await fetchAuth(`/planilla/cts/${idActivo}`);
         const d = await r.json().catch(() => ({}));
+        if (cancelado) return;
         if (r.ok) aplicar(d); else setError(d.mensaje || "No se pudo cargar el depósito.");
       } catch {
-        setError(MENSAJE_RED);
+        if (!cancelado) setError(MENSAJE_RED);
       }
     }, 0);
-    return () => clearTimeout(t);
+    return () => { cancelado = true; clearTimeout(t); };
   }, [idActivo, aplicar]);
 
-  const elegirAnio = (n) => { setAnio(n); setLista(null); setPeriodo(`${n}${periodo.slice(4)}`); setIdAnulado(""); setError(""); setAvisos([]); };
+  const elegirAnio = (n) => { anioVigente.current = n; setAnio(n); setLista(null); setPeriodo(`${n}${periodo.slice(4)}`); setIdAnulado(""); setError(""); setAvisos([]); };
   const elegirPeriodo = (p) => { setPeriodo(p); setIdAnulado(""); setError(""); setAvisos([]); };
 
   // Cada llamada del panel: muestra el error del servidor, aplica el documento que devuelve y refresca la lista y el banner.
@@ -141,16 +152,16 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
       setProcesando(false);
     }
   };
-  const terminar = async (d) => {
+  const terminar = async (d, parte = "filas") => {
     if (d.avisos?.length) setAvisos(d.avisos);
-    aplicar(d);
+    aplicar(d, parte);
     await cargarLista();
     onCambio?.();
   };
 
   const calcular = async () => {
     const d = await llamar("", { method: "POST", body: JSON.stringify({ periodo }) }, "No se pudo calcular el depósito de CTS.");
-    if (d) await terminar(d);
+    if (d) await terminar(d, "todo");
   };
   const guardar = async () => {
     const { error: invalido, trabajadores } = cuerpoGuardarCts(editables);
@@ -169,7 +180,7 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
   };
   const guardarFecha = async () => {
     const d = await llamar(`/${actual._id}/fecha-deposito`, { method: "PUT", body: JSON.stringify({ fechaDeposito }) }, "No se pudo guardar la fecha de depósito.");
-    if (d) await terminar(d);
+    if (d) await terminar(d, "fecha");
   };
   const eliminar = async () => {
     const d = await llamar(`/${actual._id}`, { method: "DELETE" }, "No se pudo eliminar el depósito.");
@@ -186,7 +197,7 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
   };
 
   const cambiar = (id, parche) => setEditables((l) => l.map((e) => (e.trabajador === id ? { ...e, ...parche } : e)));
-  const descartar = () => { setEditables(actual.trabajadores.map(filaEditable)); setError(""); };
+  const descartar = () => { aplicar(actual, "filas"); setError(""); };
 
   const descargarZip = async () => {
     setAvisos(avisosDescargaHojasCts(actual));
@@ -277,7 +288,7 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
             {actual.confirmadoEn && <p>Confirmado por {actual.confirmadoPor} el {cuando(actual.confirmadoEn)}.</p>}
             {actual.estado === "anulado" && <p className="text-gray-600">Anulado por {actual.anuladoPor} el {cuando(actual.anuladoEn)}: {actual.motivoAnulacion}</p>}
             {actual.estado === "confirmado" && (
-              <p>{actual.asiento ? `Asiento ${actual.asiento.estado}${actual.asiento.estado === "contabilizado" ? ` (${actual.asiento.cuo})` : ""}.` : "Aún sin asiento:"} El asiento sale en Contabilidad → Automáticos al generar los asientos del mes.</p>
+              <p>{textoAsiento(actual.asiento)}</p>
             )}
             {actual.provision && <p>Con provisión de CTS: el depósito consume el saldo provisionado.</p>}
           </div>
@@ -288,7 +299,7 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
                 <input type="date" value={fechaDeposito} disabled={!puedeEscribir || procesando} onChange={(e) => setFechaDeposito(e.target.value)} className={`${INP} block`} />
               </label>
               {puedeEscribir && fechaDeposito !== (actual.fechaDeposito || "") && (
-                <button onClick={guardarFecha} disabled={procesando} className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Guardar fecha</button>
+                <button onClick={guardarFecha} disabled={procesando || sucio} title={sucio ? "Guarda o descarta los cambios de las filas primero" : ""} className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Guardar fecha</button>
               )}
               <p className="text-xs text-gray-400 pb-2">Se anota a mano y sale en las hojas; no se valida contra Tesorería.</p>
             </div>
@@ -358,7 +369,7 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
                         </td>
                       )}
                       <td className="py-1.5 text-right whitespace-nowrap">
-                        {!f.excluido && actual.estado !== "anulado" && (
+                        {tieneHoja(f) && actual.estado !== "anulado" && (
                           <button onClick={() => generarHojaCtsPdf(actual, f, { empleador: catalogos.empleador })} className="text-xs text-gray-600 hover:underline">PDF</button>
                         )}
                       </td>
@@ -372,7 +383,7 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
               <tfoot>
                 <tr className="font-semibold text-gray-700">
                   <td className="py-2 pr-3" colSpan={6}>
-                    {totales.incluidos} {totales.incluidos === 1 ? "trabajador" : "trabajadores"}{totales.excluidos > 0 ? ` · ${totales.excluidos} excluido(s)` : ""}
+                    {totales.incluidos} {totales.incluidos === 1 ? "trabajador" : "trabajadores"}{totales.excluidos > 0 ? ` · ${totales.excluidos} excluido(s)` : ""}{totales.sinMonto > 0 ? ` · ${totales.sinMonto} sin monto` : ""}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums">{money(totales.total)}</td>
                   <td colSpan={editable ? 2 : 1} />
