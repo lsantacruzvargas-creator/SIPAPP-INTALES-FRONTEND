@@ -421,6 +421,22 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   - Probar en el navegador el guardado al salir de un campo del modal (meses, Tab, días, Tab rápido) y abrir un PDF real; probar el PLAME con DEV5 en el PVS.
   - Menores: reingreso en el mismo mes del cese (anterior a 11/2026) deja la boleta sin el ajuste final; la tabla de cuentas por área no tiene
     desplazamiento horizontal en pantallas angostas; la dirección del empleador no sale en la cabecera del PDF (tampoco en la boleta).
+- **CTS semestral, gratificación ordinaria y provisiones (entregado 2026-11-07)**: diseño en `specs/2026-11-07-cts-gratificacion-provisiones-design.md`,
+  plan en `plans/2026-11-07-cts-gratificacion-provisiones.md`. **Gratificación** de julio y diciembre calculada sola en la boleta (0406 + 0312;
+  RC vigente al 30/06 o 30/11, meses calendario completos, 1/180 por día no laborado; un 0406 digitado o de la liquidación la reemplaza).
+  **CTS semestral**: pestaña «CTS» de Planilla (calcular, editar, confirmar, fecha de depósito, anular; hojas PDF por trabajador y .zip;
+  aviso del 1 al 15 de mayo/noviembre); la boleta del mes de depósito la muestra como dato informativo (fuera del neto y del PLAME); pago en
+  Tesorería con «Planilla: CTS»; cuenta CTS en la ficha; solo soles. Arrastre de días del ingreso «opción B» (días sueltos aparte + meses
+  completos), también en la CTS trunca. **Provisiones**: selector «Registro de beneficios sociales» en Perfil laboral (gasto al pagar /
+  provisión mensual, «Rige desde», con historial; no puede regir antes de la última planilla cerrada); provisiones de CTS, gratificación y
+  vacaciones por área contra 4151/4114/4115; **el pago siempre descuenta lo provisionado** (la 41 queda en 0) aunque se vuelva a «gasto».
+  Ayuda «¿va al PLAME?» en la boleta y la liquidación. Prueba del año completo en `test/planillaAnio.test.js`. Commits: Backend
+  `bdd49d0..14853f2`; Frontend `5a81c5e1..a12e2d6d`. **Pendientes**:
+  - [Confirmar con el contador] ventana de variables de la gratificación de diciembre (jun–nov); licencia sin goce en la quincena de pago;
+    tope de 90 remuneraciones diarias de CTS en pequeña empresa (sin aviso hoy); probar la 0904 en el `.rem` del PDT.
+  - Probar en el navegador la pestaña CTS, el selector y la boleta; abrir hojas de CTS reales.
+  - Menores: el aviso «Sin carga inicial de vacaciones: solo se provisiona el periodo en curso» debería decir «desde el corte»; la proyección
+    de la 5.ª sigue contando meses con la regla base 30; choque de código CTS al crear dos depósitos a la vez da 500.
 - **RMV S/ 1 230 desde 01/10/2026** (D.S. 015-2026-TR): actualizar los Parámetros de oct/nov 2026 (reabrir y regenerar la planilla si ya están cerradas).
   El valor inicial de `PARAMETROS_INICIALES` ya es 1230.
 - **Prueba inestable ajena**: `test/bancos.test.js` «carrera: un movimiento y el cierre…» falla a veces por `0` contra `-0`; pasa al re-ejecutar.
