@@ -59,11 +59,11 @@ test("libroExcelGenerico: documento, cuentas y CCI son texto y conservan el cero
   assert.strictEqual(wb.getWorksheet("Cabecera").getCell("K2").value, 3550.75);
 });
 
-test("libroExcelGenerico: el texto libre que empezaría una fórmula queda como texto", async () => {
+test("libroExcelGenerico: el texto libre que empezaría una fórmula queda como texto; documento, cuenta y CCI no se tocan", async () => {
   const wb = await leer(await libroExcelGenerico(DATOS));
   assert.strictEqual(wb.getWorksheet("Cabecera").getCell("I2").value, "'=HYPERLINK(\"http://x\")");
   const d = wb.getWorksheet("Detalle");
-  assert.strictEqual(d.getCell("C3").value, "'-0123");
+  assert.strictEqual(d.getCell("C3").value, "-0123");
   assert.strictEqual(d.getCell("O3").value, "'+cmd");
   assert.strictEqual(d.getCell("O2").value, "Saldo 07/2026");
 });
@@ -115,7 +115,7 @@ test("tiposNuevoLote: la gratificación solo en julio y diciembre", () => {
 
 test("avisos fijos: BCP y tratamiento del adelanto con su texto exacto; los de la API no los repiten", () => {
   assert.equal(AVISO_BCP, "Formato del BCP sin validar con el banco: sube primero un lote pequeño a Telecrédito");
-  assert.ok(AVISO_TRATAMIENTO_ADELANTO.startsWith("Tratamiento contable del adelanto: al pagarlo se registra D 1412 Adelanto de remuneraciones / H banco."));
+  assert.equal(AVISO_TRATAMIENTO_ADELANTO, "Tratamiento contable del adelanto: al pagarlo se registra D 1412 Adelanto de remuneraciones / H banco. Al cerrar la planilla del mes, la boleta lo descuenta como 0701 y su asiento abona la 1412 por lo adelantado; la 4111 queda solo con lo que falta pagar.");
   assert.deepEqual(avisosFijos({ formato: "bcp", tipo: "adelanto" }), [AVISO_BCP, AVISO_TRATAMIENTO_ADELANTO]);
   assert.deepEqual(avisosFijos({ formato: "interbank", tipo: "saldo" }), []);
   assert.deepEqual(avisosDeApi([AVISO_BCP, "La planilla sigue en borrador: si cambia una boleta, el saldo cambia"]), ["La planilla sigue en borrador: si cambia una boleta, el saldo cambia"]);
@@ -154,6 +154,7 @@ test("cuerpoNuevoLote: BCP exige tipo y 13 dígitos de la cuenta de cargo; CTS m
 
 test("cuerpoGuardarLote valida los montos y manda cargo solo en BCP", () => {
   const editables = [{ trabajador: "t1", nombre: "ANA", monto: "100.5" }, { trabajador: "t2", nombre: "LUIS", monto: "0" }];
+  assert.equal("referencia" in cuerpoGuardarLote({ fecha: "2026-07-15", referencia: "  ", editables }).body, false);
   assert.deepEqual(cuerpoGuardarLote({ fecha: "2026-07-15", referencia: "x", editables, esBcp: false }).body,
     { fecha: "2026-07-15", referencia: "x", filas: [{ trabajador: "t1", monto: 100.5 }, { trabajador: "t2", monto: 0 }] });
   assert.match(cuerpoGuardarLote({ fecha: "2026-07-15", editables: [{ trabajador: "t1", nombre: "ANA", monto: "" }] }).error, /ANA/);

@@ -20,7 +20,7 @@ const cuando = (f) => formatearFechaHora(f, { day: "2-digit", month: "2-digit", 
 
 const pantallaDe = (l) => ({ fecha: l.fecha, referencia: l.referencia || "", cargo: l.formato === "bcp" ? { tipo: l.cargo?.tipo || "C", numero: l.cargo?.numero || "" } : { tipo: "", numero: "" }, editables: editablesDe(l.filas) });
 
-function ModalAnularLote({ lote, onCancelar, onAnulado }) {
+function ModalAnularLote({ lote, conEgreso, onCancelar, onAnulado }) {
   const [motivo, setMotivo] = useState("");
   const [error, setError] = useState("");
   const [procesando, setProcesando] = useState(false);
@@ -47,7 +47,7 @@ function ModalAnularLote({ lote, onCancelar, onAnulado }) {
       <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm space-y-4">
         <h4 className="font-semibold text-gray-800 text-sm">Anular el lote {lote.codigo}</h4>
         <p className="text-sm text-gray-600">
-          Deja de contar como abonado y se anula su egreso en Tesorería{lote.tipo === "adelanto" ? "; se quita el 0701 de las boletas (la planilla debe estar en borrador)" : ""}.
+          Deja de contar como abonado{conEgreso ? " y se anula su egreso en Tesorería" : ""}{lote.tipo === "adelanto" ? "; se quita el 0701 de las boletas (la planilla debe estar en borrador)" : ""}.
         </p>
         <label className="text-xs text-gray-500 block">Motivo
           <textarea autoFocus value={motivo} maxLength={200} rows={3} onChange={(e) => setMotivo(e.target.value)} className={`${INP} w-full resize-none`} />
@@ -231,7 +231,6 @@ export default function ModalLoteAbono({ loteId, nuevo, puedeEscribir, onClose, 
                 <ul className="list-disc pl-5">{avisosDeApi(lote.avisos).map((a) => <li key={a}>{a}</li>)}</ul>
               </div>
             )}
-            {error && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
             <div className="text-xs text-gray-500 space-y-0.5">
               {lote.confirmadoEn && <p>Confirmado por {lote.confirmadoPor} el {cuando(lote.confirmadoEn)}.</p>}
@@ -251,6 +250,7 @@ export default function ModalLoteAbono({ loteId, nuevo, puedeEscribir, onClose, 
               </div>
             )}
 
+            {error && <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
             {puedeEscribir && (
               <div className="flex flex-wrap items-center justify-end gap-3">
                 {lote.estado === "confirmado" && (
@@ -277,13 +277,13 @@ export default function ModalLoteAbono({ loteId, nuevo, puedeEscribir, onClose, 
 
       {modal === "confirmar" && lote && (
         <ConfirmacionAccion procesando={procesando} textoConfirmar="Confirmar" onCancelar={() => setModal(null)} onConfirmar={confirmar}
-          mensaje={`Se confirma el lote ${lote.codigo}: ${t.filasEnArchivo} en el archivo por ${money(t.enArchivo)}${t.filasFuera > 0 ? ` y ${t.filasFuera} fuera del archivo por ${money(t.fueraDelArchivo)}` : ""}. Se registra el egreso en ${lote.cuentaCargo?.nombre} por lo que va en el archivo${lote.tipo === "adelanto" ? " y se escribe el 0701 en las boletas (las filas en 0 se quitan)" : ""}. Después solo se puede anular. ¿Confirmar?`} />
+          mensaje={`Se confirma el lote ${lote.codigo}: ${t.filasEnArchivo} en el archivo por ${money(t.enArchivo)}${t.filasFuera > 0 ? ` y ${t.filasFuera} fuera del archivo por ${money(t.fueraDelArchivo)}` : ""}. ${t.filasEnArchivo > 0 ? `Se registra el egreso en ${lote.cuentaCargo?.nombre} por ${money(t.enArchivo)}` : "No se registra egreso en Tesorería (todo va fuera del archivo)"}${lote.tipo === "adelanto" ? "; se escribe el 0701 en las boletas (las filas en 0 se quitan)" : ""}. Después solo se puede anular. ¿Confirmar?`} />
       )}
       {modal === "eliminar" && lote && (
         <ConfirmacionAccion procesando={procesando} textoConfirmar="Eliminar" onCancelar={() => setModal(null)} onConfirmar={eliminar}
           mensaje={`Se elimina el borrador ${lote.codigo}. Podrás armar otro. ¿Eliminar?`} />
       )}
-      {modal === "anular" && lote && <ModalAnularLote lote={lote} onCancelar={() => setModal(null)} onAnulado={alAnular} />}
+      {modal === "anular" && lote && <ModalAnularLote lote={lote} conEgreso={t.filasEnArchivo > 0} onCancelar={() => setModal(null)} onAnulado={alAnular} />}
       {dialogo}
     </div>
   );

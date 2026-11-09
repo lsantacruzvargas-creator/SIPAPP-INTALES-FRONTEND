@@ -8,7 +8,7 @@ import ModalLoteAbono from "./ModalLoteAbono";
 const fechaCorta = (f) => String(f || "").split("-").reverse().join("/");
 
 // Sección «Abonos al banco» de Planilla del mes. `lotes` llega de la carga de la planilla; `onCambio` la vuelve a pedir.
-export default function PanelAbonos({ periodo, lotes, puedeEscribir, onCambio }) {
+export default function PanelAbonos({ periodo, lotes, error, puedeEscribir, onCambio }) {
   const [abierto, setAbierto] = useState(null); // { loteId } | { nuevo }
 
   return (
@@ -16,7 +16,7 @@ export default function PanelAbonos({ periodo, lotes, puedeEscribir, onCambio })
       <div className="flex flex-wrap items-center gap-3">
         <h3 className="text-sm font-semibold text-gray-700">Abonos al banco</h3>
         <div className="flex-1" />
-        {puedeEscribir && (
+        {puedeEscribir && !error && (
           <button onClick={() => setAbierto({ nuevo: { periodo, tipos: tiposNuevoLote(periodo) } })}
             className="border border-purple-300 text-purple-700 px-3 py-1.5 rounded-lg text-sm hover:bg-purple-50">Nuevo lote</button>
         )}
@@ -42,7 +42,8 @@ export default function PanelAbonos({ periodo, lotes, puedeEscribir, onCambio })
               </tr>
             ))}
             {lotes && lotes.length === 0 && <tr><td colSpan={7} className="py-4 text-center text-gray-400 text-sm">Aún no hay lotes de abono en este mes</td></tr>}
-            {!lotes && <tr><td colSpan={7} className="py-4 text-center text-gray-400 text-sm">Cargando…</td></tr>}
+            {!lotes && !error && <tr><td colSpan={7} className="py-4 text-center text-gray-400 text-sm">Cargando…</td></tr>}
+            {error && <tr><td colSpan={7} className="py-4 text-center text-red-600 text-sm">{error}</td></tr>}
           </tbody>
         </table>
       </TablaScroll>
@@ -55,16 +56,20 @@ export default function PanelAbonos({ periodo, lotes, puedeEscribir, onCambio })
 export function LotesDeDeposito({ deposito, puedeEscribir }) {
   const [lotes, setLotes] = useState(null);
   const [abierto, setAbierto] = useState(null);
+  const [error, setError] = useState("");
 
   const cargar = useCallback(() => fetchAuth(`/planilla/abonos?periodo=${deposito.periodo}`).then(async (r) => {
     const d = await r.json().catch(() => ({}));
-    setLotes(r.ok ? (d.lotes || []).filter((l) => l.tipo === "cts" && idDe(l.deposito) === deposito._id) : []);
-  }).catch(() => setLotes([])), [deposito._id, deposito.periodo]);
+    if (!r.ok) { setLotes(null); return setError(d.mensaje || "No se pudieron cargar los lotes de abono."); }
+    setError("");
+    setLotes((d.lotes || []).filter((l) => l.tipo === "cts" && idDe(l.deposito) === deposito._id));
+  }).catch(() => { setLotes(null); setError("Error de conexión con el servidor."); }), [deposito._id, deposito.periodo]);
   useEffect(() => { const t = setTimeout(cargar, 0); return () => clearTimeout(t); }, [cargar]);
 
   const vivo = (lotes || []).some((l) => l.estado !== "anulado");
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+      {error && <span className="text-red-600">{error}</span>}
       {(lotes || []).length > 0 && <span>Lotes de abono:</span>}
       {(lotes || []).map((l) => (
         <button key={l._id} onClick={() => setAbierto({ loteId: l._id })} className={`underline ${l.estado === "anulado" ? "text-gray-400" : "text-purple-700"}`}>

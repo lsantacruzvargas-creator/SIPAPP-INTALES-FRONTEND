@@ -80,7 +80,8 @@ export function cuerpoGuardarLote({ fecha, referencia, cargo, editables, esBcp }
     if (e.monto === "" || Number.isNaN(monto) || monto < 0) return { error: `El monto de ${e.nombre} no es válido.` };
     filas.push({ trabajador: e.trabajador, monto });
   }
-  const body = { fecha, referencia: String(referencia || "").trim(), filas };
+  const body = { fecha, filas };
+  if (String(referencia || "").trim()) body.referencia = String(referencia).trim();
   if (esBcp) {
     const numero = String(cargo?.numero || "").replace(/\D/g, "");
     if (!["C", "M"].includes(cargo?.tipo)) return { error: "Elige el tipo de la cuenta de cargo (corriente o maestra)." };
@@ -105,7 +106,8 @@ export function hayCambiosLote({ lote, fecha, referencia, cargo, editables }) {
 
 const cargarExcel = async () => (await import("exceljs")).default;
 
-// El motivo, la referencia y los nombres son texto libre: una celda que Excel podría leer como fórmula se antepone con «'».
+// Solo el texto libre (referencia, nombres, motivo): una celda que Excel podría leer como fórmula se antepone con «'».
+// Documento, cuentas, CCI y códigos de banco se escriben tal cual: el contador los copia a la plantilla del banco.
 export function textoSeguro(valor) {
   const t = valor == null ? "" : String(valor);
   return /^[=+\-@\t\r]/.test(t) ? `'${t}` : t;
@@ -139,11 +141,12 @@ function hoja(wb, nombre, columnas, filas) {
   ws.getRow(1).font = { bold: true };
   const numericas = new Set(columnas.filter(([, , , f]) => f === IMPORTE).map(([, k]) => k));
   const enteras = new Set(["n", "cantidad"]);
+  const textoCelda = Object.fromEntries(columnas.filter(([, , , f]) => f === TEXTO).map(([, k]) => [k, true]));
   for (const f of filas) {
     ws.addRow(Object.fromEntries(columnas.map(([, key]) => {
       const v = f[key];
       if (numericas.has(key) || enteras.has(key)) return [key, v === "" || v == null ? null : Number(v)];
-      return [key, textoSeguro(v)];
+      return [key, textoCelda[key] ? String(v ?? "") : textoSeguro(v)];
     })));
   }
   return ws;

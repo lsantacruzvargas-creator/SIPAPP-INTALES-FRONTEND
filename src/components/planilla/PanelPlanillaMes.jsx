@@ -42,7 +42,8 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
       ]);
       const d = await r.json().catch(() => ({}));
       if (r.ok) setCargado(d); else setAviso(d.mensaje || "No se pudo cargar la planilla.");
-      setAbonos(ra?.ok ? await ra.json().catch(() => null) : null);
+      const da = ra?.ok ? await ra.json().catch(() => null) : null;
+      setAbonos(da || { periodo, error: "No se pudieron cargar los lotes de abono." });
       const lista = rt?.ok ? await rt.json().catch(() => []) : [];
       setTramitesPendientes(Array.isArray(lista) ? tramitesPendientesEnMes(lista, periodo) : 0);
     } catch {
@@ -186,12 +187,12 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
                 <td className="py-1.5 pr-3 text-right tabular-nums">{money(b.totales.aportesTrabajador)}</td>
                 <td className={`py-1.5 pr-3 text-right tabular-nums font-medium ${b.totales.neto < 0 ? "text-red-600" : ""}`}>{money(b.totales.neto)}</td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">
-                  {datosAbonos ? money(abonadoTotal(abonado)) : "—"}
+                  {datosAbonos?.abonado ? money(abonadoTotal(abonado)) : "—"}
                   {abonado?.adelantos > 0 && <span className="block text-xs text-gray-400">con adelanto {money(abonado.adelantos)}</span>}
                 </td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">
-                  {datosAbonos ? money(porAbonar(b, abonado)) : "—"}
-                  {datosAbonos && abonadoMayorQueNeto(b, abonado) && <span className="block text-xs text-red-600">Abonado mayor que el neto</span>}
+                  {datosAbonos?.abonado ? money(porAbonar(b, abonado)) : "—"}
+                  {datosAbonos?.abonado && abonadoMayorQueNeto(b, abonado) && <span className="block text-xs text-red-600">Abonado mayor que el neto</span>}
                 </td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">{money(b.totales.aportesEmpleador)}</td>
                 <td className="py-1.5 text-right whitespace-nowrap">
@@ -224,7 +225,7 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
         </table>
       </TablaScroll>
 
-      {planilla && <PanelAbonos periodo={periodo} lotes={datosAbonos?.lotes ?? null} puedeEscribir={puedeEscribir} onCambio={cargar} />}
+      {planilla && <PanelAbonos periodo={periodo} lotes={datosAbonos?.lotes ?? null} error={datosAbonos?.error} puedeEscribir={puedeEscribir} onCambio={cargar} />}
 
       {boleta && (
         <ModalBoleta key={boleta._id} boleta={boleta} catalogos={catalogos} editable={puedeEscribir && !cerrada} borrador={borrador}

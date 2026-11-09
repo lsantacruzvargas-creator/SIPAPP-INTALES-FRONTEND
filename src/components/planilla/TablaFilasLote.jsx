@@ -28,7 +28,9 @@ export default function TablaFilasLote({ filas, editables, editable, onMonto, on
                 <td className="py-1.5 pr-3 text-xs">
                   {FORMAS[f.forma] || f.forma}
                   {f.error && <span className="block text-red-600">{f.error}</span>}
-                  {fuera && !f.error && <span className="block text-gray-500">Se paga por otro medio</span>}
+                  {fuera && !f.error && (f.forma === "manual"
+                    ? <span className="block text-gray-500">Se paga por otro medio</span>
+                    : <span className="block text-amber-700">Monto 0: no entra en el archivo</span>)}
                 </td>
                 <td className="py-1.5 pr-3 text-xs tabular-nums break-all">{f.forma === "cci" ? f.cci : f.cuenta || f.cci || "—"}{f.tipoCuenta && f.forma === "cuenta" ? ` · ${f.tipoCuenta}` : ""}</td>
                 <td className="py-1.5 pr-3 text-right">
