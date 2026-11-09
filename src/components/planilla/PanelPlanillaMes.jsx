@@ -1,17 +1,19 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
-import { money } from "../../utils/compras";
+import { money, idDe } from "../../utils/compras";
 import { periodoDeMes, textoPeriodo } from "../../utils/bancos";
 import { totalesPlanilla, filasExcelPlanilla, textoPension } from "../../utils/planilla";
 import { tramitesPendientesEnMes } from "../../utils/tregistro";
 import { exportarHoja } from "../../utils/exportarTabla";
 import { generarBoletaPdf, generarBoletasPdf, generarBoletasZip } from "../../utils/boletaPdf";
 import { avisosDescargaBoletas } from "../../utils/boletasMasa";
+import { abonadoTotal, porAbonar, abonadoMayorQueNeto } from "../../utils/abonos";
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
 import ModalBoleta from "./ModalBoleta";
 import ModalReportePlanilla from "./ModalReportePlanilla";
+import PanelAbonos from "./PanelAbonos";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
 
@@ -20,6 +22,7 @@ const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-n
 export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir, refrescarAvisos }) {
   const periodo = periodoDeMes(mes);
   const [cargado, setCargado] = useState(null);
+  const [abonos, setAbonos] = useState(null);
   const [aviso, setAviso] = useState("");
   const [procesando, setProcesando] = useState(false);
   const [confirmando, setConfirmando] = useState(null); // "cerrar" | "reabrir"
@@ -32,12 +35,14 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
   const cargar = useCallback(async () => {
     if (!/^\d{6}$/.test(periodo)) return;
     try {
-      const [r, rt] = await Promise.all([
+      const [r, rt, ra] = await Promise.all([
         fetchAuth(`/planilla/${periodo}`),
         fetchAuth("/planilla/tregistro/trabajadores").catch(() => null),
+        fetchAuth(`/planilla/abonos?periodo=${periodo}`).catch(() => null),
       ]);
       const d = await r.json().catch(() => ({}));
       if (r.ok) setCargado(d); else setAviso(d.mensaje || "No se pudo cargar la planilla.");
+      setAbonos(ra?.ok ? await ra.json().catch(() => null) : null);
       const lista = rt?.ok ? await rt.json().catch(() => []) : [];
       setTramitesPendientes(Array.isArray(lista) ? tramitesPendientesEnMes(lista, periodo) : 0);
     } catch {
@@ -47,6 +52,7 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
   useEffect(() => { const t = setTimeout(cargar, 200); return () => clearTimeout(t); }, [cargar]);
   // Al cambiar de mes no se muestra el anterior mientras llega el nuevo.
   const datos = cargado?.periodo === periodo ? cargado : null;
+  const datosAbonos = abonos?.periodo === periodo ? abonos : null;
 
   const accion = async (ruta, textoError) => {
     setProcesando(true);
@@ -163,11 +169,14 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
             <tr className="text-left text-xs text-gray-500 border-b">
               <th className="py-2 pr-3">Trabajador</th><th className="py-2 pr-3">Pensión</th><th className="py-2 pr-3 text-right">Días</th>
               <th className="py-2 pr-3 text-right">Ingresos</th><th className="py-2 pr-3 text-right">Descuentos</th><th className="py-2 pr-3 text-right">Aportes</th>
-              <th className="py-2 pr-3 text-right">Neto a pagar</th><th className="py-2 pr-3 text-right">EsSalud / EPS</th><th className="py-2" />
+              <th className="py-2 pr-3 text-right">Neto a pagar</th><th className="py-2 pr-3 text-right">Abonado</th><th className="py-2 pr-3 text-right">Por abonar</th>
+              <th className="py-2 pr-3 text-right">EsSalud / EPS</th><th className="py-2" />
             </tr>
           </thead>
           <tbody>
-            {boletas.map((b) => (
+            {boletas.map((b) => {
+              const abonado = datosAbonos?.abonado?.[idDe(b.trabajador)];
+              return (
               <tr key={b._id} className="border-b border-gray-100">
                 <td className="py-1.5 pr-3">{b.datos.nombre}<span className="block text-xs text-gray-400">{b.datos.numDoc} · {b.datos.cargo || "Sin cargo"}</span></td>
                 <td className="py-1.5 pr-3 text-xs">{textoPension(b.datos.pension, catalogos.afps)}</td>
@@ -176,15 +185,24 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
                 <td className="py-1.5 pr-3 text-right tabular-nums">{money(b.totales.descuentos)}</td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">{money(b.totales.aportesTrabajador)}</td>
                 <td className={`py-1.5 pr-3 text-right tabular-nums font-medium ${b.totales.neto < 0 ? "text-red-600" : ""}`}>{money(b.totales.neto)}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">
+                  {datosAbonos ? money(abonadoTotal(abonado)) : "—"}
+                  {abonado?.adelantos > 0 && <span className="block text-xs text-gray-400">con adelanto {money(abonado.adelantos)}</span>}
+                </td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">
+                  {datosAbonos ? money(porAbonar(b, abonado)) : "—"}
+                  {datosAbonos && abonadoMayorQueNeto(b, abonado) && <span className="block text-xs text-red-600">Abonado mayor que el neto</span>}
+                </td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">{money(b.totales.aportesEmpleador)}</td>
                 <td className="py-1.5 text-right whitespace-nowrap">
                   <button onClick={() => setBoleta(b)} className="text-xs text-purple-600 hover:underline mr-3">{puedeEscribir && !cerrada ? "Editar" : "Ver"}</button>
                   <button onClick={() => generarBoletaPdf(b, { empleador: catalogos.empleador, afps: catalogos.afps, borrador })} className="text-xs text-gray-600 hover:underline">PDF</button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {datos && boletas.length === 0 && (
-              <tr><td colSpan={9} className="py-6 text-center text-gray-400 text-sm">
+              <tr><td colSpan={11} className="py-6 text-center text-gray-400 text-sm">
                 {planilla ? "Ningún trabajador tiene vínculo en este mes" : "Aún no se genera la planilla de este mes"}
               </td></tr>
             )}
@@ -197,6 +215,7 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
                 <td className="py-2 pr-3 text-right tabular-nums">{money(totales.descuentos)}</td>
                 <td className="py-2 pr-3 text-right tabular-nums">{money(totales.aportesTrabajador)}</td>
                 <td className="py-2 pr-3 text-right tabular-nums">{money(totales.neto)}</td>
+                <td colSpan={2} />
                 <td className="py-2 pr-3 text-right tabular-nums">{money(totales.aportesEmpleador)}</td>
                 <td />
               </tr>
@@ -204,6 +223,8 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
           )}
         </table>
       </TablaScroll>
+
+      {planilla && <PanelAbonos periodo={periodo} lotes={datosAbonos?.lotes ?? null} puedeEscribir={puedeEscribir} onCambio={cargar} />}
 
       {boleta && (
         <ModalBoleta key={boleta._id} boleta={boleta} catalogos={catalogos} editable={puedeEscribir && !cerrada} borrador={borrador}

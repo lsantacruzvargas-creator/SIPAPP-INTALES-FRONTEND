@@ -6,6 +6,7 @@ import { opcionesDeposito, totalesCts, tieneHoja, estadoTrasGuardar, textoAsient
 import { generarHojaCtsPdf, zipHojasCts } from "../../utils/ctsPdf";
 import TablaScroll from "../TablaScroll";
 import ConfirmacionAccion from "../ConfirmacionAccion";
+import { LotesDeDeposito } from "./PanelAbonos";
 
 const INP = "border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50 disabled:text-gray-700";
 const NUM = `${INP} w-24 text-right tabular-nums`;
@@ -292,6 +293,7 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
             )}
             {actual.provision && <p>Con provisión de CTS: el depósito consume el saldo provisionado.</p>}
           </div>
+          {actual.estado === "confirmado" && <LotesDeDeposito key={actual._id} deposito={actual} puedeEscribir={puedeEscribir} />}
 
           {actual.estado !== "anulado" && (
             <div className="flex flex-wrap items-end gap-3">
