@@ -250,12 +250,12 @@ export default function TablaItemsCotizacion({
                         el valor a mayúsculas acá es lo que realmente lo deja
                         en mayúsculas también en el PDF. */}
                     {editable ? (
-                      <input value={item.descripcion}
+                      <textarea value={item.descripcion} rows={4}
                         onChange={(e) => handleItem(item._key, "descripcion", e.target.value.toUpperCase())}
                         placeholder="Descripción del ítem"
-                        className={`w-full font-semibold text-gray-800 text-xs uppercase tracking-wide border border-transparent rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-300 focus:border-sky-300 ${intentoGuardar && descripcionInvalida(item) ? "border-red-400 ring-1 ring-red-300" : ""}`} />
+                        className={`w-full resize-y font-semibold text-gray-800 text-xs uppercase tracking-wide border border-transparent rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-300 focus:border-sky-300 ${intentoGuardar && descripcionInvalida(item) ? "border-red-400 ring-1 ring-red-300" : ""}`} />
                     ) : (
-                      <p className="font-semibold text-gray-800 text-xs uppercase tracking-wide">{item.descripcion}</p>
+                      <p className="font-semibold text-gray-800 text-xs uppercase tracking-wide whitespace-pre-line">{item.descripcion}</p>
                     )}
                     {item.subItems?.length > 0 && (
                       <ul className="mt-1.5 space-y-1">
