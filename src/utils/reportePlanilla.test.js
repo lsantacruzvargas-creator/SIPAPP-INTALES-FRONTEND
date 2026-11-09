@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
-import { COLUMNAS_REPORTE, filasReportePlanilla, hojaRecord, nombreHoja, libroReporte, libroRecord, tituloMes } from "./reportePlanilla.js";
+import { COLUMNAS_REPORTE, NOMBRES_SUSPENSION, GRUPOS_DIAS, filasReportePlanilla, hojaRecord, nombreHoja, libroReporte, libroRecord, tituloMes } from "./reportePlanilla.js";
 
 const boleta = (numDoc = "45678901", extra = {}) => ({
   datos: { nombre: "PEREZ GOMEZ JUAN", numDoc, tipoDoc: "01", cargo: "Operario", area: "produccion", fechaIngreso: "2024-03-01" },
@@ -95,9 +95,23 @@ test("libro en masa: «Reporte» y una hoja por trabajador", () => {
   const wb = libroReporte([boleta("45678901"), boleta("22222222")], contexto);
   assert.deepEqual(wb.SheetNames, ["Reporte", "45678901", "22222222"]);
   const filas = XLSX.utils.sheet_to_json(wb.Sheets.Reporte, { header: 1, defval: "" });
-  assert.equal(filas.length, 4);
+  assert.deepEqual(filas.slice(0, 5).map((f) => f[0]), ["INTALES SAC", "RUC 20123456789", "Reporte de planilla – Noviembre 2026", "Estado de la planilla: En borrador", ""]);
+  const cabecera = filas[5];
+  assert.equal(cabecera[0], "Documento");
+  assert.equal(filas.length, 9);
   assert.equal(String(filas.at(-1)[0]), "TOTAL");
-  assert.equal(filas.at(-1)[filas[0].indexOf("Neto pagado")], 4995);
+  assert.equal(filas.at(-1)[cabecera.indexOf("Neto a pagar")], 4995);
+  assert.equal(filas.at(-1)[cabecera.indexOf("Total descuentos (incl. aportes)")], 1005);
+  assert.ok(wb.Sheets.Reporte["!cols"].length >= COLUMNAS_REPORTE.length);
+  const cerrado = XLSX.utils.sheet_to_json(libroReporte([boleta()], { ...contexto, cerrada: true }).Sheets.Reporte, { header: 1, defval: "" });
+  assert.equal(cerrado[3][0], "Estado de la planilla: Cerrada");
+});
+
+test("cada tipo de suspensión pertenece a exactamente un grupo de días", () => {
+  for (const tipo of Object.keys(NOMBRES_SUSPENSION)) {
+    const grupos = Object.entries(GRUPOS_DIAS).filter(([, tipos]) => tipos.includes(tipo));
+    assert.equal(grupos.length, 1, tipo);
+  }
 });
 
 test("libro de una persona: solo su hoja", () => {

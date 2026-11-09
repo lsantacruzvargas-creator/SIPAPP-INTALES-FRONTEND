@@ -1,6 +1,5 @@
 import * as XLSX from "xlsx";
 import { round2 } from "./compras.js";
-import { hojaConSubtotales } from "./exportarTabla.js";
 import { AREAS } from "./planilla.js";
 
 export const NOMBRES_SUSPENSION = {
@@ -22,7 +21,7 @@ export const NOMBRES_SUSPENSION = {
   "35": "Enfermedad grave o accidente de familiar directo",
 };
 
-const GRUPOS_DIAS = {
+export const GRUPOS_DIAS = {
   vacaciones: ["23"],
   descansoSubsidios: ["20", "21", "22"],
   licenciasConGoce: ["26", "27", "28", "32", "35"],
@@ -53,8 +52,8 @@ export const COLUMNAS_REPORTE = [
   { clave: "minutosTardanza", titulo: "Tardanza (minutos)", grupo: "Otros", numero: true },
   { clave: "descuentoTardanza", titulo: "Descuento por tardanza (0704, S/)", grupo: "Otros", numero: true, soles: true },
   { clave: "ingresos", titulo: "Total ingresos", grupo: "Pagado", numero: true, soles: true },
-  { clave: "descuentos", titulo: "Total descuentos", grupo: "Pagado", numero: true, soles: true },
-  { clave: "neto", titulo: "Neto pagado", grupo: "Pagado", numero: true, soles: true },
+  { clave: "descuentos", titulo: "Total descuentos (incl. aportes)", grupo: "Pagado", numero: true, soles: true },
+  { clave: "neto", titulo: "Neto a pagar", grupo: "Pagado", numero: true, soles: true },
   { clave: "aportesEmpleador", titulo: "Aportes del empleador", grupo: "Pagado", numero: true, soles: true },
 ];
 
@@ -170,11 +169,23 @@ export function libroRecord(boleta, contexto) {
 }
 
 export function libroReporte(boletas, contexto) {
+  const { empleador = {}, periodo, cerrada } = contexto;
   const { filas, totales } = filasReportePlanilla(boletas);
   const conTitulos = (fila) => Object.fromEntries(COLUMNAS_REPORTE.map((c) => [c.titulo, fila[c.clave]]));
-  const filaTotal = conTitulos({ ...totales, documento: "TOTAL" });
+  const titulos = COLUMNAS_REPORTE.map((c) => c.titulo);
+  const encabezado = [
+    [empleador.razonSocial || ""],
+    [`RUC ${empleador.ruc || ""}`.trim()],
+    [`Reporte de planilla – ${tituloMes(periodo)}`],
+    [`Estado de la planilla: ${cerrada ? "Cerrada" : "En borrador"}`],
+    [],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(encabezado);
+  XLSX.utils.sheet_add_json(ws, filas.map(conTitulos), { origin: encabezado.length, header: titulos });
+  XLSX.utils.sheet_add_json(ws, [conTitulos({ ...totales, documento: "TOTAL" })], { skipHeader: true, origin: -1, header: titulos });
+  ws["!cols"] = COLUMNAS_REPORTE.map((c) => ({ wch: c.clave === "nombre" ? 34 : c.numero ? Math.max(14, Math.min(c.titulo.length, 24)) : 18 }));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, hojaConSubtotales(filas.map(conTitulos), [filaTotal]), "Reporte");
+  XLSX.utils.book_append_sheet(wb, ws, "Reporte");
   const usados = new Set(["Reporte"]);
   for (const b of boletas) XLSX.utils.book_append_sheet(wb, hojaDeRecord(b, contexto), nombreHoja(b.datos?.numDoc, usados));
   return wb;
