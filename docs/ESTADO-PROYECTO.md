@@ -395,9 +395,17 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   20 días (tipo 20, lo paga el empleador) va aparte de los subsidios de EsSalud (21 y 22). Sin probar en navegador; mirar el PDF de 21 columnas
   con datos reales. Pendientes menores: 0704 automático desde los minutos, récord con reingreso en el mes (muestra solo el último vínculo),
   formato de soles en el Excel.
-- **Archivo de abono de sueldos al banco (pendiente)**: banco y formato configurables por cuenta cargo; método de abono por trabajador (mismo banco,
-  interbancario con CCI, efectivo o cheque fuera del archivo). Formatos en investigación (`specs/2026-11-04-abono-sueldos-formatos-investigacion.md`);
-  los que no se confirmen esperan el layout que entregue el banco del cliente (al final).
+- **Abono de la planilla al banco (entregado 2026-11-09, Backend `af994e0..ccfb717`, Frontend `88e489a2..8b1f3135`)**: diseño en
+  `specs/2026-11-09-abono-banco-design.md`. Lotes en Planilla del mes («Abonos al banco»): adelanto de quincena (% del básico en Perfil
+  laboral, casilla «Pago quincenal» en la ficha), gratificación (07/12), saldo del mes (varios para reintegros) y CTS (desde el depósito
+  confirmado). Archivo por banco de la cuenta de cargo: BCP Telecrédito (haberes 113/195, CTS 125/214, checksum sin validar con el banco),
+  Interbank (104/380), Excel genérico para el resto; filas sin cuenta, efectivo o con error van «fuera del archivo». Confirmar un lote: egreso
+  en Tesorería (`pago_adelanto` D 1412, `pago_remuneraciones` D 4111, `pago_cts` D 4151) y, en adelantos, 0701 «Adelanto» en la boleta;
+  el asiento de la planilla abona la 1412 por el 0701. Sin doble pago (adelanto, gratificación y CTS exclusivos) y tope del neto entre
+  tipos. **Antes de usar:** crear la 1412 en el plan de cuentas (no está en el semilla); completar en cada ficha tipo de cuenta y CCI
+  (sin tipo, la fila sale fuera del archivo); revisar boletas en borrador con 0701 digitado (generar lo quita con aviso); probar un
+  lote pequeño en Telecrédito e Interbank. Pendientes: confirmar con el contador el intangible CTS (4 boletas) y «últimos 6 sueldos»
+  (BCP), subtipo `O` del BCP; BBVA/Scotiabank esperan su layout; sin probar en navegador.
 - **Vacaciones (entregado 2026-11-04)**: diseño en `specs/2026-11-04-vacaciones-design.md`. Pestaña «Vacaciones» de Planilla: saldo por trabajador activo
   y periodo (cada aniversario de ingreso; 30 días en régimen general, 15 en pequeña y microempresa), con goce imputado desde los días de vacaciones de las
   boletas, venta con `asistencia.diasVendidos` (entero 0–15, campo «Días de vacaciones vendidos» de la boleta; se paga como compensación 0117), ajustes
