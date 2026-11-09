@@ -56,6 +56,7 @@ export default function PanelExportarConcar({ puedeEscribir }) {
       cargar();
       // La exportación ya quedó registrada: si falla solo la descarga, se baja desde la lista.
       await descargar(d).catch(() => setAviso(`La exportación ${d.codigo} se registró, pero no se pudo armar el Excel: descárgala desde la lista.`));
+      if (d.avisos?.length) setAviso((a) => [a, ...d.avisos].filter(Boolean).join(" "));
     } catch {
       setAviso("Error de conexión con el servidor.");
     } finally {
