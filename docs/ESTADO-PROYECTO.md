@@ -406,6 +406,16 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   (sin tipo, la fila sale fuera del archivo); revisar boletas en borrador con 0701 digitado (generar lo quita con aviso); probar un
   lote pequeño en Telecrédito e Interbank. Pendientes: confirmar con el contador el intangible CTS (4 boletas) y «últimos 6 sueldos»
   (BCP), subtipo `O` del BCP; BBVA/Scotiabank esperan su layout; sin probar en navegador.
+- **Anexo del trabajador en los asientos de planilla para CONCAR (entregado 2026-11-09, Backend `4bc2950..ed38eb9`, Frontend
+  `f775180c..92758ae5`)**: diseño en `specs/2026-11-09-concar-anexo-trabajador-design.md`. Las deudas con cada trabajador salen una línea por
+  trabajador con su DNI (rol `trabajador`, anexo en la columna L de CONCAR, tipo de documento en Tabla 2: 01→1, 04→4, 07→7, otros→0): en el
+  asiento de planilla la 4111, la 1412 (0701) y las 4151/4114/4115 (provisión, consumo y reversión); en el depósito de CTS la 4151; en el
+  egreso de un lote de abono el cargo por fila del archivo (el banco, una línea). Subdiario 35 sin cambio, sin documento de referencia. Al
+  exportar, aviso de los pagos de planilla registrados a mano sin lote (quedan sin anexo). El PLE 1.2 no toma el tercero de las líneas
+  `trabajador`. **Al desplegar:** regenerar un mes marca «documento cambiado» los asientos de planilla, CTS y lotes ya contabilizados; si no
+  se exportaron, anularlos y regenerar; si ya están en CONCAR, darlos por resueltos (mientras tanto la exportación del mes da 400). Los DNI
+  deben existir como anexos en CONCAR. Pendientes: confirmar con el contador si lleva documento de referencia en esas cuentas y si hay tope
+  de líneas por voucher (una planilla de 80 trabajadores pasa de ~15 a ~250 líneas).
 - **Vacaciones (entregado 2026-11-04)**: diseño en `specs/2026-11-04-vacaciones-design.md`. Pestaña «Vacaciones» de Planilla: saldo por trabajador activo
   y periodo (cada aniversario de ingreso; 30 días en régimen general, 15 en pequeña y microempresa), con goce imputado desde los días de vacaciones de las
   boletas, venta con `asistencia.diasVendidos` (entero 0–15, campo «Días de vacaciones vendidos» de la boleta; se paga como compensación 0117), ajustes
