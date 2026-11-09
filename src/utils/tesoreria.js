@@ -132,6 +132,7 @@ export const CONCEPTOS_MANUALES = [
   { valor: "pago_essalud", label: "Planilla: EsSalud", soloEgreso: true }, { valor: "pago_onp", label: "Planilla: ONP", soloEgreso: true },
   { valor: "pago_quinta", label: "Planilla: renta de 5.ª", soloEgreso: true },
   { valor: "pago_cts", label: "Planilla: CTS", soloEgreso: true },
+  { valor: "pago_adelanto", label: "Planilla: adelanto de remuneraciones", soloEgreso: true },
 ];
 export const conceptosManualesDe = (tipo) => CONCEPTOS_MANUALES.filter((c) => !c.soloEgreso || tipo === "egreso");
 export const etiquetaConceptoManual = (valor) =>
