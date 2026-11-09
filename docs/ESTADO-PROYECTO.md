@@ -387,8 +387,13 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   vacaciones ya tienen saldo, venta y ajustes (ver «Vacaciones»); CTS, truncas, indemnización vacacional, liquidación de cese y provisiones no existen. Reglas verificadas
   y respuestas del contador en `docs/superpowers/specs/2026-11-04-beneficios-sociales-reglas.md`; falta el Excel del contador (liquidación y CTS) como
   formato y caso de prueba.
-- **Reporte mensual de la planilla pagada (pendiente, pedido del usuario 2026-11-04)**: récord del mes por trabajador con lo pagado y la asistencia
-  (horas extras, faltas, vacaciones, tardanzas, licencias, etc.). Hoy las tardanzas solo existen como descuento 0704 en soles, sin minutos.
+- **Reporte mensual de la planilla (entregado 2026-11-09, Backend `ba12dba`, Frontend `9636df11..36b5264d`)**: diseño en
+  `specs/2026-11-09-reporte-mensual-planilla-design.md`. Botón «Reporte del mes» en Planilla del mes: tabla por trabajador (días por grupo,
+  horas extras, días vendidos, tardanza en minutos y 0704, ingresos, descuentos con aportes, neto, aportes del empleador) con totales; Excel en
+  masa (hoja «Reporte» con encabezado y estado + una hoja por trabajador) y por persona (`record-<doc>-AAAAMM.xlsx`); PDF apaisado con marca
+  BORRADOR. Campo nuevo `asistencia.minutosTardanza` (0–14 400, informativo: el 0704 se sigue digitando). Sin probar en navegador; mirar el PDF
+  de 20 columnas con datos reales. Pendientes menores: 0704 automático desde los minutos, separar el tipo 20 (lo paga el empleador) de los
+  subsidios 21/22 si el contador lo pide, récord con reingreso en el mes (muestra solo el último vínculo), formato de soles en el Excel.
 - **Archivo de abono de sueldos al banco (pendiente)**: banco y formato configurables por cuenta cargo; método de abono por trabajador (mismo banco,
   interbancario con CCI, efectivo o cheque fuera del archivo). Formatos en investigación (`specs/2026-11-04-abono-sueldos-formatos-investigacion.md`);
   los que no se confirmen esperan el layout que entregue el banco del cliente (al final).
