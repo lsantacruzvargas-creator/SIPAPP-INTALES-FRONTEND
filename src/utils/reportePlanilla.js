@@ -135,7 +135,7 @@ export function hojaRecord(boleta, { empleador = {}, periodo, cerrada }) {
   for (const c of boleta.conceptos || []) filas.push([`${c.codigo} ${c.nombre} (${TIPOS[c.tipo] || c.tipo})`, round2(num(c.monto))]);
   filas.push(
     ["Total ingresos", round2(num(t.ingresos))],
-    ["Total descuentos", round2(num(t.descuentos))],
+    ["Descuentos (sin aportes)", round2(num(t.descuentos))],
     ["Aportes del trabajador", round2(num(t.aportesTrabajador))],
     ["Neto a pagar", round2(num(t.neto))],
     ["Aportes del empleador", round2(num(t.aportesEmpleador))],

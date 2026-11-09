@@ -11,6 +11,7 @@ import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
 import ModalBoleta from "./ModalBoleta";
+import ModalReportePlanilla from "./ModalReportePlanilla";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
 
@@ -23,6 +24,7 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
   const [procesando, setProcesando] = useState(false);
   const [confirmando, setConfirmando] = useState(null); // "cerrar" | "reabrir"
   const [boleta, setBoleta] = useState(null);
+  const [verReporte, setVerReporte] = useState(false);
   const [tramitesPendientes, setTramitesPendientes] = useState(0);
   const [generando, setGenerando] = useState(null); // "zip" | "pdf" mientras se arman las boletas
   const [resultadoBoletas, setResultadoBoletas] = useState({ clave: "", avisos: [], error: "" });
@@ -106,6 +108,7 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
         )}
         <div className="flex-1" />
         {boletas.length > 0 && <button onClick={exportar} className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50">Exportar Excel</button>}
+        {boletas.length > 0 && <button onClick={() => setVerReporte(true)} className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50">Reporte del mes</button>}
         {boletas.length > 0 && (
           <>
             <button onClick={() => descargarBoletas("zip")} disabled={!!generando} className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">
@@ -205,6 +208,9 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
       {boleta && (
         <ModalBoleta key={boleta._id} boleta={boleta} catalogos={catalogos} editable={puedeEscribir && !cerrada} borrador={borrador}
           onClose={() => setBoleta(null)} onCambio={cargar} />
+      )}
+      {verReporte && (
+        <ModalReportePlanilla boletas={boletas} contexto={{ empleador: catalogos.empleador, periodo, cerrada }} onClose={() => setVerReporte(false)} />
       )}
       {confirmando && (
         <ConfirmacionAccion procesando={procesando} onCancelar={() => setConfirmando(null)}

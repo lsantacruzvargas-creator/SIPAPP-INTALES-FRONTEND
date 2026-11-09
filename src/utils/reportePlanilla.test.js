@@ -57,6 +57,8 @@ test("récord: lista cada suspensión con su nombre, cada concepto y el neto", (
   assert.ok(filas.some((f) => f[0] === "21 Incapacidad temporal subsidiada por EsSalud" && f[1] === 3));
   assert.ok(filas.some((f) => String(f[0]).startsWith("0704") && f[1] === 12.5));
   assert.deepEqual(filas.find((f) => f[0] === "Neto a pagar"), ["Neto a pagar", 2497.5]);
+  assert.deepEqual(filas.find((f) => f[0] === "Descuentos (sin aportes)"), ["Descuentos (sin aportes)", 112.5]);
+  assert.ok(!filas.some((f) => f[0] === "Total descuentos"));
   assert.ok(filas.some((f) => f[0] === "Récord de planilla – Noviembre 2026"));
   assert.deepEqual(filas.find((f) => f[0] === "RUC"), ["RUC", "20123456789"]);
   assert.deepEqual(filas.find((f) => f[0] === "Estado de la planilla"), ["Estado de la planilla", "Borrador"]);

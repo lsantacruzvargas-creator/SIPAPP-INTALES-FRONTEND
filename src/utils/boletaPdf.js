@@ -87,7 +87,7 @@ function dibujarMarca(doc) {
   doc.setFontSize(80);
   doc.setTextColor(120);
   const medio = doc.getTextWidth("BORRADOR") / 2 * Math.SQRT1_2;
-  doc.text("BORRADOR", 105 - medio, 148 + medio, { angle: 45 });
+  doc.text("BORRADOR", doc.internal.pageSize.getWidth() / 2 - medio, doc.internal.pageSize.getHeight() / 2 + medio, { angle: 45 });
   doc.restoreGraphicsState();
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);

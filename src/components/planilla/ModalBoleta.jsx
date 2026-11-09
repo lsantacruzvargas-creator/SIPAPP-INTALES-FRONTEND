@@ -16,6 +16,7 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
     suspensiones: (inicial.asistencia?.suspensiones || []).map((s) => ({ tipo: s.tipo, dias: String(s.dias) })),
     horasExtras25: String(inicial.asistencia?.horasExtras25 || ""), horasExtras35: String(inicial.asistencia?.horasExtras35 || ""),
     diasVendidos: String(inicial.asistencia?.diasVendidos || ""),
+    minutosTardanza: String(inicial.asistencia?.minutosTardanza || ""),
     adicionales: (inicial.adicionales || []).map((a) => ({ codigo: a.codigo, monto: String(a.monto) })),
   }));
   const [guardando, setGuardando] = useState(false);
@@ -36,7 +37,7 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
     setError("");
     try {
       const r = await fetchAuth(`/planilla/boletas/${boleta._id}`, { method: "PUT", body: JSON.stringify({
-        asistencia: { suspensiones: form.suspensiones.map((s) => ({ tipo: s.tipo, dias: Number(s.dias) })), horasExtras25: Number(form.horasExtras25) || 0, horasExtras35: Number(form.horasExtras35) || 0, diasVendidos: Number(form.diasVendidos) || 0 },
+        asistencia: { suspensiones: form.suspensiones.map((s) => ({ tipo: s.tipo, dias: Number(s.dias) })), horasExtras25: Number(form.horasExtras25) || 0, horasExtras35: Number(form.horasExtras35) || 0, diasVendidos: Number(form.diasVendidos) || 0, minutosTardanza: Number(form.minutosTardanza) || 0 },
         adicionales: form.adicionales.map((a) => ({ codigo: a.codigo, monto: Number(a.monto) })),
       }) });
       const d = await r.json().catch(() => ({}));
@@ -95,8 +96,11 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
               <label className="text-xs text-gray-500">Días de vacaciones vendidos
                 <input value={form.diasVendidos} disabled={!editable} onChange={(e) => cambiar("diasVendidos", e.target.value.replace(/\D/g, ""))} inputMode="numeric" className={`${INP} block w-28 text-right`} />
               </label>
+              <label className="text-xs text-gray-500">Tardanza (minutos)
+                <input value={form.minutosTardanza} disabled={!editable} onChange={(e) => cambiar("minutosTardanza", e.target.value.replace(/\D/g, ""))} inputMode="numeric" className={`${INP} block w-28 text-right`} />
+              </label>
             </div>
-            <p className="text-[11px] text-gray-400">Las dos primeras horas extras del día van al 25 % y las siguientes al 35 %. Los días vendidos se pagan como compensación vacacional (0117).</p>
+            <p className="text-[11px] text-gray-400">Las dos primeras horas extras del día van al 25 % y las siguientes al 35 %. Los días vendidos se pagan como compensación vacacional (0117). Los minutos de tardanza solo se informan en el reporte del mes: el descuento se registra como concepto 0704.</p>
 
             <h4 className="text-xs font-bold text-gray-600 uppercase pt-2">Otros conceptos del mes</h4>
             {form.adicionales.map((a, i) => (
