@@ -20,6 +20,8 @@ const GASTO = [
 
 const TRATAMIENTO_ADELANTO = "Tratamiento contable del adelanto: al pagarlo se registra D 1412 Adelanto de remuneraciones / H banco. Al cerrar la planilla del mes, la boleta lo descuenta como 0701 y su asiento abona la 1412 por lo adelantado; la 4111 queda solo con lo que falta pagar.";
 
+const AVISO_141 = "Si creas la 1412 bajo una 141 que hoy es una cuenta hoja, la 141 pasa a ser una agrupación y ya no puede usarse como cuenta de descuentos: usa otra (por ejemplo la 1411) para los descuentos.";
+
 const CUENTAS = [
   ["Por pagar", [
     ["porPagar", "Remuneraciones por pagar (ej. 4111)", true],
@@ -28,7 +30,7 @@ const CUENTAS = [
     ["onp", "ONP (ej. 4032)", true],
     ["afp", "AFP (ej. 407)", true],
     ["epsPorPagar", "EPS (solo si hay trabajadores con EPS)"],
-    ["descuentos", "Adelantos y otros descuentos al trabajador (ej. 141)"],
+    ["descuentos", "Otros descuentos al trabajador: préstamos, etc. (ej. 1411)"],
     ["senatiPorPagar", "SENATI por pagar (ej. 4033)"],
     ["ctsPorPagar", "CTS por pagar (ej. 4151)"],
     ["gratificacionesPorPagar", "Gratificaciones por pagar (ej. 4114)"],
@@ -36,7 +38,7 @@ const CUENTAS = [
   ]],
   ["Adelanto de remuneraciones", [
     ["adelantoRemuneraciones", "Adelanto de remuneraciones (ej. 1412)", true],
-  ], TRATAMIENTO_ADELANTO],
+  ], TRATAMIENTO_ADELANTO, AVISO_141],
 ];
 
 // Cuentas del asiento de la planilla (PCGE 2019). El régimen laboral se cambia en Planilla → Perfil laboral.
@@ -100,7 +102,7 @@ export default function PanelCuentasPlanilla({ cuentas, catalogos, puedeEscribir
           </div>
         </section>
       )}
-      {form && CUENTAS.map(([titulo, campos, nota]) => (
+      {form && CUENTAS.map(([titulo, campos, nota, aviso]) => (
         <section key={titulo} className="space-y-2">
           <h3 className="text-sm font-semibold text-gray-700">{titulo}</h3>
           <div className="grid md:grid-cols-2 gap-3 max-w-3xl">
@@ -112,11 +114,12 @@ export default function PanelCuentasPlanilla({ cuentas, catalogos, puedeEscribir
             ))}
           </div>
           {nota && <p className="text-[11px] text-gray-500 max-w-3xl">{nota}</p>}
+          {aviso && <p className="text-[11px] text-amber-700 max-w-3xl">{aviso}</p>}
         </section>
       ))}
       <p className="text-[11px] text-gray-400">
         El asiento sale al cerrar la planilla y generar los asientos del mes en Contabilidad → Automáticos, y se puede completar a mano
-        (las provisiones mensuales de CTS, gratificación y vacaciones salen solas si el registro de beneficios del Perfil laboral es «Provisión mensual»). Los pagos se registran en Tesorería como egreso manual con el concepto «Planilla» (remuneraciones, AFP, EsSalud, ONP, renta de 5.ª o CTS).
+        (las provisiones mensuales de CTS, gratificación y vacaciones salen solas si el registro de beneficios del Perfil laboral es «Provisión mensual»). Los lotes de abono al banco crean su egreso en Tesorería al confirmarse; los demás pagos (AFP, EsSalud, ONP, renta de 5.ª, o remuneraciones y CTS fuera de un lote) se registran en Tesorería como egreso manual con el concepto «Planilla».
       </p>
       {error && <p className="text-sm text-red-600">{error}</p>}
       {ok && <p className="text-sm text-green-700">Cuentas guardadas.</p>}

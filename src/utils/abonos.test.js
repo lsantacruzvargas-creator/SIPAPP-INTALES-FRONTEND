@@ -154,7 +154,8 @@ test("cuerpoNuevoLote: BCP exige tipo y 13 dígitos de la cuenta de cargo; CTS m
 
 test("cuerpoGuardarLote valida los montos y manda cargo solo en BCP", () => {
   const editables = [{ trabajador: "t1", nombre: "ANA", monto: "100.5" }, { trabajador: "t2", nombre: "LUIS", monto: "0" }];
-  assert.equal("referencia" in cuerpoGuardarLote({ fecha: "2026-07-15", referencia: "  ", editables }).body, false);
+  assert.equal(cuerpoGuardarLote({ fecha: "2026-07-15", referencia: "  ", editables }).body.referencia, "");
+  assert.equal(cuerpoGuardarLote({ fecha: "2026-07-15", editables }).body.referencia, "");
   assert.deepEqual(cuerpoGuardarLote({ fecha: "2026-07-15", referencia: "x", editables, esBcp: false }).body,
     { fecha: "2026-07-15", referencia: "x", filas: [{ trabajador: "t1", monto: 100.5 }, { trabajador: "t2", monto: 0 }] });
   assert.match(cuerpoGuardarLote({ fecha: "2026-07-15", editables: [{ trabajador: "t1", nombre: "ANA", monto: "" }] }).error, /ANA/);

@@ -113,7 +113,8 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
                 {editable && <button onClick={() => quitar("adicionales", i)} className="text-xs text-red-600 hover:underline">Quitar</button>}
               </div>
             ))}
-            {editable && <button onClick={() => cambiar("adicionales", [...form.adicionales, { codigo: "", monto: "" }])} className="text-xs text-purple-600 hover:underline">+ Ingreso o descuento (comisión, gratificación, adelanto…)</button>}
+            {editable && <button onClick={() => cambiar("adicionales", [...form.adicionales, { codigo: "", monto: "" }])} className="text-xs text-purple-600 hover:underline">+ Ingreso o descuento (comisión, bono, descuento…)</button>}
+            <p className="text-[11px] text-gray-400">El adelanto (0701) no se digita aquí: sale de los lotes de adelanto confirmados en Abonos al banco.</p>
           </section>
 
           <section className="space-y-3">

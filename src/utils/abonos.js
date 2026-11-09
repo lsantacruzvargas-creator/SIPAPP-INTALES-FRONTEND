@@ -80,8 +80,7 @@ export function cuerpoGuardarLote({ fecha, referencia, cargo, editables, esBcp }
     if (e.monto === "" || Number.isNaN(monto) || monto < 0) return { error: `El monto de ${e.nombre} no es válido.` };
     filas.push({ trabajador: e.trabajador, monto });
   }
-  const body = { fecha, filas };
-  if (String(referencia || "").trim()) body.referencia = String(referencia).trim();
+  const body = { fecha, referencia: String(referencia || "").trim(), filas };
   if (esBcp) {
     const numero = String(cargo?.numero || "").replace(/\D/g, "");
     if (!["C", "M"].includes(cargo?.tipo)) return { error: "Elige el tipo de la cuenta de cargo (corriente o maestra)." };
