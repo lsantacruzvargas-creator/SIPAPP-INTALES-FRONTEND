@@ -18,6 +18,8 @@ const GASTO = [
   ["indemnizaciones", "Indemnizaciones", false, "623 / 62311; sin respaldo: obligatoria si una boleta la usa"],
 ];
 
+const TRATAMIENTO_ADELANTO = "Tratamiento contable del adelanto: al pagarlo se registra D 1412 Adelanto de remuneraciones / H banco. Al cerrar la planilla del mes, la boleta lo descuenta como 0701 y su asiento abona la 1412 por lo adelantado; la 4111 queda solo con lo que falta pagar.";
+
 const CUENTAS = [
   ["Por pagar", [
     ["porPagar", "Remuneraciones por pagar (ej. 4111)", true],
@@ -32,6 +34,9 @@ const CUENTAS = [
     ["gratificacionesPorPagar", "Gratificaciones por pagar (ej. 4114)"],
     ["vacacionesPorPagar", "Vacaciones por pagar (ej. 4115)"],
   ]],
+  ["Adelanto de remuneraciones", [
+    ["adelantoRemuneraciones", "Adelanto de remuneraciones (ej. 1412)", true],
+  ], TRATAMIENTO_ADELANTO],
 ];
 
 // Cuentas del asiento de la planilla (PCGE 2019). El régimen laboral se cambia en Planilla → Perfil laboral.
@@ -95,7 +100,7 @@ export default function PanelCuentasPlanilla({ cuentas, catalogos, puedeEscribir
           </div>
         </section>
       )}
-      {form && CUENTAS.map(([titulo, campos]) => (
+      {form && CUENTAS.map(([titulo, campos, nota]) => (
         <section key={titulo} className="space-y-2">
           <h3 className="text-sm font-semibold text-gray-700">{titulo}</h3>
           <div className="grid md:grid-cols-2 gap-3 max-w-3xl">
@@ -106,6 +111,7 @@ export default function PanelCuentasPlanilla({ cuentas, catalogos, puedeEscribir
               </label>
             ))}
           </div>
+          {nota && <p className="text-[11px] text-gray-500 max-w-3xl">{nota}</p>}
         </section>
       ))}
       <p className="text-[11px] text-gray-400">

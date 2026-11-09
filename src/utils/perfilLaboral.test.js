@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PERFIL_VACIO, precargaAportes, aplicarPrecarga, cambiaSctrRegistrado, limiteFechaSctr, errorFechaSctr, mostrarCambioPerfil,
+import { PERFIL_VACIO, errorPorcentajeQuincena, precargaAportes, aplicarPrecarga, cambiaSctrRegistrado, limiteFechaSctr, errorFechaSctr, mostrarCambioPerfil,
   beneficiosDeFormulario, cuerpoBeneficios, errorBeneficios, textoHistorialBeneficios, avisoBeneficios, conRegistroBeneficios } from "./perfilLaboral.js";
 
 test("PERFIL_VACIO: misma forma que el del servidor, con textos vacíos en los inputs", () => {
-  assert.deepEqual(Object.keys(PERFIL_VACIO), ["remype", "ciiu", "actividadIndustrial", "senati", "sctr", "vidaLey", "beneficios", "cambios"]);
+  assert.deepEqual(Object.keys(PERFIL_VACIO), ["remype", "ciiu", "actividadIndustrial", "porcentajeQuincena", "senati", "sctr", "vidaLey", "beneficios", "cambios"]);
   assert.equal(PERFIL_VACIO.sctr.salud.entidad, "essalud");
   assert.equal(PERFIL_VACIO.sctr.pension.entidad, "onp");
   assert.equal(PERFIL_VACIO.sctr.salud.tasa, "");
@@ -147,4 +147,10 @@ test("beneficios sociales: cambiar el registro vacía «Rige desde» y exige ele
   const vuelta = conRegistroBeneficios(gasto, "provision", base);
   assert.equal(vuelta.desde, "2026-06");
   assert.equal(cuerpoBeneficios(vuelta, base), undefined);
+});
+
+test("PERFIL_VACIO: el adelanto de quincena nace en 50 % y se acepta de 0 a 100", () => {
+  assert.equal(PERFIL_VACIO.porcentajeQuincena, 50);
+  for (const v of [0, "0", 50, "37.5", 100]) assert.equal(errorPorcentajeQuincena(v), "");
+  for (const v of ["", " ", null, "abc", -1, 101]) assert.notEqual(errorPorcentajeQuincena(v), "");
 });

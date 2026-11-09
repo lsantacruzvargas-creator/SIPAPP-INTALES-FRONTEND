@@ -3,6 +3,7 @@ import { fetchAuth } from "../../utils/fetchAuth";
 import { requiereEstudios, requiereCuenta, paisEmisorBloqueado, mensajeCorreo } from "../../utils/tregistro";
 
 const INP = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
+const TIPOS_CUENTA = [["ahorros", "Ahorros"], ["corriente", "Corriente"], ["maestra", "Maestra"]];
 const GRID = "grid grid-cols-2 md:grid-cols-4 gap-3";
 
 const lista = async (ruta) => {
@@ -232,6 +233,13 @@ export default function FichaTRegistro({ form, setForm, catalogos, bloqueados })
           <div className={GRID}>
             <Lista etiqueta="Entidad financiera" valor={t.cuenta.entidad} onChange={setIn("cuenta", "entidad")} opciones={cat.entidadesFinancieras} ancho="col-span-2" />
             <Texto etiqueta="Número de cuenta" valor={t.cuenta.numero} onChange={setIn("cuenta", "numero", true)} max={20} inputMode="numeric" ancho="col-span-2" />
+            <label className="text-xs text-gray-500 col-span-2">Tipo de cuenta
+              <select value={t.cuenta.tipo} onChange={setIn("cuenta", "tipo")} className={INP}>
+                <option value="">Sin elegir</option>
+                {TIPOS_CUENTA.map(([v, n]) => <option key={v} value={v}>{n}</option>)}
+              </select>
+            </label>
+            <Texto etiqueta="CCI (20 dígitos)" valor={t.cuenta.cci} onChange={setIn("cuenta", "cci", true)} max={20} inputMode="numeric" ancho="col-span-2" />
           </div>
         </Seccion>
       )}

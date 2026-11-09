@@ -15,7 +15,7 @@ export const TREGISTRO_VACIO = (config = {}) => ({
   discapacidad: false, sindicalizado: false, jornadaMaxima: config.jornadaMaxima === true, horarioNocturno: false, regimenAlternativo: false,
   situacionEspecial: "0", eps: "",
   estudios: { completaEnPeru: true, institucion: "", carrera: "", anioEgreso: "" },
-  cuenta: { entidad: "", numero: "" },
+  cuenta: { entidad: "", numero: "", tipo: "", cci: "" },
   establecimiento: "",
   baja: { motivo: "" },
 });

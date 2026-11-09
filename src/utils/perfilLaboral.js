@@ -4,6 +4,7 @@ export const PERFIL_VACIO = {
   remype: { inscrita: false, desde: "" },
   ciiu: { codigo: "", descripcion: "" },
   actividadIndustrial: false,
+  porcentajeQuincena: 50,
   senati: { anio: null, aporta: false, origen: "manual", evaluaciones: [] },
   sctr: {
     actividadRiesgo: false,
@@ -13,6 +14,11 @@ export const PERFIL_VACIO = {
   vidaLey: { aseguradora: "", poliza: "", vigenciaDesde: "", vigenciaHasta: "", calculo: "tasa", valor: "" },
   beneficios: { registro: "gasto", desde: "", historial: [] },
   cambios: [],
+};
+
+export const errorPorcentajeQuincena = (v) => {
+  const n = Number(v);
+  return v == null || String(v).trim() === "" || !Number.isFinite(n) || n < 0 || n > 100 ? "El adelanto de quincena debe ser un porcentaje entre 0 y 100." : "";
 };
 
 // El aviso del cambio del perfil se esconde con «Entendido» hasta que el servidor informe uno más reciente.

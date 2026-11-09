@@ -5,7 +5,7 @@ import { nombreTrabajador, textoPension, REGIMENES_SALUD, AREAS, TRABAJADOR_VACI
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
-import FichaTRegistro from "./FichaTRegistro";
+import FichaTRegistro, { Lista } from "./FichaTRegistro";
 import ModalLiquidacion from "./ModalLiquidacion";
 import { TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear, puedeNuevoVinculo, lineaEdicion } from "../../utils/tregistro";
 import { aplicarPrecarga, cambiaSctrRegistrado, errorFechaSctr, limiteFechaSctr } from "../../utils/perfilLaboral";
@@ -96,6 +96,9 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const setPension = (k) => (e) => setForm((f) => ({ ...f, pension: { ...f.pension, [k]: e.target.value } }));
   const setCuentaCts = (k) => (e) => setForm((f) => ({ ...f, cuentaCts: { ...f.cuentaCts, [k]: e.target.value } }));
+  const setBancoCts = (e) => setForm((f) => ({
+    ...f, cuentaCts: { ...f.cuentaCts, codigoEntidad: e.target.value, entidad: catalogos.tregistro.entidadesFinancieras.find((b) => b.codigo === e.target.value)?.nombre || "" },
+  }));
   const setPlanEps = (k) => (e) => setForm((f) => ({ ...f, planEps: { ...f.planEps, [k]: e.target.value } }));
   const fila = (campo, i, parche) => setForm((f) => ({ ...f, [campo]: f[campo].map((x, j) => (j === i ? { ...x, ...parche } : x)) }));
   const quitar = (campo, i) => setForm((f) => ({ ...f, [campo]: f[campo].filter((_, j) => j !== i) }));
@@ -215,12 +218,16 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
                 {Object.entries(AREAS).map(([k, n]) => <option key={k} value={k}>{n}</option>)}
               </select>
             </label>
-            <label className="text-xs text-gray-500">Entidad de la cuenta CTS
-              <input value={form.cuentaCts.entidad} onChange={setCuentaCts("entidad")} maxLength={60} placeholder="Banco o caja" className={INP} />
-            </label>
+            <Lista etiqueta="Banco de la cuenta CTS" valor={form.cuentaCts.codigoEntidad} onChange={setBancoCts} opciones={catalogos.tregistro.entidadesFinancieras} vacio="Sin elegir" />
             <label className="text-xs text-gray-500">Número de cuenta CTS
               <input value={form.cuentaCts.numero} onChange={setCuentaCts("numero")} maxLength={30} inputMode="numeric" className={INP} />
             </label>
+            <label className="text-xs text-gray-500">CCI de la cuenta CTS
+              <input value={form.cuentaCts.cci} onChange={(e) => setForm((f) => ({ ...f, cuentaCts: { ...f.cuentaCts, cci: e.target.value.replace(/\D/g, "") } }))} maxLength={20} inputMode="numeric" className={INP} />
+            </label>
+            {form.cuentaCts.entidad && !form.cuentaCts.codigoEntidad && (
+              <p className="col-span-2 md:col-span-3 text-[11px] text-amber-700 self-end">Entidad guardada como texto: «{form.cuentaCts.entidad}». Elige el banco del catálogo para poder abonar la CTS por lote.</p>
+            )}
             <label className="text-xs text-gray-500">Fecha de ingreso
               <input type="date" value={form.fechaIngreso} onChange={set("fechaIngreso")} readOnly={sinIngreso} className={INP} />
             </label>
@@ -232,6 +239,9 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
             </label>
             <label className="text-sm text-gray-700 flex items-center gap-2 mt-5">
               <input type="checkbox" checked={form.asignacionFamiliar} onChange={set("asignacionFamiliar")} />Asignación familiar
+            </label>
+            <label className="text-sm text-gray-700 flex items-center gap-2 mt-5">
+              <input type="checkbox" checked={form.pagoQuincenal} onChange={set("pagoQuincenal")} />Pago quincenal
             </label>
           </div>
 

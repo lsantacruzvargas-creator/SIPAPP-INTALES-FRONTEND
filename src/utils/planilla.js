@@ -37,7 +37,7 @@ export function filasExcelPlanilla(boletas, afps = {}) {
 
 export const TRABAJADOR_VACIO = {
   tipoDoc: "01", numDoc: "", apellidoPaterno: "", apellidoMaterno: "", nombres: "", cargo: "", centroCosto: "", area: "", fechaIngreso: "", fechaCese: "",
-  remuneracionBasica: "", cuentaCts: { entidad: "", numero: "" }, asignacionFamiliar: false, conceptosFijos: [], pension: { regimen: "onp", afp: "", comision: "flujo", cuspp: "" },
+  remuneracionBasica: "", cuentaCts: { entidad: "", numero: "", codigoEntidad: "", cci: "" }, pagoQuincenal: false, asignacionFamiliar: false, conceptosFijos: [], pension: { regimen: "onp", afp: "", comision: "flujo", cuspp: "" },
   salud: "essalud", planEps: { nombre: "", primaTotal: "", aporteEmpresa: "", aporteTrabajador: "" }, quintaAnterior: [], tregistro: TREGISTRO_VACIO(), desbloqueo: false,
 };
 const MONTOS_EPS = ["primaTotal", "aporteEmpresa", "aporteTrabajador"];
@@ -48,7 +48,7 @@ const mezclarTregistro = (base, origen) => Object.fromEntries(Object.entries(bas
 )));
 
 export const formularioDeTrabajador = (t) => ({
-  ...TRABAJADOR_VACIO, ...t, tregistro: { ...mezclarTregistro(TREGISTRO_VACIO(), t.tregistro), nacionalidad: t.tregistro?.nacionalidad ?? "" }, desbloqueo: false, centroCosto: t.centroCosto || "", area: t.area || "", cuentaCts: { entidad: t.cuentaCts?.entidad || "", numero: t.cuentaCts?.numero || "" }, fechaCese: t.fechaCese || "", remuneracionBasica: String(t.remuneracionBasica ?? ""),
+  ...TRABAJADOR_VACIO, ...t, tregistro: { ...mezclarTregistro(TREGISTRO_VACIO(), t.tregistro), nacionalidad: t.tregistro?.nacionalidad ?? "" }, desbloqueo: false, centroCosto: t.centroCosto || "", area: t.area || "", cuentaCts: { entidad: t.cuentaCts?.entidad || "", numero: t.cuentaCts?.numero || "", codigoEntidad: t.cuentaCts?.codigoEntidad || "", cci: t.cuentaCts?.cci || "" }, pagoQuincenal: t.pagoQuincenal === true, fechaCese: t.fechaCese || "", remuneracionBasica: String(t.remuneracionBasica ?? ""),
   pension: { ...TRABAJADOR_VACIO.pension, ...t.pension },
   planEps: t.planEps ? { nombre: t.planEps.nombre || "", ...Object.fromEntries(MONTOS_EPS.map((k) => [k, String(t.planEps[k] ?? "")])) } : TRABAJADOR_VACIO.planEps,
   conceptosFijos: (t.conceptosFijos || []).map((c) => ({ codigo: c.codigo, monto: String(c.monto) })),
@@ -60,6 +60,8 @@ function validarTregistro(tr) {
   if (tr.telefono && !/^\d{1,9}$/.test(tr.telefono.trim())) return "El teléfono solo admite dígitos (hasta 9).";
   if (tr.establecimiento && !/^\d{4}$/.test(tr.establecimiento.trim())) return "El código de establecimiento debe tener 4 dígitos.";
   if (requiereEstudios(tr.situacionEducativa) && tr.estudios?.anioEgreso && !/^\d{4}$/.test(tr.estudios.anioEgreso.trim())) return "El año de egreso debe tener 4 dígitos.";
+  const cci = tr.cuenta?.cci?.trim();
+  if (cci && !/^\d{20}$/.test(cci)) return "El CCI de la cuenta de sueldo debe tener 20 dígitos.";
   return "";
 }
 
@@ -78,6 +80,7 @@ export function validarTrabajador(f) {
     if (MONTOS_EPS.some((k) => String(f.planEps[k]).trim() === "" || !(Number(f.planEps[k]) >= 0))) return "Completa los montos del plan EPS (0 o más) o déjalos todos vacíos.";
     if (Math.abs(empresa + trabajador - prima) > 0.005) return "El aporte de la empresa y el del trabajador deben sumar la prima total de la EPS.";
   }
+  if (f.cuentaCts.cci.trim() && !/^\d{20}$/.test(f.cuentaCts.cci.trim())) return "El CCI de la cuenta CTS debe tener 20 dígitos.";
   return validarTregistro(f.tregistro);
 }
 
@@ -88,7 +91,7 @@ const conPlanEps = (f) => f.salud === "eps" && Boolean(f.planEps) && Object.valu
 const tregistroDeCuerpo = ({ estudios, ...resto }) => (requiereEstudios(resto.situacionEducativa) ? { ...resto, estudios } : resto);
 
 export const cuerpoDeTrabajador = ({ desbloqueo, ...f }) => ({
-  ...f, tregistro: tregistroDeCuerpo(f.tregistro), cuentaCts: { entidad: f.cuentaCts.entidad.trim(), numero: f.cuentaCts.numero.trim() }, ...(desbloqueo === true && { desbloqueo }), centroCosto: f.centroCosto || null, remuneracionBasica: Number(f.remuneracionBasica),
+  ...f, tregistro: tregistroDeCuerpo(f.tregistro), cuentaCts: { entidad: f.cuentaCts.entidad.trim(), numero: f.cuentaCts.numero.trim(), codigoEntidad: f.cuentaCts.codigoEntidad, cci: f.cuentaCts.cci.trim() }, ...(desbloqueo === true && { desbloqueo }), centroCosto: f.centroCosto || null, remuneracionBasica: Number(f.remuneracionBasica),
   conceptosFijos: f.conceptosFijos.map((c) => ({ codigo: c.codigo, monto: Number(c.monto) })),
   quintaAnterior: f.quintaAnterior.map((q) => ({ periodo: q.mes.replace("-", ""), ingresos: Number(q.ingresos) || 0, retencion: Number(q.retencion) || 0 })),
   planEps: conPlanEps(f) ? { nombre: f.planEps.nombre.trim(), ...Object.fromEntries(MONTOS_EPS.map((k) => [k, Number(f.planEps[k])])) } : null,

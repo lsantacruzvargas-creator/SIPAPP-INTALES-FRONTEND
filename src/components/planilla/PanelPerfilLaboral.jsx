@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { fechaHoyLima, formatearFecha } from "../../utils/fecha";
-import { PERFIL_VACIO, errorFechaSctr, limiteFechaSctr, beneficiosDeFormulario, cuerpoBeneficios, errorBeneficios, textoHistorialBeneficios, avisoBeneficios, conRegistroBeneficios } from "../../utils/perfilLaboral";
+import { PERFIL_VACIO, errorPorcentajeQuincena, errorFechaSctr, limiteFechaSctr, beneficiosDeFormulario, cuerpoBeneficios, errorBeneficios, textoHistorialBeneficios, avisoBeneficios, conRegistroBeneficios } from "../../utils/perfilLaboral";
 import { Texto, Casilla } from "./FichaTRegistro";
 
 const INP = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
@@ -111,6 +111,8 @@ export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardad
 
   const guardar = async () => {
     if (form.ciiu.codigo && !/^\d{4}$/.test(form.ciiu.codigo)) return setError("El CIIU debe tener 4 dígitos.");
+    const errorQuincena = errorPorcentajeQuincena(form.porcentajeQuincena);
+    if (errorQuincena) return setError(errorQuincena);
     const errorBen = errorBeneficios(form.beneficios, baseBeneficios);
     if (errorBen) return setError(errorBen);
     const errorSctr = pideFecha && errorFechaSctr(sctrFecha, fechaHoyLima(), { cierra });
@@ -123,6 +125,7 @@ export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardad
         remype: form.remype,
         ciiu: form.ciiu,
         actividadIndustrial: form.actividadIndustrial,
+        porcentajeQuincena: Number(form.porcentajeQuincena),
         sctr: {
           actividadRiesgo: sctr.actividadRiesgo,
           salud: { ...sctr.salud, tasa: Number(sctr.salud.tasa) || 0 },
@@ -167,6 +170,12 @@ export default function PanelPerfilLaboral({ catalogos, puedeEscribir, onGuardad
             <div className="col-span-2 md:col-span-4">
               <Casilla etiqueta="Actividad industrial (SENATI alcanza a todos los trabajadores)" valor={form.actividadIndustrial} onChange={handleChange("actividadIndustrial")} />
             </div>
+          </div>
+        </Seccion>
+
+        <Seccion titulo="Pago de la planilla" ayuda="Propone el monto del lote «Adelanto de quincena» para los trabajadores con pago quincenal en su ficha; el monto de cada fila se puede corregir en el borrador.">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+            <Texto etiqueta="Adelanto de quincena (% del básico)" type="number" min="0" max="100" step="0.01" valor={form.porcentajeQuincena} onChange={handleChange("porcentajeQuincena")} ancho="col-span-2" />
           </div>
         </Seccion>
 

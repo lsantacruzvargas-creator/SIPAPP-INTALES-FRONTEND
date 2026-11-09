@@ -126,14 +126,46 @@ test("destinoPlame: igual que el servidor (rem, pdt o no)", () => {
   assert.equal(ETIQUETA_PLAME.no.texto, "No va al PLAME");
 });
 
-test("ficha del trabajador: la cuenta CTS siempre viaja en el cuerpo", () => {
-  assert.deepEqual(TRABAJADOR_VACIO.cuentaCts, { entidad: "", numero: "" });
+const CTS_VACIA = { entidad: "", numero: "", codigoEntidad: "", cci: "" };
+
+test("ficha del trabajador: la cuenta CTS siempre viaja en el cuerpo con todas sus claves", () => {
+  assert.deepEqual(TRABAJADOR_VACIO.cuentaCts, CTS_VACIA);
   const f = { ...TRABAJADOR_VACIO, numDoc: "12345678", apellidoPaterno: "Quispe", nombres: "Ana", fechaIngreso: "2026-01-05", remuneracionBasica: "2500" };
-  assert.deepEqual(cuerpoDeTrabajador(f).cuentaCts, { entidad: "", numero: "" });
+  assert.deepEqual(cuerpoDeTrabajador(f).cuentaCts, CTS_VACIA);
   const vuelta = formularioDeTrabajador({ ...cuerpoDeTrabajador(f), _id: "x", cuentaCts: { entidad: "BCP", numero: "191-1234567" } });
-  assert.deepEqual(vuelta.cuentaCts, { entidad: "BCP", numero: "191-1234567" });
-  assert.deepEqual(formularioDeTrabajador({ _id: "y" }).cuentaCts, { entidad: "", numero: "" });
-  assert.deepEqual(cuerpoDeTrabajador({ ...f, cuentaCts: { entidad: " BCP ", numero: " 191 " } }).cuentaCts, { entidad: "BCP", numero: "191" });
+  assert.deepEqual(vuelta.cuentaCts, { entidad: "BCP", numero: "191-1234567", codigoEntidad: "", cci: "" });
+  assert.deepEqual(formularioDeTrabajador({ _id: "y" }).cuentaCts, CTS_VACIA);
+  assert.deepEqual(cuerpoDeTrabajador({ ...f, cuentaCts: { entidad: " BCP ", numero: " 191 ", codigoEntidad: "002", cci: " 00219100000000000000 " } }).cuentaCts,
+    { entidad: "BCP", numero: "191", codigoEntidad: "002", cci: "00219100000000000000" });
+});
+
+test("ficha del trabajador: una ficha antigua trae los datos de abono con valores por defecto", () => {
+  const antigua = formularioDeTrabajador({ _id: "z", numDoc: "1", cuentaCts: { entidad: "Caja Sullana", numero: "55" }, tregistro: { cuenta: { entidad: "002", numero: "1234" } } });
+  assert.equal(antigua.pagoQuincenal, false);
+  assert.deepEqual(antigua.tregistro.cuenta, { entidad: "002", numero: "1234", tipo: "", cci: "" });
+  assert.deepEqual(antigua.cuentaCts, { entidad: "Caja Sullana", numero: "55", codigoEntidad: "", cci: "" });
+  assert.equal(formularioDeTrabajador({ _id: "w", numDoc: "1", pagoQuincenal: true }).pagoQuincenal, true);
+  assert.equal(TRABAJADOR_VACIO.pagoQuincenal, false);
+  assert.deepEqual(TRABAJADOR_VACIO.tregistro.cuenta, { entidad: "", numero: "", tipo: "", cci: "" });
+  const completa = formularioDeTrabajador({ _id: "v", numDoc: "1", tregistro: { cuenta: { entidad: "003", numero: "9", tipo: "ahorros", cci: "00300000000000000099" } } });
+  assert.deepEqual(completa.tregistro.cuenta, { entidad: "003", numero: "9", tipo: "ahorros", cci: "00300000000000000099" });
+});
+
+test("validarTrabajador: el CCI de las cuentas son 20 dígitos o vacío", () => {
+  const f = { ...TRABAJADOR_VACIO, numDoc: "12345678", apellidoPaterno: "Quispe", nombres: "Ana", fechaIngreso: "2026-01-05", remuneracionBasica: "2500" };
+  assert.equal(validarTrabajador(f), "");
+  assert.equal(validarTrabajador({ ...f, cuentaCts: { ...f.cuentaCts, cci: "123" } }), "El CCI de la cuenta CTS debe tener 20 dígitos.");
+  assert.equal(validarTrabajador({ ...f, cuentaCts: { ...f.cuentaCts, cci: "00219100000000000000" } }), "");
+  const tr = (cci) => ({ ...f, tregistro: { ...f.tregistro, cuenta: { ...f.tregistro.cuenta, cci } } });
+  assert.equal(validarTrabajador(tr("12")), "El CCI de la cuenta de sueldo debe tener 20 dígitos.");
+  assert.equal(validarTrabajador(tr("")), "");
+});
+
+test("cuerpoDeTrabajador envía pagoQuincenal y la cuenta de sueldo con tipo y CCI", () => {
+  const f = { ...TRABAJADOR_VACIO, numDoc: "12345678", pagoQuincenal: true };
+  const c = cuerpoDeTrabajador(f);
+  assert.equal(c.pagoQuincenal, true);
+  assert.deepEqual(c.tregistro.cuenta, { entidad: "", numero: "", tipo: "", cci: "" });
 });
 
 test("cuentas de la planilla: las de por pagar de CTS, gratificaciones y vacaciones viajan completas", () => {
