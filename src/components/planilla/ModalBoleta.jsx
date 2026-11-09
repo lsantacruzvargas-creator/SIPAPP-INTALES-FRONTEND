@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { money } from "../../utils/compras";
-import { TIPOS_CONCEPTO, textoPension, detalleGratificacion, etiquetaPeriodoCts, ROTULOS_PROVISION } from "../../utils/planilla";
+import { TIPOS_CONCEPTO, textoPension, detalleGratificacion, ROTULOS_PROVISION } from "../../utils/planilla";
 import EtiquetaPlame, { LeyendaPlame } from "./EtiquetaPlame";
 import { generarBoletaPdf } from "../../utils/boletaPdf";
 import { validarDiasVendidos } from "../../utils/vacaciones";
@@ -54,7 +54,6 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
   const d = boleta.datos, q = boleta.quinta;
   const noImportar = catalogos.plame?.noImportar || [];
   const grat = detalleGratificacion(boleta.gratificacion);
-  const cts = boleta.ctsDepositada;
   const provisiones = boleta.provisiones || [], consumos = boleta.consumos || [];
   const mesAnio = (p) => `${p.slice(4)}/${p.slice(0, 4)}`;
   const rotulo = (x) => `${ROTULOS_PROVISION[x.tipo] || x.tipo}${x.periodo ? ` (${x.tipo === "cts" ? "depósito" : "pago"} ${mesAnio(x.periodo)})` : ""}`;
@@ -141,13 +140,6 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
               ) : null;
             })}
             <p className="text-sm font-semibold text-gray-800 flex justify-between border-t pt-2"><span>Neto a pagar</span><span>{money(boleta.totales.neto)}</span></p>
-            {cts && (
-              <div className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                <p className="font-semibold text-gray-800 flex justify-between"><span>Depósito de CTS ({etiquetaPeriodoCts(cts.periodo)})</span><span>{money(cts.monto)}</span></p>
-                <p className="text-[11px] text-gray-500">Informativo: no forma parte de los ingresos, los descuentos ni del neto. Depósito {cts.codigo}.
-                  <EtiquetaPlame destino="no" texto="No va al PLAME (informativo)" /></p>
-              </div>
-            )}
             {(provisiones.length > 0 || consumos.length > 0) && (
               <div className="border border-gray-200 rounded-lg px-3 py-2 space-y-1">
                 <p className="text-xs font-bold text-gray-600 uppercase">Provisiones del mes (solo lectura)<EtiquetaPlame destino="no" texto="No va al PLAME (informativo)" /></p>

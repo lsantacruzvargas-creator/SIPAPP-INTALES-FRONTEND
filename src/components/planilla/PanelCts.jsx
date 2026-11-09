@@ -47,7 +47,7 @@ function ModalAnular({ deposito, onCancelar, onAnulado }) {
     <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4" style={{ zIndex: 200 }}>
       <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm space-y-4">
         <h4 className="font-semibold text-gray-800 text-sm">Anular el depósito {deposito.codigo}</h4>
-        <p className="text-sm text-gray-600">Se quita el depósito de las boletas del mes y su asiento (si aún no está contabilizado). Después puedes calcular otro.</p>
+        <p className="text-sm text-gray-600">Se quita su asiento (si aún no está contabilizado). Después puedes calcular otro.</p>
         <label className="text-xs text-gray-500 block">Motivo
           <textarea autoFocus value={motivo} maxLength={200} rows={3} onChange={(e) => setMotivo(e.target.value)} className={`${INP} w-full resize-none`} />
         </label>
@@ -403,7 +403,7 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
 
       {modal === "confirmar" && actual && (
         <ConfirmacionAccion procesando={procesando} textoConfirmar="Confirmar" onCancelar={() => setModal(null)} onConfirmar={confirmar}
-          mensaje={`Se confirma el depósito ${actual.codigo}: ${totales.incluidos} ${totales.incluidos === 1 ? "trabajador" : "trabajadores"}, ${money(totales.total)}. Se genera su asiento y el monto sale en la boleta de ${periodo.slice(4)}/${periodo.slice(0, 4)} si sigue en borrador. Después solo se puede anular. ¿Confirmar?`} />
+          mensaje={`Se confirma el depósito ${actual.codigo}: ${totales.incluidos} ${totales.incluidos === 1 ? "trabajador" : "trabajadores"}, ${money(totales.total)}. Se genera su asiento; el monto no sale en la boleta del mes. Después solo se puede anular. ¿Confirmar?`} />
       )}
       {modal === "eliminar" && actual && (
         <ConfirmacionAccion procesando={procesando} textoConfirmar="Eliminar" onCancelar={() => setModal(null)} onConfirmar={eliminar}

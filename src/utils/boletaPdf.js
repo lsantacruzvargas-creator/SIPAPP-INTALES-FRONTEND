@@ -1,6 +1,6 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { textoPension, celdasDeColumna, etiquetaPeriodoCts, detalleGratificacion } from "./planilla.js";
+import { textoPension, celdasDeColumna, detalleGratificacion } from "./planilla.js";
 import { nombreArchivoBoletas, nombrePdfTrabajador, nombresUnicos } from "./boletasMasa.js";
 
 const importe = (n) => Number(n || 0).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -61,31 +61,12 @@ export function dibujarBoleta(doc, boleta, { empleador = {}, afps = {}, borrador
   doc.text(`Neto a pagar: S/ ${importe(t.neto)}`, margen, y);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  if (boleta.ctsDepositada) {
-    const c = boleta.ctsDepositada;
-    y = cuadroCts(doc, c, `Depósito de CTS (${etiquetaPeriodoCts(c.periodo)}): S/ ${importe(c.monto)}`, margen, y + 4) + 17;
-  } else {
-    y += 28;
-  }
+  y += 28;
   doc.line(margen + 10, y, margen + 75, y);
   doc.line(120, y, 185, y);
   doc.text("Empleador", margen + 42, y + 5, { align: "center" });
   doc.text("Trabajador", 152, y + 5, { align: "center" });
   if (borrador) marcaBorrador(doc, primeraPagina);
-}
-
-// Informativo: queda fuera de ingresos, descuentos y neto.
-function cuadroCts(doc, c, titulo, margen, y) {
-  doc.setDrawColor(150);
-  doc.rect(margen, y, 182, 13);
-  doc.setFont("helvetica", "bold");
-  doc.text(titulo, margen + 3, y + 5);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.text(`Informativo: no forma parte de los ingresos, descuentos ni del neto. Depósito ${c.codigo}.`, margen + 3, y + 10);
-  doc.setFontSize(9);
-  doc.setDrawColor(0);
-  return y + 13;
 }
 
 // Si la boleta se desbordó a más páginas, todas llevan la marca; al terminar se vuelve a la última.

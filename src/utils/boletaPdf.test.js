@@ -22,19 +22,8 @@ const textos = (b) => {
   return escritos;
 };
 
-test("boleta PDF: el depósito de CTS va en un recuadro informativo y el neto no cambia", () => {
-  const sin = textos(boleta());
-  assert.ok(!sin.some((t) => t.includes("Depósito de CTS")));
-  const con = textos(boleta({ ctsDepositada: { codigo: "CTS-0001", periodo: "202611", monto: 1470.92 } }));
-  assert.ok(con.some((t) => t === "Depósito de CTS (may–oct 2026): S/ 1,470.92"));
-  assert.ok(con.some((t) => t.includes("no forma parte de los ingresos")));
-  assert.ok(con.includes("Neto a pagar: S/ 2,088.00"));
-  assert.ok(sin.includes("Neto a pagar: S/ 2,088.00"));
-});
-
 test("boleta PDF: no lleva etiquetas del PLAME ni provisiones", () => {
   const todo = textos(boleta({
-    ctsDepositada: { codigo: "CTS-0001", periodo: "202611", monto: 100 },
     provisiones: [{ tipo: "cts", periodo: "202705", devengado: 210.25, monto: 210.25 }],
   })).join(" ");
   assert.ok(!/PLAME/.test(todo));
