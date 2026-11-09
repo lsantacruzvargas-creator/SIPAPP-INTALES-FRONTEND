@@ -132,23 +132,41 @@ export default function EmitirComprobante() {
     const unidad = esServicio ? "ZZ" : "NIU";
     setTipoBienServicio(esServicio ? "servicio" : "bien");
     if (cotizacion?.moneda) setMoneda(cotizacion.moneda);
-    if (cotizacion?.items?.length) {
-      setItems(cotizacion.items.map((i) => {
-        // Precio c/dscto = precio unitario neto del descuento global de la
-        // Cotización (mismo criterio que su tabla, ver cotizacionItems.js) —
-        // el valor unitario de la factura sale ya neto, no del bruto.
-        const valorUnitario = precioConDescuento(i, cotizacion?.descuentoGlobal);
-        return {
-          _key: Date.now() + Math.random(),
-          descripcion: i.descripcion,
-          cantidad: i.cantidad || 1,
-          unidad,
-          valorUnitario,
-          precioUnitario: precioUnitarioDesdeValor(valorUnitario, "10"),
-          afectacion: "10",
-          descuentoPorcentaje: 0,
-        };
-      }));
+    // El monto a facturar es el de la OC (puede diferir del de la cotización);
+    // las líneas de la cotización solo se usan si su suma cuadra con ese monto.
+    const montoOC = Math.round((Number(oc.subtotal) || 0) * 100) / 100;
+    const lineas = (cotizacion?.items || []).map((i) => {
+      // Precio c/dscto = precio unitario neto del descuento global de la
+      // Cotización (mismo criterio que su tabla, ver cotizacionItems.js) —
+      // el valor unitario de la factura sale ya neto, no del bruto.
+      const valorUnitario = precioConDescuento(i, cotizacion?.descuentoGlobal);
+      return {
+        _key: Date.now() + Math.random(),
+        descripcion: i.descripcion,
+        cantidad: i.cantidad || 1,
+        unidad,
+        valorUnitario,
+        precioUnitario: precioUnitarioDesdeValor(valorUnitario, "10"),
+        afectacion: "10",
+        descuentoPorcentaje: 0,
+      };
+    });
+    const baseLineas = lineas.reduce((s, l) => s + calcularLineaComprobante(l).base, 0);
+    // Tolerancia: redondeo por línea (medio céntimo por ítem).
+    const cuadraConOC = !(montoOC > 0) || Math.abs(baseLineas - montoOC) <= 0.01 * lineas.length;
+    if (lineas.length && cuadraConOC) {
+      setItems(lineas);
+    } else if (montoOC > 0) {
+      setItems([{
+        ...itemVacioComprobante(),
+        descripcion: oc.descripcion || oc.titulo || lineas[0]?.descripcion || "",
+        cantidad: 1,
+        unidad,
+        valorUnitario: montoOC,
+        precioUnitario: precioUnitarioDesdeValor(montoOC, "10"),
+        afectacion: "10",
+        descuentoPorcentaje: 0,
+      }]);
     } else {
       setItems([{ ...itemVacioComprobante(), descripcion: oc.descripcion || oc.titulo || "", unidad }]);
     }
