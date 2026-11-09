@@ -24,7 +24,8 @@ const valor = (filas, clave) => filas[0][clave];
 test("reporte: agrupa los días por tipo y toma minutos y 0704", () => {
   const { filas } = filasReportePlanilla([boleta()]);
   assert.equal(valor(filas, "vacaciones"), 5);
-  assert.equal(valor(filas, "descansoSubsidios"), 5);
+  assert.equal(valor(filas, "descansoMedico"), 2);
+  assert.equal(valor(filas, "subsidios"), 3);
   assert.equal(valor(filas, "faltas"), 1);
   assert.equal(valor(filas, "licenciasSinGoce"), 2);
   assert.equal(valor(filas, "licenciasConGoce"), 0);

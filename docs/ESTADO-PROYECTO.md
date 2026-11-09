@@ -391,9 +391,10 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   `specs/2026-11-09-reporte-mensual-planilla-design.md`. Botón «Reporte del mes» en Planilla del mes: tabla por trabajador (días por grupo,
   horas extras, días vendidos, tardanza en minutos y 0704, ingresos, descuentos con aportes, neto, aportes del empleador) con totales; Excel en
   masa (hoja «Reporte» con encabezado y estado + una hoja por trabajador) y por persona (`record-<doc>-AAAAMM.xlsx`); PDF apaisado con marca
-  BORRADOR. Campo nuevo `asistencia.minutosTardanza` (0–14 400, informativo: el 0704 se sigue digitando). Sin probar en navegador; mirar el PDF
-  de 20 columnas con datos reales. Pendientes menores: 0704 automático desde los minutos, separar el tipo 20 (lo paga el empleador) de los
-  subsidios 21/22 si el contador lo pide, récord con reingreso en el mes (muestra solo el último vínculo), formato de soles en el Excel.
+  BORRADOR. Campo nuevo `asistencia.minutosTardanza` (0–14 400, informativo: el 0704 se sigue digitando). El descanso médico de los primeros
+  20 días (tipo 20, lo paga el empleador) va aparte de los subsidios de EsSalud (21 y 22). Sin probar en navegador; mirar el PDF de 21 columnas
+  con datos reales. Pendientes menores: 0704 automático desde los minutos, récord con reingreso en el mes (muestra solo el último vínculo),
+  formato de soles en el Excel.
 - **Archivo de abono de sueldos al banco (pendiente)**: banco y formato configurables por cuenta cargo; método de abono por trabajador (mismo banco,
   interbancario con CCI, efectivo o cheque fuera del archivo). Formatos en investigación (`specs/2026-11-04-abono-sueldos-formatos-investigacion.md`);
   los que no se confirmen esperan el layout que entregue el banco del cliente (al final).
