@@ -47,6 +47,7 @@ export default function PanelExportarConcar({ puedeEscribir }) {
   }, []);
 
   const exportar = async () => {
+    setAviso("");
     setProcesando(true);
     try {
       const r = await fetchAuth("/contabilidad/exportaciones", { method: "POST", body: JSON.stringify({ periodo, soloNuevos, numerosIniciales: iniciales }) });
