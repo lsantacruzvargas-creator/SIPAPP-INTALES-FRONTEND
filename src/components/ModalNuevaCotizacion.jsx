@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, uploadAuth, getUsuario } from "../utils/fetchAuth";
+import { comprimirFoto } from "../utils/comprimirFoto";
 import { calcSubtotal, itemInvalido } from "../utils/cotizacionItems";
 import TablaItemsCotizacion from "./TablaItemsCotizacion";
 import SelectFormaPago from "./SelectFormaPago";
@@ -174,7 +175,7 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
       // creada igual, no se bloquea la creación por esto.
       for (const pendiente of archivosPendientes) {
         const fd = new FormData();
-        fd.append("archivo", pendiente.file);
+        fd.append("archivo", await comprimirFoto(pendiente.file));
         await uploadAuth(`/cotizaciones/${nueva._id}/archivos`, fd);
       }
       onCreada?.(nueva);

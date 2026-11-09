@@ -58,7 +58,21 @@ export const itemDesdeDb = (item) => ({
   moneda: item.moneda || "PEN",
   imagenes: item.imagenes || [],
   otGenerada: item.otGenerada || null,
+  ocGenerada: item.ocGenerada || null,
 });
+
+// Monto sin IGV de cada ítem con el descuento global, escalado a la base de la
+// cotización (`total - igv`) según su peso en el subtotal: así la suma de todas
+// las OCs parciales por ítems da la base sin IGV de la cotización.
+export function montoAjustadoItem(cotizacion, item) {
+  const dscto = Number(cotizacion.descuentoGlobal) || 0;
+  const subtotalItems = (cotizacion.items || []).reduce((s, i) => s + calcSubtotal(i, dscto), 0);
+  const total = Number(cotizacion.total) || 0;
+  const igv = Number(cotizacion.igv) || 0;
+  const base = total > 0 && igv > 0 ? total - igv : subtotalItems;
+  const factor = subtotalItems > 0 ? base / subtotalItems : 1;
+  return Math.round(calcSubtotal(item, dscto) * factor * 100) / 100;
+}
 
 // Validación de ítems requeridos por el modelo (Backend/src/models/Cotizacion.js:
 // descripcion, cantidad y precio son obligatorios) — se resalta en el form

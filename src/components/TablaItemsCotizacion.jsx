@@ -3,7 +3,9 @@ import SelectorCatalogoServicios from "./SelectorCatalogoServicios";
 import ConfirmacionAccion from "./ConfirmacionAccion";
 import TablaScroll from "./TablaScroll";
 import ImagenProtegida from "./ImagenProtegida";
+import { CeldaOCItem, BotonGenerarOC } from "./detalleShared";
 import { uploadAuth } from "../utils/fetchAuth";
+import { comprimirFoto, mensajeSubida } from "../utils/comprimirFoto";
 import {
   calcSubtotal, montoDescuentoItem, itemVacioServicio, UNIDADES,
   descripcionInvalida, cantidadInvalida, precioInvalido, itemInvalido,
@@ -20,11 +22,13 @@ export default function TablaItemsCotizacion({
   items, onItemsChange,
   tipo, puedeEditar, disabled, intentoGuardar, totalesMostrados, descuentoGlobal = 0,
   seleccionables = false, seleccionados = new Set(), onToggleSeleccion, onGenerarOT, generando = false, onVerOT, onQuitarOT,
+  seleccionablesOC = false, seleccionadosOC = new Set(), onToggleSeleccionOC, onGenerarOC, generandoOC = false, onVerOC,
   puedeVerPrecios = true,
 }) {
   const [catalogoOpen, setCatalogoOpen] = useState(false);
   const [catalogoTarget, setCatalogoTarget] = useState(null); // null = "+ Agregar ítem de plantilla" (fusiona/crea fila); _key = agregar descripción a esa fila puntual
   const [confirmandoQuitarOT, setConfirmandoQuitarOT] = useState(null);
+  const [errorImagen, setErrorImagen] = useState("");
 
   // `puedeEditar` es el permiso de rol (admin/asistente); `disabled` es un
   // bloqueo por estado del documento (anulado) que aplica incluso a quien
@@ -43,10 +47,14 @@ export default function TablaItemsCotizacion({
   const subirImagenItem = async (key, files) => {
     const archivo = files?.[0];
     if (!archivo) return;
+    setErrorImagen("");
     const fd = new FormData();
-    fd.append("imagen", archivo);
+    fd.append("imagen", await comprimirFoto(archivo));
     const res = await uploadAuth("/cotizaciones/subir-imagen", fd);
-    if (!res.ok) return;
+    if (!res.ok) {
+      setErrorImagen(`No se subió la imagen "${archivo.name}": ${await mensajeSubida(res)}`);
+      return;
+    }
     const { url } = await res.json();
     handleItem(key, "imagenes", [url]);
   };
@@ -127,7 +135,7 @@ export default function TablaItemsCotizacion({
   // columna "Quitar" (puedeEditar) NO se suma acá: tiene su propia celda
   // vacía en cada fila del tfoot, así que colsIzquierda debe quedar fijo
   // para que la celda de valor caiga siempre bajo "Precio total".
-  const colsIzquierda = 8 + (seleccionables ? 1 : 0);
+  const colsIzquierda = 8 + (seleccionables ? 1 : 0) + (seleccionablesOC ? 1 : 0);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -139,6 +147,7 @@ export default function TablaItemsCotizacion({
           </h2>
         </div>
         <div className="flex items-center gap-2">
+          {seleccionablesOC && <BotonGenerarOC cantidad={seleccionadosOC.size} onClick={onGenerarOC} disabled={generandoOC} />}
           {seleccionables && seleccionados.size > 0 && (
             <button type="button" onClick={onGenerarOT} disabled={generando}
               className="bg-emerald-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-60 transition font-medium">
@@ -165,12 +174,14 @@ export default function TablaItemsCotizacion({
           Hay ítems con campos obligatorios sin completar (descripción, cantidad o precio). Corrígelos antes de guardar — resaltados en rojo.
         </p>
       )}
+      {errorImagen && <p className="px-6 pt-3 text-xs text-red-500">{errorImagen}</p>}
 
       <TablaScroll className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
             <tr>
               {seleccionables && <th className="px-3 py-3 w-12 text-center">OT</th>}
+              {seleccionablesOC && <th className="px-3 py-3 w-12 text-center">OC</th>}
               <th className="px-3 py-3 text-center w-12">Item</th>
               <th className="px-3 py-3 text-left w-28">Código</th>
               <th className="px-3 py-3 text-left">Descripción *</th>
@@ -186,7 +197,7 @@ export default function TablaItemsCotizacion({
           <tbody className="divide-y divide-gray-100">
             {items.length === 0 ? (
               <tr>
-                <td colSpan={6 + (seleccionables ? 1 : 0) + (puedeVerPrecios ? 3 : 0) + (puedeEditar ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={6 + (seleccionables ? 1 : 0) + (seleccionablesOC ? 1 : 0) + (puedeVerPrecios ? 3 : 0) + (puedeEditar ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">
                   Sin ítems agregados{puedeAgregar
                     ? (tipo === "servicio"
                       ? " — usa “+ Agregar ítem manual” para escribir uno o “+ Agregar ítem de plantilla” para elegir del catálogo de servicios."
@@ -219,6 +230,10 @@ export default function TablaItemsCotizacion({
                           className="w-4 h-4 rounded border-gray-300 text-sky-600 focus:ring-sky-400" />
                       )}
                     </td>
+                  )}
+                  {seleccionablesOC && (
+                    <CeldaOCItem item={item} idx={idx} seleccionados={seleccionadosOC}
+                      onToggle={onToggleSeleccionOC} onVerOC={onVerOC} deshabilitado={generandoOC} />
                   )}
                   <td className="px-3 py-3 text-center text-gray-400">{idx + 1}</td>
                   <td className="px-3 py-3">

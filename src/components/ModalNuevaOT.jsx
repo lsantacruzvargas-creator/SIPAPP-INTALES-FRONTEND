@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, uploadAuth } from "../utils/fetchAuth";
+import { comprimirFoto } from "../utils/comprimirFoto";
 import SelectorEmpresas from "./SelectorEmpresas";
 import TarjetaArchivosRelacionados from "./TarjetaArchivosRelacionados";
 
@@ -148,7 +149,7 @@ export default function ModalNuevaOT({ cotizacion, onClose, onCreada }) {
       // igual, no se bloquea la creación por esto.
       for (const pendiente of archivosPendientes) {
         const fd = new FormData();
-        fd.append("archivo", pendiente.file);
+        fd.append("archivo", await comprimirFoto(pendiente.file));
         await uploadAuth(`/ordenes-trabajo/${nueva._id}/archivos`, fd);
       }
       onCreada?.(nueva);

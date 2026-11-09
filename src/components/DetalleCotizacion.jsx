@@ -6,7 +6,7 @@ import { exportarCotizacionPdf } from "../utils/cotizacionPdf";
 import { calcSubtotal, itemDesdeDb, itemInvalido } from "../utils/cotizacionItems";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
 import ModalNuevaOT from "./ModalNuevaOT";
-import ModalOrdenCompra from "./ModalOrdenCompra";
+import ModalOrdenCompra, { ModalOrdenCompraItems } from "./ModalOrdenCompra";
 import ModalDetalleGuia from "./ModalDetalleGuia";
 import BuscadorOrdenTrabajo from "./BuscadorOrdenTrabajo";
 import SelectorEmpresas from "./SelectorEmpresas";
@@ -88,8 +88,10 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const [informes, setInformes] = useState([]);
   const [gres, setGres] = useState([]);
   const [guiaDetalle, setGuiaDetalle] = useState(null);
-  const [oc, setOc] = useState(null);
-  const [factura, setFactura] = useState(null);
+  const [ocs, setOcs] = useState([]);
+  const [facturas, setFacturas] = useState([]);
+  const oc = ocs[0] || null;
+  const factura = facturas[0] || null;
   const [servicios, setServicios] = useState([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
@@ -104,6 +106,9 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const [reasignandoOT, setReasignandoOT] = useState(false);
   const [seleccionados, setSeleccionados] = useState(() => new Set());
   const [generandoOT, setGenerandoOT] = useState(false);
+  const [seleccionadosOC, setSeleccionadosOC] = useState(() => new Set());
+  const [indicesNuevaOC, setIndicesNuevaOC] = useState(null);
+  const [preparandoOC, setPreparandoOC] = useState(false);
   const rolActual = getUsuario()?.rol;
   const puedeEditar = ["admin", "asistente", "facturacion", "jefatura", "coordinadora", "planner"].includes(rolActual);
   // Anular un documento queda reservado a Admin, Jefatura y Coordinadora — Facturación ya
@@ -124,6 +129,9 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const puedeVerGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
   const puedeGenerarGRE = puedeVerGRE && rolActual !== "coordinadora";
   const cadenaCerrada = bloqueadoPorCadenaCerrada(cot.estadoCadena, rolActual);
+  // OC por ítems: mismos roles que crean OC (POST /ordenes-compra).
+  const puedeGenerarOC = ["admin", "asistente", "facturacion", "jefatura", "coordinadora"].includes(rolActual)
+    && !cot.anulado && !cadenaCerrada;
   // Desglose mostrado en el modal de "Cerrar cadena" — mismo criterio de
   // detracción SUNAT que ya usa DetalleOrdenCompra.jsx (12% cuando el total
   // supera S/700), calculado sobre el total ya persistido de la cotización.
@@ -147,14 +155,16 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       } else {
         setGres([]);
       }
-      const ocFound = ocs.find(o => (o.cotizacion?._id || o.cotizacion) === cot._id) || null;
-      setOc(ocFound);
-      // La factura de la cadena comparte numeroDocumento; si no, se resuelve por la OC.
-      const factFound =
-        (cot.numeroDocumento != null && facts.find(f => f.numeroDocumento === cot.numeroDocumento)) ||
-        (ocFound && facts.find(f => (f.ordenCompra?._id || f.ordenCompra) === ocFound._id)) ||
-        null;
-      setFactura(factFound);
+      // Varias OCs por cotización (OCs parciales por ítems) — en orden de creación.
+      const ocsFound = ocs
+        .filter(o => (o.cotizacion?._id || o.cotizacion) === cot._id)
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      setOcs(ocsFound);
+      const idsOC = new Set(ocsFound.map(o => o._id));
+      setFacturas(facts.filter(f =>
+        idsOC.has(f.ordenCompra?._id || f.ordenCompra) ||
+        (cot.numeroDocumento != null && f.numeroDocumento === cot.numeroDocumento)
+      ));
       if (otsFound.length > 0) {
         Promise.all(
           otsFound.map(o => fetchAuth(`/informes?ordenTrabajo=${o._id}`).then(r => r.ok ? r.json() : []))
@@ -255,6 +265,33 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
         },
       },
     });
+  };
+
+  // La factura de cada OC va por su enlace directo (`ordenCompra`); con una
+  // sola OC se acepta además la de la cadena (facturas antiguas sin enlace).
+  const facturaDeOC = (o) =>
+    facturas.find(f => (f.ordenCompra?._id || f.ordenCompra) === o._id) ||
+    (ocs.length === 1 ? facturas.find(f => !f.ordenCompra) : null) ||
+    null;
+
+  const abrirOC = (o) => {
+    const full = ocs.find(x => x._id === o._id) || o;
+    onNavegar?.({ tipo: "oc", data: full, extra: facturaDeOC(full) });
+  };
+
+  const toggleSeleccionOC = (idx) => setSeleccionadosOC(prev => {
+    const next = new Set(prev);
+    if (next.has(idx)) next.delete(idx); else next.add(idx);
+    return next;
+  });
+
+  // El backend identifica los ítems por índice: se guardan antes los cambios
+  // pendientes para que la selección coincida con lo persistido.
+  const abrirNuevaOCItems = async () => {
+    setPreparandoOC(true);
+    const guardada = puedeEditar ? await guardarCotizacion() : cot;
+    setPreparandoOC(false);
+    if (guardada) setIndicesNuevaOC([...seleccionadosOC].sort((a, b) => a - b));
   };
 
   const toggleSeleccion = (idx) => setSeleccionados(prev => {
@@ -913,21 +950,32 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               )}
             </TarjetaRelacion>
 
-            <TarjetaRelacion tipo="oc" codigo={oc?.codigo} numero={oc?.numeroOrden} vacio={!oc}
-              onClick={oc ? () => onNavegar?.({ tipo: "oc", data: oc, extra: factura }) : undefined}
-              onCrear={!oc && !cot.anulado ? () => setCrearOCOpen(true) : undefined} crearLabel="OC">
-              {puedeVerPrecios && oc?.monto > 0 && <p className="text-xs text-gray-500">{money(oc.monto, cot.moneda)}</p>}
-            </TarjetaRelacion>
-
-            {rolActual !== "coordinadora" && (
-              <TarjetaRelacion tipo="factura" codigo={factura?.codigo} numero={factura?.numeroFactura} vacio={!factura}
-                onClick={factura ? () => onNavegar?.({ tipo: "factura", data: factura }) : undefined}>
-                {puedeVerPrecios && (factura?.totalAPagar || factura?.total) > 0 && (
-                  <p className="text-xs text-gray-500">{money(factura.totalAPagar ?? factura.total, cot.moneda)}</p>
-                )}
-                {factura?.estadoPago && <Chip className={badgePago(factura.estadoPago)}>{factura.estadoPago}</Chip>}
-              </TarjetaRelacion>
+            {ocs.length === 0 ? (
+              <TarjetaRelacion tipo="oc" vacio
+                onCrear={!cot.anulado ? () => setCrearOCOpen(true) : undefined} crearLabel="OC" />
+            ) : (
+              ocs.map(o => (
+                <TarjetaRelacion key={o._id} tipo="oc" codigo={o.codigo} numero={o.numeroOrden} onClick={() => abrirOC(o)}>
+                  {o.desdeItemsCotizacion && <p className="text-sm text-gray-600 line-clamp-2">{o.titulo}</p>}
+                  {puedeVerPrecios && o.monto > 0 && <p className="text-xs text-gray-500">{money(o.monto, cot.moneda)}</p>}
+                  {o.anulado && <Chip className="bg-red-100 text-red-600">Anulada</Chip>}
+                </TarjetaRelacion>
+              ))
             )}
+
+            {rolActual !== "coordinadora" && (facturas.length === 0 ? (
+              <TarjetaRelacion tipo="factura" vacio />
+            ) : (
+              facturas.map(f => (
+                <TarjetaRelacion key={f._id} tipo="factura" codigo={f.codigo} numero={f.numeroFactura}
+                  onClick={() => onNavegar?.({ tipo: "factura", data: f })}>
+                  {puedeVerPrecios && (f.totalAPagar || f.total) > 0 && (
+                    <p className="text-xs text-gray-500">{money(f.totalAPagar ?? f.total, cot.moneda)}</p>
+                  )}
+                  {f.estadoPago && <Chip className={badgePago(f.estadoPago)}>{f.estadoPago}</Chip>}
+                </TarjetaRelacion>
+              ))
+            ))}
 
             {puedeVerServicios && (
               <TarjetaRelacion
@@ -987,6 +1035,12 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
             generando={generandoOT}
             onVerOT={(o) => onNavegar?.({ tipo: "ot", data: ots.find(x => x._id === o._id) || o })}
             onQuitarOT={quitarOT}
+            seleccionablesOC={puedeGenerarOC}
+            seleccionadosOC={seleccionadosOC}
+            onToggleSeleccionOC={toggleSeleccionOC}
+            onGenerarOC={abrirNuevaOCItems}
+            generandoOC={preparandoOC}
+            onVerOC={abrirOC}
             puedeVerPrecios={puedeVerPrecios}
           />
         </div>
@@ -1063,6 +1117,26 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
           cotizacion={cot}
           onClose={() => setCrearOCOpen(false)}
           onCreada={() => { setCrearOCOpen(false); cargarRelaciones(); }}
+        />
+      )}
+
+      {indicesNuevaOC && (
+        <ModalOrdenCompraItems
+          cotizacion={cot}
+          indices={indicesNuevaOC}
+          onClose={() => setIndicesNuevaOC(null)}
+          onCreada={async () => {
+            setIndicesNuevaOC(null);
+            setSeleccionadosOC(new Set());
+            const res = await fetchAuth("/cotizaciones");
+            const actualizada = res.ok ? (await res.json()).find(c => c._id === cot._id) : null;
+            // Solo los ítems: GET /cotizaciones popula `empresa` con menos campos.
+            if (actualizada) {
+              setCot(prev => ({ ...prev, items: actualizada.items }));
+              setItems((actualizada.items || []).map(itemDesdeDb));
+            }
+            cargarRelaciones();
+          }}
         />
       )}
 

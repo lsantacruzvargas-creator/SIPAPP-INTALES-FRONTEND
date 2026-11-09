@@ -168,7 +168,13 @@ export function generarComprobantePdf(comprobante, { logoUrl } = {}) {
     doc.setFont("helvetica", "normal");
     doc.text(`Código: ${comprobante.detraccion.codigoBien || "-"}  ·  Porcentaje: ${comprobante.detraccion.porcentaje ?? "-"}%`, margin, y);
     y += 5;
-    doc.text(`Monto neto a depositar: ${simbolo} ${Number(comprobante.detraccion.montoNeto || 0).toFixed(2)}`, margin, y);
+    // El Banco de la Nación solo recibe soles: en moneda extranjera se deposita montoSoles (neto × TC, soles enteros).
+    // Los comprobantes anteriores al cambio no guardaron montoSoles y siguen mostrando el neto en su moneda.
+    const det = comprobante.detraccion;
+    const montoDetTxt = moneda !== "PEN" && det.montoSoles != null
+      ? `S/ ${Number(det.montoSoles).toFixed(2)}  (${simbolo} ${Number(det.montoNeto || 0).toFixed(2)} × TC ${det.tipoCambio})`
+      : `${simbolo} ${Number(det.montoNeto || 0).toFixed(2)}`;
+    doc.text(`Monto neto a depositar: ${montoDetTxt}`, margin, y);
     y += 5;
     doc.text(`Cuenta Banco de la Nación: ${comprobante.detraccion.cuentaBancaria || "-"}`, margin, y);
   }

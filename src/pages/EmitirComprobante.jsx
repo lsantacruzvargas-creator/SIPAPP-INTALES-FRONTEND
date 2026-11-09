@@ -135,7 +135,9 @@ export default function EmitirComprobante() {
     // El monto a facturar es el de la OC (puede diferir del de la cotización);
     // las líneas de la cotización solo se usan si su suma cuadra con ese monto.
     const montoOC = Math.round((Number(oc.subtotal) || 0) * 100) / 100;
-    const lineas = (cotizacion?.items || []).map((i) => {
+    // OC parcial (generada desde ítems puntuales): solo se facturan sus ítems.
+    const itemsDeOC = (cotizacion?.items || []).filter((i) => (i.ocGenerada?._id || i.ocGenerada) === oc._id);
+    const lineas = (itemsDeOC.length ? itemsDeOC : cotizacion?.items || []).map((i) => {
       // Precio c/dscto = precio unitario neto del descuento global de la
       // Cotización (mismo criterio que su tabla, ver cotizacionItems.js) —
       // el valor unitario de la factura sale ya neto, no del bruto.

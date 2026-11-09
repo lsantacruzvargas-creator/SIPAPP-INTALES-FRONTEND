@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { fetchAuth, uploadAuth, abrirArchivoProtegido } from "../utils/fetchAuth";
+import { comprimirFoto, mensajeSubida } from "../utils/comprimirFoto";
 import ImagenProtegida from "./ImagenProtegida";
 
 const EXT_IMAGEN = ["jpg", "jpeg", "png", "webp"];
@@ -81,9 +82,9 @@ export default function TarjetaArchivosRelacionados({
     // sobre un mismo documento).
     for (const file of files) {
       const fd = new FormData();
-      fd.append("archivo", file);
+      fd.append("archivo", await comprimirFoto(file));
       const res = await uploadAuth(`/${endpoint}/${ordenId}/archivos`, fd);
-      if (!res.ok) setError(`No se pudo subir "${file.name}" — formato o tamaño no permitido (máx. 20 MB).`);
+      if (!res.ok) setError(`No se pudo subir "${file.name}": ${await mensajeSubida(res)} (máx. 20 MB).`);
       else ultimaOrden = await res.json();
     }
     setSubiendo(false);

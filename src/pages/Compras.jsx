@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { fetchAuth, getUsuario, uploadAuth, descargarArchivoProtegido } from "../utils/fetchAuth";
+import { comprimirFoto, mensajeSubida } from "../utils/comprimirFoto";
 import { formatearFecha, fechaHoyLima } from "../utils/fecha";
 import ConfirmacionAccion from "../components/ConfirmacionAccion";
 import ModalProcesarSolicitud from "../components/ModalProcesarSolicitud";
@@ -48,9 +49,9 @@ function AdjuntosCompra({ archivos = [], endpoint, onCambio }) {
     // Secuencial: cada subida hace $push sobre el mismo array `archivos`.
     for (const file of files) {
       const fd = new FormData();
-      fd.append("archivo", file);
+      fd.append("archivo", await comprimirFoto(file));
       const res = await uploadAuth(`${endpoint}/archivos`, fd);
-      if (!res.ok) setError(`No se pudo subir "${file.name}" — solo imágenes, PDF, Word o Excel (máx. 20 MB).`);
+      if (!res.ok) setError(`No se pudo subir "${file.name}": ${await mensajeSubida(res)} (solo imágenes, PDF, Word o Excel, máx. 20 MB).`);
     }
     setSubiendo(false);
     await onCambio();
