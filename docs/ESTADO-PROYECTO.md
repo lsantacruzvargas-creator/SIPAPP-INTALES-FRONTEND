@@ -406,6 +406,20 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
   (sin tipo, la fila sale fuera del archivo); revisar boletas en borrador con 0701 digitado (generar lo quita con aviso); probar un
   lote pequeño en Telecrédito e Interbank. Pendientes: confirmar con el contador el intangible CTS (4 boletas) y «últimos 6 sueldos»
   (BCP), subtipo `O` del BCP; BBVA/Scotiabank esperan su layout; sin probar en navegador.
+- **Subsidios de EsSalud y prima AFP de mayores de 65 (entregado 2026-11-10, Backend `a4bd593..9f6a9e0`, Frontend `e0c02365..90353f7e`)**:
+  diseño en `specs/2026-11-10-subsidios-essalud-prima-afp65-design.md`. La boleta propone el **0916** (días 21) y el **0915** (días 22) =
+  promedio de las remuneraciones afectas a EsSalud de los 12 meses anteriores al inicio de la racha ÷ 360 × días (sin 04xx ni
+  liquidación; horas extras solo si son regulares; el diario se hereda dentro de la racha); el contador lo corrige digitándolo, o lo
+  deja en **0** si EsSalud paga directo. Afecta solo AFP; la base mínima de EsSalud se prorratea por días 21/22; con SIS no se calcula.
+  Avisos: sin boletas anteriores, menos meses que el vínculo, días 21 sin 20 días tipo 20 en el año. **Prima AFP**: no se cobra desde
+  el mes siguiente a los 65 (`tregistro.fechaNacimiento`), con nota en la boleta. Asiento: 0915/0916 → D «Subsidios por cobrar a
+  EsSalud» (Planilla → Cuentas, sin semilla: sugerida 1629); reembolso en Tesorería con «Planilla: reembolso de subsidio EsSalud»
+  (`cobro_subsidio`, solo ingreso). La intangibilidad de CTS de los lotes excluye 0915/0916. Lactancia y paternidad: sin cambios (el
+  subsidio de lactancia lo paga EsSalud directo; paternidad ya es tipo 28). Jubilados que trabajan: descartado por el usuario.
+  **Antes de usar:** crear la cuenta por cobrar y configurarla en Planilla → Cuentas. Al regenerar meses contabilizados con 0915/0916
+  digitados, su asiento cambia de cuenta («documento cambiado»). **[Confirmar]**: cuenta 1629 con el contador; mes de corte de la
+  prima con la AFP; divisor con menos de 12 meses. Menores diferidos: racha > 12 meses sin herencia; la boleta PDF no muestra el
+  detalle del subsidio; reingresos con boletas de un vínculo anterior.
 - **Anexo del trabajador en los asientos de planilla para CONCAR (entregado 2026-11-09, Backend `4bc2950..ed38eb9`, Frontend
   `f775180c..92758ae5`)**: diseño en `specs/2026-11-09-concar-anexo-trabajador-design.md`. Las deudas con cada trabajador salen una línea por
   trabajador con su DNI (rol `trabajador`, anexo en la columna L de CONCAR, tipo de documento en Tabla 2: 01→1, 04→4, 07→7, otros→0): en el
