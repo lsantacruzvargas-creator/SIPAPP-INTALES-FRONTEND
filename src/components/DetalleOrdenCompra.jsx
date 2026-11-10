@@ -5,6 +5,7 @@ import { formatearFecha } from "../utils/fecha";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
 import ModalDetalleGuia from "./ModalDetalleGuia";
 import ModalReporteCosto from "./ModalReporteCosto";
+import ConfirmacionAccion from "./ConfirmacionAccion";
 import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgePago, badgeOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
@@ -45,6 +46,9 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   const [calc, setCalc]           = useState(calcular(subtotalInicial));
   const [empresas, setEmpresas]   = useState([]);
   const [ot, setOt]               = useState(null);
+  const [otCargada, setOtCargada] = useState(false);
+  const [confirmandoCrearOT, setConfirmandoCrearOT] = useState(false);
+  const [creandoOT, setCreandoOT] = useState(false);
   const [informes, setInformes]   = useState([]);
   const [gres, setGres]           = useState([]);
   const [guiaDetalle, setGuiaDetalle] = useState(null);
@@ -88,6 +92,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   // resto de acciones restringidas de la app), incluso aunque vendedor no tenga
   // puedeVerPrecios general (acá compara, no edita el subtotal).
   const puedeVerReporte = ["jefatura", "coordinadora", "vendedor", "admin"].includes(rolActual);
+  const puedeCrearOT = ["admin", "asistente", "supervisor", "planner", "jefatura", "coordinadora"].includes(rolActual);
   const exigeHes  = !!ordenActual.empresa?.requiereHes;
   const exigeActa = !!ordenActual.empresa?.requiereActaConformidad;
 
@@ -170,11 +175,32 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
     });
   };
 
+  const crearOT = async () => {
+    setCreandoOT(true);
+    try {
+      const res = await fetchAuth(`/ordenes-compra/${orden._id}/generar-ot`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.mensaje || "No se pudo crear la OT."); setConfirmandoCrearOT(false); return; }
+      setConfirmandoCrearOT(false);
+      onNavegar?.({ tipo: "ot", data });
+    } catch {
+      setError("Error de conexión con el servidor");
+      setConfirmandoCrearOT(false);
+    } finally {
+      setCreandoOT(false);
+    }
+  };
+
+  // OC independiente (sin cotización): la OT se ubica por el numeroDocumento
+  // compartido de la cadena (ver POST /ordenes-compra/:id/generar-ot).
   const cargarOTeInformes = () => {
     const cotId = orden.cotizacion?._id || orden.cotizacion;
     fetchAuth("/ordenes-trabajo").then(r => r.ok && r.json()).then(ots => {
-      if (!cotId || !ots) return;
-      const found = ots.find(o => (o.cotizacion?._id || o.cotizacion) === cotId);
+      setOtCargada(true);
+      if (!ots) return;
+      const found =
+        (cotId && ots.find(o => (o.cotizacion?._id || o.cotizacion) === cotId)) ||
+        (orden.numeroDocumento != null && ots.find(o => !o.ordenPadre && o.numeroDocumento === orden.numeroDocumento));
       setOt(found || null);
       if (found) {
         fetchAuth(`/informes?ordenTrabajo=${found._id}`)
@@ -549,7 +575,9 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
             </TarjetaRelacion>
 
             <TarjetaRelacion tipo="ot" codigo={ot?.codigo} numero={ot?.numeroOT} vacio={!ot}
-              onClick={ot ? () => onNavegar?.({ tipo: "ot", data: ot }) : undefined}>
+              onClick={ot ? () => onNavegar?.({ tipo: "ot", data: ot }) : undefined}
+              onCrear={otCargada && !ot && !orden.anulado && !cadenaCerrada && puedeCrearOT ? () => setConfirmandoCrearOT(true) : undefined}
+              crearLabel="OT">
               {ot?.estado && <Chip className={badgeOT(ot.estado)}>{ot.estado}</Chip>}
               {ot?.personalEncargado?.nombre && (
                 <p className="text-xs text-gray-500">Técnico: {ot.personalEncargado.nombre}</p>
@@ -635,6 +663,16 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
           </section>
         </div>
       </div>
+
+      {confirmandoCrearOT && (
+        <ConfirmacionAccion
+          mensaje="¿Crear una Orden de Trabajo para esta OC?"
+          onCancelar={() => setConfirmandoCrearOT(false)}
+          onConfirmar={crearOT}
+          procesando={creandoOT}
+          textoConfirmar="Crear OT"
+        />
+      )}
 
       {guiaDetalle && (
         <ModalDetalleGuia guia={guiaDetalle} onClose={() => setGuiaDetalle(null)} />
