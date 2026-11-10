@@ -576,8 +576,8 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
                     {ots.map(o => (
                       <button key={o._id} type="button"
                         onClick={(e) => { e.stopPropagation(); onNavegar?.({ tipo: "ot", data: o }); }}
-                        className="w-full flex items-center gap-2 text-left bg-white rounded-lg px-2 py-1 shadow-sm hover:bg-blue-50">
-                        <span className="font-mono text-xs font-bold text-blue-700 shrink-0">{o.numeroOT || o.codigo}</span>
+                        className="w-full flex items-center gap-2 text-left bg-white rounded-lg px-2 py-1 shadow-sm hover:ring-1 hover:ring-indigo-300">
+                        <span className="font-mono text-xs font-bold text-indigo-700 tarjeta-acento-texto shrink-0">{o.numeroOT || o.codigo}</span>
                         <span className="text-xs text-gray-600 truncate flex-1">{o.titulo}</span>
                         {o.estado && <Chip className={badgeOT(o.estado)}>{o.estado}</Chip>}
                       </button>

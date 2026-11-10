@@ -105,23 +105,39 @@
 }
 
 /* Tarjetas de "Relaciones" (TarjetaRelacion en detalleShared.jsx, variante
-   con datos): fondo pastel por tipo de documento (bg-sky-50, bg-blue-50,
-   etc.) que se deja igual en los 3 temas a propósito, como el resto de
-   acentos del proyecto. El texto interno (título, precios, código) usa
-   clases grises que SÍ se re-tiñen claras en oscuro/sepia — sin esto queda
-   texto claro sobre el fondo pastel claro que no se re-tiñe. Se re-fuerza
-   el color original acá, scopeado a .tarjeta-relacion-color para no tocar
-   los mismos bg-*-50/text-gray-* en el resto del proyecto (se usan también
-   en hovers, chips, cajas informativas que si funcionan bien tal cual). */
-[data-theme="oscuro"] .tarjeta-relacion-color .text-gray-800,
-[data-theme="oscuro"] .tarjeta-relacion-color .text-gray-700,
+   con datos). En sepia conservan el fondo pastel por tipo (bg-sky-50, etc.),
+   así que se re-fuerza el texto gris oscuro original. En oscuro el pastel
+   claro chocaba con las piezas internas bg-white (re-teñidas oscuras) y con
+   el texto re-teñido claro: la tarjeta pasa a una superficie oscura teñida
+   con el acento del tipo (--tarjeta-acento en "R G B" y --tarjeta-acento-claro,
+   ver TEMAS) y los textos de acento se aclaran. Sin color-mix(): el build lo
+   baja a un respaldo que en Chrome viejo (tablets Huawei) dejaba el texto del
+   mismo color que el fondo. Scopeado a .tarjeta-relacion-color para no tocar los mismos
+   bg-*-50/text-* en el resto del proyecto. */
 [data-theme="sepia"] .tarjeta-relacion-color .text-gray-800,
 [data-theme="sepia"] .tarjeta-relacion-color .text-gray-700 {
   color: #1f2937 !important;
 }
-[data-theme="oscuro"] .tarjeta-relacion-color .text-gray-500,
 [data-theme="sepia"] .tarjeta-relacion-color .text-gray-500 {
   color: #6b7280 !important;
+}
+[data-theme="oscuro"] .tarjeta-relacion-color {
+  background-color: var(--bg-surface) !important;
+  background-image: linear-gradient(rgb(var(--tarjeta-acento) / 0.16), rgb(var(--tarjeta-acento) / 0.16)) !important;
+  border-color: rgb(var(--tarjeta-acento) / 0.5) !important;
+}
+[data-theme="oscuro"] .tarjeta-relacion-color .bg-white {
+  background-color: var(--bg-page) !important;
+}
+[data-theme="oscuro"] .tarjeta-relacion-color .tarjeta-acento-texto {
+  color: var(--tarjeta-acento-claro) !important;
+}
+[data-theme="oscuro"] .tarjeta-relacion-color .text-blue-600,
+[data-theme="oscuro"] .tarjeta-relacion-color .bg-white.text-purple-700 {
+  color: #93c5fd !important;
+}
+[data-theme="oscuro"] .tarjeta-relacion-color .hover\:text-blue-800:hover {
+  color: #bfdbfe !important;
 }
 
 [data-theme="oscuro"] .text-gray-900,

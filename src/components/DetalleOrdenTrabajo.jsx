@@ -5,7 +5,6 @@ import { formatearFecha } from "../utils/fecha";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
 import ModalOrdenCompra from "./ModalOrdenCompra";
 import SelectorEmpresas from "./SelectorEmpresas";
-import ModalNuevaSubOT from "./ModalNuevaSubOT";
 import ModalRequerimiento from "./ModalRequerimiento";
 import ModalNotificacionTrabajo from "./ModalNotificacionTrabajo";
 import ModalDetalleNotificacionTrabajo from "./ModalDetalleNotificacionTrabajo";
@@ -140,7 +139,6 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const [crearOCOpen, setCrearOCOpen] = useState(false);
-  const [crearSubOTOpen, setCrearSubOTOpen] = useState(false);
   const [generarGREOpen, setGenerarGREOpen] = useState(false);
 
   const cargarRelaciones = () => {
@@ -709,21 +707,13 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
               )}
             </TarjetaRelacion>
 
+            {/* Crear sub-OTs quedó oculto (2026-11-10): las OTs se crean por ítem desde
+                la cotización o la OC. Las sub-OTs que ya existen se siguen mostrando. */}
+            {subOTs.length > 0 && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Sub-Órdenes ({subOTs.length})
-                </p>
-                {!ot.anulado && !cadenaCerrada && !esTecnico && (
-                  <button type="button" onClick={() => setCrearSubOTOpen(true)}
-                    className="text-xs text-blue-600 hover:text-blue-800 underline">
-                    + Crear Sub-OT
-                  </button>
-                )}
-              </div>
-              {subOTs.length === 0 ? (
-                <p className="text-xs text-gray-400">Sin sub-órdenes</p>
-              ) : (
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Sub-Órdenes ({subOTs.length})
+              </p>
                 <div className="space-y-2">
                   {subOTs.map(s => (
                     <TarjetaRelacion key={s._id} tipo="ot" codigo={s.codigo} numero={s.numeroOT}
@@ -739,8 +729,8 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                     </TarjetaRelacion>
                   ))}
                 </div>
-              )}
             </div>
+            )}
 
             <TarjetaRelacion
               tipo="informe"
@@ -970,14 +960,6 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
         />
       )}
 
-
-      {crearSubOTOpen && (
-        <ModalNuevaSubOT
-          padre={ot}
-          onClose={() => setCrearSubOTOpen(false)}
-          onCreada={() => { setCrearSubOTOpen(false); cargarRelaciones(); }}
-        />
-      )}
 
       {generarGREOpen && (
         <ModalGenerarGRE

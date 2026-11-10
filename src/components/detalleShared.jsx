@@ -52,14 +52,14 @@ export const IconReloj = () => (
 
 /* ─── Paletas por entidad ───────────────────────────────────────── */
 export const TEMAS = {
-  cotizacion: { icon: IconCotizacion, ring: "ring-sky-200",     dot: "bg-sky-500",     soft: "bg-sky-50",     text: "text-sky-700",     border: "border-sky-100",     label: "Cotización" },
-  ot:         { icon: IconOT,         ring: "ring-indigo-200",  dot: "bg-indigo-500",  soft: "bg-indigo-50",  text: "text-indigo-700",  border: "border-indigo-100",  label: "Orden de Trabajo" },
-  informe:    { icon: IconInforme,    ring: "ring-violet-200",  dot: "bg-violet-500",  soft: "bg-violet-50",  text: "text-violet-700",  border: "border-violet-100",  label: "Informe" },
-  oc:         { icon: IconOC,         ring: "ring-blue-200",    dot: "bg-blue-500",    soft: "bg-blue-50",    text: "text-blue-700",    border: "border-blue-100",    label: "Orden de Compra" },
-  factura:    { icon: IconFactura,    ring: "ring-emerald-200", dot: "bg-emerald-500", soft: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-100", label: "Factura" },
-  gre:        { icon: IconGRE,        ring: "ring-purple-200",  dot: "bg-purple-500",  soft: "bg-purple-50",  text: "text-purple-700",  border: "border-purple-100",  label: "Guía de Remisión" },
-  servicio:   { icon: IconServicio,   ring: "ring-purple-200",  dot: "bg-purple-500",  soft: "bg-purple-50",  text: "text-purple-700",  border: "border-purple-100",  label: "Servicios Externos" },
-  notificacionTrabajo: { icon: IconReloj, ring: "ring-orange-200", dot: "bg-orange-500", soft: "bg-orange-50", text: "text-orange-700", border: "border-orange-100", label: "Notificación de Trabajo" },
+  cotizacion: { icon: IconCotizacion, acento: "14 165 233", acentoClaro: "#7dd3fc", ring: "ring-sky-200",     dot: "bg-sky-500",     soft: "bg-sky-50",     text: "text-sky-700",     border: "border-sky-100",     label: "Cotización" },
+  ot:         { icon: IconOT, acento: "99 102 241", acentoClaro: "#a5b4fc",         ring: "ring-indigo-200",  dot: "bg-indigo-500",  soft: "bg-indigo-50",  text: "text-indigo-700",  border: "border-indigo-100",  label: "Orden de Trabajo" },
+  informe:    { icon: IconInforme, acento: "139 92 246", acentoClaro: "#c4b5fd",    ring: "ring-violet-200",  dot: "bg-violet-500",  soft: "bg-violet-50",  text: "text-violet-700",  border: "border-violet-100",  label: "Informe" },
+  oc:         { icon: IconOC, acento: "59 130 246", acentoClaro: "#93c5fd",         ring: "ring-blue-200",    dot: "bg-blue-500",    soft: "bg-blue-50",    text: "text-blue-700",    border: "border-blue-100",    label: "Orden de Compra" },
+  factura:    { icon: IconFactura, acento: "16 185 129", acentoClaro: "#6ee7b7",    ring: "ring-emerald-200", dot: "bg-emerald-500", soft: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-100", label: "Factura" },
+  gre:        { icon: IconGRE, acento: "168 85 247", acentoClaro: "#d8b4fe",        ring: "ring-purple-200",  dot: "bg-purple-500",  soft: "bg-purple-50",  text: "text-purple-700",  border: "border-purple-100",  label: "Guía de Remisión" },
+  servicio:   { icon: IconServicio, acento: "168 85 247", acentoClaro: "#d8b4fe",   ring: "ring-purple-200",  dot: "bg-purple-500",  soft: "bg-purple-50",  text: "text-purple-700",  border: "border-purple-100",  label: "Servicios Externos" },
+  notificacionTrabajo: { icon: IconReloj, acento: "249 115 22", acentoClaro: "#fdba74", ring: "ring-orange-200", dot: "bg-orange-500", soft: "bg-orange-50", text: "text-orange-700", border: "border-orange-100", label: "Notificación de Trabajo" },
 };
 
 /* ─── Stepper del flujo de negocio ──────────────────────────────── */
@@ -151,6 +151,7 @@ export function TarjetaRelacion({ tipo, codigo, numero, children, vacio, actual,
   const clickable = typeof onClick === "function";
   return (
     <div
+      style={{ "--tarjeta-acento": t.acento, "--tarjeta-acento-claro": t.acentoClaro }}
       onClick={clickable ? onClick : undefined}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
@@ -161,16 +162,16 @@ export function TarjetaRelacion({ tipo, codigo, numero, children, vacio, actual,
         <span className="absolute top-4 right-4 text-gray-300">→</span>
       )}
       <div className="flex items-center gap-3 mb-3">
-        <div className={`w-10 h-10 rounded-xl bg-white ${t.text} flex items-center justify-center shrink-0 shadow-sm`}>
+        <div className={`w-10 h-10 rounded-xl bg-white ${t.text} tarjeta-acento-texto flex items-center justify-center shrink-0 shadow-sm`}>
           <Icon />
         </div>
         <div className="min-w-0">
-          <p className={`text-[11px] font-semibold ${t.text} uppercase tracking-wide`}>{t.label}</p>
+          <p className={`text-[11px] font-semibold ${t.text} tarjeta-acento-texto uppercase tracking-wide`}>{t.label}</p>
           <p className="font-mono text-sm font-bold text-gray-800 truncate">{codigo || "—"}</p>
         </div>
       </div>
       {numero && (
-        <p className={`inline-block font-mono text-base font-extrabold ${t.text} bg-white rounded-lg px-2.5 py-1 mb-1 shadow-sm tracking-wide`}>
+        <p className={`inline-block font-mono text-base font-extrabold ${t.text} tarjeta-acento-texto bg-white rounded-lg px-2.5 py-1 mb-1 shadow-sm tracking-wide`}>
           {numero}
         </p>
       )}
