@@ -115,7 +115,7 @@ function TablaOC({
                   className={`hover:bg-gray-50 cursor-pointer transition-colors ${o.anulado ? "opacity-50" : ""}`}
                   onClick={() => onSelect(o)}>
                   <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || <span className="text-gray-300">—</span>}</td>
-                  <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{otPadre?.numeroOT || <span className="text-gray-300 font-sans">Sin OT</span>}</td>
+                  <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{grupoOT?.parents.length ? grupoOT.parents.map((ot) => ot.numeroOT || ot.codigo).join(", ") : <span className="text-gray-300 font-sans">Sin OT</span>}</td>
                   <td className="px-4 py-3.5 font-semibold text-gray-800 max-w-[220px]">
                     <div className="flex items-center gap-1.5 flex-wrap break-words">
                       {o.numeroOrden || <span className="text-gray-300">—</span>}
@@ -276,9 +276,9 @@ export default function ListaOrdenesCompra() {
       const otG = {};
       ots.forEach((ot) => {
         if (ot.numeroDocumento == null) return;
-        if (!otG[ot.numeroDocumento]) otG[ot.numeroDocumento] = { parent: null, subs: [] };
+        if (!otG[ot.numeroDocumento]) otG[ot.numeroDocumento] = { parent: null, parents: [], subs: [] };
         if (ot.ordenPadre) otG[ot.numeroDocumento].subs.push(ot);
-        else otG[ot.numeroDocumento].parent = ot;
+        else { otG[ot.numeroDocumento].parent = ot; otG[ot.numeroDocumento].parents.unshift(ot); }
       });
       setOtGroupMap(otG);
 
@@ -351,7 +351,7 @@ export default function ListaOrdenesCompra() {
     const txt = busqueda.toLowerCase();
     const factura = factByOCMap[o._id] || factMap[o.cotizacion?._id || o.cotizacion];
     const grupoOT = otGroupMap[o.numeroDocumento];
-    const numerosOT = grupoOT ? [grupoOT.parent, ...grupoOT.subs].filter(Boolean).map((ot) => ot.numeroOT) : [];
+    const numerosOT = grupoOT ? [...grupoOT.parents, ...grupoOT.subs].map((ot) => ot.numeroOT) : [];
     const matchBusq  = !txt
       || o.numeroOrden?.toLowerCase().includes(txt)
       || o.titulo?.toLowerCase().includes(txt)
@@ -394,7 +394,7 @@ export default function ListaOrdenesCompra() {
       "Cotización":         o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || "—",
       "N° Orden de Compra": o.numeroOrden || "—",
       "Fecha de creación":  o.createdAt ? formatearFecha(o.createdAt) : "—",
-      "N° OT":              grupoOT?.parent?.numeroOT || "—",
+      "N° OT":              grupoOT?.parents.map((ot) => ot.numeroOT || ot.codigo).join(", ") || "—",
       "Sub-OTs":            grupoOT?.subs?.map((s) => s.numeroOT).join(", ") || "—",
       "N° Factura":         o.numeroFactura || factura?.numeroFactura || "—",
       "Empresa":            o.empresa?.razonSocial || "—",
