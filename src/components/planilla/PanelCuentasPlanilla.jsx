@@ -20,6 +20,8 @@ const GASTO = [
 
 const TRATAMIENTO_ADELANTO = "Tratamiento contable del adelanto: al pagarlo se registra D 1412 Adelanto de remuneraciones / H banco. Al cerrar la planilla del mes, la boleta lo descuenta como 0701 y su asiento abona la 1412 por lo adelantado; la 4111 queda solo con lo que falta pagar.";
 
+const NOTA_SUBSIDIOS = "El subsidio que paga la empresa se carga a esta cuenta al cerrar la planilla; el reembolso de EsSalud se registra en Tesorería con «Planilla: reembolso de subsidio EsSalud».";
+
 const AVISO_141 = "Si creas la 1412 bajo una 141 que hoy es una cuenta hoja, la 141 pasa a ser una agrupación y ya no puede usarse como cuenta de descuentos: usa otra (por ejemplo la 1411) para los descuentos.";
 
 const CUENTAS = [
@@ -38,7 +40,7 @@ const CUENTAS = [
   ]],
   ["Subsidios de EsSalud", [
     ["subsidiosPorCobrar", "Subsidios por cobrar a EsSalud (ej. 1629)"],
-  ]],
+  ], NOTA_SUBSIDIOS],
   ["Adelanto de remuneraciones", [
     ["adelantoRemuneraciones", "Adelanto de remuneraciones (ej. 1412)", true],
   ], TRATAMIENTO_ADELANTO, AVISO_141],

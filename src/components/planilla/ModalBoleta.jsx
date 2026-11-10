@@ -28,7 +28,7 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
   const quitar = (campo, i) => cambiar(campo, form[campo].filter((_, j) => j !== i));
 
   const guardar = async () => {
-    if (form.suspensiones.some((s) => !s.tipo || !(Number(s.dias) >= 1)) || form.adicionales.some((a) => !a.codigo || !(Number(a.monto) > 0))) {
+    if (form.suspensiones.some((s) => !s.tipo || !(Number(s.dias) >= 1)) || form.adicionales.some((a) => !a.codigo || String(a.monto).trim() === "" || !(Number(a.monto) > 0 || (["0915", "0916"].includes(a.codigo) && Number(a.monto) === 0)))) {
       return setError("Completa o quita las filas vacías.");
     }
     const errorVenta = validarDiasVendidos(form.diasVendidos);
@@ -56,7 +56,6 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
   const noImportar = catalogos.plame?.noImportar || [];
   const grat = detalleGratificacion(boleta.gratificacion);
   const subsidio = detalleSubsidio(boleta.subsidio);
-  const primerSubsidio = subsidio?.items[0]?.codigo;
   const provisiones = boleta.provisiones || [], consumos = boleta.consumos || [];
   const mesAnio = (p) => `${p.slice(4)}/${p.slice(0, 4)}`;
   const rotulo = (x) => `${ROTULOS_PROVISION[x.tipo] || x.tipo}${x.periodo ? ` (${x.tipo === "cts" ? "depósito" : "pago"} ${mesAnio(x.periodo)})` : ""}`;
@@ -116,7 +115,7 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
               </div>
             ))}
             {editable && <button onClick={() => cambiar("adicionales", [...form.adicionales, { codigo: "", monto: "" }])} className="text-xs text-purple-600 hover:underline">+ Ingreso o descuento (comisión, bono, descuento…)</button>}
-            <p className="text-[11px] text-gray-400">El adelanto (0701) no se digita aquí: sale de los lotes de adelanto confirmados en Abonos al banco.</p>
+            <p className="text-[11px] text-gray-400">Con días 21/22, un 0916/0915 en 0 significa que EsSalud paga directo: la boleta no lo calcula. El adelanto (0701) no se digita aquí: sale de los lotes de adelanto confirmados en Abonos al banco.</p>
           </section>
 
           <section className="space-y-3">
@@ -139,8 +138,7 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
                             </span>
                           )}
                           {c.calculado && c.codigo === "0312" && grat?.bonificacion && <span className="block text-[11px] text-gray-400">{grat.bonificacion}</span>}
-                          {subsidio?.items.filter((x) => x.codigo === c.codigo).map((x, i) => <span key={i} className="block text-[11px] text-gray-400">{x.texto}</span>)}
-                          {c.codigo === primerSubsidio && subsidio.avisos.map((a, i) => <span key={i} className="block text-[11px] text-amber-700">{a}</span>)}</td>
+                          {subsidio?.items.filter((x) => x.codigo === c.codigo).map((x, i) => <span key={i} className="block text-[11px] text-gray-400">{x.texto}</span>)}</td>
                         <td className="py-1 text-right tabular-nums whitespace-nowrap">{money(c.monto)}</td>
                       </tr>
                     ))}
@@ -148,6 +146,12 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
                 </table>
               ) : null;
             })}
+            {subsidio?.avisos.length > 0 && (
+              <div className="space-y-0.5">
+                {subsidio.avisos.map((a, i) => <p key={i} className="text-[11px] text-amber-700">{a}</p>)}
+              </div>
+            )}
+            {boleta.sinPrimaPor65 && <p className="text-[11px] text-gray-500">Sin prima de seguro AFP: 65 años cumplidos</p>}
             <p className="text-sm font-semibold text-gray-800 flex justify-between border-t pt-2"><span>Neto a pagar</span><span>{money(boleta.totales.neto)}</span></p>
             {(provisiones.length > 0 || consumos.length > 0) && (
               <div className="border border-gray-200 rounded-lg px-3 py-2 space-y-1">
