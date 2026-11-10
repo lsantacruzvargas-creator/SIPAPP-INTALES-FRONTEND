@@ -133,8 +133,11 @@ export const CONCEPTOS_MANUALES = [
   { valor: "pago_quinta", label: "Planilla: renta de 5.ª", soloEgreso: true },
   { valor: "pago_cts", label: "Planilla: CTS", soloEgreso: true },
   { valor: "pago_adelanto", label: "Planilla: adelanto de remuneraciones", soloEgreso: true },
+  // EsSalud reembolsa el subsidio: entra dinero, cancela lo que quedó por cobrar.
+  { valor: "cobro_subsidio", label: "Planilla: reembolso de subsidio EsSalud", soloIngreso: true },
 ];
-export const conceptosManualesDe = (tipo) => CONCEPTOS_MANUALES.filter((c) => !c.soloEgreso || tipo === "egreso");
+export const conceptosManualesDe = (tipo) =>
+  CONCEPTOS_MANUALES.filter((c) => (!c.soloEgreso || tipo === "egreso") && (!c.soloIngreso || tipo === "ingreso"));
 export const etiquetaConceptoManual = (valor) =>
   valor === "transferencia" ? "Transferencia entre cuentas" : CONCEPTOS_MANUALES.find((c) => c.valor === valor)?.label || valor;
 

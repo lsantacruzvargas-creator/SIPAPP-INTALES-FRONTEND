@@ -167,4 +167,18 @@ export const detalleGratificacion = (g) => {
   };
 };
 
+// El diario es informativo: el monto del concepto se calcula con el diario sin redondear, así que diario × días puede diferir en centavos.
+export const detalleSubsidio = (s) => {
+  if (!s) return null;
+  return {
+    items: (s.items || []).map((x) => {
+      const origen = x.heredado
+        ? "diario heredado del mes anterior"
+        : `desde ${x.mesInicio.slice(4)}/${x.mesInicio.slice(0, 4)}${x.meses ? `, ${x.meses} ${x.meses === 1 ? "mes" : "meses"}` : ""}`;
+      return { codigo: x.codigo, texto: `${x.codigo} · ${x.dias} ${x.dias === 1 ? "día" : "días"} × ${money(x.diario)} diario (${origen})` };
+    }),
+    avisos: s.avisos || [],
+  };
+};
+
 export const ROTULOS_PROVISION = { cts: "CTS", gratificacion: "Gratificación", bonificacion: "Bonificación extraordinaria", vacaciones: "Vacaciones" };

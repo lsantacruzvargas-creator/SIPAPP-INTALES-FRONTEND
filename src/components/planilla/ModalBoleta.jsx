@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { fetchAuth } from "../../utils/fetchAuth";
 import { money } from "../../utils/compras";
-import { TIPOS_CONCEPTO, textoPension, detalleGratificacion, ROTULOS_PROVISION } from "../../utils/planilla";
+import { TIPOS_CONCEPTO, textoPension, detalleGratificacion, detalleSubsidio, ROTULOS_PROVISION } from "../../utils/planilla";
 import EtiquetaPlame, { LeyendaPlame } from "./EtiquetaPlame";
 import { generarBoletaPdf } from "../../utils/boletaPdf";
 import { validarDiasVendidos } from "../../utils/vacaciones";
@@ -55,6 +55,8 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
   const d = boleta.datos, q = boleta.quinta;
   const noImportar = catalogos.plame?.noImportar || [];
   const grat = detalleGratificacion(boleta.gratificacion);
+  const subsidio = detalleSubsidio(boleta.subsidio);
+  const primerSubsidio = subsidio?.items[0]?.codigo;
   const provisiones = boleta.provisiones || [], consumos = boleta.consumos || [];
   const mesAnio = (p) => `${p.slice(4)}/${p.slice(0, 4)}`;
   const rotulo = (x) => `${ROTULOS_PROVISION[x.tipo] || x.tipo}${x.periodo ? ` (${x.tipo === "cts" ? "depósito" : "pago"} ${mesAnio(x.periodo)})` : ""}`;
@@ -136,7 +138,9 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
                               {grat.avisos.map((a, i) => <span key={i} className="block text-amber-700">{a}</span>)}
                             </span>
                           )}
-                          {c.calculado && c.codigo === "0312" && grat?.bonificacion && <span className="block text-[11px] text-gray-400">{grat.bonificacion}</span>}</td>
+                          {c.calculado && c.codigo === "0312" && grat?.bonificacion && <span className="block text-[11px] text-gray-400">{grat.bonificacion}</span>}
+                          {subsidio?.items.filter((x) => x.codigo === c.codigo).map((x, i) => <span key={i} className="block text-[11px] text-gray-400">{x.texto}</span>)}
+                          {c.codigo === primerSubsidio && subsidio.avisos.map((a, i) => <span key={i} className="block text-[11px] text-amber-700">{a}</span>)}</td>
                         <td className="py-1 text-right tabular-nums whitespace-nowrap">{money(c.monto)}</td>
                       </tr>
                     ))}

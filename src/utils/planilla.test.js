@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   nombreTrabajador, textoPension, montoDe, totalesPlanilla, filasExcelPlanilla, TRABAJADOR_VACIO, formularioDeTrabajador, validarTrabajador,
   cuerpoDeTrabajador, formularioDeParametros, cuerpoDeParametros, faltanTasasAfp, cuerpoDeCuentas, celdasDeColumna, SUBTITULO_LIQUIDACION, AREAS, CLAVES_GASTO_AREA,
-  destinoPlame, ETIQUETA_PLAME, etiquetaPeriodoCts, detalleGratificacion, ROTULOS_PROVISION,
+  destinoPlame, ETIQUETA_PLAME, etiquetaPeriodoCts, detalleGratificacion, detalleSubsidio, ROTULOS_PROVISION,
 } from "./planilla.js";
 
 const AFPS = { integra: "Integra", habitat: "Habitat" };
@@ -193,4 +193,17 @@ test("detalleGratificacion: la fórmula con los datos de la boleta", () => {
 
 test("rótulos de las provisiones mensuales", () => {
   assert.deepEqual(ROTULOS_PROVISION, { cts: "CTS", gratificacion: "Gratificación", bonificacion: "Bonificación extraordinaria", vacaciones: "Vacaciones" });
+});
+
+test("detalleSubsidio: un texto por item, con su inicio y duración o el diario heredado, y los avisos", () => {
+  const s = { items: [
+    { codigo: "0916", tipo: "21", dias: 10, diario: 100, mesInicio: "202603", meses: 12, heredado: false, monto: 1000 },
+    { codigo: "0915", tipo: "22", dias: 1, diario: 80.5, mesInicio: "202603", meses: null, heredado: true, monto: 80.5 },
+  ], avisos: ["Falta el CITT"] };
+  const d = detalleSubsidio(s);
+  assert.equal(d.items[0].texto, "0916 · 10 días × S/ 100.00 diario (desde 03/2026, 12 meses)");
+  assert.equal(d.items[1].texto, "0915 · 1 día × S/ 80.50 diario (diario heredado del mes anterior)");
+  assert.deepEqual(d.avisos, ["Falta el CITT"]);
+  assert.equal(detalleSubsidio({ items: [{ ...s.items[0], meses: null }] }).items[0].texto, "0916 · 10 días × S/ 100.00 diario (desde 03/2026)");
+  assert.equal(detalleSubsidio(null), null);
 });

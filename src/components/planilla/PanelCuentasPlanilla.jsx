@@ -36,6 +36,9 @@ const CUENTAS = [
     ["gratificacionesPorPagar", "Gratificaciones por pagar (ej. 4114)"],
     ["vacacionesPorPagar", "Vacaciones por pagar (ej. 4115)"],
   ]],
+  ["Subsidios de EsSalud", [
+    ["subsidiosPorCobrar", "Subsidios por cobrar a EsSalud (ej. 1629)"],
+  ]],
   ["Adelanto de remuneraciones", [
     ["adelantoRemuneraciones", "Adelanto de remuneraciones (ej. 1412)", true],
   ], TRATAMIENTO_ADELANTO, AVISO_141],

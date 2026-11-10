@@ -307,11 +307,13 @@ test("filasExcelComparacionCarga: con RUC distinto muestra el RUC de SUNAT", asy
   assert.equal(f.DIFERENCIAS, "RUC");
 });
 
-test("conceptos manuales: los cinco del diseño, los pagos de planilla (solo egresos) y su etiqueta", async () => {
+test("conceptos manuales: los cinco del diseño, los pagos de planilla (solo egresos), el cobro del subsidio (solo ingreso) y su etiqueta", async () => {
   const { conceptosManualesDe } = await import("./tesoreria.js");
-  assert.deepEqual(conceptosManualesDe("ingreso").map((c) => c.valor), ["aporte", "prestamo", "retiro", "gasto_bancario", "otros"]);
-  assert.deepEqual(CONCEPTOS_MANUALES.map((c) => c.valor).slice(5), ["pago_remuneraciones", "pago_afp", "pago_essalud", "pago_onp", "pago_quinta", "pago_cts", "pago_adelanto"]);
+  assert.deepEqual(conceptosManualesDe("ingreso").map((c) => c.valor), ["aporte", "prestamo", "retiro", "gasto_bancario", "otros", "cobro_subsidio"]);
+  assert.deepEqual(CONCEPTOS_MANUALES.map((c) => c.valor).slice(5), ["pago_remuneraciones", "pago_afp", "pago_essalud", "pago_onp", "pago_quinta", "pago_cts", "pago_adelanto", "cobro_subsidio"]);
   assert.equal(conceptosManualesDe("egreso").length, 12);
+  assert.ok(!conceptosManualesDe("egreso").some((c) => c.valor === "cobro_subsidio"));
+  assert.equal(etiquetaConceptoManual("cobro_subsidio"), "Planilla: reembolso de subsidio EsSalud");
   assert.equal(etiquetaConceptoManual("pago_afp"), "Planilla: AFP");
   assert.equal(etiquetaConceptoManual("pago_cts"), "Planilla: CTS");
   assert.equal(etiquetaConceptoManual("gasto_bancario"), "Gasto bancario");
