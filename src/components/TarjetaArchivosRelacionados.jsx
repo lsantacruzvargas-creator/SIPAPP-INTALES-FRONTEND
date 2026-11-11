@@ -46,17 +46,43 @@ const formatoTamano = (bytes = 0) => {
 // sube los planos a la Cotización y deben verse también desde la OT
 // generada, y en el sentido contrario (revisión del usuario, 2026-09-14). Se
 // muestran de solo lectura acá (no se pueden borrar desde este lado) — para
-// eso hay que abrir el documento dueño.
+// eso hay que abrir el documento dueño. Cualquier archivo puede traer su
+// propia `_etiqueta` (ej. "De OT 42", "Asignado a OT 42"); en los vinculados
+// reemplaza a `vinculadoLabel`.
+//
+// `accionArchivo(archivo, { vinculado })` (opcional): devuelve
+// { label, onClick } para un botón extra en ese archivo, o null — lo usa la
+// OT para asignarse o quitarse un adjunto de la cotización. `onClick`
+// devuelve una promesa con un mensaje de error o null.
+//
+// `puedeEliminar` controla la ✕ de los archivos propios ya guardados;
+// `onEliminarVinculado` (misma firma que `onClick`) agrega la ✕ a los
+// vinculados — el padre decide qué roles la ven.
 export default function TarjetaArchivosRelacionados({
   ordenId, archivos = [], onCambio,
   pendientes, onPendientesChange,
   archivosVinculados = [], vinculadoLabel = "",
+  accionArchivo,
+  puedeEliminar = true, onEliminarVinculado,
   endpoint = "ordenes-trabajo",
   soloLectura = false,
   className = "",
 }) {
   const [subiendo, setSubiendo] = useState(false);
   const [error, setError] = useState("");
+  const [moviendo, setMoviendo] = useState(null);
+
+  const ejecutarAccion = async (accion, archivo) => {
+    setError(""); setMoviendo(archivo._id);
+    try {
+      const msg = await accion.onClick(archivo);
+      if (msg) setError(msg);
+    } catch {
+      setError("Error de conexión con el servidor");
+    } finally {
+      setMoviendo(null);
+    }
+  };
   const esPendiente = ordenId == null;
   const lista = esPendiente ? (pendientes || []) : archivos;
 
@@ -96,8 +122,11 @@ export default function TarjetaArchivosRelacionados({
       onPendientesChange?.((pendientes || []).filter((_, i) => i !== idx));
       return;
     }
+    setError("");
     const res = await fetchAuth(`/${endpoint}/${ordenId}/archivos/${archivo._id}`, { method: "DELETE" });
-    if (res.ok) onCambio?.(await res.json());
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) onCambio?.(data);
+    else setError(data.mensaje || "No se pudo eliminar el archivo.");
   };
 
   const abrir = (archivo) => {
@@ -105,10 +134,14 @@ export default function TarjetaArchivosRelacionados({
     else if (archivo.file) window.open(URL.createObjectURL(archivo.file), "_blank");
   };
 
-  const renderArchivo = (a, idx, { vinculado = false } = {}) => (
+  const renderArchivo = (a, idx, { vinculado = false } = {}) => {
+    const accion = !soloLectura && accionArchivo ? accionArchivo(a, { vinculado }) : null;
+    const conX = !soloLectura && (vinculado ? !!onEliminarVinculado : esPendiente || puedeEliminar);
+    return (
     <div key={a._id || idx} className="relative border border-gray-100 rounded-xl p-3 w-[200px] space-y-2">
-      {!soloLectura && !vinculado && (
-        <button type="button" onClick={() => eliminar(a, idx)}
+      {conX && (
+        <button type="button" title="Eliminar archivo" disabled={moviendo != null}
+          onClick={() => (vinculado ? ejecutarAccion({ onClick: onEliminarVinculado }, a) : eliminar(a, idx))}
           className="absolute -top-2 -right-2 bg-white border border-gray-200 text-red-400 hover:text-red-600 rounded-full w-6 h-6 text-xs leading-none z-10">
           ✕
         </button>
@@ -130,14 +163,22 @@ export default function TarjetaArchivosRelacionados({
       </button>
       <div className="flex items-center justify-between gap-1">
         <p className="text-[11px] text-gray-400">{formatoTamano(a.tamano)}</p>
-        {vinculado && (
-          <span className="text-[10px] text-cyan-600 bg-cyan-50 rounded-full px-1.5 py-0.5 whitespace-nowrap">
-            De {vinculadoLabel}
+        {(vinculado || a._etiqueta) && (
+          <span title={a._etiqueta || `De ${vinculadoLabel}`}
+            className="text-[10px] text-cyan-600 bg-cyan-50 rounded-full px-1.5 py-0.5 whitespace-nowrap truncate max-w-[130px]">
+            {a._etiqueta || `De ${vinculadoLabel}`}
           </span>
         )}
       </div>
+      {accion && (
+        <button type="button" onClick={() => ejecutarAccion(accion, a)} disabled={moviendo != null}
+          className="w-full text-xs border border-cyan-200 text-cyan-700 bg-white rounded-lg py-1 hover:bg-cyan-50 disabled:opacity-50">
+          {moviendo === a._id ? "Guardando…" : accion.label}
+        </button>
+      )}
     </div>
-  );
+    );
+  };
 
   const totalArchivos = lista.length + archivosVinculados.length;
 

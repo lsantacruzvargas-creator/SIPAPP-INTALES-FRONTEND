@@ -338,6 +338,17 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     }
   };
 
+  // Adjuntos que se ven acá porque están en una OT de la cadena: el backend
+  // los quita de esa OT (solo Coordinadora o superior).
+  const eliminarAdjuntoDeOT = async (archivo) => {
+    const res = await fetchAuth(`/cotizaciones/${cot._id}/archivos/${archivo._id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    cargarRelaciones();
+    if (!res.ok) return data.mensaje || "No se pudo eliminar el archivo.";
+    setCot(data);
+    return null;
+  };
+
   const descuentoGlobalNum = Number(form.descuentoGlobal) || 0;
   const subtotalItems = parseFloat(items.reduce((acc, i) => acc + calcSubtotal(i, descuentoGlobalNum), 0).toFixed(2));
   const usarTotalesDeItems = items.length > 0;
@@ -1047,9 +1058,18 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
           <TarjetaArchivosRelacionados
             ordenId={cot._id}
             endpoint="cotizaciones"
-            archivos={cot.archivos}
-            archivosVinculados={ots.flatMap(o => o.archivos || [])}
+            archivos={(cot.archivos || []).map(a => {
+              const asignadas = ots.filter(o => (a.ordenesTrabajo || []).some(id => String(id) === String(o._id)));
+              return asignadas.length
+                ? { ...a, _etiqueta: `Asignado a ${asignadas.map(o => `OT ${o.numeroOT || o.codigo}`).join(", ")}` }
+                : a;
+            })}
+            archivosVinculados={ots.flatMap(o => (o.archivos || []).map(a => ({
+              ...a,
+              _etiqueta: `De OT ${o.numeroOT || o.codigo}`,
+            })))}
             vinculadoLabel="la OT"
+            onEliminarVinculado={["admin", "jefatura", "coordinadora"].includes(rolActual) ? eliminarAdjuntoDeOT : undefined}
             soloLectura={cot.anulado}
             onCambio={(actualizada) => setCot(actualizada)}
           />

@@ -97,6 +97,8 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   // técnico, supervisor no ve el resto de la cadena (Cotización/OC/Factura).
   const puedeEditarCampos = ["admin", "jefatura", "supervisor", "planner", "coordinadora"].includes(rolActual);
   const puedeEditarDetalleItem = puedeEditarCampos && rolActual !== "supervisor";
+  const puedeAsignarAdjuntos = ["admin", "jefatura", "planner", "coordinadora"].includes(rolActual);
+  const puedeEliminarAdjuntos = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   // Anular un documento queda reservado a Admin, Jefatura y Coordinadora — Facturación ya
   // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
   const puedeAnular = ["admin", "jefatura", "coordinadora"].includes(rolActual);
@@ -147,6 +149,24 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const [error, setError] = useState("");
   const [crearOCOpen, setCrearOCOpen] = useState(false);
   const [generarGREOpen, setGenerarGREOpen] = useState(false);
+
+  // Los adjuntos de la cotización siguen siendo de la cotización: acá solo se
+  // asignan o quitan de esta OT. Supervisor y técnicos ven únicamente los
+  // asignados; quien asigna ve también el resto, para poder elegirlos.
+  const asignadoAEstaOT = (a) => (a.ordenesTrabajo || []).some((id) => String(id) === String(ot._id));
+  const adjuntosCotizacion = (cot?.archivos || [])
+    .filter((a) => puedeAsignarAdjuntos || asignadoAEstaOT(a))
+    .map((a) => ({
+      ...a,
+      _etiqueta: !puedeAsignarAdjuntos ? "De la Cotización"
+        : asignadoAEstaOT(a) ? "Asignado a esta OT" : "Cotización · sin asignar",
+    }));
+  const asignarAdjunto = async (archivo, accion) => {
+    const res = await fetchAuth(`/ordenes-trabajo/${ot._id}/archivos-cotizacion/${archivo._id}/${accion}`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    cargarRelaciones();
+    return res.ok ? null : data.mensaje || "No se pudo actualizar el adjunto.";
+  };
 
   const cargarRelaciones = () => {
     Promise.all([
@@ -892,8 +912,14 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
           <TarjetaArchivosRelacionados
             ordenId={ot._id}
             archivos={ot.archivos}
-            archivosVinculados={cot?.archivos || []}
+            archivosVinculados={adjuntosCotizacion}
             vinculadoLabel="la Cotización"
+            puedeEliminar={puedeEliminarAdjuntos}
+            accionArchivo={puedeAsignarAdjuntos ? (a, { vinculado }) => !vinculado ? null
+              : asignadoAEstaOT(a)
+                ? { label: "Quitar de esta OT", onClick: (x) => asignarAdjunto(x, "quitar") }
+                : { label: "Pasar a esta OT", onClick: (x) => asignarAdjunto(x, "asignar") }
+              : undefined}
             soloLectura={ot.anulado || cadenaCerrada}
             onCambio={(actualizada) => setOt(actualizada)}
           />
