@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAuth, getUsuario } from "../utils/fetchAuth";
+import { fetchAuth, getUsuario, abrirArchivoProtegido } from "../utils/fetchAuth";
+import ImagenProtegida from "./ImagenProtegida";
 import { formatearFecha } from "../utils/fecha";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
 import ModalOrdenCompra from "./ModalOrdenCompra";
@@ -64,6 +65,11 @@ const estadoItem = (it) => it.esSolicitudCompra
 export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardada, onNavegar }) {
   const [ot, setOt] = useState(inicial);
   const [form, setForm] = useState({
+    // Las OT generadas antes de existir `subItems` solo tienen el detalle
+    // unido con saltos de línea en `descripcion`.
+    subItems: inicial.subItems?.length
+      ? inicial.subItems
+      : (inicial.descripcion || "").split("\n").map((s) => s.trim()).filter(Boolean),
     numeroOT: inicial.numeroOT || "",
     codigoSap: inicial.codigoSap || "",
     empresa: inicial.empresa?._id || "",
@@ -90,6 +96,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   // Supervisor edita los campos de la OT, pero no puede anularla. Igual que
   // técnico, supervisor no ve el resto de la cadena (Cotización/OC/Factura).
   const puedeEditarCampos = ["admin", "jefatura", "supervisor", "planner", "coordinadora"].includes(rolActual);
+  const puedeEditarDetalleItem = puedeEditarCampos && rolActual !== "supervisor";
   // Anular un documento queda reservado a Admin, Jefatura y Coordinadora — Facturación ya
   // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
   const puedeAnular = ["admin", "jefatura", "coordinadora"].includes(rolActual);
@@ -256,6 +263,12 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     }));
   };
 
+  const cambiarSubItem = (idx, valor) =>
+    setForm(prev => ({ ...prev, subItems: prev.subItems.map((s, i) => (i === idx ? valor : s)) }));
+  const quitarSubItem = (idx) =>
+    setForm(prev => ({ ...prev, subItems: prev.subItems.filter((_, i) => i !== idx) }));
+  const agregarSubItem = () => setForm(prev => ({ ...prev, subItems: [...prev.subItems, ""] }));
+
   const guardar = async () => {
     if (!form.titulo.trim()) { setError("El título de la OT es obligatorio."); return; }
     setGuardando(true); setError("");
@@ -264,6 +277,8 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
       contactoNombre: contactoSel?.nombre || "",
       contactoTelefono: contactoSel?.telefono || "",
     };
+    if (puedeEditarDetalleItem) body.subItems = form.subItems.map(s => s.trim()).filter(Boolean);
+    else delete body.subItems;
     if (!body.empresa) delete body.empresa;
     if (!body.fechaSalida) delete body.fechaSalida;
     body.cantidad = body.cantidad === "" ? null : Number(body.cantidad);
@@ -276,6 +291,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     if (res.ok) {
       const actualizada = await res.json();
       setOt(actualizada);
+      if (puedeEditarDetalleItem) setForm(prev => ({ ...prev, subItems: actualizada.subItems || [] }));
       onGuardada?.(actualizada);
     } else {
       setError("Error al guardar los cambios.");
@@ -658,6 +674,47 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                   <input value={form.tiempoFabricacion === "" ? "—" : `${form.tiempoFabricacion} días hábiles`} disabled className={RO} />
                 </div>
               </div>
+
+              {(puedeEditarDetalleItem || form.subItems.length > 0 || ot.imagenes?.length > 0) && (
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Detalle del ítem cotizado</label>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 space-y-2">
+                    {puedeEditarDetalleItem ? (
+                      <div className="space-y-1.5">
+                        {form.subItems.map((s, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <span className="text-sky-500 text-sm">•</span>
+                            <input value={s} onChange={(e) => cambiarSubItem(i, e.target.value)}
+                              placeholder="Sub ítem" className={`${INP} py-1.5`} />
+                            <button type="button" onClick={() => quitarSubItem(i)} title="Quitar sub ítem"
+                              className="text-gray-400 hover:text-red-500 text-lg leading-none px-1">×</button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={agregarSubItem}
+                          className="text-xs text-blue-600 hover:text-blue-800">+ agregar sub ítem</button>
+                      </div>
+                    ) : form.subItems.length > 0 && (
+                      <ul className="space-y-1">
+                        {form.subItems.map((s, i) => (
+                          <li key={i} className="flex gap-2 text-sm text-gray-700">
+                            <span className="text-sky-500">•</span>
+                            <span className="whitespace-pre-wrap break-words">{s}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {ot.imagenes?.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {ot.imagenes.map((url) => (
+                          <ImagenProtegida key={url} src={url} alt=""
+                            onClick={() => abrirArchivoProtegido(url)}
+                            className="w-24 h-24 object-cover rounded-lg border border-gray-200 cursor-pointer" />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div hidden>
                 <label className="text-xs text-gray-500 block mb-1">Condición</label>

@@ -42,7 +42,7 @@ function BuscadorCotizacion({ onSelect, onClose }) {
                 className="w-full text-left px-4 py-3 rounded-xl hover:bg-blue-50 border border-transparent hover:border-blue-100 transition">
                 <div className="flex justify-between">
                   <span className="font-mono text-xs text-blue-600">{c.codigo}</span>
-                  <span className="text-xs text-gray-400">S/ {Number(c.total ?? 0).toFixed(2)}</span>
+                  <span className="text-xs text-gray-400">{c.moneda === "USD" ? "US$" : "S/"} {Number(c.total ?? 0).toFixed(2)}</span>
                 </div>
                 <p className="text-sm text-gray-700 truncate">{c.titulo}</p>
                 {c.empresa && <p className="text-xs text-gray-400">{c.empresa.razonSocial}</p>}
@@ -63,6 +63,7 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
     empresa: "", titulo: "",
     subtotal: "", descripcion: "",
     encargado: "", planta: "",
+    moneda: "PEN",
   });
   const [calc, setCalc]          = useState(calcular(0));
   const [cotVinculada, setCot]   = useState(null);
@@ -77,6 +78,10 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
   }, []);
 
   const plantasEmpresa = empresas.find(e => e._id === form.empresa)?.plantas ?? [];
+  // Con cotización vinculada la OC toma su moneda (lo fuerza el pre("save")
+  // de OrdenCompra), así que el selector solo decide en la OC independiente.
+  const moneda = cotVinculada?.moneda || form.moneda;
+  const simbolo = moneda === "USD" ? "US$" : "S/";
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -122,6 +127,7 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
       descripcion:   form.descripcion,
       encargado:     form.encargado,
       planta:        form.planta,
+      moneda,
       cotizacion:    cotVinculada?._id,
     };
     if (form.empresa)       payload.empresa    = form.empresa;
@@ -203,12 +209,22 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
             </select>
           </div>
 
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Moneda</label>
+            <select name="moneda" value={moneda} onChange={handleChange} disabled={!!cotVinculada}
+              className={cotVinculada ? INP_DIS : INP}>
+              <option value="PEN">Soles (S/)</option>
+              <option value="USD">Dólares (US$)</option>
+            </select>
+            {cotVinculada && <p className="text-xs text-gray-400 mt-1">Se toma de la cotización vinculada.</p>}
+          </div>
+
           {/* Cálculos — ocultos para Administración, que no ve/edita montos */}
           {!esAsistente && (
             <div className="bg-gray-50 rounded-xl p-4 grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="text-xs text-gray-500 block mb-1">
-                  Subtotal sin IGV {cotVinculada?.moneda === "USD" ? "(US$)" : "(S/)"} *
+                  Subtotal sin IGV ({simbolo}) *
                 </label>
                 <input type="number" name="subtotal" value={form.subtotal} onChange={handleChange}
                   disabled={esAsistente} step="0.01" min="0" placeholder="0.00" className={INP} />

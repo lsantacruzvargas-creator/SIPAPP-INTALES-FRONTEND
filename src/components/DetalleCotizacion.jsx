@@ -5,7 +5,6 @@ import { formatearFecha } from "../utils/fecha";
 import { exportarCotizacionPdf } from "../utils/cotizacionPdf";
 import { calcSubtotal, itemDesdeDb, itemInvalido } from "../utils/cotizacionItems";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
-import ModalNuevaOT from "./ModalNuevaOT";
 import ModalOrdenCompra, { ModalOrdenCompraItems } from "./ModalOrdenCompra";
 import ModalDetalleGuia from "./ModalDetalleGuia";
 import BuscadorOrdenTrabajo from "./BuscadorOrdenTrabajo";
@@ -95,7 +94,6 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const [servicios, setServicios] = useState([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
-  const [crearOTOpen, setCrearOTOpen] = useState(false);
   const [crearOCOpen, setCrearOCOpen] = useState(false);
   const [modalCerrarCadenaOpen, setModalCerrarCadenaOpen] = useState(false);
   const [fechaPagoCierre, setFechaPagoCierre] = useState(() => new Date().toISOString().slice(0, 10));
@@ -888,8 +886,9 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
             </TarjetaRelacion>
 
             {ots.length === 0 ? (
-              <TarjetaRelacion tipo="ot" vacio
-                onCrear={!cot.anulado ? () => setCrearOTOpen(true) : undefined} crearLabel="OT" />
+              // Sin botón de crear: las OT de una cotización salen solo del
+              // check «OT» de cada ítem, para que cada una lleve su detalle.
+              <TarjetaRelacion tipo="ot" vacio />
             ) : (
               ots.map(o => (
                 <TarjetaRelacion key={o._id} tipo="ot" codigo={o.codigo} numero={o.numeroOT}
@@ -900,10 +899,6 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
             )}
             {!cot.anulado && (
               <div className="flex items-center gap-3 -mt-2 px-1">
-                {ots.length > 0 && (
-                  <button type="button" onClick={() => setCrearOTOpen(true)}
-                    className="text-xs text-blue-600 hover:text-blue-800 underline">+ Crear otra OT</button>
-                )}
                 <button type="button" onClick={() => setBuscadorOTOpen(true)}
                   className="text-xs text-blue-600 hover:text-blue-800 underline">+ Vincular OT existente</button>
               </div>
@@ -1076,14 +1071,6 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               setBusquedaEmpresa(guardada.alias ? `${guardada.alias} — ${guardada.razonSocial}` : guardada.razonSocial);
             }
           }}
-        />
-      )}
-
-      {crearOTOpen && (
-        <ModalNuevaOT
-          cotizacion={cot}
-          onClose={() => setCrearOTOpen(false)}
-          onCreada={() => { setCrearOTOpen(false); cargarRelaciones(); }}
         />
       )}
 

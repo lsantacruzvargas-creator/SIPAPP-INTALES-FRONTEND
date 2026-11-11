@@ -176,8 +176,8 @@
 /* Quita las flechas de spinner de los input[type=number] en todo el
    proyecto (Chrome/Safari + Firefox) — decisión de diseño, no solo para el
    formulario de GRE. El scroll del mouse cambiando el valor sin querer se
-   corrige aparte, por input, con onWheel={(e) => e.target.blur()} — eso no
-   se puede resolver solo con CSS. */
+   corrige aparte, para toda la app, con el listener de "wheel" en main.jsx —
+   eso no se puede resolver solo con CSS. */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
