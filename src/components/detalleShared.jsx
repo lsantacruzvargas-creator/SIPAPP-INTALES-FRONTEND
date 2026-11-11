@@ -285,17 +285,17 @@ export function BotonAnular({ onAnular }) {
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+      <div className="bg-white text-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
         <h4 className="font-semibold text-gray-800">Anular documento</h4>
         <p className="text-sm text-gray-500">
           Esta acción es permanente y no se puede deshacer. Indica el motivo:
         </p>
         <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} autoFocus
           placeholder="Motivo de la anulación…"
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 resize-none" />
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none" />
         <div className="flex gap-3 justify-end">
           <button onClick={() => { setAbierto(false); setMotivo(""); }} disabled={enviando}
-            className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition disabled:opacity-50">
+            className="text-sm text-gray-700 bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition disabled:opacity-50">
             Cancelar
           </button>
           <button onClick={confirmar} disabled={!motivo.trim() || enviando}
