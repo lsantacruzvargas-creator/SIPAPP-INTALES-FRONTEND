@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
+import { baseSinIgvCotizacion } from "../utils/cotizacionItems";
 
 const INP     = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 const INP_DIS = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full";
@@ -68,6 +69,8 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
   const [calc, setCalc]          = useState(calcular(0));
   const [cotVinculada, setCot]   = useState(null);
   const [empresas, setEmpresas]  = useState([]);
+  const [busquedaEmpresa, setBusquedaEmpresa] = useState("");
+  const [listaEmpresaAbierta, setListaEmpresaAbierta] = useState(false);
   const [buscadorCot, setBCot]   = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState("");
@@ -93,12 +96,34 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
     }));
   };
 
+  const nombreEmpresa = (e) => (e.alias ? `${e.alias} — ${e.razonSocial}` : e.razonSocial);
+
+  const qEmpresa = busquedaEmpresa.trim().toLowerCase();
+  const empresasFiltradas = (qEmpresa
+    ? empresas.filter(e => [e.razonSocial, e.alias, e.ruc].some(v => v?.toLowerCase().includes(qEmpresa)))
+    : empresas
+  ).slice(0, 50);
+
+  const seleccionarEmpresa = (e) => {
+    setForm(f => ({ ...f, empresa: e._id, planta: "" }));
+    setBusquedaEmpresa(nombreEmpresa(e));
+    setListaEmpresaAbierta(false);
+  };
+
+  const cambiarBusquedaEmpresa = (e) => {
+    setBusquedaEmpresa(e.target.value);
+    setListaEmpresaAbierta(true);
+    if (form.empresa) setForm(f => ({ ...f, empresa: "", planta: "" }));
+  };
+
   const seleccionarCot = (cot) => {
     setCot(cot);
     setBCot(false);
+    if (!form.empresa && cot.empresa?._id) setBusquedaEmpresa(nombreEmpresa(cot.empresa));
     setForm(prev => {
-      const nuevoSub = prev.subtotal || (cot.total > 0 ? String(cot.total) : prev.subtotal);
-      if (!prev.subtotal && cot.total > 0) setCalc(calcular(cot.total));
+      const base = baseSinIgvCotizacion(cot);
+      const nuevoSub = prev.subtotal || (base > 0 ? String(base) : prev.subtotal);
+      if (!prev.subtotal && base > 0) setCalc(calcular(base));
       return {
         ...prev,
         titulo:   prev.titulo   || cot.titulo           || "",
@@ -199,14 +224,32 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
           {/* Empresa */}
           <div>
             <label className="text-xs text-gray-500 block mb-1">Empresa</label>
-            <select name="empresa" value={form.empresa} onChange={handleChange} className={INP}>
-              <option value="">— Sin empresa —</option>
-              {empresas.map(e => (
-                <option key={e._id} value={e._id}>
-                  {e.alias ? `${e.alias} — ` : ""}{e.razonSocial}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <input
+                type="text"
+                value={busquedaEmpresa}
+                onChange={cambiarBusquedaEmpresa}
+                onFocus={() => setListaEmpresaAbierta(true)}
+                onBlur={() => setListaEmpresaAbierta(false)}
+                placeholder="Escribe el nombre, alias o RUC…"
+                className={INP}
+                autoComplete="off"
+              />
+              {listaEmpresaAbierta && empresasFiltradas.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                  {empresasFiltradas.map(e => (
+                    <button type="button" key={e._id}
+                      onMouseDown={() => seleccionarEmpresa(e)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition border-b border-gray-50 last:border-0">
+                      {nombreEmpresa(e)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {!form.empresa && busquedaEmpresa.trim() && (
+              <p className="text-[11px] text-amber-600 mt-1">Elige una empresa de la lista; si no, la OC se crea sin empresa.</p>
+            )}
           </div>
 
           <div>

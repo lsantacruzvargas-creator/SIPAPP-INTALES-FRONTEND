@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
-import { montoAjustadoItem } from "../utils/cotizacionItems";
+import { montoAjustadoItem, baseSinIgvCotizacion } from "../utils/cotizacionItems";
 import { money } from "./detalleShared";
 
 const INP    = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
@@ -24,9 +24,7 @@ export default function ModalOrdenCompra({ cotizacion, onClose, onCreada }) {
   // la práctica no se podía editar aunque no tenía `disabled`. Ahora el
   // estado y el input manejan el mismo número — permite crear una OC con
   // monto menor al de la cotización.
-  const [monto, setMonto] = useState(() =>
-    cotizacion.subtotal != null ? Number(cotizacion.subtotal) : (Number(cotizacion.total) || 0) / 1.18
-  );
+  const [monto, setMonto] = useState(() => baseSinIgvCotizacion(cotizacion));
   const [numeroOrden, setNumeroOrden] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState("");

@@ -61,6 +61,15 @@ export const itemDesdeDb = (item) => ({
   ocGenerada: item.ocGenerada || null,
 });
 
+// Base sin IGV de la cotización para precargar una OC. Es `total − igv` y no `subtotal`: sin ítems, `subtotal` se guarda
+// bruto (antes del descuento global), y `total` lleva IGV.
+export function baseSinIgvCotizacion(cotizacion) {
+  const total = Number(cotizacion.total) || 0;
+  const igv = Number(cotizacion.igv) || 0;
+  if (total > 0 && igv > 0) return Math.round((total - igv) * 100) / 100;
+  return Number(cotizacion.subtotal) || 0;
+}
+
 // Monto sin IGV de cada ítem con el descuento global, escalado a la base de la
 // cotización (`total - igv`) según su peso en el subtotal: así la suma de todas
 // las OCs parciales por ítems da la base sin IGV de la cotización.

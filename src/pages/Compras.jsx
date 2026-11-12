@@ -143,6 +143,8 @@ function FilaSeleccionable({
           <p className="text-base font-bold text-gray-900 break-words">{descripcion}</p>
         </div>
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
+          <dt className="text-gray-400">Cantidad:</dt>
+          <dd className="text-gray-800 font-semibold">{cantidad != null && cantidad !== "" ? `${cantidad} ${unidad || ""}` : "—"}</dd>
           <dt className="text-gray-400">Proveedor:</dt>
           <dd className="text-gray-800 font-medium truncate">{proveedor || "—"}</dd>
           <dt className="text-gray-400">Precio:</dt>
@@ -156,7 +158,6 @@ function FilaSeleccionable({
         {adjuntos}
       </div>
       <div className="text-right shrink-0">
-        <p className="text-sm text-gray-700">{cantidad} {unidad || ""}</p>
         <p className="text-xs text-gray-400">{fecha}</p>
       </div>
     </div>
