@@ -109,7 +109,7 @@ const ACCEPT_DOCUMENTOS = [
 // del de quien lo pidió — OC/OT/Cliente/Planta deben quedar visibles en cada fila.
 function FilaSeleccionable({
   seleccionado, onToggle, disabledCheckbox, ot, oc, cliente, planta,
-  descripcion, proveedor, precio, flete, referencia, estado, cantidad, unidad, fecha, detalle, adjuntos,
+  descripcion, observacion, proveedor, precio, flete, referencia, estado, cantidad, unidad, fecha, detalle, adjuntos,
 }) {
   return (
     <div className="flex items-start gap-3 border-t border-gray-100 first:border-t-0 py-4">
@@ -136,6 +136,12 @@ function FilaSeleccionable({
           <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-600">Descripción</p>
           <p className="text-base font-bold text-gray-900 break-words">{descripcion}</p>
         </div>
+        {observacion?.trim() && (
+          <div className="mb-2 border-l-4 border-amber-400 bg-amber-50 rounded-r-lg px-3 py-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Observación</p>
+            <p className="text-sm italic text-gray-800 whitespace-pre-line break-words">{observacion}</p>
+          </div>
+        )}
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
           <dt className="text-gray-400">Cantidad:</dt>
           <dd className="text-gray-800 font-semibold">{cantidad != null && cantidad !== "" ? `${cantidad} ${unidad || ""}` : "—"}</dd>
@@ -546,6 +552,7 @@ export default function Compras() {
                   cliente={nombreEmpresa(it.requerimiento.ordenTrabajo?.empresa)}
                   planta={it.requerimiento.ordenTrabajo?.planta}
                   descripcion={descripcionMaterial(it)}
+                  observacion={it.requerimiento.observaciones}
                   proveedor={it.proveedorNombre}
                   precio={it.montoUnitario}
                   flete={it.costoTransporte}
@@ -589,6 +596,7 @@ export default function Compras() {
                   cliente={nombreEmpresa(s.ordenTrabajo?.empresa)}
                   planta={s.ordenTrabajo?.planta}
                   descripcion={s.material || "—"}
+                  observacion={s.observaciones}
                   proveedor={s.nombreProveedor}
                   precio={s.costo > 0 ? s.costo : null}
                   flete={s.costoTransporte}

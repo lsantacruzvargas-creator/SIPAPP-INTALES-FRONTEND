@@ -4,7 +4,7 @@ import { fetchAuth } from "../utils/fetchAuth";
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full transition";
 
 export default function ModalServicioExterno({ ot, onClose, onCreado }) {
-  const [form, setForm] = useState({ rucProveedor: "", nombreProveedor: "", tipoTrabajo: "", material: "", cantidad: "1", costo: "" });
+  const [form, setForm] = useState({ rucProveedor: "", nombreProveedor: "", tipoTrabajo: "", material: "", cantidad: "1", costo: "", observaciones: "" });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
@@ -29,6 +29,7 @@ export default function ModalServicioExterno({ ot, onClose, onCreado }) {
         material: form.material.trim(),
         cantidad: Number(form.cantidad),
         costo: form.costo ? Number(form.costo) : 0,
+        observaciones: form.observaciones.trim(),
       }),
     });
 
@@ -80,6 +81,11 @@ export default function ModalServicioExterno({ ot, onClose, onCreado }) {
           <div>
             <label className="text-xs text-gray-500 block mb-1">Cantidad *</label>
             <input type="number" min="0.01" step="any" name="cantidad" value={form.cantidad} onChange={handleChange} className={INP} />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Observaciones</label>
+            <textarea name="observaciones" value={form.observaciones} onChange={handleChange}
+              rows={2} maxLength={1000} placeholder="Opcional" className={INP} />
           </div>
           {/* Costo oculto por ahora (revisión del usuario, 2026-09-14). */}
           <div hidden>
