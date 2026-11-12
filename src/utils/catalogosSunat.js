@@ -1,3 +1,4 @@
+import { r2 } from "./redondeo.js";
 // Espejo en frontend de Backend/src/utils/catalogos.js — solo lo necesario para selects.
 // Afectación: SOLO los 4 códigos base. Los subcódigos extendidos (11-17, 21, 31-36) están
 // documentados en la Guía SUNAT pero confirmados RECHAZADOS por SUNAT en demo (error 2040) —
@@ -109,7 +110,7 @@ export function itemVacioComprobante() {
 export function precioUnitarioDesdeValor(valorUnitario, afectacion) {
   const valor = Number(valorUnitario) || 0;
   if (afectacion !== "10") return valor;
-  return Math.round(valor * 1.18 * 100) / 100;
+  return r2(valor * 1.18);
 }
 
 export const TIPO_GUIA = [
@@ -288,19 +289,30 @@ export const DETRACCION_BIENES_SERVICIOS = [
   { codigo: "041", descripcion: "Plomo", porcentaje: 15 },
 ];
 
+// Copia exacta de Backend/src/utils/montosCpe.js (calcularLineaCpe /
+// calcularTotalesCpe), que es lo que va escrito en el XML: cada valor de
+// línea redondeado a 2 decimales y los totales como suma de esos valores ya
+// redondeados. Si este cálculo se aparta en un céntimo, el "monto neto
+// pendiente" con el que se arman las cuotas no cuadra con el del XML y SUNAT
+// rechaza con 3319 (origen SIPAPP-HUAQUIAN 0a37c0b). Cambiar uno obliga a cambiar el otro.
 export function calcularLineaComprobante(item) {
-  const cantidad  = Number(item.cantidad) || 0;
-  const valorUnit = Number(item.valorUnitario) || 0;
-  const baseAntesDescuento = cantidad * valorUnit;
+  const baseAntesDescuento = r2((Number(item.cantidad) || 0) * (Number(item.valorUnitario) || 0));
   const descuentoPct   = Number(item.descuentoPorcentaje) || 0;
-  const montoDescuento = descuentoPct > 0 ? baseAntesDescuento * descuentoPct : 0;
-  const base = baseAntesDescuento - montoDescuento;
-  const igv  = item.afectacion === "10" ? base * 0.18 : 0;
+  const montoDescuento = descuentoPct > 0 ? r2(baseAntesDescuento * descuentoPct) : 0;
+  const base = r2(baseAntesDescuento - montoDescuento);
+  const igv  = r2(item.afectacion === "10" ? base * (18 / 100) : 0);
+  return { baseAntesDescuento, montoDescuento, base, igv, total: r2(base + igv) };
+}
+
+export function totalesComprobante(lineas, otrosCargos = 0, montoRedondeo = 0) {
+  const base      = r2(lineas.reduce((s, l) => s + l.base, 0));
+  const descuento = r2(lineas.reduce((s, l) => s + l.montoDescuento, 0));
+  const igv       = r2(lineas.reduce((s, l) => s + l.igv, 0));
+  const taxExclusive = r2(base + (Number(otrosCargos) || 0));
+  const taxInclusive = r2(taxExclusive + igv);
   return {
-    baseAntesDescuento: Math.round(baseAntesDescuento * 100) / 100,
-    montoDescuento:     Math.round(montoDescuento * 100) / 100,
-    base:               Math.round(base * 100) / 100,
-    igv:                Math.round(igv * 100) / 100,
-    total:              Math.round((base + igv) * 100) / 100,
+    base, igv, descuento,
+    total:      r2(base + igv),
+    totalPagar: r2(taxInclusive + (Number(montoRedondeo) || 0)),
   };
 }

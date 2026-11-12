@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
+import { costoCompraSoles } from "../utils/montoCompra";
 import { formatearFecha } from "../utils/fecha";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
 import ModalDetalleGuia from "./ModalDetalleGuia";
 import ModalReporteCosto from "./ModalReporteCosto";
+import { r2, r0 } from "../utils/redondeo";
 import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgePago, badgeOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
@@ -15,13 +17,13 @@ const codigoDeGuia = (g) => `${g.serie}-${String(g.correlativo).padStart(4, "0")
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full transition";
 
 function calcular(sub) {
-  const s = Math.round(Number(sub) * 100) / 100 || 0;
-  const igv = Math.round(s * 0.18 * 100) / 100;
-  const total = Math.round((s + igv) * 100) / 100;
+  const s = r2(Number(sub)) || 0;
+  const igv = r2(s * 0.18);
+  const total = r2((s + igv));
   // R.S. 178-2005/SUNAT: aplica solo si el total (con IGV) es >= S/ 701, y el
   // depósito se hace en números enteros (sin decimales).
-  const detraccion = total >= 701 ? Math.round(total * 0.12) : 0;
-  return { igv, total, detraccion, totalAPagar: Math.round((total - detraccion) * 100) / 100 };
+  const detraccion = total >= 701 ? r0(total * 0.12) : 0;
+  return { igv, total, detraccion, totalAPagar: r2((total - detraccion)) };
 }
 
 export default function DetalleOrdenCompra({ orden, onClose, onGuardada, facturaVinculada, onNavegar }) {
@@ -300,9 +302,13 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
     .reduce((s, it) => s + it.costoTotal, 0);
   const costoMateriales = requerimientos.flatMap(r => r.items)
     .filter(it => it.esSolicitudCompra && it.estadoPago === "pagado")
-    .reduce((s, it) => s + (Number(it.montoUnitario) || 0) * (Number(it.cantidad) || 0) + (Number(it.costoTransporte) || 0), 0);
+    .reduce((s, it) => s + costoCompraSoles({
+      unitario: it.montoUnitario, cantidad: it.cantidad, flete: it.costoTransporte, moneda: it.moneda, tipoCambio: it.tipoCambio,
+    }), 0);
   const costoServicios = servicios.filter(s => s.estadoPago === "pagado" && !s.anulado)
-    .reduce((s, v) => s + (Number(v.costo) || 0) * (Number(v.cantidad) || 0) + (Number(v.costoTransporte) || 0), 0);
+    .reduce((s, v) => s + costoCompraSoles({
+      unitario: v.costo, cantidad: v.cantidad, flete: v.costoTransporte, moneda: v.moneda, tipoCambio: v.tipoCambio,
+    }), 0);
   const costoFabricacionPEN = costoHH + costoHM + costoMateriales + costoServicios;
   const costoFabricacion = orden.moneda === "USD" && tipoCambio > 0
     ? costoFabricacionPEN / tipoCambio

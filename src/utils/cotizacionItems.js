@@ -1,3 +1,4 @@
+import { r2 } from "./redondeo.js";
 export const UNIDADES = ["und", "kg", "g", "L", "mL", "m", "cm", "m²", "caja", "rollo", "par", "juego", "bolsa"];
 
 // Descuento global (%) de TODA la cotización (ver DetalleCotizacion.jsx
@@ -12,7 +13,7 @@ export const precioConDescuento = (item, descuentoGlobalPct = 0) =>
   Math.max(0, (item.precio || 0) - montoDescuentoItem(item, descuentoGlobalPct));
 
 export const calcSubtotal = (item, descuentoGlobalPct = 0) =>
-  parseFloat((item.cantidad * precioConDescuento(item, descuentoGlobalPct)).toFixed(2));
+  r2(item.cantidad * precioConDescuento(item, descuentoGlobalPct));
 
 export const INP =
   "border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400";
@@ -66,7 +67,7 @@ export const itemDesdeDb = (item) => ({
 export function baseSinIgvCotizacion(cotizacion) {
   const total = Number(cotizacion.total) || 0;
   const igv = Number(cotizacion.igv) || 0;
-  if (total > 0 && igv > 0) return Math.round((total - igv) * 100) / 100;
+  if (total > 0 && igv > 0) return r2((total - igv));
   return Number(cotizacion.subtotal) || 0;
 }
 
@@ -80,7 +81,7 @@ export function montoAjustadoItem(cotizacion, item) {
   const igv = Number(cotizacion.igv) || 0;
   const base = total > 0 && igv > 0 ? total - igv : subtotalItems;
   const factor = subtotalItems > 0 ? base / subtotalItems : 1;
-  return Math.round(calcSubtotal(item, dscto) * factor * 100) / 100;
+  return r2(calcSubtotal(item, dscto) * factor);
 }
 
 // Validación de ítems requeridos por el modelo (Backend/src/models/Cotizacion.js:

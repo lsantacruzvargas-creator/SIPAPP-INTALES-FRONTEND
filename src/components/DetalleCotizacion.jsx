@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
+import { costoCompraSoles } from "../utils/montoCompra";
 import { formatearFecha } from "../utils/fecha";
 import { exportarCotizacionPdf } from "../utils/cotizacionPdf";
 import { calcSubtotal, itemDesdeDb, itemInvalido } from "../utils/cotizacionItems";
@@ -13,6 +14,7 @@ import SelectFormaPago from "./SelectFormaPago";
 import ConfirmacionAccion from "./ConfirmacionAccion";
 import TablaItemsCotizacion from "./TablaItemsCotizacion";
 import TarjetaArchivosRelacionados from "./TarjetaArchivosRelacionados";
+import { r2 } from "../utils/redondeo";
 import {
   FlujoNegocio, TarjetaRelacion, Chip,
   badgePago, badgeOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
@@ -29,18 +31,18 @@ const codigoDeGuia = (g) => `${g.serie}-${String(g.correlativo).padStart(4, "0")
 // único caso que sí aplica `pct` acá es el subtotal tipeado a mano (sin
 // ítems), donde `sub` es bruto.
 function calcular(sub, descuentoPct = 0) {
-  const s = Math.round(Number(sub) * 100) / 100 || 0;
+  const s = r2(Number(sub)) || 0;
   const pct = Math.min(100, Math.max(0, Number(descuentoPct) || 0));
-  const descuento = Math.round(s * (pct / 100) * 100) / 100;
-  const subtotalConDescuento = Math.round((s - descuento) * 100) / 100;
-  const igv = Math.round(subtotalConDescuento * 0.18 * 100) / 100;
+  const descuento = r2(s * (pct / 100));
+  const subtotalConDescuento = r2((s - descuento));
+  const igv = r2(subtotalConDescuento * 0.18);
   return {
     subtotal: s,
     descuentoPorcentaje: pct,
     descuento,
     subtotalConDescuento,
     igv,
-    total: Math.round((subtotalConDescuento + igv) * 100) / 100,
+    total: r2((subtotalConDescuento + igv)),
   };
 }
 
@@ -134,8 +136,8 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   // detracción SUNAT que ya usa DetalleOrdenCompra.jsx (12% cuando el total
   // supera S/700), calculado sobre el total ya persistido de la cotización.
   const detraccionCierreAplica = Number(cot.total) > 700;
-  const detraccionCierreMonto = detraccionCierreAplica ? Math.round(Number(cot.total) * 0.12 * 100) / 100 : 0;
-  const totalAPagarCierre = Math.round((Number(cot.total) - detraccionCierreMonto) * 100) / 100;
+  const detraccionCierreMonto = detraccionCierreAplica ? r2(Number(cot.total) * 0.12) : 0;
+  const totalAPagarCierre = r2((Number(cot.total) - detraccionCierreMonto));
 
   const cargarRelaciones = () => {
     Promise.all([
@@ -1002,7 +1004,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                           <td className="py-1 pr-2 text-gray-600">
                             {s.rucProveedor ? `${s.rucProveedor} — ` : ""}{s.nombreProveedor} · {s.tipoTrabajo} ({s.cantidad})
                           </td>
-                          <td className="py-1 text-right text-gray-700 tabular-nums whitespace-nowrap">{money(s.costo)}</td>
+                          <td className="py-1 text-right text-gray-700 tabular-nums whitespace-nowrap">{money(s.costo, s.moneda)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1010,7 +1012,9 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                       <tr className="border-t border-white/60 font-semibold">
                         <td className="py-1 pr-2 text-gray-700">Total</td>
                         <td className="py-1 text-right text-gray-800 tabular-nums whitespace-nowrap">
-                          {money(servicios.reduce((s, v) => s + (Number(v.costo) || 0), 0))}
+                          {money(servicios.reduce((s, v) => s + costoCompraSoles({
+                            unitario: v.costo, cantidad: 1, moneda: v.moneda, tipoCambio: v.tipoCambio,
+                          }), 0))}
                         </td>
                       </tr>
                     </tfoot>

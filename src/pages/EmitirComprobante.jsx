@@ -18,11 +18,13 @@ import {
   itemVacioComprobante,
   precioUnitarioDesdeValor,
   calcularLineaComprobante,
+  totalesComprobante,
   documentoValido,
   serieValida,
   parsearGuiaRemision,
   formatearGuiaRemision,
 } from "../utils/catalogosSunat";
+import { r2, r0 } from "../utils/redondeo";
 
 const RECEPTOR_VACIO = { schemeID: "6", numDoc: "", nombre: "" };
 const REFERENCIA_VACIA = { id: "", serie: "", tipoDoc: "" };
@@ -134,7 +136,7 @@ export default function EmitirComprobante() {
     if (cotizacion?.moneda) setMoneda(cotizacion.moneda);
     // El monto a facturar es el de la OC (puede diferir del de la cotización);
     // las líneas de la cotización solo se usan si su suma cuadra con ese monto.
-    const montoOC = Math.round((Number(oc.subtotal) || 0) * 100) / 100;
+    const montoOC = r2(Number(oc.subtotal) || 0);
     // OC parcial (generada desde ítems puntuales): solo se facturan sus ítems.
     const itemsDeOC = (cotizacion?.items || []).filter((i) => (i.ocGenerada?._id || i.ocGenerada) === oc._id);
     const lineas = (itemsDeOC.length ? itemsDeOC : cotizacion?.items || []).map((i) => {
@@ -276,19 +278,11 @@ export default function EmitirComprobante() {
     ...i,
     ...calcularLineaComprobante({ ...i, descuentoPorcentaje: (Number(i.descuentoPorcentaje) || 0) / 100 }),
   }));
-  const totales = itemsCalc.reduce(
-    (acc, i) => ({
-      base:       acc.base + i.base,
-      igv:        acc.igv + i.igv,
-      descuento:  acc.descuento + i.montoDescuento,
-      total:      acc.total + i.total,
-    }),
-    { base: 0, igv: 0, descuento: 0, total: 0 }
-  );
   const otrosCargosNum   = Number(otrosCargos) || 0;
   const montoRedondeoNum = Number(montoRedondeo) || 0;
-  const totalGeneral = totales.total + otrosCargosNum + montoRedondeoNum;
-  const sumaCuotas = cuotas.reduce((s, c) => s + (Number(c.monto) || 0), 0);
+  const totales = totalesComprobante(itemsCalc, otrosCargosNum, montoRedondeoNum);
+  const totalGeneral = totales.totalPagar;
+  const sumaCuotas = r2(cuotas.reduce((s, c) => s + (Number(c.monto) || 0), 0));
 
   // Monto neto a depositar = detraccionPorcentaje% del total a pagar — ya no es un input libre,
   // se deriva siempre del total y el porcentaje vigente (evita que quede desincronizado si el
@@ -300,10 +294,10 @@ export default function EmitirComprobante() {
   const enSoles = moneda === "PEN";
   const detraccionBruta = totalGeneral * (Number(detraccionPorcentaje) || 0) / 100;
   const detraccionMontoMoneda = !detraccionAplica ? 0
-    : enSoles ? Math.round(detraccionBruta) : Math.round(detraccionBruta * 100) / 100;
+    : enSoles ? r0(detraccionBruta) : r2(detraccionBruta);
   const detraccionMontoNeto = !detraccionAplica ? ""
     : enSoles ? detraccionMontoMoneda.toFixed(2)
-    : tcDetraccion ? Math.round(Math.round(detraccionBruta * tcDetraccion.valor * 100) / 100).toFixed(2) : "";
+    : tcDetraccion ? r0(r2(detraccionBruta * tcDetraccion.valor)).toFixed(2) : "";
 
   useEffect(() => {
     // Ref y no el state `cargandoTc`: StrictMode corre el efecto dos veces antes de que el state
@@ -334,12 +328,14 @@ export default function EmitirComprobante() {
   // Retención del IGV: la retiene el cliente (agente de retención) al pagar, sobre el total.
   // El backend la recalcula igual; acá es para mostrarla y para el neto de las cuotas.
   const retencionMonto = retencionAplica
-    ? Math.round(totalGeneral * (Number(retencionPorcentaje) || 0)) / 100
+    ? r2(totalGeneral * (Number(retencionPorcentaje) || 0) / 100)
     : 0;
 
   // Lo que deben sumar las cuotas: el XML informa como monto neto pendiente el total menos la
   // detracción (va al Banco de la Nación) y menos la retención; el total del comprobante no cambia.
-  const montoNetoPendiente = totalGeneral - detraccionMontoMoneda - retencionMonto;
+  const montoNetoPendiente = r2(totalGeneral - detraccionMontoMoneda - retencionMonto);
+  // SUNAT exige igualdad exacta al céntimo (3319) — sin tolerancia de ±0.01.
+  const cuotasCuadran = Math.abs(sumaCuotas - montoNetoPendiente) < 0.005;
 
   const ro = !!resultado?.ok;
 
@@ -424,7 +420,7 @@ export default function EmitirComprobante() {
         if (!c.monto || Number(c.monto) <= 0) return "Cada cuota debe tener un monto mayor a 0.";
         if (!c.fechaVencimiento) return "Cada cuota debe tener una fecha de vencimiento.";
       }
-      if (Math.abs(sumaCuotas - montoNetoPendiente) > 0.01) {
+      if (!cuotasCuadran) {
         return `La suma de las cuotas (${moneda} ${sumaCuotas.toFixed(2)}) debe ser igual al monto neto pendiente (${moneda} ${montoNetoPendiente.toFixed(2)}).`;
       }
     }
@@ -790,7 +786,7 @@ export default function EmitirComprobante() {
                             className="text-sm text-gray-500 hover:text-gray-800 transition">
                             + Agregar cuota
                           </button>
-                          <span className={`text-xs font-medium ${Math.abs(sumaCuotas - montoNetoPendiente) < 0.01 ? "text-green-600" : "text-red-500"}`}>
+                          <span className={`text-xs font-medium ${cuotasCuadran ? "text-green-600" : "text-red-500"}`}>
                             Suma de cuotas: {moneda} {sumaCuotas.toFixed(2)}
                           </span>
                         </div>

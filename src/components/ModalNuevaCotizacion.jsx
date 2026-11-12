@@ -7,6 +7,7 @@ import SelectFormaPago from "./SelectFormaPago";
 import SelectorEmpresas from "./SelectorEmpresas";
 import TarjetaArchivosRelacionados from "./TarjetaArchivosRelacionados";
 import { FlujoNegocio, TarjetaRelacion, money } from "./detalleShared";
+import { r2 } from "../utils/redondeo";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 w-full transition";
 
@@ -14,12 +15,12 @@ const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-n
 // aplicado sobre el precio unitario de cada ítem — mismo criterio que
 // DetalleCotizacion.jsx (ver comentario ahí para el porqué de `pct=0` con ítems).
 function calcular(sub, descuentoPct = 0) {
-  const s = Math.round(Number(sub) * 100) / 100 || 0;
+  const s = r2(Number(sub)) || 0;
   const pct = Math.min(100, Math.max(0, Number(descuentoPct) || 0));
-  const descuento = Math.round(s * (pct / 100) * 100) / 100;
-  const subtotalConDescuento = Math.round((s - descuento) * 100) / 100;
-  const igv = Math.round(subtotalConDescuento * 0.18 * 100) / 100;
-  return { subtotal: s, descuentoPorcentaje: pct, descuento, subtotalConDescuento, igv, total: Math.round((subtotalConDescuento + igv) * 100) / 100 };
+  const descuento = r2(s * (pct / 100));
+  const subtotalConDescuento = r2((s - descuento));
+  const igv = r2(subtotalConDescuento * 0.18);
+  return { subtotal: s, descuentoPorcentaje: pct, descuento, subtotalConDescuento, igv, total: r2((subtotalConDescuento + igv)) };
 }
 
 const FORM_VACIO = {
