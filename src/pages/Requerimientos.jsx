@@ -323,8 +323,13 @@ export default function Requerimientos() {
     setLista((prev) => prev.map((r) => r._id === actualizado._id ? actualizado : r));
   };
 
-  const tieneItemsPendientes = (r) => r.items.some((it) => it.estado === "pendiente");
-  const filtrados = lista.filter((r) => tab === "activos" ? tieneItemsPendientes(r) : !tieneItemsPendientes(r));
+  // Las solicitudes de compra se gestionan solo en Compras (decisión del usuario, 2026-11-12): aquí van únicamente
+  // los ítems de stock, y un RQ que solo trae compras no aparece.
+  const itemsStock = (r) => r.items.filter((it) => !it.esSolicitudCompra);
+  const tieneItemsPendientes = (r) => itemsStock(r).some((it) => it.estado === "pendiente");
+  const filtrados = lista
+    .filter((r) => itemsStock(r).length > 0)
+    .filter((r) => tab === "activos" ? tieneItemsPendientes(r) : !tieneItemsPendientes(r));
 
   const fmtFecha = (d) => d ? formatearFecha(d, { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—";
 
@@ -381,7 +386,7 @@ export default function Requerimientos() {
             </div>
             {r.observaciones && <p className="text-xs text-gray-400 italic mb-2">{r.observaciones}</p>}
             <div>
-              {r.items.map((item) => (
+              {itemsStock(r).map((item) => (
                 <FilaItem key={item._id} requerimiento={r} item={item} puedeAtender={puedeAtender}
                   onActualizado={actualizarEnLista} />
               ))}

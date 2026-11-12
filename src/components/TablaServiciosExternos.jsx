@@ -5,16 +5,7 @@ import ModalServicioExterno from "./ModalServicioExterno";
 import TablaScroll from "./TablaScroll";
 import PromptAccion from "./PromptAccion";
 import { Chip } from "./detalleShared";
-
-// Mismo pipeline de pago que Requerimientos.jsx (por_procesar → pendiente_pago
-// → pagado) — acá se resume en un solo Chip por fila, ya que a diferencia de
-// un Requerimiento (con ítems), un Servicio Externo es un único documento
-// con un solo `estadoPago`.
-const ESTADO_SERVICIO = {
-  por_procesar:   { clase: "bg-gray-100 text-gray-600",   label: "Por procesar" },
-  pendiente_pago: { clase: "bg-amber-100 text-amber-700", label: "Pendiente de pago" },
-  pagado:         { clase: "bg-green-100 text-green-700", label: "Pagado" },
-};
+import { estadoCompra } from "../utils/estadoCompra";
 
 // Sección full-width de Servicios Externos (terceros) para el detalle de una
 // OT/sub-OT — no la ve el rol técnico (gate ya hecho en el componente padre
@@ -79,7 +70,7 @@ export default function TablaServiciosExternos({ ot, subOTs = [], servicios, pue
                   const otOrigenId = s.ordenTrabajo?._id || s.ordenTrabajo;
                   const esPrincipal = otOrigenId === ot._id;
                   const subOrigen = subOTs.find(sub => sub._id === otOrigenId);
-                  const { clase, label } = ESTADO_SERVICIO[s.estadoPago || "por_procesar"] || ESTADO_SERVICIO.por_procesar;
+                  const { clase, label } = estadoCompra(s);
                   return (
                     <tr key={s._id} className={s.anulado ? "opacity-50" : ""}>
                       <td className="py-2 pr-3 font-mono text-xs text-gray-700">{s.codigo}</td>

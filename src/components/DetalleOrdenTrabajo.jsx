@@ -10,6 +10,7 @@ import ModalRequerimiento from "./ModalRequerimiento";
 import ModalNotificacionTrabajo from "./ModalNotificacionTrabajo";
 import ModalDetalleNotificacionTrabajo from "./ModalDetalleNotificacionTrabajo";
 import TablaServiciosExternos from "./TablaServiciosExternos";
+import { estadoCompra } from "../utils/estadoCompra";
 import TarjetaArchivosRelacionados from "./TarjetaArchivosRelacionados";
 import TablaScroll from "./TablaScroll";
 import ModalGenerarGRE from "./ModalGenerarGRE";
@@ -45,22 +46,16 @@ const descripcionItem = (it) => it.esSolicitudCompra
   : (it.material?.nombre || "—");
 
 // Estado de un ítem de requerimiento — una solicitud de compra sigue el
-// pipeline de pago (por_procesar/pendiente_pago/pagado, ver
-// Requerimientos.jsx), independiente del pipeline de despacho de almacén
+// pipeline de Compras (por procesar → recepcionado), independiente del pipeline de despacho de almacén
 // (pendiente/atendido/rechazado) que sí aplica a los ítems de stock.
-const ESTADO_ITEM_COMPRA = {
-  por_procesar:   { clase: "bg-gray-100 text-gray-600",   label: "Por procesar" },
-  pendiente_pago: { clase: "bg-amber-100 text-amber-700", label: "Pendiente de pago" },
-  pagado:         { clase: "bg-green-100 text-green-700", label: "Pagado" },
-};
 const ESTADO_ITEM_STOCK = {
   pendiente: { clase: "bg-blue-100 text-blue-700",  label: "Pendiente" },
   atendido:  { clase: "bg-green-100 text-green-700", label: "Atendido" },
   rechazado: { clase: "bg-red-100 text-red-700",     label: "Rechazado" },
 };
 const estadoItem = (it) => it.esSolicitudCompra
-  ? (ESTADO_ITEM_COMPRA[it.estadoPago || "por_procesar"] || ESTADO_ITEM_COMPRA.por_procesar)
-  : (ESTADO_ITEM_STOCK[it.estado] || { clase: "bg-gray-100 text-gray-500", label: it.estado || "—" });
+  ? estadoCompra(it)
+  :(ESTADO_ITEM_STOCK[it.estado] || { clase: "bg-gray-100 text-gray-500", label: it.estado || "—" });
 
 export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardada, onNavegar }) {
   const [ot, setOt] = useState(inicial);

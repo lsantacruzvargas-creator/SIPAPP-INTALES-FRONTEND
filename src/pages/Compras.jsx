@@ -5,19 +5,13 @@ import { comprimirFoto, mensajeSubida } from "../utils/comprimirFoto";
 import { formatearFecha, fechaHoyLima } from "../utils/fecha";
 import ConfirmacionAccion from "../components/ConfirmacionAccion";
 import ModalProcesarSolicitud from "../components/ModalProcesarSolicitud";
+import { estadoCompra } from "../utils/estadoCompra";
 
 const ESTADO_ITEM = {
   pendiente: "bg-blue-100 text-blue-700",
   atendido: "bg-green-100 text-green-700",
   cerrado: "bg-green-100 text-green-700",
   rechazado: "bg-red-100 text-red-700",
-};
-
-const ESTADO_PAGO = {
-  por_procesar:   { clase: "bg-gray-100 text-gray-600",   label: "Por procesar" },
-  pendiente_pago: { clase: "bg-amber-100 text-amber-700", label: "Pendiente de pago" },
-  pagado:         { clase: "bg-green-100 text-green-700", label: "Pagado" },
-  recepcionado:   { clase: "bg-sky-100 text-sky-700",     label: "Recepcionado" },
 };
 
 const money = (v) => "S/ " + Number(v ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 });
@@ -600,8 +594,7 @@ export default function Compras() {
                   flete={s.costoTransporte}
                   referencia={`${s.tipoTrabajo} — ${s.codigo}`}
                   estado={(() => {
-                    const clave = s.recepcionado ? "recepcionado" : s.estadoPago || "por_procesar";
-                    const { clase, label } = ESTADO_PAGO[clave] || ESTADO_PAGO.por_procesar;
+                    const { clase, label } = estadoCompra(s);
                     return <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${clase}`}>{label}</span>;
                   })()}
                   cantidad={s.cantidad}
