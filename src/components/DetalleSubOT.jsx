@@ -414,7 +414,10 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
                           <td className="py-2 pr-3 text-gray-600">{req.solicitadoPor}</td>
                           <td className="py-2 pr-3 text-gray-600">
                             {req.items.map((it, i) => (
-                              <span key={i} className="block text-xs">{descripcionItem(it)}</span>
+                              <span key={i} className={`block text-xs ${it.anulado ? "line-through text-gray-400" : ""}`}
+                                title={it.anulado ? `Anulado: ${it.motivoAnulacion}` : undefined}>
+                                {descripcionItem(it)}
+                              </span>
                             ))}
                           </td>
                           <td className="py-2 pr-3 text-right text-gray-600">

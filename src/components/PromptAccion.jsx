@@ -4,7 +4,7 @@ import { useState } from "react";
 // de anulación/rechazo, etc.) — reemplaza window.prompt() por el mismo
 // motivo (ver ConfirmacionAccion.jsx): en Electron, el diálogo nativo puede
 // dejar la ventana sin foco de teclado/mouse al cerrarse.
-export default function PromptAccion({ titulo, label = "Motivo", placeholder, onCancelar, onConfirmar, procesando, textoConfirmar = "Confirmar" }) {
+export default function PromptAccion({ titulo, label = "Motivo", placeholder, nota, onCancelar, onConfirmar, procesando, textoConfirmar = "Confirmar" }) {
   const [valor, setValor] = useState("");
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
@@ -17,8 +17,9 @@ export default function PromptAccion({ titulo, label = "Motivo", placeholder, on
           onChange={(e) => setValor(e.target.value)}
           rows={3}
           placeholder={placeholder}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none mb-6"
+          className={`w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none ${nota ? "mb-2" : "mb-6"}`}
         />
+        {nota && <p className="text-xs text-gray-500 mb-6">{nota}</p>}
         <div className="flex justify-end gap-3">
           <button onClick={onCancelar} disabled={procesando}
             className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition disabled:opacity-50">

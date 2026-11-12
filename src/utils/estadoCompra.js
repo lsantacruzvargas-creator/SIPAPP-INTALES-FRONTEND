@@ -5,7 +5,9 @@ export const ESTADO_COMPRA = {
   pendiente_pago: { clase: "bg-amber-100 text-amber-700", label: "Pendiente de pago" },
   pagado:         { clase: "bg-green-100 text-green-700", label: "Pagado" },
   recepcionado:   { clase: "bg-sky-100 text-sky-700",     label: "Recepcionado" },
+  anulado:        { clase: "bg-red-100 text-red-700",     label: "Anulado" },
 };
 
 export const estadoCompra = (x) =>
-  ESTADO_COMPRA[x.recepcionado ? "recepcionado" : x.estadoPago || "por_procesar"] || ESTADO_COMPRA.por_procesar;
+  ESTADO_COMPRA[x.anulado ? "anulado" : x.recepcionado ? "recepcionado" : x.estadoPago || "por_procesar"]
+  || ESTADO_COMPRA.por_procesar;

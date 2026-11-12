@@ -2,19 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { fetchAuth, getUsuario, uploadAuth, descargarArchivoProtegido } from "../utils/fetchAuth";
 import { comprimirFoto, mensajeSubida } from "../utils/comprimirFoto";
-import { formatearFecha, fechaHoyLima } from "../utils/fecha";
+import { formatearFecha, formatearFechaHora, fechaHoyLima } from "../utils/fecha";
 import ConfirmacionAccion from "../components/ConfirmacionAccion";
 import ModalProcesarSolicitud from "../components/ModalProcesarSolicitud";
+import PromptAccion from "../components/PromptAccion";
 import { estadoCompra } from "../utils/estadoCompra";
+import { simboloMoneda } from "../utils/montoCompra";
 
-const ESTADO_ITEM = {
-  pendiente: "bg-blue-100 text-blue-700",
-  atendido: "bg-green-100 text-green-700",
-  cerrado: "bg-green-100 text-green-700",
-  rechazado: "bg-red-100 text-red-700",
-};
-
-const money = (v) => "S/ " + Number(v ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 });
+const money = (v, moneda) => `${simboloMoneda(moneda)} ` + Number(v ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 });
 
 function resumenCompra(item) {
   return Object.entries(item.camposCompra || {}).map(([k, v]) => `${k}: ${v}`).join(" · ");
@@ -109,11 +104,12 @@ const ACCEPT_DOCUMENTOS = [
 // del de quien lo pidió — OC/OT/Cliente/Planta deben quedar visibles en cada fila.
 function FilaSeleccionable({
   seleccionado, onToggle, disabledCheckbox, ot, oc, cliente, planta,
-  descripcion, observacion, proveedor, precio, flete, referencia, estado, cantidad, unidad, fecha, detalle, adjuntos,
+  descripcion, observacion, proveedor, precio, flete, moneda, referencia, estado, cantidad, unidad, fecha, detalle, adjuntos,
+  anulacion, onDescartar,
 }) {
   return (
-    <div className="flex items-start gap-3 border-t border-gray-100 first:border-t-0 py-4">
-      <input type="checkbox" checked={seleccionado} disabled={disabledCheckbox}
+    <div className={`flex items-start gap-3 border-t border-gray-100 first:border-t-0 py-4 ${anulacion ? "opacity-60" : ""}`}>
+      <input type="checkbox" checked={seleccionado && !anulacion} disabled={disabledCheckbox || !!anulacion}
         onChange={onToggle} className="mt-1 w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-400 disabled:opacity-30" />
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
@@ -148,16 +144,39 @@ function FilaSeleccionable({
           <dt className="text-gray-400">Proveedor:</dt>
           <dd className="text-gray-800 font-medium truncate">{proveedor || "—"}</dd>
           <dt className="text-gray-400">Precio:</dt>
-          <dd className="text-gray-800">{precio != null ? `${money(precio)} c/u` : "—"}</dd>
+          <dd className="text-gray-800">{precio != null ? `${money(precio, moneda)} c/u` : "—"}</dd>
           <dt className="text-gray-400">Flete:</dt>
-          <dd className="text-gray-800">{flete > 0 ? money(flete) : "—"}</dd>
+          <dd className="text-gray-800">{flete > 0 ? money(flete, moneda) : "—"}</dd>
         </dl>
         <p className="text-xs text-gray-400 mt-1.5">{referencia}</p>
         <div className="mt-1">{estado}</div>
-        {detalle}
-        {adjuntos}
+        {anulacion ? (
+          <div className="mt-2 border-l-4 border-red-400 bg-red-50 rounded-r-lg px-3 py-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-red-700">
+              Anulado
+            </p>
+            <p className="text-xs text-gray-700">
+              <span className="font-semibold">Por:</span> {anulacion.por || "—"}
+              <span className="mx-1.5 text-gray-300">·</span>
+              <span className="font-semibold">Fecha y hora:</span> {anulacion.fecha || "—"}
+            </p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-red-700 mt-1">Motivo</p>
+            <p className="text-sm italic text-gray-800 whitespace-pre-line break-words">{anulacion.motivo || "—"}</p>
+          </div>
+        ) : (
+          <>
+            {detalle}
+            {adjuntos}
+          </>
+        )}
       </div>
-      <div className="text-right shrink-0">
+      <div className="text-right shrink-0 flex flex-col items-end gap-1">
+        {onDescartar && !anulacion && (
+          <button type="button" onClick={onDescartar} title="Descartar compra" aria-label="Descartar compra"
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 text-lg leading-none hover:bg-red-50 hover:text-red-700 hover:border-red-400 transition">
+            ✕
+          </button>
+        )}
         <p className="text-xs text-gray-400">{fecha}</p>
       </div>
     </div>
@@ -285,6 +304,10 @@ export default function Compras() {
   const [procesarOpen, setProcesarOpen] = useState(false);
   // "pago" | "recepcion" | null
   const [modalDatos, setModalDatos] = useState(null);
+  // { tipo: "material" | "servicio", x }
+  const [porDescartar, setPorDescartar] = useState(null);
+  const [descartando, setDescartando] = useState(false);
+  const [errorDescarte, setErrorDescarte] = useState("");
   const usuario = getUsuario();
   // "Procesar solicitud" (elegir proveedor + monto) — vendedor, admin, jefatura y coordinadora.
   const puedeProcesar = ["vendedor", "admin", "jefatura", "coordinadora"].includes(usuario?.rol);
@@ -331,11 +354,11 @@ export default function Compras() {
   const itemsPagados = itemsCompra.filter((it) => it.estadoPago === "pagado" && !it.recepcionado);
   const itemsRecepcionados = itemsCompra.filter((it) => it.estadoPago === "pagado" && it.recepcionado);
 
-  const serviciosActivos = servicios.filter((s) => !s.anulado);
-  const serviciosPorProcesar = serviciosActivos.filter((s) => (s.estadoPago || "por_procesar") === "por_procesar");
-  const serviciosPendientePago = serviciosActivos.filter((s) => s.estadoPago === "pendiente_pago");
-  const serviciosPagados = serviciosActivos.filter((s) => s.estadoPago === "pagado" && !s.recepcionado);
-  const serviciosRecepcionados = serviciosActivos.filter((s) => s.estadoPago === "pagado" && s.recepcionado);
+  // Los anulados (descartados) se quedan en su pestaña, deshabilitados; no se pueden seleccionar ni van al Excel.
+  const serviciosPorProcesar = servicios.filter((s) => (s.estadoPago || "por_procesar") === "por_procesar");
+  const serviciosPendientePago = servicios.filter((s) => s.estadoPago === "pendiente_pago");
+  const serviciosPagados = servicios.filter((s) => s.estadoPago === "pagado" && !s.recepcionado);
+  const serviciosRecepcionados = servicios.filter((s) => s.estadoPago === "pagado" && s.recepcionado);
 
   const fmtFecha = (d) => d ? formatearFecha(d, { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—";
   const fmtFechaExcel = (d) => d ? formatearFecha(d, { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
@@ -365,10 +388,12 @@ export default function Compras() {
       "CLIENTE": nombreEmpresa(ot?.empresa) || "—",
       "MATERIALES": celda([it.categoriaNombre, resumenCompra(it)].filter(Boolean).join(" — ")),
       "PROVEEDOR": it.proveedorNombre || "—",
+      "MONEDA": it.moneda || "PEN",
       "COSTO": costo,
       "CANTIDAD": cantidad,
       "FLETE": flete,
       "TOTAL": costo * cantidad + flete,
+      "T.C.": it.moneda === "USD" ? it.tipoCambio : "—",
       ...datosPagoRecepcion(it),
     };
   };
@@ -386,18 +411,21 @@ export default function Compras() {
       "CLIENTE": nombreEmpresa(ot?.empresa) || "—",
       "MATERIALES": celda([s.tipoTrabajo, s.material].filter(Boolean).join(" — ")),
       "PROVEEDOR": s.nombreProveedor || "—",
+      "MONEDA": s.moneda || "PEN",
       "COSTO": costo,
       "CANTIDAD": cantidad,
       "FLETE": flete,
       "TOTAL": costo * cantidad + flete,
+      "T.C.": s.moneda === "USD" ? s.tipoCambio : "—",
       ...datosPagoRecepcion(s),
     };
   };
 
   const exportarPagadosExcel = () => {
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([...itemsPagados, ...itemsRecepcionados].map(filaPagoMaterial)), "Materiales pagados");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([...serviciosPagados, ...serviciosRecepcionados].map(filaPagoServicio)), "Servicios pagados");
+    const vigentes = (xs) => xs.filter((x) => !x.anulado);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(vigentes([...itemsPagados, ...itemsRecepcionados]).map(filaPagoMaterial)), "Materiales pagados");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(vigentes([...serviciosPagados, ...serviciosRecepcionados]).map(filaPagoServicio)), "Servicios pagados");
     XLSX.writeFile(wb, "solicitudes-pagadas.xlsx");
   };
 
@@ -410,12 +438,43 @@ export default function Compras() {
   const filaMaterialKey = (it) => `mat-${it._id}`;
   const filaServicioKey = (s) => `serv-${s._id}`;
 
-  const itemsSeleccionadosMateriales = itemsPorProcesar.filter((it) => seleccionados.has(filaMaterialKey(it)));
-  const itemsSeleccionadosPagoMateriales = itemsPendientePago.filter((it) => seleccionados.has(filaMaterialKey(it)));
-  const serviciosSeleccionados = serviciosPorProcesar.filter((s) => seleccionados.has(filaServicioKey(s)));
-  const serviciosSeleccionadosPago = serviciosPendientePago.filter((s) => seleccionados.has(filaServicioKey(s)));
-  const itemsSeleccionadosRecepcion = itemsPagados.filter((it) => seleccionados.has(filaMaterialKey(it)));
-  const serviciosSeleccionadosRecepcion = serviciosPagados.filter((s) => seleccionados.has(filaServicioKey(s)));
+  const selMat = (xs) => xs.filter((it) => !it.anulado && seleccionados.has(filaMaterialKey(it)));
+  const selServ = (xs) => xs.filter((s) => !s.anulado && seleccionados.has(filaServicioKey(s)));
+  const itemsSeleccionadosMateriales = selMat(itemsPorProcesar);
+  const itemsSeleccionadosPagoMateriales = selMat(itemsPendientePago);
+  const serviciosSeleccionados = selServ(serviciosPorProcesar);
+  const serviciosSeleccionadosPago = selServ(serviciosPendientePago);
+  const itemsSeleccionadosRecepcion = selMat(itemsPagados);
+  const serviciosSeleccionadosRecepcion = selServ(serviciosPagados);
+
+  // Descartar solo antes de pagar: una compra pagada ya suma al costo de la OT.
+  const puedeDescartar = puedeProcesar && (tab === "por-procesar" || tab === "pendiente-pago");
+  const datosAnulacion = (x) => x.anulado
+    ? {
+        motivo: x.motivoAnulacion,
+        por: x.anuladoPor,
+        fecha: x.fechaAnulacion
+          ? formatearFechaHora(x.fechaAnulacion, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+          : "",
+      }
+    : null;
+
+  const descartar = async (motivo) => {
+    setDescartando(true);
+    setErrorDescarte("");
+    const ruta = porDescartar.tipo === "material"
+      ? `/requerimientos/${porDescartar.x.requerimiento._id}/items/${porDescartar.x._id}/anular`
+      : `/servicios-externos/${porDescartar.x._id}/anular`;
+    const res = await fetchAuth(ruta, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ motivo }),
+    });
+    if (!res.ok) setErrorDescarte((await res.json().catch(() => ({}))).mensaje || "No se pudo descartar.");
+    setDescartando(false);
+    setPorDescartar(null);
+    await cargar();
+  };
 
   const esMateriales = seccion === "materiales";
   const nPorProcesarSel = esMateriales ? itemsSeleccionadosMateriales.length : serviciosSeleccionados.length;
@@ -530,6 +589,10 @@ export default function Compras() {
         </div>
       )}
 
+      {errorDescarte && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">{errorDescarte}</p>
+      )}
+
       {esMateriales ? (
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
           {(() => {
@@ -556,10 +619,14 @@ export default function Compras() {
                   proveedor={it.proveedorNombre}
                   precio={it.montoUnitario}
                   flete={it.costoTransporte}
+                  moneda={it.moneda}
                   referencia={`${it.categoriaNombre || "Otros"} — ${it.requerimiento.codigo}`}
-                  estado={
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${ESTADO_ITEM[it.estado]}`}>{it.estado}</span>
-                  }
+                  estado={(() => {
+                    const { clase, label } = estadoCompra(it);
+                    return <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${clase}`}>{label}</span>;
+                  })()}
+                  anulacion={datosAnulacion(it)}
+                  onDescartar={puedeDescartar ? () => setPorDescartar({ tipo: "material", x: it }) : null}
                   cantidad={it.cantidad}
                   unidad={it.materialAsociado?.unidad}
                   fecha={fmtFecha(it.fechaProcesado || it.createdAt)}
@@ -600,11 +667,14 @@ export default function Compras() {
                   proveedor={s.nombreProveedor}
                   precio={s.costo > 0 ? s.costo : null}
                   flete={s.costoTransporte}
+                  moneda={s.moneda}
                   referencia={`${s.tipoTrabajo} — ${s.codigo}`}
                   estado={(() => {
                     const { clase, label } = estadoCompra(s);
                     return <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${clase}`}>{label}</span>;
                   })()}
+                  anulacion={datosAnulacion(s)}
+                  onDescartar={puedeDescartar ? () => setPorDescartar({ tipo: "servicio", x: s }) : null}
                   cantidad={s.cantidad}
                   unidad=""
                   fecha={fmtFecha(s.fechaProcesado || s.createdAt)}
@@ -651,6 +721,19 @@ export default function Compras() {
           textoConfirmar="Marcar como recepcionado"
           onCancelar={() => setModalDatos(null)}
           onConfirmar={(datos) => aplicarASeleccion("recepcionar", datos)}
+        />
+      )}
+
+      {porDescartar && (
+        <PromptAccion
+          titulo="Descartar compra"
+          label="Motivo de anulación o descarte *"
+          placeholder="Ej. ya no se requiere, se consiguió en stock…"
+          nota={`Quedará registrado a nombre de ${usuario?.nombre || "tu usuario"}, con la fecha y hora en que confirmes.`}
+          onCancelar={() => setPorDescartar(null)}
+          onConfirmar={descartar}
+          procesando={descartando}
+          textoConfirmar="Descartar"
         />
       )}
     </div>

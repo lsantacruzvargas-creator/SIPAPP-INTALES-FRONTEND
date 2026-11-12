@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
 import SelectorEmpresas from "./SelectorEmpresas";
+import { simboloMoneda } from "../utils/montoCompra";
 
 // "Procesar solicitud" — asigna un proveedor (de la misma lista de Empresas)
 // + monto por unidad (sin IGV) a cada ítem seleccionado, más un costo de
@@ -21,6 +22,7 @@ export default function ModalProcesarSolicitud({ tipo, items, onClose, onProcesa
   const [proveedor, setProveedor] = useState(null);
   const [montos, setMontos] = useState(() => Object.fromEntries(items.map((it) => [it.key, ""])));
   const [costoTransporte, setCostoTransporte] = useState("");
+  const [moneda, setMoneda] = useState("PEN");
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
@@ -50,6 +52,7 @@ export default function ModalProcesarSolicitud({ tipo, items, onClose, onProcesa
           proveedor: proveedor._id,
           montoUnitario: Number(montos[it.key]),
           costoTransporte: costoTransporte ? Number(costoTransporte) : 0,
+          moneda,
         }),
       });
       if (!res.ok) {
@@ -89,8 +92,20 @@ export default function ModalProcesarSolicitud({ tipo, items, onClose, onProcesa
             </button>
           </div>
 
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Moneda *</label>
+            <select value={moneda} onChange={(e) => setMoneda(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-purple-300">
+              <option value="PEN">Soles (S/)</option>
+              <option value="USD">Dólares (US$)</option>
+            </select>
+            {moneda === "USD" && (
+              <p className="text-[11px] text-gray-400 mt-1">Se guarda con el tipo de cambio vigente de la app para los costos por OT.</p>
+            )}
+          </div>
+
           <div className="space-y-2">
-            <p className="text-xs text-gray-500">Monto por unidad (sin IGV) *</p>
+            <p className="text-xs text-gray-500">Monto por unidad (sin IGV, {simboloMoneda(moneda)}) *</p>
             {items.map((it) => (
               <div key={it.key} className="flex items-center gap-3 border border-gray-100 rounded-lg px-3 py-2">
                 <div className="flex-1 min-w-0">
@@ -106,7 +121,7 @@ export default function ModalProcesarSolicitud({ tipo, items, onClose, onProcesa
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Costo de transporte (opcional)</label>
+            <label className="text-xs text-gray-500 block mb-1">Costo de transporte ({simboloMoneda(moneda)}, opcional)</label>
             <input type="number" min="0" step="0.01" value={costoTransporte}
               onChange={(e) => setCostoTransporte(e.target.value)} onWheel={(e) => e.target.blur()}
               placeholder="0.00"

@@ -981,7 +981,7 @@ function ModalIngreso({ materialInicial, onClose, onGuardado }) {
     fetchAuth("/requerimientos").then((r) => r.ok ? r.json() : []).then((lista) => {
       for (const req of lista) {
         const item = req.items.find((it) =>
-          it.esSolicitudCompra && it.estado === "pendiente" &&
+          it.esSolicitudCompra && !it.anulado && it.estado === "pendiente" &&
           (it.materialAsociado?._id || it.materialAsociado) === form.material);
         if (item) { setRqPendiente({ requerimientoId: req._id, itemId: item._id, codigo: req.codigo, categoria: item.categoriaNombre }); return; }
       }
