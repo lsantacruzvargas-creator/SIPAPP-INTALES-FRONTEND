@@ -4,6 +4,8 @@ const OPCIONES = [
   "Factura a 90 días",
   "Factura a 120 días",
   "30% de adelanto",
+  "Confirming a 180 días",
+  "Factoring a 90 días",
   "Piezas por consignación",
 ];
 const OTRO = "__otro__";
