@@ -98,7 +98,6 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, t
               {mostrarEstadoServicio && <th className={`${TH} text-center w-px`}>Estado de<br />servicio</th>}
               <th className={`${TH} text-left min-w-[160px]`}>Empresa</th>
               <th className={`${TH} text-left`}>Contacto</th>
-              <th className={`${TH} text-left min-w-[260px]`}>Título cotización</th>
               {mostrarTituloOT && <th className={`${TH} text-left min-w-[260px]`}>Título orden de<br />trabajo</th>}
               <th className={`${TH} text-left`}>Planta</th>
               {puedeVerPrecios && <th className={`${TH} text-right w-px`}>Total sin<br />IGV (S/)</th>}
@@ -108,7 +107,7 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, t
           <tbody className="divide-y divide-gray-100">
             {cotizaciones.length === 0 ? (
               <tr>
-                <td colSpan={6 + (puedeVerPrecios ? 2 : 0) + (mostrarEstadoServicio ? 3 : 0) + (mostrarTituloOT ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
+                <td colSpan={5 +(puedeVerPrecios ? 2 : 0) + (mostrarEstadoServicio ? 3 : 0) + (mostrarTituloOT ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
               </tr>
             ) : (
               cotizaciones.map((c) => {
@@ -161,10 +160,9 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, t
                   <td className="px-4 py-3.5 text-gray-600">
                     {c.personaContacto || c.contactoNombre || <span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-4 py-3.5 text-gray-700">{c.titulo}</td>
                   {mostrarTituloOT && (
                     <td className="px-4 py-3.5 text-gray-700">
-                      {titulosOT(otsDeCot) || <span className="text-gray-300">—</span>}
+                      {(c._esOT ? c.titulo : titulosOT(otsDeCot)) || <span className="text-gray-300">—</span>}
                     </td>
                   )}
                   <td className="px-4 py-3.5 text-gray-600">{c.planta || <span className="text-gray-300">—</span>}</td>
@@ -369,8 +367,7 @@ export default function ListaCotizaciones() {
       "Fecha recibida":         c.fechaRecibida ? formatearFecha(c.fechaRecibida) : "—",
       "Empresa":                c.empresa?.razonSocial || "—",
       "Contacto":               c.personaContacto || c.contactoNombre || "—",
-      "Título cotización":      c.titulo,
-      "Título orden de trabajo": titulosOT(otsPorCot.get(c._id)) || "—",
+      "Título orden de trabajo": (c._esOT ? c.titulo : titulosOT(otsPorCot.get(c._id))) || "—",
       "Planta":                 c.planta || "—",
       "Encargado":              c.encargado || "—",
       ...(puedeVerPrecios ? {

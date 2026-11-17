@@ -14,7 +14,19 @@ const SORTS = [
   { valor: "fecha",             label: "Más reciente" },
   { valor: "numeroOT",          label: "N° OT" },
   { valor: "numeroOC",          label: "N° OC" },
+  { valor: "plazo",             label: "Plazo" },
+  { valor: "fechaOC",           label: "Fecha recibida OC" },
+  { valor: "diasRecibido",      label: "Días desde recibido" },
 ];
+
+// Los valores null (sin OC, sin días de fabricación) van al final en ambas
+// direcciones.
+const compararNum = (va, vb, dir) => {
+  if (va == null && vb == null) return 0;
+  if (va == null) return 1;
+  if (vb == null) return -1;
+  return dir === "asc" ? va - vb : vb - va;
+};
 
 // Comparador descendente: numérico si ambos parsean como número, si no
 // localeCompare; los valores vacíos van al final.
@@ -100,8 +112,24 @@ const dentroDeRangoFecha = (fecha, desde, hasta) => {
 
 const VACIO = <span className="text-gray-300">—</span>;
 
+function ThOrden({ clave, orden, className, title, children }) {
+  const activo = orden.sortBy === clave;
+  return (
+    <th className={className} title={title}>
+      <button
+        type="button"
+        onClick={() => orden.onOrdenar(clave)}
+        className={`inline-flex items-center gap-1 uppercase tracking-wide font-semibold hover:text-gray-800 transition ${activo ? "text-gray-800" : ""}`}
+      >
+        <span>{children}</span>
+        <span className={activo ? "" : "text-gray-300"}>{activo ? (orden.sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+      </button>
+    </th>
+  );
+}
+
 // `ocPorNumDoc`: numeroDocumento → { numeroOrden, fecha } de la OC del cliente.
-function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc }) {
+function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc, orden }) {
   return (
     <div className="mb-6">
       <div className="flex items-center gap-2 mb-3">
@@ -124,9 +152,9 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc }) 
                 <th className={`${TH} text-left min-w-[320px]`}>Descripción</th>
                 <th className={`${TH} text-center w-px`}>Días de<br />fabricación</th>
                 <th className={`${TH} text-left`}>Encargado de<br />Progreso</th>
-                <th className={`${TH} text-center w-px`} title="Días hábiles desde la fecha recibida de la OC">Días desde<br />recibido</th>
-                <th className={`${TH} text-center w-px`}>Fecha<br />recibida OC</th>
-                <th className={`${TH} text-center w-px`}>Plazo</th>
+                <ThOrden clave="diasRecibido" orden={orden} className={`${TH} text-center w-px`} title="Días hábiles desde la fecha recibida de la OC">Días desde<br />recibido</ThOrden>
+                <ThOrden clave="fechaOC" orden={orden} className={`${TH} text-center w-px`}>Fecha<br />recibida OC</ThOrden>
+                <ThOrden clave="plazo" orden={orden} className={`${TH} text-center w-px`}>Plazo</ThOrden>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -239,6 +267,9 @@ export default function ListaOrdenesTrabajo() {
   const [ocPorNumDoc, setOcPorNumDoc] = useState(new Map());
   const [filtros, setFiltros] = useState(FILTROS_VACIO);
   const [sortBy, setSortBy] = useState("numeroOT");
+  // Solo aplica a las columnas con orden en el encabezado (plazo, fechaOC,
+  // diasRecibido); los del select siguen siendo descendentes.
+  const [sortDir, setSortDir] = useState("desc");
   const [seleccionada, setSeleccionada] = useState(null);
   const [crearOTOpen, setCrearOTOpen] = useState(false);
   const [importarOpen, setImportarOpen] = useState(false);
@@ -337,13 +368,38 @@ export default function ListaOrdenesTrabajo() {
   });
 
   const diasOC = (o) => diasDesdeRecibido(ocPorNumDoc.get(o.numeroDocumento)?.fecha);
+  const fechaOCms = (o) => {
+    const f = ocPorNumDoc.get(o.numeroDocumento)?.fecha;
+    return f ? new Date(f).getTime() : null;
+  };
+  // Urgencia del plazo: (días desde recibido − días de fabricación) / días de
+  // fabricación, mismo margen que estadoPlazo pero con signo invertido — más
+  // alto = más atrasado. Las terminadas van debajo de cualquier OT en curso.
+  const urgenciaPlazo = (o) => {
+    const dr = diasOC(o);
+    const clave = estadoPlazo(o, dr);
+    if (!clave) return null;
+    if (clave === "terminada") return -1e9;
+    const df = Number(o.tiempoFabricacion);
+    return (dr - df) / df;
+  };
+
+  const ordenarPorColumna = (clave) => {
+    if (sortBy === clave) {
+      setSortDir(sortDir === "desc" ? "asc" : "desc");
+    } else {
+      setSortBy(clave);
+      setSortDir("desc");
+    }
+  };
+  const orden = { sortBy, sortDir, onOrdenar: ordenarPorColumna };
 
   filtradas.sort((a, b) => {
     if (sortBy === "numeroOT") return compararTexto(a.numeroOT, b.numeroOT);
     if (sortBy === "numeroOC") return compararTexto(ocPorNumDoc.get(a.numeroDocumento)?.numeroOrden, ocPorNumDoc.get(b.numeroDocumento)?.numeroOrden);
-    // Descendente: más días esperando primero — sin OC (null) va al final,
-    // igual que un valor "menor" a cualquier día real (>= 0).
-    if (sortBy === "diasRecibido") return (diasOC(b) ?? -1) - (diasOC(a) ?? -1);
+    if (sortBy === "diasRecibido") return compararNum(diasOC(a), diasOC(b), sortDir);
+    if (sortBy === "fechaOC") return compararNum(fechaOCms(a), fechaOCms(b), sortDir);
+    if (sortBy === "plazo") return compararNum(urgenciaPlazo(a), urgenciaPlazo(b), sortDir);
     return new Date(b.createdAt) - new Date(a.createdAt);
   });
 
@@ -463,7 +519,7 @@ export default function ListaOrdenesTrabajo() {
       {/* Filtros — orden: Ordenar, Estado, Empresa (+ Planta), búsqueda */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
 
-        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={SELECT}>
+        <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setSortDir("desc"); }} className={SELECT}>
           {SORTS.map(({ valor, label }) => (
             <option key={valor} value={valor}>Ordenar: {label}</option>
           ))}
@@ -517,9 +573,13 @@ export default function ListaOrdenesTrabajo() {
             priorizar por antigüedad en todas las tablas de un solo click. */}
         <button
           type="button"
-          onClick={() => setSortBy(sortBy === "diasRecibido" ? "fecha" : "diasRecibido")}
+          onClick={() => {
+            const activo = sortBy === "diasRecibido" && sortDir === "desc";
+            setSortBy(activo ? "fecha" : "diasRecibido");
+            setSortDir("desc");
+          }}
           className={`px-3 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
-            sortBy === "diasRecibido"
+            sortBy === "diasRecibido" && sortDir === "desc"
               ? "bg-gray-900 text-white"
               : "border border-gray-300 text-gray-600 hover:bg-gray-50"
           }`}
@@ -539,7 +599,7 @@ export default function ListaOrdenesTrabajo() {
 
       <>
           {filtroEstadoPlanner === "todos" && (
-            <TablaOTs ocPorNumDoc={ocPorNumDoc}
+            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
               titulo="Todas las Órdenes de Trabajo"
               acento="bg-indigo-500"
               ordenes={todasOTs}
@@ -549,7 +609,7 @@ export default function ListaOrdenesTrabajo() {
           )}
 
           {filtroEstadoPlanner === "noAsignada" && (
-            <TablaOTs ocPorNumDoc={ocPorNumDoc}
+            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
               titulo="Órdenes no asignadas"
               acento="bg-red-500"
               ordenes={noAsignadas}
@@ -559,7 +619,7 @@ export default function ListaOrdenesTrabajo() {
           )}
 
           {filtroEstadoPlanner === "enProgreso" && (
-            <TablaOTs ocPorNumDoc={ocPorNumDoc}
+            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
               titulo="Órdenes en progreso"
               acento="bg-blue-500"
               ordenes={plannerEnProgreso}
@@ -569,7 +629,7 @@ export default function ListaOrdenesTrabajo() {
           )}
 
           {filtroEstadoPlanner === "completada" && (
-            <TablaOTs ocPorNumDoc={ocPorNumDoc}
+            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
               titulo="Órdenes completadas"
               acento="bg-green-500"
               ordenes={plannerCompletadas}
@@ -579,7 +639,7 @@ export default function ListaOrdenesTrabajo() {
           )}
 
           {filtroEstadoPlanner === "entregada" && (
-            <TablaOTs ocPorNumDoc={ocPorNumDoc}
+            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
               titulo="Órdenes entregadas"
               acento="bg-teal-500"
               ordenes={plannerEntregadas}
@@ -590,7 +650,7 @@ export default function ListaOrdenesTrabajo() {
         </>
 
       {filtroEstadoPlanner === "cerrada" && (
-        <TablaOTs ocPorNumDoc={ocPorNumDoc}
+        <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
           titulo="Órdenes cerradas"
           acento="bg-gray-500"
           ordenes={cerradas}

@@ -135,7 +135,10 @@ function TablaOC({
                     <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{o.numeroFactura || factura?.numeroFactura || <span className="text-gray-300">—</span>}</td>
                   )}
                   <td className="px-4 py-3.5 text-gray-700">{o.empresa?.razonSocial || "—"}</td>
-                  {mostrarTitulo && <td className="px-4 py-3.5 text-gray-600">{o.titulo}</td>}
+                  {/* max-width en un <td> se ignora con table-layout auto: el
+                      tope va en un div interno, que limita el max-content de
+                      la columna y obliga al título a envolver. */}
+                  {mostrarTitulo && <td className="px-4 py-3.5 text-gray-600"><div className="max-w-[340px]">{o.titulo}</div></td>}
                   {puedeVerPrecios && (
                     <td className="px-4 py-3.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">
                       {pen.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
@@ -146,7 +149,7 @@ function TablaOC({
                       {usd != null ? usd.toLocaleString("es-PE", { minimumFractionDigits: 2 }) : "—"}
                     </td>
                   )}
-                  <td className="px-4 py-3.5 text-center">
+                  <td className="px-4 py-3.5 text-center whitespace-nowrap">
                     {otPadre ? (
                       <DotChip chip={badgeOT(otPadre.estado)} dot={dotOT(otPadre.estado)}>{otPadre.estado}</DotChip>
                     ) : (
@@ -208,7 +211,7 @@ function TablaOC({
                   {puedeVerPrecios && <td className="px-4 py-3" />}
                   {puedeVerPrecios && <td className="px-4 py-3" />}
                   <td className="px-4 py-3" />
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-3 text-center whitespace-nowrap">
                     <DotChip chip={badgeOT(s.estado)} dot={dotOT(s.estado)}>{s.estado}</DotChip>
                   </td>
                   <td className="px-4 py-3 text-center">
