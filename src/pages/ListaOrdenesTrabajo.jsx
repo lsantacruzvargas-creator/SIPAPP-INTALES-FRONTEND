@@ -85,16 +85,18 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
           <table className="w-full text-sm" style={{ minWidth: "1000px" }}>
             <thead className="bg-gray-50 text-xs uppercase tracking-wide border-b-2 border-gray-200">
               <tr>
-                <th className={`${TH} text-left`}>N° OT</th>
-                <th className={`${TH} text-left`}>N° Cotización</th>
-                <th className={`${TH} text-center`}>Servicio</th>
-                <th className={`${TH} text-left`}>Empresa</th>
+                {/* w-px encoge la columna a su contenido (que es nowrap) y
+                    deja el ancho sobrante a Empresa/Descripción. */}
+                <th className={`${TH} text-left w-px`}>N° OT</th>
+                <th className={`${TH} text-left w-px`}>N° Cotización</th>
+                <th className={`${TH} text-center w-px`}>Servicio</th>
+                <th className={`${TH} text-left min-w-[180px]`}>Empresa</th>
                 <th className={`${TH} text-left`}>Contacto</th>
-                <th className={`${TH} text-left`}>Descripción</th>
-                <th className={`${TH} text-center`}>Estado de Progreso</th>
-                <th className={`${TH} text-left`}>Encargado de Progreso</th>
-                <th className={`${TH} text-center`}>Días desde recibido</th>
-                <th className={`${TH} text-center`}>Fecha de Ingreso</th>
+                <th className={`${TH} text-left min-w-[320px]`}>Descripción</th>
+                <th className={`${TH} text-center w-px`}>Estado de<br />Progreso</th>
+                <th className={`${TH} text-left`}>Encargado de<br />Progreso</th>
+                <th className={`${TH} text-center w-px`}>Días desde<br />recibido</th>
+                <th className={`${TH} text-center w-px`}>Fecha de<br />Ingreso</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -122,7 +124,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-center">
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       <DotChip chip={badgeGeneral(o.estadoGeneral)} dot={dotGeneral(o.estadoGeneral)}>{o.estadoGeneral}</DotChip>
                     </td>
                     <td className="px-4 py-3.5 text-gray-700">
@@ -132,7 +134,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                       {o.personaContacto || o.contactoNombre || <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-4 py-3.5 text-gray-700">{o.titulo || <span className="text-gray-300">—</span>}</td>
-                    <td className="px-4 py-3.5 text-center">
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       <DotChip chip={badgeOT(progresoLabel(o))} dot={dotOT(progresoLabel(o))}>{progresoLabel(o)}</DotChip>
                     </td>
                     <td className="px-4 py-3.5 text-gray-600">{o.encargado || <span className="text-gray-300">—</span>}</td>
@@ -164,7 +166,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                           <span className="text-gray-400">{s.cotizacion?.numeroCotizacion || s.cotizacion?.codigo || "—"}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-3 text-center whitespace-nowrap">
                         <DotChip chip={badgeGeneral(s.estadoGeneral)} dot={dotGeneral(s.estadoGeneral)}>{s.estadoGeneral}</DotChip>
                       </td>
                       <td className="px-4 py-3 text-gray-700">
@@ -174,7 +176,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                         {s.personaContacto || s.contactoNombre || o.personaContacto || o.contactoNombre || <span className="text-gray-300">—</span>}
                       </td>
                       <td className="px-4 py-3 text-gray-700">{s.titulo || <span className="text-gray-300">—</span>}</td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-3 text-center whitespace-nowrap">
                         <DotChip chip={badgeOT(progresoLabel(s))} dot={dotOT(progresoLabel(s))}>{progresoLabel(s)}</DotChip>
                       </td>
                       <td className="px-4 py-3 text-gray-600">{s.encargado || <span className="text-gray-300">—</span>}</td>

@@ -87,15 +87,17 @@ function TablaOC({
         <table className="w-full text-sm" style={{ minWidth: `${totalColumnas * 85}px` }}>
           <thead className="bg-gray-50 text-xs uppercase tracking-wide border-b-2 border-gray-200">
             <tr>
-              <th className={`${TH} text-left`}>Cotización</th>
-              <th className={`${TH} text-left`}>N° OT</th>
-              <th className={`${TH} text-left`}>N° Orden de Compra</th>
-              <th className={`${TH} text-left`}>Fecha de creación</th>
-              {mostrarFactura && <th className={`${TH} text-left`}>N° Factura</th>}
-              <th className={`${TH} text-left`}>Empresa</th>
-              {mostrarTitulo && <th className={`${TH} text-left`}>Título</th>}
-              {puedeVerPrecios && <th className={`${TH} text-right`}>Total (S/)</th>}
-              {puedeVerPrecios && <th className={`${TH} text-right`}>Total (US$)</th>}
+              {/* w-px encoge la columna a su contenido (que es nowrap) y deja
+                  el ancho sobrante al título. */}
+              <th className={`${TH} text-left w-px`}>Cotización</th>
+              <th className={`${TH} text-left w-px`}>N° OT</th>
+              <th className={`${TH} text-left`}>N° Orden de<br />Compra</th>
+              <th className={`${TH} text-left w-px`}>Fecha de<br />creación</th>
+              {mostrarFactura && <th className={`${TH} text-left w-px`}>N° Factura</th>}
+              <th className={`${TH} text-left min-w-[160px]`}>Empresa</th>
+              {mostrarTitulo && <th className={`${TH} text-left min-w-[260px]`}>Título</th>}
+              {puedeVerPrecios && <th className={`${TH} text-right w-px`}>Total<br />(S/)</th>}
+              {puedeVerPrecios && <th className={`${TH} text-right w-px`}>Total<br />(US$)</th>}
               <th className={`${TH} text-center`}>Estado OT</th>
               <th className={`${TH} text-center`}>GRE</th>
               {mostrarHesActa && <th className={`${TH} text-center`}>HES</th>}
@@ -137,7 +139,10 @@ function TablaOC({
                     <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{o.numeroFactura || factura?.numeroFactura || <span className="text-gray-300">—</span>}</td>
                   )}
                   <td className="px-4 py-3.5 text-gray-700">{o.empresa?.razonSocial || "—"}</td>
-                  {mostrarTitulo && <td className="px-4 py-3.5 text-gray-600">{o.titulo}</td>}
+                  {/* max-width en un <td> se ignora con table-layout auto: el
+                      tope va en un div interno, que limita el max-content de
+                      la columna y obliga al título a envolver. */}
+                  {mostrarTitulo && <td className="px-4 py-3.5 text-gray-600"><div className="max-w-[340px]">{o.titulo}</div></td>}
                   {puedeVerPrecios && (
                     <td className="px-4 py-3.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">
                       {pen.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
@@ -148,7 +153,7 @@ function TablaOC({
                       {usd != null ? usd.toLocaleString("es-PE", { minimumFractionDigits: 2 }) : "—"}
                     </td>
                   )}
-                  <td className="px-4 py-3.5 text-center">
+                  <td className="px-4 py-3.5 text-center whitespace-nowrap">
                     {otPadre ? (
                       <DotChip chip={badgeOT(otPadre.estado)} dot={dotOT(otPadre.estado)}>{otPadre.estado}</DotChip>
                     ) : (
@@ -210,7 +215,7 @@ function TablaOC({
                   {puedeVerPrecios && <td className="px-4 py-3" />}
                   {puedeVerPrecios && <td className="px-4 py-3" />}
                   <td className="px-4 py-3" />
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-3 text-center whitespace-nowrap">
                     <DotChip chip={badgeOT(s.estado)} dot={dotOT(s.estado)}>{s.estado}</DotChip>
                   </td>
                   <td className="px-4 py-3 text-center">
