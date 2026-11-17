@@ -114,17 +114,19 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc }) 
           <table className="w-full text-sm" style={{ minWidth: "1100px" }}>
             <thead className="bg-gray-50 text-xs uppercase tracking-wide border-b-2 border-gray-200">
               <tr>
-                <th className={`${TH} text-left`}>N° OT</th>
-                <th className={`${TH} text-left`}>N° OC</th>
-                <th className={`${TH} text-center`}>Estado de Progreso</th>
-                <th className={`${TH} text-left`}>Empresa</th>
+                {/* w-px encoge la columna a su contenido (que es nowrap) y
+                    deja el ancho sobrante a Empresa/Descripción. */}
+                <th className={`${TH} text-left w-px`}>N° OT</th>
+                <th className={`${TH} text-left w-px`}>N° OC</th>
+                <th className={`${TH} text-center w-px`}>Estado de<br />Progreso</th>
+                <th className={`${TH} text-left min-w-[180px]`}>Empresa</th>
                 <th className={`${TH} text-left`}>Cotizado por</th>
-                <th className={`${TH} text-left`}>Descripción</th>
-                <th className={`${TH} text-center`}>Días de fabricación</th>
-                <th className={`${TH} text-left`}>Encargado de Progreso</th>
-                <th className={`${TH} text-center`} title="Días hábiles desde la fecha recibida de la OC">Días desde recibido</th>
-                <th className={`${TH} text-center`}>Fecha recibida OC</th>
-                <th className={`${TH} text-center`}>Plazo</th>
+                <th className={`${TH} text-left min-w-[320px]`}>Descripción</th>
+                <th className={`${TH} text-center w-px`}>Días de<br />fabricación</th>
+                <th className={`${TH} text-left`}>Encargado de<br />Progreso</th>
+                <th className={`${TH} text-center w-px`} title="Días hábiles desde la fecha recibida de la OC">Días desde<br />recibido</th>
+                <th className={`${TH} text-center w-px`}>Fecha<br />recibida OC</th>
+                <th className={`${TH} text-center w-px`}>Plazo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -155,7 +157,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc }) 
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-center">
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       <DotChip chip={badgeOT(progresoLabel(o))} dot={dotOT(progresoLabel(o))}>{progresoLabel(o)}</DotChip>
                     </td>
                     <td className="px-4 py-3.5 text-gray-700">
@@ -194,7 +196,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc }) 
                       <td className="px-4 py-3 whitespace-nowrap text-gray-400">
                         {ocSub?.numeroOrden || "—"}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-3 text-center whitespace-nowrap">
                         <DotChip chip={badgeOT(progresoLabel(s))} dot={dotOT(progresoLabel(s))}>{progresoLabel(s)}</DotChip>
                       </td>
                       <td className="px-4 py-3 text-gray-700">

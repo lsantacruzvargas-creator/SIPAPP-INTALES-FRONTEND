@@ -90,17 +90,19 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, t
         <table className="w-full text-sm" style={{ minWidth: "1000px" }}>
           <thead className="bg-gray-50 text-xs uppercase tracking-wide border-b-2 border-gray-200">
             <tr>
-              <th className={`${TH} text-left`}>N° Cotización</th>
-              {mostrarEstadoServicio && <th className={`${TH} text-left ${colOtEstrecha ? "w-20" : ""}`}>N° OT</th>}
-              {mostrarEstadoServicio && <th className={`${TH} text-center`}>Fecha de salida</th>}
-              {mostrarEstadoServicio && <th className={`${TH} text-center`}>Estado de servicio</th>}
-              <th className={`${TH} text-left`}>Empresa</th>
+              {/* w-px encoge la columna a su contenido (que es nowrap) y deja
+                  el ancho sobrante a los títulos. */}
+              <th className={`${TH} text-left w-px`}>N° Cotización</th>
+              {mostrarEstadoServicio && <th className={`${TH} text-left ${colOtEstrecha ? "w-20" : "w-px"}`}>N° OT</th>}
+              {mostrarEstadoServicio && <th className={`${TH} text-center w-px`}>Fecha de<br />salida</th>}
+              {mostrarEstadoServicio && <th className={`${TH} text-center w-px`}>Estado de<br />servicio</th>}
+              <th className={`${TH} text-left min-w-[160px]`}>Empresa</th>
               <th className={`${TH} text-left`}>Contacto</th>
-              <th className={`${TH} text-left`}>Título cotización</th>
-              {mostrarTituloOT && <th className={`${TH} text-left`}>Título orden de trabajo</th>}
+              <th className={`${TH} text-left min-w-[260px]`}>Título cotización</th>
+              {mostrarTituloOT && <th className={`${TH} text-left min-w-[260px]`}>Título orden de<br />trabajo</th>}
               <th className={`${TH} text-left`}>Planta</th>
-              {puedeVerPrecios && <th className={`${TH} text-right`}>Total sin IGV (S/)</th>}
-              {puedeVerPrecios && <th className={`${TH} text-right`}>Total sin IGV (US$)</th>}
+              {puedeVerPrecios && <th className={`${TH} text-right w-px`}>Total sin<br />IGV (S/)</th>}
+              {puedeVerPrecios && <th className={`${TH} text-right w-px`}>Total sin<br />IGV (US$)</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -147,7 +149,7 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, t
                     </td>
                   )}
                   {mostrarEstadoServicio && (
-                    <td className="px-4 py-3.5 text-center">
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       {otPrincipal
                         ? <DotChip chip={badgeGeneral(otPrincipal.estadoGeneral)} dot={dotGeneral(otPrincipal.estadoGeneral)}>{otPrincipal.estadoGeneral}</DotChip>
                         : <span className="text-gray-300">—</span>}

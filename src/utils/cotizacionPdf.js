@@ -326,21 +326,27 @@ export const exportarCotizacionPdf = async (cotizacion) => {
       const maxWidth = cell.width - cell.padding("left") - cell.padding("right");
       const lineasPadre = doc.splitTextToSize(item.descripcion || "", maxWidth);
 
-      const totalLineas = Array.isArray(cell.text) && cell.text.length > 0 ? cell.text.length : lineasPadre.length;
       const padTop = cell.padding("top");
       const padBottom = cell.padding("bottom");
-      const alturaInterior = cell.height - padTop - padBottom;
-      const lineHeight = alturaInterior / totalLineas;
+      // Misma fórmula que autoTable (Cell.getContentHeight / autoTableText):
+      // derivarla del alto de la celda falla cuando otra columna (COD que
+      // envuelve en 3 líneas) hace la fila más alta que la descripción.
+      const fontSizeMm = cell.styles.fontSize / doc.internal.scaleFactor;
+      const lineHeight = fontSizeMm * doc.getLineHeightFactor();
       const bandHeight = lineasPadre.length * lineHeight;
 
-      doc.setFillColor(255, 255, 255);
-      doc.rect(cell.x + 0.3, cell.y + padTop - 0.2, cell.width - 0.6, bandHeight + 0.2, "F");
-
+      // En la continuación de una fila partida entre páginas el padre no está.
       const x = cell.x + cell.padding("left");
-      let ly = cell.y + padTop + lineHeight * 0.75;
-      doc.setFont("helvetica", "bold");
-      lineasPadre.forEach((linea) => { doc.text(linea, x, ly); ly += lineHeight; });
-      doc.setFont("helvetica", "normal");
+      const esInicioDeCelda = !Array.isArray(cell.text) || (cell.text[0] || "").trim() === (lineasPadre[0] || "").trim();
+      if (esInicioDeCelda && lineasPadre.length > 0) {
+        doc.setFillColor(255, 255, 255);
+        doc.rect(cell.x + 0.3, cell.y + padTop - 0.2, cell.width - 0.6, bandHeight + 0.2, "F");
+
+        let ly = cell.y + padTop + fontSizeMm * (2 - 1.15);
+        doc.setFont("helvetica", "bold");
+        lineasPadre.forEach((linea) => { doc.text(linea, x, ly); ly += lineHeight; });
+        doc.setFont("helvetica", "normal");
+      }
 
       // Imagen del ítem, si existe — dibujada en el espacio reservado con
       // las líneas en blanco al final de la celda (ver LINEAS_RESERVA_IMAGEN).
