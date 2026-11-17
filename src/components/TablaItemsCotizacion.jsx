@@ -183,7 +183,7 @@ export default function TablaItemsCotizacion({
               {seleccionables && <th className="px-3 py-3 w-12 text-center">OT</th>}
               {seleccionablesOC && <th className="px-3 py-3 w-12 text-center">OC</th>}
               <th className="px-3 py-3 text-center w-12">Item</th>
-              <th className="px-3 py-3 text-left w-28">Código</th>
+              <th className="px-3 py-3 text-left w-px">Código</th>
               <th className="px-3 py-3 text-left">Descripción *</th>
               <th className="px-3 py-3 text-center w-24">Unidad</th>
               <th className="px-3 py-3 text-center w-24">Cantidad *</th>
@@ -237,10 +237,14 @@ export default function TablaItemsCotizacion({
                   )}
                   <td className="px-3 py-3 text-center text-gray-400">{idx + 1}</td>
                   <td className="px-3 py-3">
-                    <input value={item.codigo || ""} disabled={!editable}
-                      onChange={(e) => handleItem(item._key, "codigo", e.target.value)}
+                    {/* Textarea de 2 filas x ~10 caracteres: un código de 20
+                        dígitos se ve completo sin ensanchar la columna a costa
+                        de Descripción. break-all porque un número sin guiones
+                        no tiene dónde partirse. */}
+                    <textarea value={item.codigo || ""} disabled={!editable} rows={2}
+                      onChange={(e) => handleItem(item._key, "codigo", e.target.value.replace(/\n/g, ""))}
                       placeholder="—"
-                      className={`w-full ${editable ? INP : "bg-transparent border-transparent text-sm px-2 py-1"}`} />
+                      className={`${editable ? INP : "bg-transparent border-transparent text-sm px-2 py-1"} w-[calc(10ch+1.75rem)]! resize-none break-all leading-snug`} />
                   </td>
                   <td className="px-3 py-3">
                     {/* La clase `uppercase` de abajo solo transforma la

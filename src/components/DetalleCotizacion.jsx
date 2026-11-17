@@ -1025,10 +1025,10 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
           </section>
         </div>
 
-        {/* Ítems — ancho ampliado (80vw, pedido del usuario) para que la
+        {/* Ítems — ancho ampliado (90vw, pedido del usuario) para que la
             tabla respire más que el resto del modal, debajo de Datos +
             Relaciones */}
-        <div className="w-[80vw] max-w-none mx-auto px-8 pb-8">
+        <div className="w-[90vw] max-w-none mx-auto px-8 pb-8">
           <TablaItemsCotizacion
             items={items}
             onItemsChange={setItems}
