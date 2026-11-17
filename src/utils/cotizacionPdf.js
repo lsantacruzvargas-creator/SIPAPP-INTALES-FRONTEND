@@ -235,7 +235,7 @@ export const exportarCotizacionPdf = async (cotizacion) => {
   doc.setFontSize(8.5);
   doc.text("FECHA:", colDerX + colDerW, y, { align: "right" });
   doc.setFont("helvetica", "normal");
-  doc.text(fechaStr, doc.getTextWidth("FECHA__") + colDerX + colDerW, y, { align: "right" });
+  doc.text(fechaStr, doc.getTextWidth("FECHA___") + colDerX + colDerW, y, { align: "right" });
 
   y = yIzq + 4;
 
