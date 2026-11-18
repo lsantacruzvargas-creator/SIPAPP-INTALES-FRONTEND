@@ -37,10 +37,18 @@ export const fetchUpload = (ruta) => {
 // Para "ver en pestaña nueva" (click en una miniatura, un PDF, etc.): trae el
 // archivo con el header de auth y recién ahí genera una Object URL de un solo
 // uso para pasarle al navegador — la URL real con el token nunca se expone.
+// Los adjuntos de OT/Cotización admiten cualquier formato: un blob con tipo
+// HTML/XHTML/SVG/XML abierto en pestaña correría en el origen de la app (XSS
+// con acceso al token). Solo los tipos de esta lista se muestran; el resto se
+// fuerza a octet-stream y el navegador lo descarga sin interpretarlo.
+const TIPOS_VISIBLES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+
 export const abrirArchivoProtegido = async (ruta) => {
   const res = await fetchUpload(ruta);
   if (!res.ok) return;
-  const blob = await res.blob();
+  const original = await res.blob();
+  const tipo = original.type.split(";")[0].trim().toLowerCase();
+  const blob = TIPOS_VISIBLES.includes(tipo) ? original : new Blob([original], { type: "application/octet-stream" });
   const url = URL.createObjectURL(blob);
   window.open(url, "_blank");
   setTimeout(() => URL.revokeObjectURL(url), 60_000);

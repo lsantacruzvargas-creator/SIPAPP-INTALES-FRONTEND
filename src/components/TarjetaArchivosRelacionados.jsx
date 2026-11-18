@@ -1,20 +1,15 @@
 import { useState } from "react";
-import { fetchAuth, uploadAuth, abrirArchivoProtegido } from "../utils/fetchAuth";
+import { fetchAuth, uploadAuth, abrirArchivoProtegido, descargarArchivoProtegido } from "../utils/fetchAuth";
 import { comprimirFoto, mensajeSubida } from "../utils/comprimirFoto";
 import ImagenProtegida from "./ImagenProtegida";
 
 const EXT_IMAGEN = ["jpg", "jpeg", "png", "webp"];
-const ACCEPT = [
-  "image/jpeg", "image/png", "image/webp",
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-].join(",");
 
 const extension = (nombre = "") => nombre.split(".").pop()?.toLowerCase() || "";
 const esImagen = (nombre) => EXT_IMAGEN.includes(extension(nombre));
+// Solo imágenes y PDF se abren en pestaña; el resto (SolidWorks, DWG, Office…)
+// se descarga con su nombre real — un blob abierto en pestaña pierde nombre y extensión.
+const seVeEnNavegador = (nombre) => esImagen(nombre) || extension(nombre) === "pdf";
 const iconoPorExtension = (ext) => {
   if (ext === "pdf") return "📄";
   if (["doc", "docx"].includes(ext)) return "📝";
@@ -110,7 +105,7 @@ export default function TarjetaArchivosRelacionados({
       const fd = new FormData();
       fd.append("archivo", await comprimirFoto(file));
       const res = await uploadAuth(`/${endpoint}/${ordenId}/archivos`, fd);
-      if (!res.ok) setError(`No se pudo subir "${file.name}": ${await mensajeSubida(res)} (máx. 20 MB).`);
+      if (!res.ok) setError(`No se pudo subir "${file.name}": ${await mensajeSubida(res)} (máx. 100 MB).`);
       else ultimaOrden = await res.json();
     }
     setSubiendo(false);
@@ -130,8 +125,13 @@ export default function TarjetaArchivosRelacionados({
   };
 
   const abrir = (archivo) => {
-    if (archivo.url) abrirArchivoProtegido(archivo.url);
-    else if (archivo.file) window.open(URL.createObjectURL(archivo.file), "_blank");
+    const enPestana = seVeEnNavegador(archivo.nombre);
+    if (archivo.url) {
+      if (enPestana) abrirArchivoProtegido(archivo.url);
+      else descargarArchivoProtegido(archivo.url, archivo.nombre);
+    } else if (archivo.file && enPestana) {
+      window.open(URL.createObjectURL(archivo.file), "_blank");
+    }
   };
 
   const renderArchivo = (a, idx, { vinculado = false } = {}) => {
@@ -194,7 +194,7 @@ export default function TarjetaArchivosRelacionados({
         {!soloLectura && (
           <label className={`text-sm bg-cyan-600 text-white px-4 py-2 rounded-lg transition font-medium ${subiendo ? "opacity-60" : "hover:bg-cyan-700 cursor-pointer"}`}>
             {subiendo ? "Subiendo…" : "+ Agregar archivo"}
-            <input type="file" multiple accept={ACCEPT} className="hidden" disabled={subiendo}
+            <input type="file" multiple className="hidden" disabled={subiendo}
               onChange={(e) => { agregarArchivos(e.target.files); e.target.value = ""; }} />
           </label>
         )}
