@@ -186,7 +186,12 @@ export function generarComprobantePdf(comprobante, { logoUrl } = {}) {
     doc.text("Operación sujeta a retención del IGV", margin, y);
     y += 5;
     doc.setFont("helvetica", "normal");
-    doc.text(`Porcentaje: ${comprobante.retencion.porcentaje ?? "-"}%  ·  Monto de retención: ${simbolo} ${Number(comprobante.retencion.monto || 0).toFixed(2)}`, margin, y);
+    // En USD se imprime en soles (TC vigente de la emisión), aunque el XML la lleve en dólares.
+    const retEnSoles = moneda !== "PEN" && comprobante.retencion.montoSoles > 0;
+    const montoRetTxt = retEnSoles
+      ? `S/ ${Number(comprobante.retencion.montoSoles).toFixed(2)}`
+      : `${simbolo} ${Number(comprobante.retencion.monto || 0).toFixed(2)}`;
+    doc.text(`Porcentaje: ${comprobante.retencion.porcentaje ?? "-"}%  ·  Monto de retención: ${montoRetTxt}`, margin, y);
     y += 5;
     doc.text(`Neto a cobrar: ${simbolo} ${(Number(totales.totalPagar || 0) - Number(comprobante.retencion.monto || 0)).toFixed(2)}`, margin, y);
   }

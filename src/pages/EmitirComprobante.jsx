@@ -330,6 +330,19 @@ export default function EmitirComprobante() {
   const retencionMonto = retencionAplica
     ? r2(totalGeneral * (Number(retencionPorcentaje) || 0) / 100)
     : 0;
+  // Equivalente en soles solo referencial, al TC vigente de la app: el XML lleva la retención en
+  // la moneda del comprobante (SUNAT 2071) y el cliente la convierte con el TC de la fecha de pago.
+  const [tcRetencion, setTcRetencion] = useState(null);
+  useEffect(() => {
+    if (!retencionAplica || moneda === "PEN") return;
+    let vigente = true;
+    fetchAuth("/tipo-cambio")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (vigente) setTcRetencion(d?.valor > 0 ? d : null); })
+      .catch(() => { if (vigente) setTcRetencion(null); });
+    return () => { vigente = false; };
+  }, [retencionAplica, moneda]);
+  const retencionSoles = tcRetencion ? Math.round(retencionMonto * tcRetencion.valor * 100) / 100 : 0;
 
   // Lo que deben sumar las cuotas: el XML informa como monto neto pendiente el total menos la
   // detracción (va al Banco de la Nación) y menos la retención; el total del comprobante no cambia.
@@ -533,7 +546,13 @@ export default function EmitirComprobante() {
               cuentaBancaria: detraccionCuentaBancaria.trim(),
             },
           } : {}),
-          ...(retencionAplica ? { retencion: { aplica: true, porcentaje: Number(retencionPorcentaje) } } : {}),
+          ...(retencionAplica ? {
+            retencion: {
+              aplica: true,
+              porcentaje: Number(retencionPorcentaje),
+              ...(moneda !== "PEN" && tcRetencion ? { tipoCambio: tcRetencion.valor } : {}),
+            },
+          } : {}),
         };
       }
       const res  = await fetchAuth(endpoint, { method: "POST", body: JSON.stringify(body) });
@@ -1123,6 +1142,15 @@ export default function EmitirComprobante() {
                       <label className="block text-xs font-medium text-gray-500 mb-1">Monto de retención</label>
                       <input value={retencionMonto.toFixed(2)} disabled
                         className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
+                      {moneda !== "PEN" && (
+                        tcRetencion ? (
+                          <div className="mt-1 inline-flex flex-col gap-0.5 rounded-md border border-sky-300 bg-sky-50 px-2 py-1 text-xs text-sky-800">
+                            <span className="font-semibold">Referencial: S/ {retencionSoles.toFixed(2)}</span>
+                            <span>US$ {retencionMonto.toFixed(2)} × TC vigente {tcRetencion.valor}</span>
+                          </div>
+                        )
+                        : <p className="text-xs mt-1 text-gray-500">Sin tipo de cambio vigente para mostrarla en soles.</p>
+                      )}
                     </div>
                     <div className="col-span-2">
                       <label className="block text-xs font-medium text-gray-500 mb-1">Neto a cobrar (total − retención)</label>
