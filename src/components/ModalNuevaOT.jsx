@@ -287,7 +287,7 @@ export default function ModalNuevaOT({ cotizacion, onClose, onCreada }) {
               <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Datos de la orden de trabajo</h4>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-[1fr_110px_160px] gap-4">
               <div>
                 <label className="text-xs text-gray-500 block mb-1">N° Orden de Trabajo</label>
                 <input name="numeroOT" value={form.numeroOT} onChange={handleChange} className={INP} />
@@ -300,13 +300,6 @@ export default function ModalNuevaOT({ cotizacion, onClose, onCreada }) {
                 <label className="text-xs text-gray-500 block mb-1">Fecha de salida</label>
                 <input type="date" name="fechaSalida" value={form.fechaSalida} onChange={handleChange} className={INP} />
               </div>
-            </div>
-
-            <div className="grid grid-cols-[1fr_110px_160px] gap-4">
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Título OT</label>
-                <input name="titulo" value={form.titulo} onChange={handleChange} className={INP} placeholder="Título de la OT" />
-              </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Cantidad</label>
                 <input type="number" name="cantidad" value={form.cantidad} onChange={handleChange} className={INP} />
@@ -315,6 +308,12 @@ export default function ModalNuevaOT({ cotizacion, onClose, onCreada }) {
                 <label className="text-xs text-gray-500 block mb-1">Tiempo de Fabricación</label>
                 <input type="number" name="tiempoFabricacion" value={form.tiempoFabricacion} onChange={handleChange} placeholder="Días hábiles" className={INP} />
               </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Título OT</label>
+              <textarea name="titulo" value={form.titulo} onChange={handleChange} rows={2}
+                placeholder="Título de la OT" className={`${INP} resize-y`} />
             </div>
 
             <div hidden>
