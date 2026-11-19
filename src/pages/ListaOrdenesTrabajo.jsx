@@ -5,7 +5,7 @@ import DetalleDocumento from "../components/DetalleDocumento";
 import ModalNuevaOT from "../components/ModalNuevaOT";
 import ModalImportarExcel, { COLS_OT } from "../components/ModalImportarExcel";
 import TablaScroll from "../components/TablaScroll";
-import { DotChip, badgeOT, dotOT } from "../components/detalleShared";
+import { ChipEstadoOT, estadoProgresoOT } from "../components/detalleShared";
 import * as XLSX from "xlsx";
 
 const FILTROS_VACIO = { empresa: "", planta: "", busqueda: "", fechaDesde: "", fechaHasta: "" };
@@ -44,12 +44,11 @@ const SELECT =
 
 const TH = "px-4 py-3 font-semibold text-gray-500 whitespace-nowrap";
 
-// Si nadie está asignado, `estado` se queda en el default "pendiente" del
-// modelo — visualmente eso confunde con "ya asignado pero sin empezar", así
-// que en la tabla se muestra "No asignado". Hasta 2026-09-11 existían dos
-// columnas/tracks independientes (Prueba/Intervención) — se simplificaron a
-// una sola "Estado de Progreso" (decisión del usuario, ver DetalleOrdenTrabajo.jsx).
-const progresoLabel = (o) => (o.encargado?.trim() ? o.estado : "No asignado");
+// "Estado de Progreso": estadoProgresoOT/ChipEstadoOT de detalleShared, el
+// mismo que usan Cotizaciones, OC e Ingreso de equipos. Hasta 2026-09-11
+// existían dos tracks (Prueba/Intervención) — se simplificaron a uno solo
+// (decisión del usuario, ver DetalleOrdenTrabajo.jsx).
+const progresoLabel = estadoProgresoOT;
 
 const diaLima = (fecha) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" }).format(new Date(fecha));
 
@@ -186,7 +185,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc, or
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                      <DotChip chip={badgeOT(progresoLabel(o))} dot={dotOT(progresoLabel(o))}>{progresoLabel(o)}</DotChip>
+                      <ChipEstadoOT ot={o} />
                     </td>
                     <td className="px-4 py-3.5 text-gray-700">
                       {o.empresa?.razonSocial || VACIO}
@@ -225,7 +224,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc, or
                         {ocSub?.numeroOrden || "—"}
                       </td>
                       <td className="px-4 py-3 text-center whitespace-nowrap">
-                        <DotChip chip={badgeOT(progresoLabel(s))} dot={dotOT(progresoLabel(s))}>{progresoLabel(s)}</DotChip>
+                        <ChipEstadoOT ot={s} />
                       </td>
                       <td className="px-4 py-3 text-gray-700">
                         {s.empresa?.razonSocial || o.empresa?.razonSocial || VACIO}

@@ -4,11 +4,11 @@ import { formatearFecha } from "../utils/fecha";
 import DetalleDocumento from "../components/DetalleDocumento";
 import ModalCrearOrdenCompra   from "../components/ModalCrearOrdenCompra";
 import ModalImportarExcel, { COLS_OC, COLS_CADENA } from "../components/ModalImportarExcel";
-import { DotChip, badgeOT, dotOT } from "../components/detalleShared";
+import { ChipEstadoOT, estadoProgresoOT, ESTADOS_PROGRESO_OT } from "../components/detalleShared";
 import TablaScroll from "../components/TablaScroll";
 import * as XLSX from "xlsx";
 
-const ESTADOS_OT = ["", "pendiente", "en progreso", "completado"];
+const ESTADOS_OT = ["", ...ESTADOS_PROGRESO_OT];
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const TH = "px-4 py-3 font-semibold text-gray-500 whitespace-nowrap";
 
@@ -151,7 +151,7 @@ function TablaOC({
                   )}
                   <td className="px-4 py-3.5 text-center whitespace-nowrap">
                     {otPadre ? (
-                      <DotChip chip={badgeOT(otPadre.estado)} dot={dotOT(otPadre.estado)}>{otPadre.estado}</DotChip>
+                      <ChipEstadoOT ot={otPadre} />
                     ) : (
                       <span className="text-gray-300 text-xs">Sin OT</span>
                     )}
@@ -212,7 +212,7 @@ function TablaOC({
                   {puedeVerPrecios && <td className="px-4 py-3" />}
                   <td className="px-4 py-3" />
                   <td className="px-4 py-3 text-center whitespace-nowrap">
-                    <DotChip chip={badgeOT(s.estado)} dot={dotOT(s.estado)}>{s.estado}</DotChip>
+                    <ChipEstadoOT ot={s} />
                   </td>
                   <td className="px-4 py-3 text-center">
                     {greMap[s._id] ? (
@@ -367,7 +367,7 @@ export default function ListaOrdenesCompra() {
       || o.cotizacion?.codigo?.toLowerCase().includes(txt)
       || o.empresa?.razonSocial?.toLowerCase().includes(txt)
       || o.empresa?.ruc?.includes(txt);
-    const estadoActual = grupoOT?.parent?.estado;
+    const estadoActual = grupoOT?.parent && estadoProgresoOT(grupoOT.parent);
     const matchEstado = !estadoOT || estadoActual === estadoOT;
     const matchEmpresa = !empresa || o.empresa?._id === empresa;
     const matchPlanta = !planta || o.planta === planta;
@@ -408,7 +408,7 @@ export default function ListaOrdenesCompra() {
         "Total (S/)":       pen.toFixed(2),
         "Total (US$)":      usd != null ? usd.toFixed(2) : "—",
       } : {}),
-      "Estado":             grupoOT?.parent?.estado || "Sin OT",
+      "Estado":             grupoOT?.parent ? estadoProgresoOT(grupoOT.parent) : "Sin OT",
       "GRE":                (grupoOT?.parent && greMap[grupoOT.parent._id]) || "Sin GRE",
     };
   };

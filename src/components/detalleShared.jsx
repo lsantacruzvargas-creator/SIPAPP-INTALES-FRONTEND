@@ -235,6 +235,17 @@ export const dotOT = (e) => {
   return "bg-gray-300";
 };
 
+// Estado de una OT en cualquier tabla (OTs, Cotizaciones, OC, Ingreso de
+// equipos): una sola fuente para que todas muestren lo mismo. Sin encargado,
+// `estado` queda en el default "pendiente" del modelo y se confundiría con
+// "asignada pero sin empezar", por eso se muestra "No asignado".
+export const ESTADOS_PROGRESO_OT = ["No asignado", "pendiente", "en progreso", "completado", "entregado"];
+export const estadoProgresoOT = (o) => (o?.encargado?.trim() ? o.estado : "No asignado");
+export function ChipEstadoOT({ ot }) {
+  const e = estadoProgresoOT(ot);
+  return <DotChip chip={badgeOT(e)} dot={dotOT(e)}>{e}</DotChip>;
+}
+
 // Estado general de la OT (ver Backend/src/utils/estadoGeneralOT.js) —
 // combina asignación de técnicos, progreso y aprobación de Informe.
 export const badgeGeneral = (e) => {

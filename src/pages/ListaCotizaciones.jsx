@@ -6,7 +6,7 @@ import DetalleDocumento from "../components/DetalleDocumento";
 import ModalImportarExcel, { COLS_COT_OT, COLS_COTIZACIONES } from "../components/ModalImportarExcel";
 import ModalNuevaOT from "../components/ModalNuevaOT";
 import ModalNuevaCotizacion from "../components/ModalNuevaCotizacion";
-import { DotChip, badgeGeneral, dotGeneral } from "../components/detalleShared";
+import { ChipEstadoOT } from "../components/detalleShared";
 import TablaScroll from "../components/TablaScroll";
 import * as XLSX from "xlsx";
 import { r2 } from "../utils/redondeo";
@@ -151,7 +151,7 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, t
                   {mostrarEstadoServicio && (
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       {otPrincipal
-                        ? <DotChip chip={badgeGeneral(otPrincipal.estadoGeneral)} dot={dotGeneral(otPrincipal.estadoGeneral)}>{otPrincipal.estadoGeneral}</DotChip>
+                        ? <ChipEstadoOT ot={otPrincipal} />
                         : <span className="text-gray-300">—</span>}
                     </td>
                   )}
