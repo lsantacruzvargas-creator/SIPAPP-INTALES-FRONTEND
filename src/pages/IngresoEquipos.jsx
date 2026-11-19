@@ -3,20 +3,12 @@ import { fetchAuth } from "../utils/fetchAuth";
 import { formatearFecha, aInputFecha, anioLima, fechaHoyLima, mesLima } from "../utils/fecha";
 import ModalOTEquipo from "../components/ModalOTEquipo";
 import TablaScroll from "../components/TablaScroll";
+import { ChipEstadoOT, estadoProgresoOT, ESTADOS_PROGRESO_OT } from "../components/detalleShared";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "../components/BarraEdicion";
 
 const ESTADOS = ["recibido", "en diagnóstico", "en reparación", "listo", "entregado"];
-const ESTADOS_OT = ["pendiente", "en progreso", "completado", "entregado"];
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-
-const badgeOT = (e) => {
-  if (e === "entregado")   return "bg-teal-50 text-teal-700";
-  if (e === "completado")  return "bg-green-50 text-green-700";
-  if (e === "en progreso") return "bg-blue-50 text-blue-700";
-  if (e === "pendiente")   return "bg-amber-50 text-amber-700";
-  return "bg-gray-100 text-gray-400";
-};
 
 const hoyISO = fechaHoyLima;
 
@@ -157,7 +149,7 @@ export default function IngresoEquipos() {
       || i.empresa?.ruc?.includes(txt)
       || ot?.codigo?.toLowerCase().includes(txt)
       || i.numeroGuiaEmision?.toLowerCase().includes(txt);
-    const matchEstado  = !estadoFiltro  || ot?.estado === estadoFiltro;
+    const matchEstado  = !estadoFiltro  || (ot && estadoProgresoOT(ot) === estadoFiltro);
     const matchAnio    = !anioFiltro    || anioLima(i.fechaIngreso) === parseInt(anioFiltro);
     const matchMes     = !mesFiltro     || mesLima(i.fechaIngreso) === parseInt(mesFiltro);
     const matchEmpresa = !empresaFiltro || i.empresa?._id === empresaFiltro;
@@ -215,8 +207,8 @@ export default function IngresoEquipos() {
           onChange={(e) => setEstadoFiltro(e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
         >
-          <option value="">Todo estado OT</option>
-          {ESTADOS_OT.map((e) => (
+          <option value="">Todo estado de servicio</option>
+          {ESTADOS_PROGRESO_OT.map((e) => (
             <option key={e} value={e}>{e.charAt(0).toUpperCase() + e.slice(1)}</option>
           ))}
         </select>
@@ -272,7 +264,7 @@ export default function IngresoEquipos() {
               <th className="px-4 py-3 text-left">Marca / Modelo</th>
               <th className="px-4 py-3 text-center">Fecha ingreso</th>
               <th className="px-4 py-3 text-center">Código OT</th>
-              <th className="px-4 py-3 text-center">Estado OT</th>
+              <th className="px-4 py-3 text-center">Estado de<br />servicio</th>
               <th className="px-4 py-3 text-center">N° Guía Emisión</th>
               <th className="px-4 py-3 text-center">Garantía</th>
             </tr>
@@ -316,9 +308,7 @@ export default function IngresoEquipos() {
                   </td>
                   <td className="px-4 py-3 text-center">
                     {ot ? (
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${badgeOT(ot.estado)}`}>
-                        {ot.estado}
-                      </span>
+                      <ChipEstadoOT ot={ot} />
                     ) : (
                       <span className="text-gray-300 text-xs">Sin OT</span>
                     )}

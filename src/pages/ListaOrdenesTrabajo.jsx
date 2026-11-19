@@ -5,7 +5,7 @@ import DetalleDocumento from "../components/DetalleDocumento";
 import ModalNuevaOT from "../components/ModalNuevaOT";
 import ModalImportarExcel, { COLS_OT } from "../components/ModalImportarExcel";
 import TablaScroll from "../components/TablaScroll";
-import { DotChip, badgeOT, dotOT, badgeGeneral, dotGeneral } from "../components/detalleShared";
+import { ChipEstadoOT, estadoProgresoOT } from "../components/detalleShared";
 import * as XLSX from "xlsx";
 import { veFacturas, rolDeSesion } from "../utils/roles";
 
@@ -38,7 +38,8 @@ const TH = "px-4 py-3 font-semibold text-gray-500 whitespace-nowrap";
 // que en la tabla se muestra "No asignado". Hasta 2026-09-11 existían dos
 // columnas/tracks independientes (Prueba/Intervención) — se simplificaron a
 // una sola "Estado de Progreso" (decisión del usuario, ver DetalleOrdenTrabajo.jsx).
-const progresoLabel = (o) => (o.encargado?.trim() ? o.estado : "No asignado");
+// Mismo chip y etiqueta que Cotizaciones, OC e Ingreso de equipos (detalleShared).
+const progresoLabel = estadoProgresoOT;
 
 // Una sub-OT nace con la misma `cotizacion` que su padre, pero /vincular-cotizacion
 // (ver DetalleOrdenTrabajo/DetalleCotizacion) permite "jalarla" luego a otra
@@ -89,11 +90,10 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                     deja el ancho sobrante a Empresa/Descripción. */}
                 <th className={`${TH} text-left w-px`}>N° OT</th>
                 <th className={`${TH} text-left w-px`}>N° Cotización</th>
-                <th className={`${TH} text-center w-px`}>Servicio</th>
                 <th className={`${TH} text-left min-w-[180px]`}>Empresa</th>
                 <th className={`${TH} text-left`}>Contacto</th>
                 <th className={`${TH} text-left min-w-[320px]`}>Descripción</th>
-                <th className={`${TH} text-center w-px`}>Estado de<br />Progreso</th>
+                <th className={`${TH} text-center w-px`}>Estado de<br />servicio</th>
                 <th className={`${TH} text-left`}>Encargado de<br />Progreso</th>
                 <th className={`${TH} text-center w-px`}>Días desde<br />recibido</th>
                 <th className={`${TH} text-center w-px`}>Fecha de<br />Ingreso</th>
@@ -102,7 +102,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
             <tbody className="divide-y divide-gray-100">
               {ordenes.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
                 </tr>
               ) : (
                 ordenes.flatMap((o) => [
@@ -124,9 +124,6 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                      <DotChip chip={badgeGeneral(o.estadoGeneral)} dot={dotGeneral(o.estadoGeneral)}>{o.estadoGeneral}</DotChip>
-                    </td>
                     <td className="px-4 py-3.5 text-gray-700">
                       {o.empresa?.razonSocial || <span className="text-gray-300">—</span>}
                     </td>
@@ -135,7 +132,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                     </td>
                     <td className="px-4 py-3.5 text-gray-700">{o.titulo || <span className="text-gray-300">—</span>}</td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                      <DotChip chip={badgeOT(progresoLabel(o))} dot={dotOT(progresoLabel(o))}>{progresoLabel(o)}</DotChip>
+                      <ChipEstadoOT ot={o} />
                     </td>
                     <td className="px-4 py-3.5 text-gray-600">{o.encargado || <span className="text-gray-300">—</span>}</td>
                     <td className="px-4 py-3.5 text-center text-gray-600 whitespace-nowrap">
@@ -166,9 +163,6 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                           <span className="text-gray-400">{s.cotizacion?.numeroCotizacion || s.cotizacion?.codigo || "—"}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center whitespace-nowrap">
-                        <DotChip chip={badgeGeneral(s.estadoGeneral)} dot={dotGeneral(s.estadoGeneral)}>{s.estadoGeneral}</DotChip>
-                      </td>
                       <td className="px-4 py-3 text-gray-700">
                         {s.empresa?.razonSocial || o.empresa?.razonSocial || <span className="text-gray-300">—</span>}
                       </td>
@@ -177,7 +171,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                       </td>
                       <td className="px-4 py-3 text-gray-700">{s.titulo || <span className="text-gray-300">—</span>}</td>
                       <td className="px-4 py-3 text-center whitespace-nowrap">
-                        <DotChip chip={badgeOT(progresoLabel(s))} dot={dotOT(progresoLabel(s))}>{progresoLabel(s)}</DotChip>
+                        <ChipEstadoOT ot={s} />
                       </td>
                       <td className="px-4 py-3 text-gray-600">{s.encargado || <span className="text-gray-300">—</span>}</td>
                       <td className="px-4 py-3 text-center text-gray-600 whitespace-nowrap">
@@ -209,7 +203,7 @@ export default function ListaOrdenesTrabajo() {
   const [importarOpen, setImportarOpen] = useState(false);
   // Qué tabla de las 5 categorías se muestra (No asignada/En progreso/
   // Completada/Entregada/Cerrada) — un solo filtro para todos los roles,
-  // desde que se simplificó a un único track "Estado de Progreso"
+  // desde que se simplificó a un único track "Estado de servicio"
   // (decisión del usuario, 2026-09-11 — antes técnico tenía su propio
   // filtro separado, con las tablas divididas en Prueba/Intervención).
   const [filtroEstadoPlanner, setFiltroEstadoPlanner] = useState("todos");
@@ -248,7 +242,7 @@ export default function ListaOrdenesTrabajo() {
   const nombreActual = getUsuario()?.nombre;
   const coincideNombre = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
   // "tecnico" (legado) + los 2 roles especializados comparten la misma
-  // vista de tablas (un solo track "Estado de Progreso", ver TablaOTs) — lo
+  // vista de tablas (un solo track "Estado de servicio", ver TablaOTs) — lo
   // que cambia es el ALCANCE: estrictamente el rol "tecnico" ve TODAS las
   // OTs (mismo criterio que planner, a pedido explícito del usuario);
   // tecnico_prueba/tecnico_intervencion siguen viendo solo las suyas
@@ -367,11 +361,10 @@ export default function ListaOrdenesTrabajo() {
     "N° OT":          o.numeroOT || "—",
     "Sub-OTs":        o.subOTs?.map((s) => s.numeroOT).join(", ") || "—",
     "N° Cotización":  o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || "—",
-    "Servicio":       o.estadoGeneral || "—",
     "Empresa":        o.empresa?.razonSocial || "—",
     "Contacto":       o.personaContacto || o.contactoNombre || "—",
     "Descripción":    o.titulo || "—",
-    "Estado de Progreso":    o.estado || "—",
+    "Estado de servicio":    progresoLabel(o) || "—",
     "Encargado de Progreso": o.encargado || "—",
     "Días desde recibido":   diasDesdeRecibido(o.fechaRecibida) ?? "—",
     "Fecha de Ingreso":      o.fechaRecibida ? formatearFecha(o.fechaRecibida) : "—",
