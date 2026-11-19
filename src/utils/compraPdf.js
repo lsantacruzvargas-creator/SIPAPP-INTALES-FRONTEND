@@ -69,7 +69,7 @@ export function bloqueDatos(doc, y, filas) {
 }
 
 export async function exportarSolicitudCotizacionPdf(licitacion, proveedor) {
-  const doc = new jsPDF();
+  const doc = new jsPDF({ compress: true });
   const empresa = proveedor.empresa || {};
   let y = await encabezado(doc, "SOLICITUD DE COTIZACIÓN", licitacion.codigo, proveedor.fechaEnvio || licitacion.createdAt);
   y = bloqueDatos(doc, y, [
@@ -92,7 +92,7 @@ export async function exportarSolicitudCotizacionPdf(licitacion, proveedor) {
 }
 
 export async function exportarOrdenCompraProveedorPdf(ocp) {
-  const doc = new jsPDF();
+  const doc = new jsPDF({ compress: true });
   const PAGE_W = doc.internal.pageSize.getWidth();
   const m = (v) => money(v, ocp.moneda);
   let y = await encabezado(doc, "ORDEN DE COMPRA", ocp.codigo, ocp.fecha);
