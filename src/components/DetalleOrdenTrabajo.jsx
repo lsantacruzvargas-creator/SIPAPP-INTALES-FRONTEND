@@ -640,7 +640,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                 <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Datos de la orden de trabajo</h2>
               </div>
 
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-[1fr_110px_160px] gap-4">
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">N° OT</label>
                   <input name="numeroOT" value={form.numeroOT} onChange={handleChange} placeholder="—" className={INP} />
@@ -648,13 +648,6 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                 <div hidden>
                   <label className="text-xs text-gray-500 block mb-1">Código SAP</label>
                   <input name="codigoSap" value={form.codigoSap} onChange={handleChange} placeholder="—" className={INP} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-[1fr_110px_160px] gap-4">
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Título OT</label>
-                  <input name="titulo" value={form.titulo} onChange={handleChange} placeholder="Título de la OT" className={INP} />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Cantidad</label>
@@ -670,6 +663,12 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                       escribe a mano acá (pedido del usuario, 2026-09-11). */}
                   <input value={form.tiempoFabricacion === "" ? "—" : `${form.tiempoFabricacion} días hábiles`} disabled className={RO} />
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Título OT</label>
+                <textarea name="titulo" value={form.titulo} onChange={handleChange} rows={2}
+                  placeholder="Título de la OT" className={`${INP} resize-y`} />
               </div>
 
               <div hidden>
