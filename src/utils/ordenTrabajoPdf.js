@@ -14,7 +14,7 @@ const MAX_IMAGENES = 6;
 // supervisores). `ot` trae lo que está en pantalla, ver datosParaPdf() en
 // DetalleOrdenTrabajo.jsx.
 export const exportarOrdenTrabajoPdf = async (ot) => {
-  const doc = new jsPDF();
+  const doc = new jsPDF({ compress: true });
   const M = 12;
   const PAGE_W = doc.internal.pageSize.getWidth();
   const PAGE_H = doc.internal.pageSize.getHeight();

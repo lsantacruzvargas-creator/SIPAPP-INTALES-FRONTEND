@@ -114,7 +114,7 @@ const BANCOS = {
 const LINEAS_RESERVA_IMAGEN = 8;
 
 export const exportarCotizacionPdf = async (cotizacion) => {
-  const doc = new jsPDF();
+  const doc = new jsPDF({ compress: true });
   const empresa = cotizacion.empresa;
   const items = cotizacion.items || [];
   const M = 12;
