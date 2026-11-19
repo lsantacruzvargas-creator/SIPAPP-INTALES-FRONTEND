@@ -61,6 +61,17 @@ export const abrirArchivoProtegido = async (ruta) => {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
 
+export const descargarArchivoProtegido = async (ruta, nombre) => {
+  const res = await fetchUpload(ruta);
+  if (!res.ok) return;
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombre || "";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
+
 export const uploadAuth = (endpoint, formData, headers = {}) => {
   const token = sessionStorage.getItem("token");
   return fetch(`${API}${endpoint}`, {
