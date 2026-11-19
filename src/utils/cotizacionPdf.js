@@ -27,7 +27,7 @@ export function cargarImagen(url) {
 // "GET blob:...net::ERR_FILE_NOT_FOUND" (bug real, confirmado 2026-09-11).
 // Por eso acá se usa un data URI (FileReader) en vez de una Object URL: no
 // depende de ninguna URL viva, jsPDF puede leerlo en cualquier momento.
-function cargarImagenProtegida(url) {
+export function cargarImagenProtegida(url) {
   if (!url) return Promise.resolve(null);
   return fetchUpload(url)
     .then((r) => (r.ok ? r.blob() : null))
