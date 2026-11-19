@@ -19,7 +19,7 @@ import ConfirmacionAccion from "./ConfirmacionAccion";
 import AvisoAccion from "./AvisoAccion";
 import {
   FlujoNegocio, TarjetaRelacion, Chip,
-  badgePago, badgeOT, badgeGeneral, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
+  badgePago, badgeOT, estadoProgresoOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
 } from "./detalleShared";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "./BarraEdicion";
@@ -489,10 +489,9 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
           </div>
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="text-[10px] text-white/60 uppercase tracking-widest leading-none">OT</p>
-              <Chip className={`mt-0.5 ${badgeGeneral(ot.estadoGeneral)}`}>{ot.estadoGeneral}</Chip>
-              <p className="text-[10px] text-white/60 uppercase tracking-widest leading-none mt-1.5">Estado</p>
-              <Chip className="mt-0.5 bg-white/20 text-white">{ot.estado}</Chip>
+              {/* Un solo estado, el mismo de la columna "Estado de servicio" de las tablas. */}
+              <p className="text-[10px] text-white/60 uppercase tracking-widest leading-none">Estado</p>
+              <Chip className="mt-0.5 bg-white/20 text-white">{estadoProgresoOT(ot)}</Chip>
             </div>
             <button onClick={() => exportarOrdenTrabajoPdf(datosParaPdf())}
               className="bg-white/15 text-white text-sm px-4 py-2 rounded-lg hover:bg-white/25 transition font-medium shrink-0">
