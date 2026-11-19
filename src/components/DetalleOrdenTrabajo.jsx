@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchAuth, getUsuario, abrirArchivoProtegido } from "../utils/fetchAuth";
 import ImagenProtegida from "./ImagenProtegida";
 import { formatearFecha } from "../utils/fecha";
+import { exportarOrdenTrabajoPdf } from "../utils/ordenTrabajoPdf";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
 import ModalOrdenCompra from "./ModalOrdenCompra";
 import SelectorEmpresas from "./SelectorEmpresas";
@@ -268,6 +269,18 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const contactosPlanta = plantaSel?.contactos ?? [];
   const contactoSel = contactosPlanta.find(c => c.nombre === form.personaContacto);
 
+  // Lo que está en pantalla, sin exigir guardar antes (mismo criterio que el PDF de la cotización).
+  const datosParaPdf = () => ({
+    ...form,
+    codigo: ot.codigo,
+    empresa: empresaSel || ot.empresa,
+    numeroCotizacion: cot?.numeroCotizacion || cot?.codigo || "",
+    createdAt: ot.createdAt,
+    // Misma fecha que la columna "Fecha recibida OC" de la lista de OTs.
+    fechaOC: oc ? oc.fecha || oc.createdAt : null,
+    imagenes: ot.imagenes || [],
+  });
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm(prev => ({
@@ -500,6 +513,10 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
               <p className="text-[10px] text-white/60 uppercase tracking-widest leading-none mt-1.5">Estado</p>
               <Chip className="mt-0.5 bg-white/20 text-white">{ot.estado}</Chip>
             </div>
+            <button onClick={() => exportarOrdenTrabajoPdf(datosParaPdf())}
+              className="bg-white/15 text-white text-sm px-4 py-2 rounded-lg hover:bg-white/25 transition font-medium shrink-0">
+              Exportar PDF
+            </button>
             {!ot.anulado && !cadenaCerrada && puedeAnular && <BotonAnular onAnular={anular} />}
             {esAdmin && ot.anulado && <BotonDesanular onDesanular={desanular} />}
             {esAdmin && <BotonCerrarCadena cerrado={cadenaCerrada} onToggle={toggleCerrarCadena} />}
