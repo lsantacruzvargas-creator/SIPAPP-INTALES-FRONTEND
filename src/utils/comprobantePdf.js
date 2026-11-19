@@ -14,7 +14,7 @@ const simboloMoneda = (moneda) => (moneda === "USD" ? "US$" : "S/");
 // PDF preliminar generado por el ERP (no es la representación impresa oficial del PSE).
 // logoUrl es opcional: si no se pasa o falla al cargar, el PDF se genera igual sin logo.
 export function generarComprobantePdf(comprobante, { logoUrl } = {}) {
-  const doc = new jsPDF();
+  const doc = new jsPDF({ compress: true });
   const margin = 14;
   let y = 18;
 
