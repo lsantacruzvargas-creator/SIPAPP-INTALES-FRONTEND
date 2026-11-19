@@ -1,17 +1,28 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 
+// Esta rama no tiene utils/redondeo (redondeo tipo SUNAT de comprabasico): se mantiene el
+// Math.round que ya usaba el modal.
+const r2 = (n) => Math.round(Number(n) * 100) / 100;
+const r0 = (n) => Math.round(Number(n));
+// Base sin IGV de la cotización (total − igv), no el total con IGV.
+const baseSinIgvCotizacion = (cot) => {
+  const total = Number(cot.total) || 0;
+  const igv = Number(cot.igv) || 0;
+  return total > 0 && igv > 0 ? r2(total - igv) : Number(cot.subtotal) || 0;
+};
+
 const INP     = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 const INP_DIS = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full";
 
 function calcular(sub) {
-  const s = Math.round(Number(sub) * 100) / 100 || 0;
-  const igv = Math.round(s * 0.18 * 100) / 100;
-  const total = Math.round((s + igv) * 100) / 100;
+  const s = r2(Number(sub)) || 0;
+  const igv = r2(s * 0.18);
+  const total = r2((s + igv));
   // R.S. 178-2005/SUNAT: aplica solo si el total (con IGV) es >= S/ 701, y el
   // depósito se hace en números enteros (sin decimales).
-  const detraccion = total >= 701 ? Math.round(total * 0.12) : 0;
-  return { igv, total, detraccion, totalAPagar: Math.round((total - detraccion) * 100) / 100 };
+  const detraccion = total >= 701 ? r0(total * 0.12) : 0;
+  return { igv, total, detraccion, totalAPagar: r2((total - detraccion)) };
 }
 
 function BuscadorCotizacion({ onSelect, onClose }) {
@@ -42,7 +53,7 @@ function BuscadorCotizacion({ onSelect, onClose }) {
                 className="w-full text-left px-4 py-3 rounded-xl hover:bg-blue-50 border border-transparent hover:border-blue-100 transition">
                 <div className="flex justify-between">
                   <span className="font-mono text-xs text-blue-600">{c.codigo}</span>
-                  <span className="text-xs text-gray-400">S/ {Number(c.total ?? 0).toFixed(2)}</span>
+                  <span className="text-xs text-gray-400">{c.moneda === "USD" ? "US$" : "S/"} {Number(c.total ?? 0).toFixed(2)}</span>
                 </div>
                 <p className="text-sm text-gray-700 truncate">{c.titulo}</p>
                 {c.empresa && <p className="text-xs text-gray-400">{c.empresa.razonSocial}</p>}
@@ -62,11 +73,14 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
     numeroOrden: "", numeroFactura: "",
     empresa: "", titulo: "",
     subtotal: "", descripcion: "",
-    encargado: "", planta: "",
+    planta: "", personaContacto: "",
+    moneda: "PEN",
   });
   const [calc, setCalc]          = useState(calcular(0));
   const [cotVinculada, setCot]   = useState(null);
   const [empresas, setEmpresas]  = useState([]);
+  const [busquedaEmpresa, setBusquedaEmpresa] = useState("");
+  const [listaEmpresaAbierta, setListaEmpresaAbierta] = useState(false);
   const [buscadorCot, setBCot]   = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState("");
@@ -77,6 +91,15 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
   }, []);
 
   const plantasEmpresa = empresas.find(e => e._id === form.empresa)?.plantas ?? [];
+  // Contactos de la planta elegida; sin planta, los de todas las plantas de la empresa.
+  const contactosEmpresa = [...new Set(
+    (form.planta ? plantasEmpresa.filter(p => p.nombre === form.planta) : plantasEmpresa)
+      .flatMap(p => (p.contactos || []).map(c => c.nombre?.trim()).filter(Boolean))
+  )];
+  // Con cotización vinculada la OC toma su moneda (lo fuerza el pre("save")
+  // de OrdenCompra), así que el selector solo decide en la OC independiente.
+  const moneda = cotVinculada?.moneda || form.moneda;
+  const simbolo = moneda === "USD" ? "US$" : "S/";
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -84,20 +107,47 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
     setForm(prev => ({
       ...prev,
       [name]: value,
-      ...(name === "empresa" ? { planta: "" } : {}),
+      ...(name === "empresa" ? { planta: "", personaContacto: "" } : {}),
+      // Al cambiar de planta, el contacto elegido se limpia si no pertenece a la nueva.
+      ...(name === "planta" && value && !(plantasEmpresa.find(p => p.nombre === value)?.contactos || [])
+        .some(c => c.nombre?.trim() === prev.personaContacto) ? { personaContacto: "" } : {}),
     }));
+  };
+
+  const nombreEmpresa = (e) => (e.alias ? `${e.alias} — ${e.razonSocial}` : e.razonSocial);
+
+  const qEmpresa = busquedaEmpresa.trim().toLowerCase();
+  const empresasFiltradas = (qEmpresa
+    ? empresas.filter(e => [e.razonSocial, e.alias, e.ruc].some(v => v?.toLowerCase().includes(qEmpresa)))
+    : empresas
+  ).slice(0, 50);
+
+  const seleccionarEmpresa = (e) => {
+    setForm(f => ({ ...f, empresa: e._id, planta: "", personaContacto: "" }));
+    setBusquedaEmpresa(nombreEmpresa(e));
+    setListaEmpresaAbierta(false);
+  };
+
+  const cambiarBusquedaEmpresa = (e) => {
+    setBusquedaEmpresa(e.target.value);
+    setListaEmpresaAbierta(true);
+    if (form.empresa) setForm(f => ({ ...f, empresa: "", planta: "", personaContacto: "" }));
   };
 
   const seleccionarCot = (cot) => {
     setCot(cot);
     setBCot(false);
+    if (!form.empresa && cot.empresa?._id) setBusquedaEmpresa(nombreEmpresa(cot.empresa));
     setForm(prev => {
-      const nuevoSub = prev.subtotal || (cot.total > 0 ? String(cot.total) : prev.subtotal);
-      if (!prev.subtotal && cot.total > 0) setCalc(calcular(cot.total));
+      const base = baseSinIgvCotizacion(cot);
+      const nuevoSub = prev.subtotal || (base > 0 ? String(base) : prev.subtotal);
+      if (!prev.subtotal && base > 0) setCalc(calcular(base));
       return {
         ...prev,
         titulo:   prev.titulo   || cot.titulo           || "",
         empresa:  prev.empresa  || cot.empresa?._id     || "",
+        planta:   prev.planta   || cot.planta           || "",
+        personaContacto: prev.personaContacto || cot.personaContacto || "",
         subtotal: nuevoSub,
       };
     });
@@ -120,8 +170,9 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
       total:         calc.total,
       monto:         Number(form.subtotal),
       descripcion:   form.descripcion,
-      encargado:     form.encargado,
       planta:        form.planta,
+      personaContacto: form.personaContacto,
+      moneda,
       cotizacion:    cotVinculada?._id,
     };
     if (form.empresa)       payload.empresa    = form.empresa;
@@ -145,7 +196,7 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
   return (
     <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
 
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <h3 className="font-semibold text-gray-800">Nueva Orden de Compra</h3>
@@ -193,14 +244,80 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
           {/* Empresa */}
           <div>
             <label className="text-xs text-gray-500 block mb-1">Empresa</label>
-            <select name="empresa" value={form.empresa} onChange={handleChange} className={INP}>
-              <option value="">— Sin empresa —</option>
-              {empresas.map(e => (
-                <option key={e._id} value={e._id}>
-                  {e.alias ? `${e.alias} — ` : ""}{e.razonSocial}
-                </option>
-              ))}
+            <div className="relative">
+              <input
+                type="text"
+                value={busquedaEmpresa}
+                onChange={cambiarBusquedaEmpresa}
+                onFocus={() => setListaEmpresaAbierta(true)}
+                onBlur={() => setListaEmpresaAbierta(false)}
+                placeholder="Escribe el nombre, alias o RUC…"
+                className={INP}
+                autoComplete="off"
+              />
+              {listaEmpresaAbierta && empresasFiltradas.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                  {empresasFiltradas.map(e => (
+                    <button type="button" key={e._id}
+                      onMouseDown={() => seleccionarEmpresa(e)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition border-b border-gray-50 last:border-0">
+                      {nombreEmpresa(e)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {!form.empresa && busquedaEmpresa.trim() && (
+              <p className="text-[11px] text-amber-600 mt-1">Elige una empresa de la lista; si no, la OC se crea sin empresa.</p>
+            )}
+          </div>
+
+          {/* Planta y contacto: listas de la empresa elegida; texto libre si no tiene. */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Planta</label>
+              {plantasEmpresa.length > 0 ? (
+                <select name="planta" value={form.planta} onChange={handleChange} className={INP}>
+                  <option value="">— Seleccionar planta —</option>
+                  {plantasEmpresa.map((p, i) => (
+                    <option key={i} value={p.nombre}>{p.nombre}</option>
+                  ))}
+                </select>
+              ) : (
+                <input name="planta" value={form.planta} onChange={handleChange}
+                  placeholder="Planta o sede" className={INP} />
+              )}
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Persona de contacto</label>
+              {contactosEmpresa.length > 0 ? (
+                <select name="personaContacto" value={form.personaContacto} onChange={handleChange} className={INP}>
+                  <option value="">— Sin contacto —</option>
+                  {contactosEmpresa.map((nombre) => (
+                    <option key={nombre} value={nombre}>{nombre}</option>
+                  ))}
+                </select>
+              ) : (
+                <input name="personaContacto" value={form.personaContacto} onChange={handleChange}
+                  placeholder="Nombre del contacto" className={INP} />
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Título de la orden</label>
+            <textarea name="titulo" value={form.titulo} onChange={handleChange} rows={2}
+              placeholder="Descripción del servicio u obra" className={`${INP} resize-y`} />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Moneda</label>
+            <select name="moneda" value={moneda} onChange={handleChange} disabled={!!cotVinculada}
+              className={cotVinculada ? INP_DIS : INP}>
+              <option value="PEN">Soles (S/)</option>
+              <option value="USD">Dólares (US$)</option>
             </select>
+            {cotVinculada && <p className="text-xs text-gray-400 mt-1">Se toma de la cotización vinculada.</p>}
           </div>
 
           {/* Cálculos — ocultos para Administración, que no ve/edita montos */}
@@ -208,7 +325,7 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
             <div className="bg-gray-50 rounded-xl p-4 grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="text-xs text-gray-500 block mb-1">
-                  Subtotal sin IGV {cotVinculada?.moneda === "USD" ? "(US$)" : "(S/)"} *
+                  Subtotal sin IGV ({simbolo}) *
                 </label>
                 <input type="number" name="subtotal" value={form.subtotal} onChange={handleChange}
                   disabled={esAsistente} step="0.01" min="0" placeholder="0.00" className={INP} />
@@ -231,34 +348,6 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
               </div>
             </div>
           )}
-
-          {/* Descripción y personal */}
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Título / Descripción</label>
-            <input name="titulo" value={form.titulo} onChange={handleChange}
-              placeholder="Descripción del servicio u obra" className={INP} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Encargado</label>
-              <input name="encargado" value={form.encargado} onChange={handleChange}
-                placeholder="Nombre del encargado" className={INP} />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Planta</label>
-              {plantasEmpresa.length > 0 ? (
-                <select name="planta" value={form.planta} onChange={handleChange} className={INP}>
-                  <option value="">— Seleccionar planta —</option>
-                  {plantasEmpresa.map((p, i) => (
-                    <option key={i} value={p.nombre}>{p.nombre}</option>
-                  ))}
-                </select>
-              ) : (
-                <input name="planta" value={form.planta} onChange={handleChange}
-                  placeholder="Planta o sede" className={INP} />
-              )}
-            </div>
-          </div>
 
           {exito && (
             <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3">
