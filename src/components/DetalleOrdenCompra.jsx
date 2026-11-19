@@ -47,7 +47,9 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   });
   const [calc, setCalc]           = useState(calcular(subtotalInicial));
   const [empresas, setEmpresas]   = useState([]);
-  const [ot, setOt]               = useState(null);
+  const [ots, setOts]             = useState([]);
+  const [otCargada, setOtCargada] = useState(false);
+  const [crearOTsOpen, setCrearOTsOpen] = useState(false);
   const [informes, setInformes]   = useState([]);
   const [gres, setGres]           = useState([]);
   const [guiaDetalle, setGuiaDetalle] = useState(null);
@@ -89,6 +91,9 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   // restringidas de la app), incluso aunque vendedor no tenga
   // puedeVerPrecios general (acá compara, no edita el subtotal).
   const puedeVerReporte = ["jefatura", "vendedor", "admin"].includes(rolActual);
+  // Mismos roles que crean una OT standalone (POST /ordenes-trabajo).
+  const puedeCrearOT = ["admin", "asistente", "supervisor", "planner", "jefatura", "coordinadora"].includes(rolActual);
+  const puedeCrearOTAqui = puedeCrearOT && !orden.anulado && !cadenaCerrada;
   const exigeHes  = !!ordenActual.empresa?.requiereHes;
   const exigeActa = !!ordenActual.empresa?.requiereActaConformidad;
 
@@ -154,45 +159,52 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
     });
   };
 
-  // Misma navegación que DetalleOrdenTrabajo.jsx (la OC no tiene sub-OTs, así
-  // que siempre va directo a la página de emisión con un solo ítem prellenado).
+  // Misma navegación que DetalleOrdenTrabajo.jsx: un ítem por cada OT de la OC.
   const crearGREDesdeOC = () => {
-    if (!ot) return;
+    if (!ots.length) return;
+    const empresa = ots[0].empresa;
     navigate("/facturacion-electronica/guias/emitir", {
       state: {
         prellenarGRE: {
-          items: [{ descripcion: ot.titulo, cantidad: 1, unidad: "NIU" }],
-          destinatario: ot.empresa
-            ? { schemeID: "6", numDoc: ot.empresa.ruc || "", nombre: ot.empresa.razonSocial || "" }
+          items: ots.map(o => ({ descripcion: o.titulo, cantidad: o.cantidad || 1, unidad: "NIU" })),
+          destinatario: empresa
+            ? { schemeID: "6", numDoc: empresa.ruc || "", nombre: empresa.razonSocial || "" }
             : undefined,
-          ordenesTrabajo: [ot._id],
+          ordenesTrabajo: ots.map(o => o._id),
         },
       },
     });
   };
 
+  const juntar = (urls) =>
+    Promise.all(urls.map(u => fetchAuth(u).then(r => r.ok ? r.json() : []))).then(ls => ls.flat());
+
+  // Con cotización: las OTs de esa cotización. OC independiente: las OTs que
+  // comparten su numeroDocumento (ver POST /ordenes-compra/:id/generar-ot).
   const cargarOTeInformes = () => {
     const cotId = orden.cotizacion?._id || orden.cotizacion;
-    fetchAuth("/ordenes-trabajo").then(r => r.ok && r.json()).then(ots => {
-      if (!cotId || !ots) return;
-      const found = ots.find(o => (o.cotizacion?._id || o.cotizacion) === cotId);
-      setOt(found || null);
-      if (found) {
-        fetchAuth(`/informes?ordenTrabajo=${found._id}`)
+    fetchAuth("/ordenes-trabajo").then(r => r.ok ? r.json() : null).then(todas => {
+      setOtCargada(true);
+      if (!todas) return;
+      const propias = todas
+        .filter(o => !o.ordenPadre && (cotId
+          ? (o.cotizacion?._id || o.cotizacion) === cotId
+          : orden.numeroDocumento != null && o.numeroDocumento === orden.numeroDocumento))
+        .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+      setOts(propias);
+      if (!propias.length) return;
+      const ids = propias.map(o => o._id);
+      juntar(ids.map(id => `/informes?ordenTrabajo=${id}`)).then(infs =>
+        setInformes(infs.sort((a, b) => String(a.fechaHoraGuardado).localeCompare(String(b.fechaHoraGuardado)))));
+      if (puedeGenerarGRE) {
+        fetchAuth(`/guias?ordenesTrabajo=${ids.join(",")}&estado=ACEPTADO&limit=1000`)
           .then(r => r.ok && r.json())
-          .then(infs => setInformes(infs || []));
-        if (puedeGenerarGRE) {
-          fetchAuth(`/guias?ordenesTrabajo=${found._id}&estado=ACEPTADO&limit=1000`)
-            .then(r => r.ok && r.json())
-            .then(data => setGres(data?.ok ? data.data : []));
-        }
-        if (puedeVerReporte) {
-          // Agregado (propia OT + todas sus sub-OTs) — mismo patrón
-          // `?ordenTrabajoPadre=` ya usado en DetalleOrdenTrabajo.jsx.
-          fetchAuth(`/reportes/costos-fabricacion/${found._id}`)
-            .then((r) => (r.ok ? r.json() : null))
-            .then(setCostos);
-        }
+          .then(data => setGres(data?.ok ? data.data : []));
+      }
+      if (puedeVerReporte) {
+        // Costo de fabricación de cada OT (cada una ya agrega sus sub-OTs), sumado.
+        Promise.all(ids.map(id => fetchAuth(`/reportes/costos-fabricacion/${id}`).then(r => (r.ok ? r.json() : null))))
+          .then(lista => setCostos(sumarCostos(lista.filter(Boolean))));
       }
     });
   };
@@ -296,7 +308,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
 
   const pasos = [
     { tipo: "cotizacion", activo: !!cot,             codigo: cot?.codigo },
-    { tipo: "ot",         activo: !!ot,              codigo: ot?.codigo },
+    { tipo: "ot",         activo: ots.length > 0,    codigo: ots.length === 1 ? ots[0].codigo : ots.length ? `${ots.length} OTs` : "" },
     { tipo: "informe",    activo: informes.length>0, codigo: ultimo?.codigo || (informes.length ? `${informes.length} av.` : "") },
     { tipo: "oc",         activo: true,              codigo: orden.codigo },
     { tipo: "factura",    activo: !!factura,         codigo: factura?.codigo },
@@ -539,15 +551,46 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
               {puedeVerPrecios && cot?.total > 0 && <p className="text-xs text-gray-500">{money(cot.total, cot.moneda)}</p>}
             </TarjetaRelacion>
 
-            <TarjetaRelacion tipo="ot" codigo={ot?.codigo} numero={ot?.numeroOT} vacio={!ot}
-              onClick={ot ? () => onNavegar?.({ tipo: "ot", data: ot }) : undefined}>
-              {ot?.estado && <Chip className={badgeOT(ot.estado)}>{ot.estado}</Chip>}
-              {ot?.personalEncargado?.nombre && (
-                <p className="text-xs text-gray-500">Técnico: {ot.personalEncargado.nombre}</p>
-              )}
-            </TarjetaRelacion>
+            {ots.length === 0 ? (
+              <TarjetaRelacion tipo="ot" vacio
+                onCrear={otCargada && puedeCrearOTAqui ? () => setCrearOTsOpen(true) : undefined}
+                crearLabel="OT" />
+            ) : (
+              <TarjetaRelacion tipo="ot"
+                codigo={ots.length === 1 ? ots[0].codigo : `${ots.length} OTs`}
+                numero={ots.length === 1 ? ots[0].numeroOT : undefined}
+                onClick={ots.length === 1 ? () => onNavegar?.({ tipo: "ot", data: ots[0] }) : undefined}>
+                {ots.length === 1 ? (
+                  <>
+                    {ots[0].estado && <Chip className={badgeOT(ots[0].estado)}>{ots[0].estado}</Chip>}
+                    {ots[0].personalEncargado?.nombre && (
+                      <p className="text-xs text-gray-500">Técnico: {ots[0].personalEncargado.nombre}</p>
+                    )}
+                  </>
+                ) : (
+                  <div className="space-y-1">
+                    {ots.map(o => (
+                      <button key={o._id} type="button"
+                        onClick={(e) => { e.stopPropagation(); onNavegar?.({ tipo: "ot", data: o }); }}
+                        className="w-full flex items-center gap-2 text-left bg-white rounded-lg px-2 py-1 shadow-sm hover:bg-blue-50">
+                        <span className="font-mono text-xs font-bold text-blue-700 shrink-0">{o.numeroOT || o.codigo}</span>
+                        <span className="text-xs text-gray-600 truncate flex-1">{o.titulo}</span>
+                        {o.estado && <Chip className={badgeOT(o.estado)}>{o.estado}</Chip>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {puedeCrearOTAqui && (
+                  <button type="button"
+                    onClick={(e) => { e.stopPropagation(); setCrearOTsOpen(true); }}
+                    className="text-xs text-blue-600 hover:text-blue-800 underline mt-0.5">
+                    + Agregar OTs
+                  </button>
+                )}
+              </TarjetaRelacion>
+            )}
 
-            {puedeGenerarGRE && ot && (gres.length === 0 ? (
+            {puedeGenerarGRE && ots.length > 0 && (gres.length === 0 ? (
               <TarjetaRelacion tipo="gre" vacio
                 onCrear={!orden.anulado ? crearGREDesdeOC : undefined} crearLabel="GRE" />
             ) : (
@@ -632,6 +675,14 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
         </div>
       </div>
 
+      {crearOTsOpen && (
+        <ModalCrearOTs
+          orden={orden}
+          onClose={() => setCrearOTsOpen(false)}
+          onCreadas={() => { setCrearOTsOpen(false); cargarOTeInformes(); }}
+        />
+      )}
+
       {guiaDetalle && (
         <ModalDetalleGuia guia={guiaDetalle} onClose={() => setGuiaDetalle(null)} />
       )}
@@ -645,6 +696,111 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
           onClose={() => setReporteOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+// Suma el costo de fabricación de varias OTs (mapas planos de montos en soles).
+function sumarCostos(lista) {
+  if (!lista.length) return null;
+  if (lista.length === 1) return lista[0];
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const sumarMapa = (clave) => {
+    const out = {};
+    lista.forEach(c => Object.entries(c[clave] || {}).forEach(([k, v]) => { out[k] = r2((out[k] || 0) + (Number(v) || 0)); }));
+    return out;
+  };
+  return {
+    ...lista[0],
+    comprometido: sumarMapa("comprometido"),
+    consumido: sumarMapa("consumido"),
+    costoTotal: r2(lista.reduce((s, c) => s + (Number(c.costoTotal) || 0), 0)),
+  };
+}
+
+const itemOTVacio = (titulo = "") => ({ _key: Date.now() + Math.random(), titulo, cantidad: "1", diasEntrega: "" });
+
+// Port de comprabasico 485f50c0 + 2dd5cd1b: una OT por ítem (POST /ordenes-compra/:id/generar-ot).
+function ModalCrearOTs({ orden, onClose, onCreadas }) {
+  const [items, setItems] = useState(() => [itemOTVacio(orden.titulo && orden.titulo !== "por definir" ? orden.titulo : "")]);
+  const [creando, setCreando] = useState(false);
+  const [error, setError] = useState("");
+
+  const cambiar = (key, campo, valor) =>
+    setItems(prev => prev.map(it => (it._key === key ? { ...it, [campo]: valor } : it)));
+  const quitar = (key) => setItems(prev => prev.filter(it => it._key !== key));
+
+  const crear = async () => {
+    const malo = items.findIndex(it =>
+      !it.titulo.trim() || !(Number(it.cantidad) > 0) || !Number.isInteger(Number(it.diasEntrega)) || !(Number(it.diasEntrega) > 0));
+    if (!items.length) { setError("Agrega al menos un ítem."); return; }
+    if (malo !== -1) { setError(`Ítem ${malo + 1}: completa el título, una cantidad mayor a 0 y los días (entero mayor a 0).`); return; }
+    setCreando(true); setError("");
+    try {
+      const res = await fetchAuth(`/ordenes-compra/${orden._id}/generar-ot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map(it => ({ titulo: it.titulo.trim(), cantidad: Number(it.cantidad), diasEntrega: Number(it.diasEntrega) })),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.mensaje || "No se pudieron crear las OTs."); return; }
+      onCreadas(data);
+    } catch {
+      setError("Error de conexión con el servidor");
+    } finally {
+      setCreando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-800">Crear Órdenes de Trabajo</h3>
+          <p className="text-xs text-gray-500">
+            Se crea una OT por ítem, con los datos de la OC {orden.numeroOrden || orden.codigo}
+            {orden.numeroDocumento != null && ` (Doc. N° ${orden.numeroDocumento})`}.
+          </p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+          <div className="grid grid-cols-[1fr_6rem_6rem_2rem] gap-2 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+            <span>Título</span><span>Cantidad</span><span>Días</span><span />
+          </div>
+          {items.map((it, i) => (
+            <div key={it._key} className="grid grid-cols-[1fr_6rem_6rem_2rem] gap-2 items-start">
+              <textarea value={it.titulo} rows={2} placeholder={`Título de la OT ${i + 1}`}
+                onChange={(e) => cambiar(it._key, "titulo", e.target.value)}
+                className={`${INP} resize-y`} />
+              <input type="number" min="0" step="any" value={it.cantidad}
+                onChange={(e) => cambiar(it._key, "cantidad", e.target.value)} className={INP} />
+              <input type="number" min="1" step="1" value={it.diasEntrega} placeholder="0"
+                onChange={(e) => cambiar(it._key, "diasEntrega", e.target.value)} className={INP} />
+              <button type="button" onClick={() => quitar(it._key)} disabled={items.length === 1}
+                title="Quitar ítem"
+                className="h-9 text-red-500 hover:text-red-700 disabled:text-gray-300 text-lg leading-none">×</button>
+            </div>
+          ))}
+          <button type="button" onClick={() => setItems(prev => [...prev, itemOTVacio()])}
+            className="text-xs text-blue-600 hover:text-blue-800 underline">
+            + Agregar ítem
+          </button>
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
+          {error && <p className="text-xs text-red-500 mr-auto">{error}</p>}
+          <button type="button" onClick={onClose} disabled={creando}
+            className="text-sm px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+            Cancelar
+          </button>
+          <button type="button" onClick={crear} disabled={creando}
+            className="text-sm px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60">
+            {creando ? "Creando…" : `Crear ${items.length} OT${items.length !== 1 ? "s" : ""}`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
