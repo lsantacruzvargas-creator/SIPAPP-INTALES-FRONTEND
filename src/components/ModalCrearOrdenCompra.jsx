@@ -64,7 +64,7 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
     numeroOrden: "", numeroFactura: "",
     empresa: "", titulo: "",
     subtotal: "", descripcion: "",
-    encargado: "", planta: "",
+    planta: "", personaContacto: "",
     moneda: "PEN",
   });
   const [calc, setCalc]          = useState(calcular(0));
@@ -82,6 +82,11 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
   }, []);
 
   const plantasEmpresa = empresas.find(e => e._id === form.empresa)?.plantas ?? [];
+  // Contactos de la planta elegida; sin planta, los de todas las plantas de la empresa.
+  const contactosEmpresa = [...new Set(
+    (form.planta ? plantasEmpresa.filter(p => p.nombre === form.planta) : plantasEmpresa)
+      .flatMap(p => (p.contactos || []).map(c => c.nombre?.trim()).filter(Boolean))
+  )];
   // Con cotización vinculada la OC toma su moneda (lo fuerza el pre("save")
   // de OrdenCompra), así que el selector solo decide en la OC independiente.
   const moneda = cotVinculada?.moneda || form.moneda;
@@ -93,7 +98,10 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
     setForm(prev => ({
       ...prev,
       [name]: value,
-      ...(name === "empresa" ? { planta: "" } : {}),
+      ...(name === "empresa" ? { planta: "", personaContacto: "" } : {}),
+      // Al cambiar de planta, el contacto elegido se limpia si no pertenece a la nueva.
+      ...(name === "planta" && value && !(plantasEmpresa.find(p => p.nombre === value)?.contactos || [])
+        .some(c => c.nombre?.trim() === prev.personaContacto) ? { personaContacto: "" } : {}),
     }));
   };
 
@@ -106,7 +114,7 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
   ).slice(0, 50);
 
   const seleccionarEmpresa = (e) => {
-    setForm(f => ({ ...f, empresa: e._id, planta: "" }));
+    setForm(f => ({ ...f, empresa: e._id, planta: "", personaContacto: "" }));
     setBusquedaEmpresa(nombreEmpresa(e));
     setListaEmpresaAbierta(false);
   };
@@ -114,7 +122,7 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
   const cambiarBusquedaEmpresa = (e) => {
     setBusquedaEmpresa(e.target.value);
     setListaEmpresaAbierta(true);
-    if (form.empresa) setForm(f => ({ ...f, empresa: "", planta: "" }));
+    if (form.empresa) setForm(f => ({ ...f, empresa: "", planta: "", personaContacto: "" }));
   };
 
   const seleccionarCot = (cot) => {
@@ -129,6 +137,8 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
         ...prev,
         titulo:   prev.titulo   || cot.titulo           || "",
         empresa:  prev.empresa  || cot.empresa?._id     || "",
+        planta:   prev.planta   || cot.planta           || "",
+        personaContacto: prev.personaContacto || cot.personaContacto || "",
         subtotal: nuevoSub,
       };
     });
@@ -151,8 +161,8 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
       total:         calc.total,
       monto:         Number(form.subtotal),
       descripcion:   form.descripcion,
-      encargado:     form.encargado,
       planta:        form.planta,
+      personaContacto: form.personaContacto,
       moneda,
       cotizacion:    cotVinculada?._id,
     };
@@ -177,7 +187,7 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
   return (
     <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
 
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <h3 className="font-semibold text-gray-800">Nueva Orden de Compra</h3>
@@ -253,6 +263,44 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
             )}
           </div>
 
+          {/* Planta y contacto: listas de la empresa elegida; texto libre si no tiene. */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Planta</label>
+              {plantasEmpresa.length > 0 ? (
+                <select name="planta" value={form.planta} onChange={handleChange} className={INP}>
+                  <option value="">— Seleccionar planta —</option>
+                  {plantasEmpresa.map((p, i) => (
+                    <option key={i} value={p.nombre}>{p.nombre}</option>
+                  ))}
+                </select>
+              ) : (
+                <input name="planta" value={form.planta} onChange={handleChange}
+                  placeholder="Planta o sede" className={INP} />
+              )}
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Persona de contacto</label>
+              {contactosEmpresa.length > 0 ? (
+                <select name="personaContacto" value={form.personaContacto} onChange={handleChange} className={INP}>
+                  <option value="">— Sin contacto —</option>
+                  {contactosEmpresa.map((nombre) => (
+                    <option key={nombre} value={nombre}>{nombre}</option>
+                  ))}
+                </select>
+              ) : (
+                <input name="personaContacto" value={form.personaContacto} onChange={handleChange}
+                  placeholder="Nombre del contacto" className={INP} />
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Título de la orden</label>
+            <textarea name="titulo" value={form.titulo} onChange={handleChange} rows={2}
+              placeholder="Descripción del servicio u obra" className={`${INP} resize-y`} />
+          </div>
+
           <div>
             <label className="text-xs text-gray-500 block mb-1">Moneda</label>
             <select name="moneda" value={moneda} onChange={handleChange} disabled={!!cotVinculada}
@@ -291,34 +339,6 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
               </div>
             </div>
           )}
-
-          {/* Descripción y personal */}
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Título / Descripción</label>
-            <input name="titulo" value={form.titulo} onChange={handleChange}
-              placeholder="Descripción del servicio u obra" className={INP} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Encargado</label>
-              <input name="encargado" value={form.encargado} onChange={handleChange}
-                placeholder="Nombre del encargado" className={INP} />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Planta</label>
-              {plantasEmpresa.length > 0 ? (
-                <select name="planta" value={form.planta} onChange={handleChange} className={INP}>
-                  <option value="">— Seleccionar planta —</option>
-                  {plantasEmpresa.map((p, i) => (
-                    <option key={i} value={p.nombre}>{p.nombre}</option>
-                  ))}
-                </select>
-              ) : (
-                <input name="planta" value={form.planta} onChange={handleChange}
-                  placeholder="Planta o sede" className={INP} />
-              )}
-            </div>
-          </div>
 
           {exito && (
             <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3">
