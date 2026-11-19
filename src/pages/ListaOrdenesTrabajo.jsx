@@ -44,7 +44,7 @@ const SELECT =
 
 const TH = "px-4 py-3 font-semibold text-gray-500 whitespace-nowrap";
 
-// "Estado de Progreso": estadoProgresoOT/ChipEstadoOT de detalleShared, el
+// "Estado de servicio": estadoProgresoOT/ChipEstadoOT de detalleShared, el
 // mismo que usan Cotizaciones, OC e Ingreso de equipos. Hasta 2026-09-11
 // existían dos tracks (Prueba/Intervención) — se simplificaron a uno solo
 // (decisión del usuario, ver DetalleOrdenTrabajo.jsx).
@@ -145,7 +145,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc, or
                     deja el ancho sobrante a Empresa/Descripción. */}
                 <th className={`${TH} text-left w-px`}>N° OT</th>
                 <th className={`${TH} text-left w-px`}>N° OC</th>
-                <th className={`${TH} text-center w-px`}>Estado de<br />Progreso</th>
+                <th className={`${TH} text-center w-px`}>Estado de<br />servicio</th>
                 <th className={`${TH} text-left min-w-[180px]`}>Empresa</th>
                 <th className={`${TH} text-left`}>Cotizado por</th>
                 <th className={`${TH} text-left min-w-[320px]`}>Descripción</th>
@@ -274,7 +274,7 @@ export default function ListaOrdenesTrabajo() {
   const [importarOpen, setImportarOpen] = useState(false);
   // Qué tabla de las 5 categorías se muestra (No asignada/En progreso/
   // Completada/Entregada/Cerrada) — un solo filtro para todos los roles,
-  // desde que se simplificó a un único track "Estado de Progreso"
+  // desde que se simplificó a un único track "Estado de servicio"
   // (decisión del usuario, 2026-09-11 — antes técnico tenía su propio
   // filtro separado, con las tablas divididas en Prueba/Intervención).
   const [filtroEstadoPlanner, setFiltroEstadoPlanner] = useState("todos");
@@ -313,7 +313,7 @@ export default function ListaOrdenesTrabajo() {
   const nombreActual = getUsuario()?.nombre;
   const coincideNombre = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
   // "tecnico" (legado) + los 2 roles especializados comparten la misma
-  // vista de tablas (un solo track "Estado de Progreso", ver TablaOTs) — lo
+  // vista de tablas (un solo track "Estado de servicio", ver TablaOTs) — lo
   // que cambia es el ALCANCE: estrictamente el rol "tecnico" ve TODAS las
   // OTs (mismo criterio que planner, a pedido explícito del usuario);
   // tecnico_prueba/tecnico_intervencion siguen viendo solo las suyas
@@ -455,7 +455,7 @@ export default function ListaOrdenesTrabajo() {
     "N° OT":          o.numeroOT || "—",
     "Sub-OTs":        o.subOTs?.map((s) => s.numeroOT).join(", ") || "—",
     "N° OC":          ocPorNumDoc.get(o.numeroDocumento)?.numeroOrden || "—",
-    "Estado de Progreso": progresoLabel(o) || "—",
+    "Estado de servicio": progresoLabel(o) || "—",
     "Empresa":        o.empresa?.razonSocial || "—",
     "Cotizado por":   o.cotizacion?.creadoPor?.nombre || "—",
     "Descripción":    o.titulo || "—",

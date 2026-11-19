@@ -94,7 +94,7 @@ function TablaOC({
               {mostrarTitulo && <th className={`${TH} text-left min-w-[260px]`}>Título</th>}
               {puedeVerPrecios && <th className={`${TH} text-right w-px`}>Total<br />(S/)</th>}
               {puedeVerPrecios && <th className={`${TH} text-right w-px`}>Total<br />(US$)</th>}
-              <th className={`${TH} text-center`}>Estado OT</th>
+              <th className={`${TH} text-center`}>Estado de<br />servicio</th>
               <th className={`${TH} text-center`}>GRE</th>
               {mostrarHesActa && <th className={`${TH} text-center`}>HES</th>}
               {mostrarHesActa && <th className={`${TH} text-center`}>Acta de Conformidad</th>}
@@ -408,7 +408,7 @@ export default function ListaOrdenesCompra() {
         "Total (S/)":       pen.toFixed(2),
         "Total (US$)":      usd != null ? usd.toFixed(2) : "—",
       } : {}),
-      "Estado":             grupoOT?.parent ? estadoProgresoOT(grupoOT.parent) : "Sin OT",
+      "Estado de servicio": grupoOT?.parent ? estadoProgresoOT(grupoOT.parent) : "Sin OT",
       "GRE":                (grupoOT?.parent && greMap[grupoOT.parent._id]) || "Sin GRE",
     };
   };
@@ -515,7 +515,7 @@ export default function ListaOrdenesCompra() {
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
         >
           {ESTADOS_OT.map((e) => (
-            <option key={e} value={e}>{e ? e.charAt(0).toUpperCase() + e.slice(1) : "Todo estado OT"}</option>
+            <option key={e} value={e}>{e ? e.charAt(0).toUpperCase() + e.slice(1) : "Todo estado de servicio"}</option>
           ))}
         </select>
         <select

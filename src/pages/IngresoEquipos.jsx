@@ -202,7 +202,7 @@ export default function IngresoEquipos() {
           onChange={(e) => setEstadoFiltro(e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
         >
-          <option value="">Todo estado OT</option>
+          <option value="">Todo estado de servicio</option>
           {ESTADOS_PROGRESO_OT.map((e) => (
             <option key={e} value={e}>{e.charAt(0).toUpperCase() + e.slice(1)}</option>
           ))}
@@ -259,7 +259,7 @@ export default function IngresoEquipos() {
               <th className="px-4 py-3 text-left">Marca / Modelo</th>
               <th className="px-4 py-3 text-center">Fecha ingreso</th>
               <th className="px-4 py-3 text-center">Código OT</th>
-              <th className="px-4 py-3 text-center">Estado OT</th>
+              <th className="px-4 py-3 text-center">Estado de<br />servicio</th>
               <th className="px-4 py-3 text-center">N° Guía Emisión</th>
               <th className="px-4 py-3 text-center">Garantía</th>
             </tr>
