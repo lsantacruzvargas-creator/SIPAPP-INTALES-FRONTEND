@@ -108,7 +108,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const puedeNotificarTrabajo = ["supervisor", "admin"].includes(rolActual);
   // Mismo criterio que DetalleCotizacion.jsx/ModalNuevaCotizacion.jsx —
   // Planner puede ver el card de Cotización (ver más abajo) pero nunca su monto.
-  const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(rolActual);
+  const puedeVerPrecios = ["admin", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
   const cadenaCerrada = bloqueadoPorCadenaCerrada(ot.estadoCadena, rolActual);
   const bloqueo = useBloqueoEdicion("ordenTrabajo", ot._id, ot.updatedAt, { autoEditar: puedeEditarCampos && !ot.anulado && !cadenaCerrada });
   // Progreso (Encargado de Progreso) es una card independiente del fieldset

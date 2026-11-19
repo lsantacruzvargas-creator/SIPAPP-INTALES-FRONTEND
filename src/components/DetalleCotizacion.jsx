@@ -117,7 +117,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const esAdmin = rolActual === "admin";
   // Precios: información sensible, solo Admin/Facturación/Jefatura los ven —
   // ni Asistente ni Planner, aunque puedan editar/ver el resto de la cotización.
-  const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(rolActual);
+  const puedeVerPrecios = ["admin", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
   // Card de Servicios Externos — visible solo para este set de roles, a
   // pedido explícito del usuario.
   const puedeVerServicios = ["admin", "jefatura", "coordinadora", "planner", "asistente"].includes(rolActual);

@@ -70,7 +70,7 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
   const [creada, setCreada] = useState(null);
   // Precios: información sensible, solo Admin/Facturación/Jefatura los ven —
   // ni Asistente ni Planner, aunque puedan crear la cotización.
-  const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(getUsuario()?.rol);
+  const puedeVerPrecios = ["admin", "facturacion", "jefatura", "coordinadora"].includes(getUsuario()?.rol);
 
   const cargarEmpresas = () =>
     fetchAuth("/empresas?tipo=cliente").then(r => r.ok && r.json()).then(d => setEmpresas(d || []));

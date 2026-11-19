@@ -76,7 +76,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   // que ListaOrdenesCompra.jsx y que precios de Cotización (Fase 16). Antes
   // era una lista de bloqueo (solo excluía asistente/coordinadora) que
   // dejaba pasar a planner y otros roles por error.
-  const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(rolActual);
+  const puedeVerPrecios = ["admin", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
   // Generar factura es libre (ya no exige confirmar HES/Acta antes) — Admin,
   // Facturación y Jefatura pueden (mismo gate en el backend, POST /facturas
   // puedeCrear en routes/facturas.js; Admin sumado a pedido explícito del
