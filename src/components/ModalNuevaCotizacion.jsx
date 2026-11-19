@@ -24,7 +24,7 @@ function calcular(sub, descuentoPct = 0) {
 }
 
 const FORM_VACIO = {
-  empresa: "", tipo: "venta", atencion: "", rq: "",
+  empresa: "", tipo: "venta", titulo: "", atencion: "", rq: "",
   fecha: new Date().toISOString().split("T")[0], fechaRecibida: "",
   encargado: "", planta: "", personaContacto: "", condicionPago: "Factura a 30 días",
   validezOferta: "7", tipoDiasEntrega: "habiles",
@@ -131,6 +131,7 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
       condicionPago: form.condicionPago,
       validezOferta: form.validezOferta,
       tipoDiasEntrega: form.tipoDiasEntrega,
+      titulo: form.titulo,
       rq: form.rq,
       atencion: form.atencion,
       encargado: form.encargado,
@@ -344,6 +345,12 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-5 rounded-full bg-gray-400" />
                 <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Otros datos</h2>
+              </div>
+
+              {/* Uso interno (listas de cotizaciones); no va en el PDF. */}
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Título cotización</label>
+                <input name="titulo" value={form.titulo} onChange={handleChange} placeholder="Título de la cotización" className={INP} />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
