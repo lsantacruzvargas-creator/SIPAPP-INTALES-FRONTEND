@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
-import { formatearFecha } from "../utils/fecha";
+import { formatearFecha, fechaHoyLima } from "../utils/fecha";
 import DetalleDocumento from "../components/DetalleDocumento";
 import ModalNuevaOT from "../components/ModalNuevaOT";
 import ModalImportarExcel, { COLS_OT } from "../components/ModalImportarExcel";
@@ -14,8 +14,20 @@ const FILTROS_VACIO = { empresa: "", planta: "", busqueda: "", fechaDesde: "", f
 const SORTS = [
   { valor: "fecha",             label: "Más reciente" },
   { valor: "numeroOT",          label: "N° OT" },
-  { valor: "numeroCotizacion",  label: "N° Cotización" },
+  { valor: "numeroOC",          label: "N° OC" },
+  { valor: "plazo",             label: "Plazo" },
+  { valor: "fechaOC",           label: "Fecha recibida OC" },
+  { valor: "diasRecibido",      label: "Días desde recibido" },
 ];
+
+// Los valores null (sin OC, sin días de fabricación) van al final en ambas
+// direcciones.
+const compararNum = (va, vb, dir) => {
+  if (va == null && vb == null) return 0;
+  if (va == null) return 1;
+  if (vb == null) return -1;
+  return dir === "asc" ? va - vb : vb - va;
+};
 
 // Comparador descendente: numérico si ambos parsean como número, si no
 // localeCompare; los valores vacíos van al final.
@@ -33,35 +45,60 @@ const SELECT =
 
 const TH = "px-4 py-3 font-semibold text-gray-500 whitespace-nowrap";
 
-// Si nadie está asignado, `estado` se queda en el default "pendiente" del
-// modelo — visualmente eso confunde con "ya asignado pero sin empezar", así
-// que en la tabla se muestra "No asignado". Hasta 2026-09-11 existían dos
-// columnas/tracks independientes (Prueba/Intervención) — se simplificaron a
-// una sola "Estado de Progreso" (decisión del usuario, ver DetalleOrdenTrabajo.jsx).
-// Mismo chip y etiqueta que Cotizaciones, OC e Ingreso de equipos (detalleShared).
+// "Estado de servicio": estadoProgresoOT/ChipEstadoOT de detalleShared, el
+// mismo que usan Cotizaciones, OC e Ingreso de equipos. Hasta 2026-09-11
+// existían dos tracks (Prueba/Intervención) — se simplificaron a uno solo
+// (decisión del usuario, ver DetalleOrdenTrabajo.jsx).
 const progresoLabel = estadoProgresoOT;
 
-// Una sub-OT nace con la misma `cotizacion` que su padre, pero /vincular-cotizacion
-// (ver DetalleOrdenTrabajo/DetalleCotizacion) permite "jalarla" luego a otra
-// cotización distinta — eso la saca de la cadena de su padre. Se detecta
-// comparando el _id de cotización de cada una (no el numeroCotizacion, que
-// podría repetirse).
-const cotizacionReasignada = (sub, padre) => {
-  const idSub = sub.cotizacion?._id;
-  const idPadre = padre.cotizacion?._id;
-  return Boolean(idSub || idPadre) && idSub !== idPadre;
-};
+const diaLima = (fecha) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" }).format(new Date(fecha));
 
-// Días transcurridos desde el ingreso del equipo (fechaRecibida) — las
-// sub-OTs no tienen su propia fechaRecibida (comparten el ingreso de la OT
-// padre), así que reciben la del padre como fallback.
+// Días hábiles (lun–vie, sin feriados) desde que se recibió la OC hasta hoy en
+// Lima: los días de fabricación de la OT también son hábiles, y contar días
+// calendario adelantaría el "Atrasado".
 const diasDesdeRecibido = (fecha) => {
   if (!fecha) return null;
-  const ms = Date.now() - new Date(fecha).getTime();
-  return Math.max(0, Math.floor(ms / 86400000));
+  const [y, m, d] = diaLima(fecha).split("-").map(Number);
+  const [hy, hm, hd] = fechaHoyLima().split("-").map(Number);
+  const fin = Date.UTC(hy, hm - 1, hd);
+  let t = Date.UTC(y, m - 1, d);
+  let n = 0;
+  while (t < fin) {
+    t += 86400000;
+    const dia = new Date(t).getUTCDay();
+    if (dia !== 0 && dia !== 6) n++;
+  }
+  return n;
 };
 
-// Rango de fechas (Fecha de Ingreso) del filtro — "desde"/"hasta" son fechas
+const PLAZO = {
+  enFecha:   { label: "En fecha",      clase: "bg-green-100 text-green-700" },
+  cerca:     { label: "Cerca a plazo", clase: "bg-yellow-100 text-yellow-800" },
+  atrasado:  { label: "Atrasado",      clase: "bg-red-100 text-red-700" },
+  terminada: { label: "Terminada",     clase: "bg-gray-100 text-gray-500" },
+};
+
+// Margen restante = (días de fabricación − días desde recibida la OC) / días de
+// fabricación. ≤ 0 % atrasado, < 30 % cerca a plazo, desde 30 % en fecha. Una
+// OT ya completada, entregada o con la cadena cerrada no se evalúa.
+const estadoPlazo = (ot, diasRecibido) => {
+  const df = Number(ot.tiempoFabricacion);
+  if (diasRecibido == null || !(df > 0)) return null;
+  if (["completada", "entregada"].includes(ot.estadoGeneral) || ot.estadoCadena === "cerrado") return "terminada";
+  const margen = ((df - diasRecibido) / df) * 100;
+  if (margen <= 0) return "atrasado";
+  if (margen < 30) return "cerca";
+  return "enFecha";
+};
+
+function ChipPlazo({ ot, diasRecibido }) {
+  const clave = estadoPlazo(ot, diasRecibido);
+  if (!clave) return <span className="text-gray-300">—</span>;
+  const { label, clase } = PLAZO[clave];
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${clase}`}>{label}</span>;
+}
+
+// Rango de fechas (fecha recibida OC) del filtro — "desde"/"hasta" son fechas
 // sin hora (input type=date) ancladas al día calendario de Lima (UTC-5 fijo),
 // mismo criterio que el filtro de Movimientos de Almacén.
 const dentroDeRangoFecha = (fecha, desde, hasta) => {
@@ -73,7 +110,26 @@ const dentroDeRangoFecha = (fecha, desde, hasta) => {
   return true;
 };
 
-function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
+const VACIO = <span className="text-gray-300">—</span>;
+
+function ThOrden({ clave, orden, className, title, children }) {
+  const activo = orden.sortBy === clave;
+  return (
+    <th className={className} title={title}>
+      <button
+        type="button"
+        onClick={() => orden.onOrdenar(clave)}
+        className={`inline-flex items-center gap-1 uppercase tracking-wide font-semibold hover:text-gray-800 transition ${activo ? "text-gray-800" : ""}`}
+      >
+        <span>{children}</span>
+        <span className={activo ? "" : "text-gray-300"}>{activo ? (orden.sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+      </button>
+    </th>
+  );
+}
+
+// `ocPorNumDoc`: numeroDocumento → { numeroOrden, fecha } de la OC del cliente.
+function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg, ocPorNumDoc, orden }) {
   return (
     <div className="mb-6">
       <div className="flex items-center gap-2 mb-3">
@@ -83,29 +139,34 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
       </div>
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <TablaScroll className="overflow-x-auto">
-          <table className="w-full text-sm" style={{ minWidth: "1000px" }}>
+          <table className="w-full text-sm" style={{ minWidth: "1100px" }}>
             <thead className="bg-gray-50 text-xs uppercase tracking-wide border-b-2 border-gray-200">
               <tr>
                 {/* w-px encoge la columna a su contenido (que es nowrap) y
                     deja el ancho sobrante a Empresa/Descripción. */}
                 <th className={`${TH} text-left w-px`}>N° OT</th>
-                <th className={`${TH} text-left w-px`}>N° Cotización</th>
-                <th className={`${TH} text-left min-w-[180px]`}>Empresa</th>
-                <th className={`${TH} text-left`}>Contacto</th>
-                <th className={`${TH} text-left min-w-[320px]`}>Descripción</th>
+                <th className={`${TH} text-left w-px`}>N° OC</th>
                 <th className={`${TH} text-center w-px`}>Estado de<br />servicio</th>
+                <th className={`${TH} text-left min-w-[180px]`}>Empresa</th>
+                <th className={`${TH} text-left`}>Cotizado por</th>
+                <th className={`${TH} text-left min-w-[320px]`}>Descripción</th>
+                <th className={`${TH} text-center w-px`}>Días de<br />fabricación</th>
                 <th className={`${TH} text-left`}>Encargado de<br />Progreso</th>
-                <th className={`${TH} text-center w-px`}>Días desde<br />recibido</th>
-                <th className={`${TH} text-center w-px`}>Fecha de<br />Ingreso</th>
+                <ThOrden clave="diasRecibido" orden={orden} className={`${TH} text-center w-px`} title="Días hábiles desde la fecha recibida de la OC">Días desde<br />recibido</ThOrden>
+                <ThOrden clave="fechaOC" orden={orden} className={`${TH} text-center w-px`}>Fecha<br />recibida OC</ThOrden>
+                <ThOrden clave="plazo" orden={orden} className={`${TH} text-center w-px`}>Plazo</ThOrden>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {ordenes.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
+                  <td colSpan={11} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
                 </tr>
               ) : (
-                ordenes.flatMap((o) => [
+                ordenes.flatMap((o) => {
+                  const oc = ocPorNumDoc.get(o.numeroDocumento);
+                  const dr = diasDesdeRecibido(oc?.fecha);
+                  return [
                   <tr
                     key={o._id}
                     className={`hover:bg-gray-50 cursor-pointer transition-colors ${o.anulado ? "opacity-50" : ""}`}
@@ -116,7 +177,7 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                     </td>
                     <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
-                        {o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || <span className="text-gray-300 font-sans">—</span>}
+                        {oc?.numeroOrden || <span className="text-gray-300 font-sans">—</span>}
                         {o.anulado && (
                           <span title={o.motivoAnulacion} className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 uppercase">
                             Anulada
@@ -124,25 +185,34 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-gray-700">
-                      {o.empresa?.razonSocial || <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3.5 text-gray-600">
-                      {o.personaContacto || o.contactoNombre || <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3.5 text-gray-700">{o.titulo || <span className="text-gray-300">—</span>}</td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       <ChipEstadoOT ot={o} />
                     </td>
-                    <td className="px-4 py-3.5 text-gray-600">{o.encargado || <span className="text-gray-300">—</span>}</td>
+                    <td className="px-4 py-3.5 text-gray-700">
+                      {o.empresa?.razonSocial || VACIO}
+                    </td>
+                    <td className="px-4 py-3.5 text-gray-600">
+                      {o.cotizacion?.creadoPor?.nombre || VACIO}
+                    </td>
+                    <td className="px-4 py-3.5 text-gray-700">{o.titulo || VACIO}</td>
                     <td className="px-4 py-3.5 text-center text-gray-600 whitespace-nowrap">
-                      {diasDesdeRecibido(o.fechaRecibida) ?? <span className="text-gray-300">—</span>}
+                      {o.tiempoFabricacion ?? VACIO}
+                    </td>
+                    <td className="px-4 py-3.5 text-gray-600">{o.encargado || VACIO}</td>
+                    <td className="px-4 py-3.5 text-center text-gray-600 whitespace-nowrap">
+                      {dr ?? VACIO}
                     </td>
                     <td className="px-4 py-3.5 text-center text-gray-600 whitespace-nowrap">
-                      {o.fechaRecibida ? formatearFecha(o.fechaRecibida) : <span className="text-gray-300">—</span>}
+                      {oc?.fecha ? formatearFecha(oc.fecha) : VACIO}
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <ChipPlazo ot={o} diasRecibido={dr} />
                     </td>
                   </tr>,
-                  ...(o.subOTs || []).map((s) => (
+                  ...(o.subOTs || []).map((s) => {
+                    const ocSub = ocPorNumDoc.get(s.numeroDocumento ?? o.numeroDocumento);
+                    const drSub = diasDesdeRecibido(ocSub?.fecha);
+                    return (
                     <tr
                       key={s._id}
                       className={`hover:bg-gray-50 cursor-pointer transition-colors bg-indigo-50/30 ${s.anulado ? "opacity-50" : ""}`}
@@ -151,38 +221,37 @@ function TablaOTs({ titulo, acento, ordenes, onSelect, vacioMsg }) {
                       <td className="px-4 py-3 font-semibold text-indigo-700 whitespace-nowrap pl-8">
                         ↳ {s.numeroOT}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {cotizacionReasignada(s, o) ? (
-                          <span
-                            className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase tracking-wide"
-                            title={`Reasignada — la OT padre (${o.numeroOT}) pertenece a la cotización ${o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || "—"}`}
-                          >
-                            {s.cotizacion?.numeroCotizacion || s.cotizacion?.codigo || "—"} ⇄
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">{s.cotizacion?.numeroCotizacion || s.cotizacion?.codigo || "—"}</span>
-                        )}
+                      <td className="px-4 py-3 whitespace-nowrap text-gray-400">
+                        {ocSub?.numeroOrden || "—"}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
-                        {s.empresa?.razonSocial || o.empresa?.razonSocial || <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {s.personaContacto || s.contactoNombre || o.personaContacto || o.contactoNombre || <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">{s.titulo || <span className="text-gray-300">—</span>}</td>
                       <td className="px-4 py-3 text-center whitespace-nowrap">
                         <ChipEstadoOT ot={s} />
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{s.encargado || <span className="text-gray-300">—</span>}</td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {s.empresa?.razonSocial || o.empresa?.razonSocial || VACIO}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {s.cotizacion?.creadoPor?.nombre || o.cotizacion?.creadoPor?.nombre || VACIO}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{s.titulo || VACIO}</td>
                       <td className="px-4 py-3 text-center text-gray-600 whitespace-nowrap">
-                        {diasDesdeRecibido(s.fechaRecibida ?? o.fechaRecibida) ?? <span className="text-gray-300">—</span>}
+                        {s.tiempoFabricacion ?? VACIO}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{s.encargado || VACIO}</td>
+                      <td className="px-4 py-3 text-center text-gray-600 whitespace-nowrap">
+                        {drSub ?? VACIO}
                       </td>
                       <td className="px-4 py-3 text-center text-gray-600 whitespace-nowrap">
-                        {(s.fechaRecibida ?? o.fechaRecibida) ? formatearFecha(s.fechaRecibida ?? o.fechaRecibida) : <span className="text-gray-300">—</span>}
+                        {ocSub?.fecha ? formatearFecha(ocSub.fecha) : VACIO}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <ChipPlazo ot={s} diasRecibido={drSub} />
                       </td>
                     </tr>
-                  )),
-                ])
+                    );
+                  }),
+                  ];
+                })
               )}
             </tbody>
           </table>
@@ -198,6 +267,9 @@ export default function ListaOrdenesTrabajo() {
   const [ocPorNumDoc, setOcPorNumDoc] = useState(new Map());
   const [filtros, setFiltros] = useState(FILTROS_VACIO);
   const [sortBy, setSortBy] = useState("numeroOT");
+  // Solo aplica a las columnas con orden en el encabezado (plazo, fechaOC,
+  // diasRecibido); los del select siguen siendo descendentes.
+  const [sortDir, setSortDir] = useState("desc");
   const [seleccionada, setSeleccionada] = useState(null);
   const [crearOTOpen, setCrearOTOpen] = useState(false);
   const [importarOpen, setImportarOpen] = useState(false);
@@ -222,8 +294,8 @@ export default function ListaOrdenesTrabajo() {
              .map((f) => [f.numeroDocumento, f.numeroFactura])
       ));
       setOcPorNumDoc(new Map(
-        ocs.filter((oc) => oc.numeroDocumento != null)
-           .map((oc) => [oc.numeroDocumento, oc.numeroOrden])
+        ocs.filter((oc) => oc.numeroDocumento != null && !oc.anulado)
+           .map((oc) => [oc.numeroDocumento, { numeroOrden: oc.numeroOrden, fecha: oc.fecha || oc.createdAt }])
       ));
     });
 
@@ -281,13 +353,13 @@ export default function ListaOrdenesTrabajo() {
     return (
       (!filtros.empresa || o.empresa?._id === filtros.empresa) &&
       (!filtros.planta || o.planta === filtros.planta) &&
-      dentroDeRangoFecha(o.fechaRecibida, filtros.fechaDesde, filtros.fechaHasta) &&
+      dentroDeRangoFecha(ocPorNumDoc.get(o.numeroDocumento)?.fecha, filtros.fechaDesde, filtros.fechaHasta) &&
       (!q ||
         o.titulo?.toLowerCase().includes(q) ||
         o.numeroOT?.toLowerCase().includes(q) ||
         o.cotizacion?.numeroCotizacion?.toLowerCase().includes(q) ||
         o.cotizacion?.codigo?.toLowerCase().includes(q) ||
-        ocPorNumDoc.get(o.numeroDocumento)?.toLowerCase().includes(q) ||
+        ocPorNumDoc.get(o.numeroDocumento)?.numeroOrden?.toLowerCase().includes(q) ||
         facturaPorNumDoc.get(o.numeroDocumento)?.toLowerCase().includes(q) ||
         o.empresa?.razonSocial?.toLowerCase().includes(q) ||
         o.empresa?.ruc?.includes(q) ||
@@ -295,12 +367,39 @@ export default function ListaOrdenesTrabajo() {
     );
   });
 
+  const diasOC = (o) => diasDesdeRecibido(ocPorNumDoc.get(o.numeroDocumento)?.fecha);
+  const fechaOCms = (o) => {
+    const f = ocPorNumDoc.get(o.numeroDocumento)?.fecha;
+    return f ? new Date(f).getTime() : null;
+  };
+  // Urgencia del plazo: (días desde recibido − días de fabricación) / días de
+  // fabricación, mismo margen que estadoPlazo pero con signo invertido — más
+  // alto = más atrasado. Las terminadas van debajo de cualquier OT en curso.
+  const urgenciaPlazo = (o) => {
+    const dr = diasOC(o);
+    const clave = estadoPlazo(o, dr);
+    if (!clave) return null;
+    if (clave === "terminada") return -1e9;
+    const df = Number(o.tiempoFabricacion);
+    return (dr - df) / df;
+  };
+
+  const ordenarPorColumna = (clave) => {
+    if (sortBy === clave) {
+      setSortDir(sortDir === "desc" ? "asc" : "desc");
+    } else {
+      setSortBy(clave);
+      setSortDir("desc");
+    }
+  };
+  const orden = { sortBy, sortDir, onOrdenar: ordenarPorColumna };
+
   filtradas.sort((a, b) => {
     if (sortBy === "numeroOT") return compararTexto(a.numeroOT, b.numeroOT);
-    if (sortBy === "numeroCotizacion") return compararTexto(a.cotizacion?.numeroCotizacion || a.cotizacion?.codigo, b.cotizacion?.numeroCotizacion || b.cotizacion?.codigo);
-    // Descendente: más días esperando primero — sin fechaRecibida (null) va
-    // al final, igual que un valor "menor" a cualquier día real (>= 0).
-    if (sortBy === "diasRecibido") return (diasDesdeRecibido(b.fechaRecibida) ?? -1) - (diasDesdeRecibido(a.fechaRecibida) ?? -1);
+    if (sortBy === "numeroOC") return compararTexto(ocPorNumDoc.get(a.numeroDocumento)?.numeroOrden, ocPorNumDoc.get(b.numeroDocumento)?.numeroOrden);
+    if (sortBy === "diasRecibido") return compararNum(diasOC(a), diasOC(b), sortDir);
+    if (sortBy === "fechaOC") return compararNum(fechaOCms(a), fechaOCms(b), sortDir);
+    if (sortBy === "plazo") return compararNum(urgenciaPlazo(a), urgenciaPlazo(b), sortDir);
     return new Date(b.createdAt) - new Date(a.createdAt);
   });
 
@@ -351,23 +450,21 @@ export default function ListaOrdenesTrabajo() {
   );
 
   const hayFiltro = Object.values(filtros).some(Boolean);
-  // Con qué categoría se queda la vista — "todos" no filtra nada (todas las
-  // tablas se muestran).
-  const mostrarPlanner = (clave) => filtroEstadoPlanner === "todos" || filtroEstadoPlanner === clave;
-
   // Mismas columnas que TablaOTs (ver el nuevo orden ahí) — una hoja por
   // cada tabla visible.
   const filaOT = (o) => ({
     "N° OT":          o.numeroOT || "—",
     "Sub-OTs":        o.subOTs?.map((s) => s.numeroOT).join(", ") || "—",
-    "N° Cotización":  o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || "—",
+    "N° OC":          ocPorNumDoc.get(o.numeroDocumento)?.numeroOrden || "—",
+    "Estado de servicio": progresoLabel(o) || "—",
     "Empresa":        o.empresa?.razonSocial || "—",
-    "Contacto":       o.personaContacto || o.contactoNombre || "—",
+    "Cotizado por":   o.cotizacion?.creadoPor?.nombre || "—",
     "Descripción":    o.titulo || "—",
-    "Estado de servicio":    progresoLabel(o) || "—",
+    "Días de fabricación":   o.tiempoFabricacion ?? "—",
     "Encargado de Progreso": o.encargado || "—",
-    "Días desde recibido":   diasDesdeRecibido(o.fechaRecibida) ?? "—",
-    "Fecha de Ingreso":      o.fechaRecibida ? formatearFecha(o.fechaRecibida) : "—",
+    "Días desde recibido":   diasOC(o) ?? "—",
+    "Fecha recibida OC":     ocPorNumDoc.get(o.numeroDocumento)?.fecha ? formatearFecha(ocPorNumDoc.get(o.numeroDocumento).fecha) : "—",
+    "Plazo":                 PLAZO[estadoPlazo(o, diasOC(o))]?.label || "—",
   });
 
   const exportarExcel = () => {
@@ -422,14 +519,14 @@ export default function ListaOrdenesTrabajo() {
       {/* Filtros — orden: Ordenar, Estado, Empresa (+ Planta), búsqueda */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
 
-        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={SELECT}>
+        <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setSortDir("desc"); }} className={SELECT}>
           {SORTS.map(({ valor, label }) => (
             <option key={valor} value={valor}>Ordenar: {label}</option>
           ))}
         </select>
 
         <select value={filtroEstadoPlanner} onChange={(e) => setFiltroEstadoPlanner(e.target.value)} className={SELECT}>
-          <option value="todos">Todo estado</option>
+          <option value="todos">Todas las Órdenes de Trabajo</option>
           <option value="noAsignada">No asignada</option>
           <option value="enProgreso">En progreso</option>
           <option value="completada">Completada</option>
@@ -465,10 +562,10 @@ export default function ListaOrdenesTrabajo() {
 
         <div className="flex items-center gap-1.5">
           <input type="date" name="fechaDesde" value={filtros.fechaDesde} onChange={handleFiltro}
-            className={SELECT} title="Fecha de ingreso desde" />
+            className={SELECT} title="Fecha recibida OC desde" />
           <span className="text-gray-400 text-xs">a</span>
           <input type="date" name="fechaHasta" value={filtros.fechaHasta} onChange={handleFiltro}
-            className={SELECT} title="Fecha de ingreso hasta" />
+            className={SELECT} title="Fecha recibida OC hasta" />
         </div>
 
         {/* Botón dedicado (a pedido del usuario) — planner/coordinadora/
@@ -476,9 +573,13 @@ export default function ListaOrdenesTrabajo() {
             priorizar por antigüedad en todas las tablas de un solo click. */}
         <button
           type="button"
-          onClick={() => setSortBy(sortBy === "diasRecibido" ? "fecha" : "diasRecibido")}
+          onClick={() => {
+            const activo = sortBy === "diasRecibido" && sortDir === "desc";
+            setSortBy(activo ? "fecha" : "diasRecibido");
+            setSortDir("desc");
+          }}
           className={`px-3 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
-            sortBy === "diasRecibido"
+            sortBy === "diasRecibido" && sortDir === "desc"
               ? "bg-gray-900 text-white"
               : "border border-gray-300 text-gray-600 hover:bg-gray-50"
           }`}
@@ -497,19 +598,18 @@ export default function ListaOrdenesTrabajo() {
       </div>
 
       <>
-          {/* Vista global: todas las OTs juntas (sin separar por asignación),
-              respondiendo al mismo filtro de Estado de arriba — "Todo
-              estado" muestra la unión exacta de las 5 tablas de abajo. */}
-          <TablaOTs
-            titulo="Todas las Órdenes de Trabajo"
-            acento="bg-indigo-500"
-            ordenes={todasOTs}
-            onSelect={setSeleccionada}
-            vacioMsg={hayFiltro || filtroEstadoPlanner !== "todos" ? "Sin resultados para los filtros aplicados" : "Sin órdenes de trabajo"}
-          />
+          {filtroEstadoPlanner === "todos" && (
+            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
+              titulo="Todas las Órdenes de Trabajo"
+              acento="bg-indigo-500"
+              ordenes={todasOTs}
+              onSelect={setSeleccionada}
+              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de trabajo"}
+            />
+          )}
 
-          {mostrarPlanner("noAsignada") && (
-            <TablaOTs
+          {filtroEstadoPlanner === "noAsignada" && (
+            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
               titulo="Órdenes no asignadas"
               acento="bg-red-500"
               ordenes={noAsignadas}
@@ -518,8 +618,8 @@ export default function ListaOrdenesTrabajo() {
             />
           )}
 
-          {mostrarPlanner("enProgreso") && (
-            <TablaOTs
+          {filtroEstadoPlanner === "enProgreso" && (
+            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
               titulo="Órdenes en progreso"
               acento="bg-blue-500"
               ordenes={plannerEnProgreso}
@@ -528,8 +628,8 @@ export default function ListaOrdenesTrabajo() {
             />
           )}
 
-          {mostrarPlanner("completada") && (
-            <TablaOTs
+          {filtroEstadoPlanner === "completada" && (
+            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
               titulo="Órdenes completadas"
               acento="bg-green-500"
               ordenes={plannerCompletadas}
@@ -538,8 +638,8 @@ export default function ListaOrdenesTrabajo() {
             />
           )}
 
-          {mostrarPlanner("entregada") && (
-            <TablaOTs
+          {filtroEstadoPlanner === "entregada" && (
+            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
               titulo="Órdenes entregadas"
               acento="bg-teal-500"
               ordenes={plannerEntregadas}
@@ -549,8 +649,8 @@ export default function ListaOrdenesTrabajo() {
           )}
         </>
 
-      {mostrarPlanner("cerrada") && (
-        <TablaOTs
+      {filtroEstadoPlanner === "cerrada" && (
+        <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
           titulo="Órdenes cerradas"
           acento="bg-gray-500"
           ordenes={cerradas}

@@ -20,7 +20,6 @@ const TH = "px-4 py-3 font-semibold text-gray-500 whitespace-nowrap";
 // Cotizaciones (ver ListaCotizaciones.jsx).
 const VISTAS = [
   { valor: "todasLasOC",  label: "Todas las Órdenes de Compra" },
-  { valor: "todas",       label: "Todas las tablas" },
   { valor: "sinFactura",  label: "Sin factura" },
   { valor: "conFactura",  label: "Con factura" },
   { valor: "cerradas",    label: "Cerradas" },
@@ -121,7 +120,7 @@ function TablaOC({
                   className={`hover:bg-gray-50 cursor-pointer transition-colors ${o.anulado ? "opacity-50" : ""}`}
                   onClick={() => onSelect(o)}>
                   <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || <span className="text-gray-300">—</span>}</td>
-                  <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{otPadre?.numeroOT || <span className="text-gray-300 font-sans">Sin OT</span>}</td>
+                  <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{grupoOT?.parents.length ? grupoOT.parents.map((ot) => ot.numeroOT || ot.codigo).join(", ") : <span className="text-gray-300 font-sans">Sin OT</span>}</td>
                   <td className="px-4 py-3.5 font-semibold text-gray-800 max-w-[220px]">
                     <div className="flex items-center gap-1.5 flex-wrap break-words">
                       {o.numeroOrden || <span className="text-gray-300">—</span>}
@@ -286,9 +285,9 @@ export default function ListaOrdenesCompra() {
       const otG = {};
       ots.forEach((ot) => {
         if (ot.numeroDocumento == null) return;
-        if (!otG[ot.numeroDocumento]) otG[ot.numeroDocumento] = { parent: null, subs: [] };
+        if (!otG[ot.numeroDocumento]) otG[ot.numeroDocumento] = { parent: null, parents: [], subs: [] };
         if (ot.ordenPadre) otG[ot.numeroDocumento].subs.push(ot);
-        else otG[ot.numeroDocumento].parent = ot;
+        else { otG[ot.numeroDocumento].parent = ot; otG[ot.numeroDocumento].parents.unshift(ot); }
       });
       setOtGroupMap(otG);
 
@@ -320,8 +319,10 @@ export default function ListaOrdenesCompra() {
       const factByOCM = {};
       facts.forEach((f) => {
         const cotId = f.cotizacion?._id || f.cotizacion;
-        if (cotId && !factM[cotId]) factM[cotId] = f;
         const ocId = f.ordenCompra?._id || f.ordenCompra;
+        // Respaldo por cotización solo para facturas sin OC: con varias OCs por
+        // cotización, una factura de otra OC no debe aparecer como la de esta.
+        if (cotId && !ocId && !factM[cotId]) factM[cotId] = f;
         if (ocId) {
           // Preferir la factura cuyo numeroDocumento coincide con el de la OC;
           // solo se cae a la primera vista si ninguna coincide.
@@ -358,7 +359,7 @@ export default function ListaOrdenesCompra() {
     const txt = busqueda.toLowerCase();
     const factura = factByOCMap[o._id] || factMap[o.cotizacion?._id || o.cotizacion];
     const grupoOT = otGroupMap[o.numeroDocumento];
-    const numerosOT = grupoOT ? [grupoOT.parent, ...grupoOT.subs].filter(Boolean).map((ot) => ot.numeroOT) : [];
+    const numerosOT = grupoOT ? [...grupoOT.parents, ...grupoOT.subs].map((ot) => ot.numeroOT) : [];
     const matchBusq  = !txt
       || o.numeroOrden?.toLowerCase().includes(txt)
       || o.titulo?.toLowerCase().includes(txt)
@@ -383,10 +384,7 @@ export default function ListaOrdenesCompra() {
   });
 
   const hayFiltro = busqueda || estadoOT || empresa || planta || anio || mes;
-  // Si hay búsqueda de texto activa, no dejar que el selector de "vista"
-  // esconda una tabla donde SÍ cae el resultado — mismo criterio que
-  // ListaCotizaciones.jsx.
-  const vistaEfectiva = busqueda ? "todasLasOC" : vista;
+  const vistaEfectiva = vista;
   const veFact = veFacturas(rolDeSesion());
 
   const tieneFactura = (o) => !!(factByOCMap[o._id] || factMap[o.cotizacion?._id || o.cotizacion]);
@@ -405,7 +403,7 @@ export default function ListaOrdenesCompra() {
       "Cotización":         o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || "—",
       "N° Orden de Compra": o.numeroOrden || "—",
       "Fecha de creación":  o.createdAt ? formatearFecha(o.createdAt) : "—",
-      "N° OT":              grupoOT?.parent?.numeroOT || "—",
+      "N° OT":              grupoOT?.parents.map((ot) => ot.numeroOT || ot.codigo).join(", ") || "—",
       "Sub-OTs":            grupoOT?.subs?.map((s) => s.numeroOT).join(", ") || "—",
       "N° Factura":         o.numeroFactura || factura?.numeroFactura || "—",
       "Empresa":            o.empresa?.razonSocial || "—",
@@ -563,20 +561,7 @@ export default function ListaOrdenesCompra() {
         />
       )}
 
-      {!veFact && vistaEfectiva === "todas" && (
-        <TablaOC
-          titulo="Órdenes de Compra abiertas"
-          acento="bg-amber-500"
-          ordenes={abiertas}
-          otGroupMap={otGroupMap} factMap={factMap} factByOCMap={factByOCMap} greMap={greMap} tipoCambio={tipoCambio} puedeVerPrecios={puedeVerPrecios}
-          onSelect={setOrdenSeleccionada}
-          subirDocumento={subirDocumento}
-          mostrarFactura={false}
-          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de compra abiertas"}
-        />
-      )}
-
-      {veFact && (vistaEfectiva === "todas" || vistaEfectiva === "sinFactura") && (
+      {veFact && vistaEfectiva === "sinFactura" && (
         <TablaOC
           titulo="Órdenes de Compra sin factura"
           acento="bg-amber-500"
@@ -592,7 +577,7 @@ export default function ListaOrdenesCompra() {
         />
       )}
 
-      {veFact && (vistaEfectiva === "todas" || vistaEfectiva === "conFactura") && (
+      {veFact && vistaEfectiva === "conFactura" && (
         <TablaOC
           titulo="Órdenes de Compra con factura"
           acento="bg-emerald-500"
@@ -604,7 +589,7 @@ export default function ListaOrdenesCompra() {
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "cerradas") && (
+      {vistaEfectiva === "cerradas" && (
         <TablaOC
           titulo="Órdenes de Compra cerradas"
           acento="bg-gray-500"

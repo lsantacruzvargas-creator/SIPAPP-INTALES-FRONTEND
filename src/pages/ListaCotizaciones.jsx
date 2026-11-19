@@ -20,7 +20,6 @@ const FILTROS_VACIO = { empresa: "", planta: "", ano: "", mes: "", oc: "", busqu
 
 const VISTAS = [
   { valor: "todasLasCotizaciones", label: "Todas las cotizaciones" },
-  { valor: "todas",      label: "Todas las tablas" },
   { valor: "sinOT",      label: "Cotizaciones sin OT" },
   { valor: "pendientes", label: "Cotizaciones pendientes de OC" },
   { valor: "conOC",      label: "Cotización con OC" },
@@ -63,16 +62,23 @@ const titulosOT = (ots) =>
 // columna quedaba desactualizada en cotizaciones de formatos que ya no
 // existen (Gloria/Alicorp, con gastos administrativos + utilidad, o
 // descuento global); se mantiene el mismo criterio por consistencia.
+// Se usa `total − igv` (exacto) y no `total / 1.18`: este último arrastra
+// decimales que, multiplicados por el TC, descuadraban la conversión en
+// ±0.01 (reportado por el usuario en HUAQUIAN, 2026-11-06). `/1.18` queda
+// solo de respaldo para filas sin `igv`.
+const r2 = (n) => Math.round(n * 100) / 100;
 const totalesDuales = (c, tipoCambio) => {
-  const total = c.total != null ? (Number(c.total) || 0) / 1.18 : Number(c.subtotal) || 0;
+  const total = Number(c.total) || 0;
+  const igv = Number(c.igv) || 0;
+  const sinIgv = r2(igv > 0 ? total - igv : c.total != null ? total / 1.18 : Number(c.subtotal) || 0);
   const tc = Number(tipoCambio) || 0;
   if (c.moneda === "USD") {
-    return { pen: tc > 0 ? total * tc : null, usd: total };
+    return { pen: tc > 0 ? r2(sinIgv * tc) : null, usd: sinIgv };
   }
-  return { pen: total, usd: tc > 0 ? total / tc : null };
+  return { pen: sinIgv, usd: tc > 0 ? r2(sinIgv / tc) : null };
 };
 
-function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, mostrarEstadoServicio, mostrarTituloOT, otsPorCot, colOtEstrecha }) {
+function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, tipoCambio, puedeVerPrecios, mostrarEstadoServicio, mostrarTituloOT, otsPorCot, colOtEstrecha }) {
   return (
     <div className="mb-6">
       <div className="flex items-center gap-2 mb-3">
@@ -96,15 +102,18 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, m
               <th className={`${TH} text-left min-w-[260px]`}>Título cotización</th>
               {mostrarTituloOT && <th className={`${TH} text-left min-w-[260px]`}>Título orden de<br />trabajo</th>}
               <th className={`${TH} text-left`}>Planta</th>
+              {puedeVerPrecios && <th className={`${TH} text-right w-px`}>Total sin<br />IGV (S/)</th>}
+              {puedeVerPrecios && <th className={`${TH} text-right w-px`}>Total sin<br />IGV (US$)</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {cotizaciones.length === 0 ? (
               <tr>
-                <td colSpan={6 + (mostrarEstadoServicio ? 3 : 0) + (mostrarTituloOT ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
+                <td colSpan={6 + (puedeVerPrecios ? 2 : 0) + (mostrarEstadoServicio ? 3 : 0) + (mostrarTituloOT ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
               </tr>
             ) : (
               cotizaciones.map((c) => {
+                const { pen, usd } = totalesDuales(c, tipoCambio);
                 const otsDeCot = (mostrarEstadoServicio || mostrarTituloOT) ? otsPorCot?.get(c._id) : null;
                 // Solo se usa (y se busca) en la tabla de Pendientes de OC.
                 const otPrincipal = mostrarEstadoServicio ? otsDeCot?.[0] : null;
@@ -153,13 +162,25 @@ function TablaCotizaciones({ titulo, acento, cotizaciones, onSelect, vacioMsg, m
                   <td className="px-4 py-3.5 text-gray-600">
                     {c.personaContacto || c.contactoNombre || <span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-4 py-3.5 text-gray-700">{c.titulo}</td>
+                  <td className="px-4 py-3.5 text-gray-700">
+                    {(!c._esOT && c.titulo) || <span className="text-gray-300">—</span>}
+                  </td>
                   {mostrarTituloOT && (
                     <td className="px-4 py-3.5 text-gray-700">
-                      {titulosOT(otsDeCot) || <span className="text-gray-300">—</span>}
+                      {(c._esOT ? c.titulo : titulosOT(otsDeCot)) || <span className="text-gray-300">—</span>}
                     </td>
                   )}
                   <td className="px-4 py-3.5 text-gray-600">{c.planta || <span className="text-gray-300">—</span>}</td>
+                  {puedeVerPrecios && (
+                    <td className="px-4 py-3.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">
+                      {pen != null ? pen.toLocaleString("es-PE", { minimumFractionDigits: 2 }) : "—"}
+                    </td>
+                  )}
+                  {puedeVerPrecios && (
+                    <td className="px-4 py-3.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">
+                      {usd != null ? usd.toLocaleString("es-PE", { minimumFractionDigits: 2 }) : "—"}
+                    </td>
+                  )}
                 </tr>
                 );
               })
@@ -339,14 +360,9 @@ export default function ListaCotizaciones() {
   // vivir en esa tabla, no duplicarse acá.
   const sinOT = filtradas.filter((c) => !c._esOT && !esCerrada(c) && !otsPorCot.get(c._id)?.length);
   const hayFiltro = Object.values(filtros).some(Boolean);
-  // Si hay una búsqueda de texto activa, no dejar que el selector de "vista"
-  // esconda una tabla donde SÍ cae el resultado (ej. buscar un N° OT que
-  // pertenece a una cotización "con OC" mientras la vista activa es
-  // "Pendientes") — las otras 3 páginas de lista siempre muestran todas sus
-  // categorías a la vez, así que en búsqueda esta página se comporta igual.
-  const vistaEfectiva = filtros.busqueda ? "todasLasCotizaciones" : vista;
+  const vistaEfectiva = vista;
 
-  // Columnas de TablaCotizaciones más los totales sin IGV (la tabla en pantalla ya no los muestra) — una hoja por cada tabla visible.
+  // Misma columnas que TablaCotizaciones — una hoja por cada tabla visible.
   const filaCotizacion = (c) => {
     const { pen, usd } = totalesDuales(c, tipoCambio);
     return {
@@ -355,8 +371,8 @@ export default function ListaCotizaciones() {
       "Fecha recibida":         c.fechaRecibida ? formatearFecha(c.fechaRecibida) : "—",
       "Empresa":                c.empresa?.razonSocial || "—",
       "Contacto":               c.personaContacto || c.contactoNombre || "—",
-      "Título cotización":      c.titulo,
-      "Título orden de trabajo": titulosOT(otsPorCot.get(c._id)) || "—",
+      "Título cotización":      (!c._esOT && c.titulo) || "—",
+      "Título orden de trabajo": (c._esOT ? c.titulo : titulosOT(otsPorCot.get(c._id))) || "—",
       "Planta":                 c.planta || "—",
       "Encargado":              c.encargado || "—",
       ...(puedeVerPrecios ? {
@@ -490,6 +506,8 @@ export default function ListaCotizaciones() {
           cotizaciones={filtradas}
           onSelect={seleccionarFila}
           vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin cotizaciones registradas"}
+          tipoCambio={tipoCambio}
+          puedeVerPrecios={puedeVerPrecios}
           mostrarEstadoServicio
           mostrarTituloOT
           otsPorCot={otsPorCot}
@@ -497,48 +515,56 @@ export default function ListaCotizaciones() {
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "sinOT") && (
+      {vistaEfectiva === "sinOT" && (
         <TablaCotizaciones
           titulo="Cotizaciones sin OT"
           acento="bg-indigo-500"
           cotizaciones={sinOT}
           onSelect={seleccionarFila}
           vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Todas las cotizaciones ya tienen OT"}
+          tipoCambio={tipoCambio}
+          puedeVerPrecios={puedeVerPrecios}
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "pendientes") && (
+      {vistaEfectiva === "pendientes" && (
         <TablaCotizaciones
           titulo="Cotizaciones pendientes de OC"
           acento="bg-amber-500"
           cotizaciones={pendientes}
           onSelect={seleccionarFila}
           vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin cotizaciones pendientes"}
+          tipoCambio={tipoCambio}
+          puedeVerPrecios={puedeVerPrecios}
           mostrarEstadoServicio
           mostrarTituloOT
           otsPorCot={otsPorCot}
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "conOC") && (
+      {vistaEfectiva === "conOC" && (
         <TablaCotizaciones
           titulo="Cotización con OC"
           acento="bg-emerald-500"
           cotizaciones={conOC}
           onSelect={seleccionarFila}
           vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin cotizaciones con OC"}
+          tipoCambio={tipoCambio}
+          puedeVerPrecios={puedeVerPrecios}
           mostrarTituloOT
           otsPorCot={otsPorCot}
         />
       )}
 
-      {(vistaEfectiva === "todas" || vistaEfectiva === "cerradas") && (
+      {vistaEfectiva === "cerradas" && (
         <TablaCotizaciones
           titulo="Cotizaciones cerradas"
           acento="bg-gray-500"
           cotizaciones={cerradas}
           onSelect={seleccionarFila}
           vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin cotizaciones cerradas"}
+          tipoCambio={tipoCambio}
+          puedeVerPrecios={puedeVerPrecios}
           mostrarTituloOT
           otsPorCot={otsPorCot}
         />

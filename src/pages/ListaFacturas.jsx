@@ -65,7 +65,8 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, vacioMsg }) {
     subtotal:    noAnuladas.reduce((s, f) => s + (Number(f.subtotal ?? f.monto)    || 0), 0),
     igv:         noAnuladas.reduce((s, f) => s + (Number(f.igv)                   || 0), 0),
     total:       noAnuladas.reduce((s, f) => s + (Number(f.total)                 || 0), 0),
-    detraccion:  noAnuladas.reduce((s, f) => s + (Number(f.detraccion)            || 0), 0),
+    // Misma cifra que la celda de cada fila: detracción o retención (impuesto.monto).
+    detraccion:  noAnuladas.reduce((s, f) => s + (Number(f.impuesto?.monto ?? f.detraccion) || 0), 0),
     totalAPagar: noAnuladas.reduce((s, f) => s + (Number(f.totalAPagar)           || 0), 0),
     pagado:      noAnuladas.reduce((s, f) => s + (Number(f.montoPagado)           || 0), 0),
   };
@@ -241,6 +242,7 @@ export default function ListaFacturas() {
   const [crearOpen, setCrearOpen]     = useState(false);
   const [importarOpen, setImportarOpen] = useState(false);
   const [sortBy, setSortBy]           = useState("fecha");
+  const [vista, setVista]             = useState("todas");
 
   const cargar = () =>
     Promise.all([
@@ -396,6 +398,11 @@ export default function ListaFacturas() {
             <option key={valor} value={valor}>{label}</option>
           ))}
         </select>
+        <select value={vista} onChange={(e) => setVista(e.target.value)} className={SELECT}>
+          <option value="todas">Todas las facturas</option>
+          <option value="abiertas">Facturas abiertas</option>
+          <option value="cerradas">Facturas cerradas</option>
+        </select>
         <input name="busqueda" value={filtros.busqueda} onChange={handleFiltro}
           placeholder="Buscar por N° OT, cotización, OC, factura, título, empresa o RUC…"
           className={`${SELECT} flex-1 min-w-52`} />
@@ -405,26 +412,40 @@ export default function ListaFacturas() {
           ))}
         </select>
         {Object.values(filtros).some(Boolean) && (
-          <button onClick={() => setFiltros(FILTROS_VACIO)}
+          <button onClick={() => { setFiltros(FILTROS_VACIO); setVista("todas"); }}
             className="text-sm text-gray-400 hover:text-gray-700 transition">Limpiar</button>
         )}
       </div>
 
-      <TablaFacturas
-        titulo="Facturas"
-        acento="bg-emerald-500"
-        facturas={abiertas}
-        onSelect={setSeleccionada}
-        vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin facturas registradas"}
-      />
+      {vista === "todas" && (
+        <TablaFacturas
+          titulo="Todas las facturas"
+          acento="bg-blue-500"
+          facturas={filtradas}
+          onSelect={setSeleccionada}
+          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin facturas registradas"}
+        />
+      )}
 
-      <TablaFacturas
-        titulo="Facturas cerradas"
-        acento="bg-gray-500"
-        facturas={cerradas}
-        onSelect={setSeleccionada}
-        vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin facturas cerradas"}
-      />
+      {vista === "abiertas" && (
+        <TablaFacturas
+          titulo="Facturas abiertas"
+          acento="bg-emerald-500"
+          facturas={abiertas}
+          onSelect={setSeleccionada}
+          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin facturas abiertas"}
+        />
+      )}
+
+      {vista === "cerradas" && (
+        <TablaFacturas
+          titulo="Facturas cerradas"
+          acento="bg-gray-500"
+          facturas={cerradas}
+          onSelect={setSeleccionada}
+          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin facturas cerradas"}
+        />
+      )}
     </div>
 
     {crearOpen && (
