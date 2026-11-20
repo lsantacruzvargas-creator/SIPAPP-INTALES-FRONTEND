@@ -10,8 +10,10 @@ import {
 const INP    = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 w-full transition";
 const INP_RO = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full cursor-not-allowed";
 
-function calcular(sub, retencionPct = 0) {
+// `afectoIgv: false` = factura de una OC/cotización de trabajo en el extranjero: sin IGV, detracción ni retención.
+function calcular(sub, retencionPct = 0, afectoIgv = true) {
   const s = r2(Number(sub)) || 0;
+  if (!afectoIgv) return { igv: 0, total: s, detraccion: 0, retencion: 0, totalAPagar: s };
   const igv = r2(s * 0.18);
   const total = r2((s + igv));
   // Con retención del IGV no hay detracción — mismo cálculo que routes/facturas.js.
@@ -82,8 +84,10 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
       ? new Date(inicial.fechaSalida).toISOString().split("T")[0] : "",
   });
   const retencionPct = inicial.retencionPorcentaje || 0;
-  const [calc, setCalc]           = useState(calcular(subtotalInicial, retencionPct));
   const [ocVinculada, setOC]      = useState(inicial.ordenCompra || null);
+  // La factura sigue a su OC; el backend lo recalcula igual (routes/facturas.js `afectoIgvDe`).
+  const afectoIgv = (ocVinculada && "afectoIgv" in ocVinculada ? ocVinculada.afectoIgv : inicial.afectoIgv) !== false;
+  const calc = calcular(form.subtotal, retencionPct, afectoIgv);
   const [empresas, setEmpresas]   = useState([]);
   const [buscadorOC, setBOC]      = useState(false);
   const [cot, setCot]             = useState(inicial.cotizacion || null);
@@ -165,7 +169,6 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === "subtotal") setCalc(calcular(value, retencionPct));
     setForm(prev => ({
       ...prev,
       [name]: value,
@@ -178,7 +181,6 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
     setBOC(false);
     setForm(prev => {
       const nuevoSub = prev.subtotal || (oc.subtotal > 0 ? String(oc.subtotal) : prev.subtotal);
-      if (!prev.subtotal && oc.subtotal > 0) setCalc(calcular(oc.subtotal, retencionPct));
       return {
         ...prev,
         empresa:     prev.empresa     || oc.empresa?._id || "",
@@ -423,7 +425,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
               </div>
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div className="text-center">
-                  <p className="text-xs text-gray-400">IGV 18%</p>
+                  <p className="text-xs text-gray-400">{afectoIgv ? "IGV 18%" : "IGV (no afecto)"}</p>
                   <p className="font-semibold text-gray-700">{calc.igv.toFixed(2)}</p>
                 </div>
                 <div className="text-center">

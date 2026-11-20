@@ -316,3 +316,9 @@ export function totalesComprobante(lineas, otrosCargos = 0, montoRedondeo = 0) {
     totalPagar: r2(taxInclusive + (Number(montoRedondeo) || 0)),
   };
 }
+
+// OC de una cotización no afecta a IGV (trabajo en el extranjero): su factura es de exportación (tipo de operación
+// 0200, afectación 40) y todavía no se emite desde la app — ver EmitirComprobante.jsx y ModalCrearFactura.jsx.
+export const MSG_OC_SIN_IGV =
+  "Esta OC es de una cotización sin IGV (trabajo en el extranjero). Su factura es de exportación y todavía no se " +
+  "puede emitir desde aquí: emitirla gravada (IGV 18 %) sería incorrecto.";

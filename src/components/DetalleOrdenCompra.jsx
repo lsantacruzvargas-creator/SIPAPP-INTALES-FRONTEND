@@ -16,13 +16,14 @@ const codigoDeGuia = (g) => `${g.serie}-${String(g.correlativo).padStart(4, "0")
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full transition";
 
-function calcular(sub) {
+// `afectoIgv: false` = OC de una cotización de trabajo en el extranjero: sin IGV ni detracción.
+function calcular(sub, afectoIgv = true) {
   const s = r2(Number(sub)) || 0;
-  const igv = r2(s * 0.18);
+  const igv = afectoIgv ? r2(s * 0.18) : 0;
   const total = r2((s + igv));
   // R.S. 178-2005/SUNAT: aplica solo si el total (con IGV) es >= S/ 701, y el
   // depósito se hace en números enteros (sin decimales).
-  const detraccion = total >= 701 ? r0(total * 0.12) : 0;
+  const detraccion = afectoIgv && total >= 701 ? r0(total * 0.12) : 0;
   return { igv, total, detraccion, totalAPagar: r2((total - detraccion)) };
 }
 
@@ -44,7 +45,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
     fechaSalida: orden.fechaSalida
       ? new Date(orden.fechaSalida).toISOString().split("T")[0] : "",
   });
-  const [calc, setCalc]           = useState(calcular(subtotalInicial));
+  const calc = calcular(form.subtotal, orden.afectoIgv !== false);
   const [empresas, setEmpresas]   = useState([]);
   const [ots, setOts]             = useState([]);
   const [otCargada, setOtCargada] = useState(false);
@@ -222,7 +223,6 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === "subtotal") setCalc(calcular(value));
     setForm(prev => ({
       ...prev,
       [name]: value,
@@ -526,7 +526,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div className="text-center">
-                    <p className="text-xs text-gray-400">IGV 18%</p>
+                    <p className="text-xs text-gray-400">{orden.afectoIgv === false ? "IGV (no afecto)" : "IGV 18%"}</p>
                     <p className="font-semibold text-gray-700">{calc.igv.toFixed(2)}</p>
                   </div>
                   <div className="text-center">

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
 import { r2, r0 } from "../utils/redondeo";
+import { MSG_OC_SIN_IGV } from "../utils/catalogosSunat";
 
 const INP     = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 const INP_DIS = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full";
@@ -15,15 +16,16 @@ const RUC_EMISOR = "20607650811";
 const NOMBRE_EMISOR = "INTALES";
 const SERIE_FACTURA = "F002";
 
-function calcular(subtotal, descuentoPct) {
+// `afectoIgv: false` = OC de una cotización de trabajo en el extranjero: sin IGV ni detracción.
+function calcular(subtotal, descuentoPct, afectoIgv = true) {
   const sub = r2(Number(subtotal)) || 0;
   const desc = Number(descuentoPct) || 0;
   const base = r2(sub * (1 - desc / 100));
-  const igv = r2(base * 0.18);
+  const igv = afectoIgv ? r2(base * 0.18) : 0;
   const total = r2((base + igv));
   // R.S. 178-2005/SUNAT: aplica solo si el total (con IGV) es >= S/ 701, y el
   // depósito se hace en números enteros (sin decimales).
-  const detraccion = total >= 701 ? r0(total * 0.12) : 0;
+  const detraccion = afectoIgv && total >= 701 ? r0(total * 0.12) : 0;
   return { base, igv, total, detraccion, totalAPagar: r2((total - detraccion)) };
 }
 
@@ -96,8 +98,9 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
       numeroGuiaRemision: ocInicial.numeroGuiaRemision || "",
     };
   });
-  const [calc, setCalc]           = useState(() => calcular(ocInicial?.subtotal > 0 ? ocInicial.subtotal : 0, 0));
   const [ocVinculada, setOcVinc]  = useState(ocInicial || null);
+  const afectoIgv = ocVinculada?.afectoIgv !== false;
+  const calc = calcular(form.subtotal, form.descuentoPorcentaje, afectoIgv);
   const [empresas, setEmpresas]   = useState([]);
   const [buscadorOC, setBOC]      = useState(false);
   const [formaPago, setFormaPago] = useState("Contado");
@@ -127,12 +130,6 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === "subtotal" || name === "descuentoPorcentaje") {
-      setCalc(calcular(
-        name === "subtotal" ? value : form.subtotal,
-        name === "descuentoPorcentaje" ? value : form.descuentoPorcentaje,
-      ));
-    }
     setForm(prev => ({
       ...prev,
       [name]: value,
@@ -145,7 +142,6 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
     setBOC(false);
     setForm(prev => {
       const nuevoSub = prev.subtotal || (oc.subtotal > 0 ? String(oc.subtotal) : prev.subtotal);
-      if (!prev.subtotal && oc.subtotal > 0) setCalc(calcular(oc.subtotal, prev.descuentoPorcentaje));
       return {
         ...prev,
         numeroOrdenCompra:  oc.numeroOrden   || prev.numeroOrdenCompra,
@@ -189,6 +185,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
   };
 
   const guardar = async () => {
+    if (!afectoIgv) return setError(MSG_OC_SIN_IGV);
     if (!form.descripcion.trim()) return setError("La descripción es obligatoria.");
     if (!form.subtotal || Number(form.subtotal) <= 0) return setError("El valor unitario debe ser mayor a 0.");
     if (!empresaSeleccionada?.ruc || !/^\d{11}$/.test(empresaSeleccionada.ruc))
@@ -382,7 +379,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
                 step="0.01" min="0" max="100" className={INP} />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block mb-1">IGV 18%</label>
+              <label className="text-xs text-gray-500 block mb-1">{afectoIgv ? "IGV 18%" : "IGV (no afecto)"}</label>
               <input value={calc.igv.toFixed(2)} disabled className={INP_DIS} />
             </div>
             <div>

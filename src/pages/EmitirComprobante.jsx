@@ -23,6 +23,7 @@ import {
   serieValida,
   parsearGuiaRemision,
   formatearGuiaRemision,
+  MSG_OC_SIN_IGV,
 } from "../utils/catalogosSunat";
 import { r2, r0 } from "../utils/redondeo";
 
@@ -474,6 +475,10 @@ export default function EmitirComprobante() {
   };
 
   const emitir = async () => {
+    // Una OC de una cotización no afecta a IGV (trabajo en el extranjero) necesita una factura de exportación
+    // (tipo de operación 0200, afectación 40), que todavía no se emite desde acá: con afectación 10 saldría un
+    // comprobante gravado incorrecto, y con 40 sobre la operación 0101 SUNAT lo rechazaría quemando el correlativo.
+    if (ocOrigen?.afectoIgv === false) return setError(MSG_OC_SIN_IGV);
     setCargando(true);
     setError("");
     try {
@@ -679,6 +684,11 @@ export default function EmitirComprobante() {
               Volver a Órdenes de Compra
             </button>
           )}
+        </div>
+      )}
+      {ocOrigen?.afectoIgv === false && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-3 mb-5">
+          {MSG_OC_SIN_IGV}
         </div>
       )}
       {error && (

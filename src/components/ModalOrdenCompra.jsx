@@ -7,9 +7,9 @@ import { r2 } from "../utils/redondeo";
 const INP    = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 const INP_RO = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full cursor-not-allowed";
 
-function calcular(sub) {
+function calcular(sub, afectoIgv = true) {
   const s = r2(Number(sub)) || 0;
-  const igv = r2(s * 0.18);
+  const igv = afectoIgv ? r2(s * 0.18) : 0;
   return { subtotal: s, igv, total: r2((s + igv)) };
 }
 
@@ -37,7 +37,7 @@ export default function ModalOrdenCompra({ cotizacion, onClose, onCreada }) {
     if (!esAsistente && (!monto || Number(monto) <= 0)) return setError("El monto es obligatorio.");
     setGuardando(true);
     setError("");
-    const calc = calcular(Number(monto)); // `monto` ya es el subtotal sin IGV
+    const calc = calcular(Number(monto), cotizacion.afectoIgv !== false); // `monto` ya es el subtotal sin IGV
     const res = await fetchAuth("/ordenes-compra", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -6,13 +6,14 @@ import { r2, r0 } from "../utils/redondeo";
 const INP     = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 const INP_DIS = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full";
 
-function calcular(sub) {
+// `afectoIgv: false` = OC de una cotización de trabajo en el extranjero: sin IGV ni detracción.
+function calcular(sub, afectoIgv = true) {
   const s = r2(Number(sub)) || 0;
-  const igv = r2(s * 0.18);
+  const igv = afectoIgv ? r2(s * 0.18) : 0;
   const total = r2((s + igv));
   // R.S. 178-2005/SUNAT: aplica solo si el total (con IGV) es >= S/ 701, y el
   // depósito se hace en números enteros (sin decimales).
-  const detraccion = total >= 701 ? r0(total * 0.12) : 0;
+  const detraccion = afectoIgv && total >= 701 ? r0(total * 0.12) : 0;
   return { igv, total, detraccion, totalAPagar: r2((total - detraccion)) };
 }
 
@@ -67,7 +68,6 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
     planta: "", personaContacto: "",
     moneda: "PEN",
   });
-  const [calc, setCalc]          = useState(calcular(0));
   const [cotVinculada, setCot]   = useState(null);
   const [empresas, setEmpresas]  = useState([]);
   const [busquedaEmpresa, setBusquedaEmpresa] = useState("");
@@ -91,10 +91,12 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
   // de OrdenCompra), así que el selector solo decide en la OC independiente.
   const moneda = cotVinculada?.moneda || form.moneda;
   const simbolo = moneda === "USD" ? "US$" : "S/";
+  // Igual que la moneda, la OC hereda `afectoIgv` de su cotización (pre("save") de OrdenCompra).
+  const afectoIgv = cotVinculada?.afectoIgv !== false;
+  const calc = calcular(form.subtotal, afectoIgv);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === "subtotal") setCalc(calcular(value));
     setForm(prev => ({
       ...prev,
       [name]: value,
@@ -132,7 +134,6 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
     setForm(prev => {
       const base = baseSinIgvCotizacion(cot);
       const nuevoSub = prev.subtotal || (base > 0 ? String(base) : prev.subtotal);
-      if (!prev.subtotal && base > 0) setCalc(calcular(base));
       return {
         ...prev,
         titulo:   prev.titulo   || cot.titulo           || "",
@@ -322,7 +323,7 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
                   disabled={esAsistente} step="0.01" min="0" placeholder="0.00" className={INP} />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">IGV 18%</label>
+                <label className="text-xs text-gray-500 block mb-1">{afectoIgv ? "IGV 18%" : "IGV (no afecto)"}</label>
                 <input value={calc.igv.toFixed(2)} disabled className={INP_DIS} />
               </div>
               <div>
