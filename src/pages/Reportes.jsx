@@ -61,7 +61,9 @@ export default function Reportes() {
     });
   }, []);
 
-  const exportarExcel = () => {
+  const exportarExcel = async () => {
+    // El detalle de compras solo va en el Excel: se pide recién al exportar.
+    const detalleCompras = await fetchAuth("/reportes/detalle-compras").then((r) => (r.ok ? r.json() : []));
     const wb = XLSX.utils.book_new();
 
     const filaFacturacion = (r) => ({
@@ -98,6 +100,24 @@ export default function Reportes() {
       "T.C.":               c.primeraDeCadena ? c.tipoCambio : null,
       "Margen OC":          c.primeraDeCadena ? c.margen : null,
     });
+    // Una fila por compra (sin duplicados), precio sin IGV en su moneda; la fecha es la de creación de la OC del cliente.
+    const filaCompra = (c) => ({
+      "N° OT":                c.numeroOT || "",
+      "Sub-OT":               c.subOT || "",
+      "N° OC cliente":        c.numeroOC || "",
+      "Fecha creación OC":    (c.fechasOC || []).map(fecha).join(", "),
+      "Tipo":                 c.tipo,
+      "Código":               c.codigo,
+      "Proveedor":            c.proveedor,
+      "Descripción":          c.descripcion,
+      "Cantidad":             c.cantidad,
+      "Moneda":               c.moneda,
+      "Precio unitario (sin IGV)": c.precioUnitario,
+      "Flete":                c.flete,
+      "Total (sin IGV)":      c.total,
+      "Estado de pago":       c.estadoPago === "pagado" ? "Pagado" : "Pendiente de pago",
+      "Fecha de pago":        c.fechaPago ? fecha(c.fechaPago) : "",
+    });
     const filaOCsinHesActa = (o) => ({
       "N° Orden":   o.numeroOrden,
       "Codigo":     o.codigo,
@@ -124,6 +144,7 @@ export default function Reportes() {
       ["Facturacion x Empresa", data.facturacion.map(filaFacturacion)],
       ["Valorizado Almacen",    data.valorizado.materiales.map(filaMaterial)],
       ["Costos de Fabricacion", data.costosFabricacion.map(filaCostoFabricacion)],
+      ["Detalle de compras",    detalleCompras.map(filaCompra)],
       ["OC sin HES-Acta",       data.ocSinHesActa.map(filaOCsinHesActa)],
       ["Ranking OT Cliente",    data.ranking.map(filaRanking)],
       ["Mora de Pago",          data.mora.map(filaMora)],
