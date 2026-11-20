@@ -79,18 +79,24 @@ export default function Reportes() {
       "Stock":      m.stock,
       "Valorizado": m.valorizado,
     });
+    // Los datos de la OC van solo en la primera OT de cada cadena, para que
+    // sumar las columnas de OC/margen no cuente la misma OC dos veces.
+    // Montos vacíos como celda vacía (no "—"), para que sigan siendo numéricos.
     const filaCostoFabricacion = (c) => ({
       "N° OT":              c.numeroOT,
-      "N° Orden de Compra": c.numeroOrdenCompra || "—",
+      "N° Orden de Compra": c.numeroOrdenCompra || "",
       "Titulo":             c.titulo,
       "Empresa":            nombreEmpresa(c.empresa),
-      "OC sin IGV":         c.ocSubtotal ?? "—",
-      "HH":                 c.costoHH,
-      "HM":                 c.costoHM,
-      "Materiales":         c.costoMateriales,
-      "Servicios":          c.costoServicios,
-      "Costo de Fabricacion": c.costoFabricacion,
-      "Margen":             c.margen ?? "—",
+      "HH (S/)":            c.costoHH,
+      "HM (S/)":            c.costoHM,
+      "Materiales (S/)":    c.costoMateriales,
+      "Servicios (S/)":     c.costoServicios,
+      "Gasto OT (S/)":      c.costoFabricacion,
+      "Moneda OC":          c.primeraDeCadena ? c.ocMoneda || "" : "",
+      "OC sin IGV":         c.primeraDeCadena ? c.ocSubtotal : null,
+      "Gasto total OC":     c.primeraDeCadena ? c.gastoCadena : null,
+      "T.C.":               c.primeraDeCadena ? c.tipoCambio : null,
+      "Margen OC":          c.primeraDeCadena ? c.margen : null,
     });
     const filaOCsinHesActa = (o) => ({
       "N° Orden":   o.numeroOrden,
@@ -122,7 +128,7 @@ export default function Reportes() {
       ["Ranking OT Cliente",    data.ranking.map(filaRanking)],
       ["Mora de Pago",          data.mora.map(filaMora)],
     ].forEach(([nombre, filas]) => {
-      const ws = XLSX.utils.json_to_sheet(filas);
+      const ws = filas.length ? XLSX.utils.json_to_sheet(filas) : XLSX.utils.aoa_to_sheet([["Sin datos"]]);
       XLSX.utils.book_append_sheet(wb, ws, nombre);
     });
 
@@ -227,35 +233,45 @@ export default function Reportes() {
             <th className={`${TH} text-left`}>N° OC</th>
             <th className={`${TH} text-left`}>Título</th>
             <th className={`${TH} text-left`}>Empresa</th>
-            <th className={`${TH} text-right`}>OC sin IGV</th>
             <th className={`${TH} text-right`}>HH</th>
             <th className={`${TH} text-right`}>HM</th>
             <th className={`${TH} text-right`}>Materiales</th>
             <th className={`${TH} text-right`}>Servicios</th>
-            <th className={`${TH} text-right`}>Costo de Fabricación</th>
-            <th className={`${TH} text-right`}>Margen</th>
+            <th className={`${TH} text-right`}>Gasto OT (S/)</th>
+            <th className={`${TH} text-right border-l border-gray-200`}>OC sin IGV</th>
+            <th className={`${TH} text-right`}>Gasto total OC</th>
+            <th className={`${TH} text-right`}>Margen OC</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
           {data.costosFabricacion.length === 0 ? (
-            <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">Sin datos</td></tr>
+            <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">Sin datos</td></tr>
           ) : data.costosFabricacion.map((c) => (
             <tr key={c.otId} className="hover:bg-gray-50 transition-colors">
               <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{c.numeroOT}</td>
               <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{c.numeroOrdenCompra || "—"}</td>
               <td className="px-4 py-3.5 text-gray-600">{c.titulo}</td>
               <td className="px-4 py-3.5 text-gray-700">{nombreEmpresa(c.empresa)}</td>
-              <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">
-                {c.ocSubtotal != null ? money(c.ocSubtotal) : "—"}
-              </td>
               <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{money(c.costoHH)}</td>
               <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{money(c.costoHM)}</td>
               <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{money(c.costoMateriales)}</td>
               <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{money(c.costoServicios)}</td>
               <td className="px-4 py-3.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">{money(c.costoFabricacion)}</td>
-              <td className={`px-4 py-3.5 text-right font-bold tabular-nums whitespace-nowrap ${c.margen == null ? "text-gray-400" : c.margen >= 0 ? "text-green-600" : "text-red-600"}`}>
-                {c.margen != null ? money(c.margen) : "—"}
-              </td>
+              {c.primeraDeCadena && (
+                <>
+                  <td rowSpan={c.otsEnCadena} className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap align-top border-l border-gray-200">
+                    {c.ocSubtotal != null ? money(c.ocSubtotal, c.ocMoneda) : "—"}
+                  </td>
+                  <td rowSpan={c.otsEnCadena} className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap align-top">
+                    {c.gastoCadena != null ? money(c.gastoCadena, c.ocMoneda || "PEN") : "—"}
+                    {c.otsEnCadena > 1 && <p className="text-[11px] font-normal text-gray-400">{c.otsEnCadena} OTs</p>}
+                    {c.tipoCambio && <p className="text-[11px] font-normal text-gray-400">T.C. {c.tipoCambio}</p>}
+                  </td>
+                  <td rowSpan={c.otsEnCadena} className={`px-4 py-3.5 text-right font-bold tabular-nums whitespace-nowrap align-top ${c.margen == null ? "text-gray-400" : c.margen >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {c.margen != null ? money(c.margen, c.ocMoneda) : c.ocMoneda === "USD" ? "Sin T.C." : "—"}
+                  </td>
+                </>
+              )}
             </tr>
           ))}
         </tbody>
