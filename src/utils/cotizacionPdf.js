@@ -395,7 +395,7 @@ export const exportarCotizacionPdf = async (cotizacion) => {
       [
         { content: "FORMA DE PAGO", styles: { fontStyle: "bold", halign: "left" } },
         { content: cotizacion.condicionPago || "—" },
-        { content: "I.G.V (18%)", styles: { fontStyle: "bold" } },
+        { content: cotizacion.afectoIgv === false ? "I.G.V (NO AFECTO)" : "I.G.V (18%)", styles: { fontStyle: "bold" } },
         { content: `${simboloDoc} ${Number(cotizacion.igv || 0).toFixed(2)}`, styles: { halign: "right" } },
       ],
       [

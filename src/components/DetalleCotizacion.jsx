@@ -30,17 +30,18 @@ const codigoDeGuia = (g) => `${g.serie}-${String(g.correlativo).padStart(4, "0")
 // vuelve a aplicar acá (se llama con 0) para no descontar dos veces; el
 // único caso que sí aplica `pct` acá es el subtotal tipeado a mano (sin
 // ítems), donde `sub` es bruto.
-function calcular(sub, descuentoPct = 0) {
+function calcular(sub, descuentoPct = 0, afectoIgv = true) {
   const s = r2(Number(sub)) || 0;
   const pct = Math.min(100, Math.max(0, Number(descuentoPct) || 0));
   const descuento = r2(s * (pct / 100));
   const subtotalConDescuento = r2((s - descuento));
-  const igv = r2(subtotalConDescuento * 0.18);
+  const igv = afectoIgv ? r2(subtotalConDescuento * 0.18) : 0;
   return {
     subtotal: s,
     descuentoPorcentaje: pct,
     descuento,
     subtotalConDescuento,
+    afectoIgv,
     igv,
     total: r2((subtotalConDescuento + igv)),
   };
@@ -53,6 +54,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const [form, setForm] = useState({
     subtotal: subtotalInicial > 0 ? String(subtotalInicial) : "",
     descuentoGlobal: inicial.descuentoGlobal ? String(inicial.descuentoGlobal) : "",
+    afectoIgv: inicial.afectoIgv !== false,
     numeroCotizacion: inicial.numeroCotizacion || inicial.codigo || "",
     empresa: inicial.empresa?._id || "",
     tipo: inicial.tipo || "venta",
@@ -136,7 +138,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   // Desglose mostrado en el modal de "Cerrar cadena" — mismo criterio de
   // detracción SUNAT que ya usa DetalleOrdenCompra.jsx (12% cuando el total
   // supera S/700), calculado sobre el total ya persistido de la cotización.
-  const detraccionCierreAplica = Number(cot.total) > 700;
+  const detraccionCierreAplica = cot.afectoIgv !== false && Number(cot.total) > 700;
   const detraccionCierreMonto = detraccionCierreAplica ? r2(Number(cot.total) * 0.12) : 0;
   const totalAPagarCierre = r2((Number(cot.total) - detraccionCierreMonto));
 
@@ -204,10 +206,10 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const contactoSel = contactosPlanta.find(c => c.nombre === form.personaContacto);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setForm(prev => ({
       ...prev,
-      [name]: value,
+      [name]: type === "checkbox" ? checked : value,
       ...(name === "empresa" ? { planta: "", personaContacto: "" } : {}),
       ...(name === "planta" ? { personaContacto: "" } : {}),
     }));
@@ -360,8 +362,8 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   // descontar dos veces; sin ítems, el subtotal tipeado a mano es bruto y
   // sí necesita que `calcular` le aplique el % una sola vez.
   const totalesMostrados = usarTotalesDeItems
-    ? calcular(subtotalItems, 0)
-    : calcular(form.subtotal, form.descuentoGlobal);
+    ? calcular(subtotalItems, 0, form.afectoIgv)
+    : calcular(form.subtotal, form.descuentoGlobal, form.afectoIgv);
 
   // Arma el objeto para el PDF con lo que hay en pantalla ahora mismo, sin
   // depender de que se haya guardado antes (Guardar cambios cierra el modal).
@@ -379,6 +381,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     moneda: form.moneda,
     subtotal: totalesMostrados.subtotal,
     descuentoGlobal: descuentoGlobalNum,
+    afectoIgv: form.afectoIgv,
     igv: totalesMostrados.igv,
     total: totalesMostrados.total,
     personaContacto: form.personaContacto,
@@ -426,6 +429,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       moneda: form.moneda,
       subtotal: totalesMostrados.subtotal,
       descuentoGlobal: descuentoGlobalNum,
+      afectoIgv: form.afectoIgv,
       igv: totalesMostrados.igv,
       total: totalesMostrados.total,
       numeroGuiaEmision: form.numeroGuiaEmision,
@@ -878,9 +882,15 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                       </p>
                     )}
                   </div>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                    <input type="checkbox" name="afectoIgv" checked={form.afectoIgv} onChange={handleChange}
+                      className="h-4 w-4 accent-sky-600" />
+                    Afecto a IGV (18%)
+                    {!form.afectoIgv && <span className="text-xs text-amber-600">— trabajo en el extranjero, sin IGV</span>}
+                  </label>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="text-center">
-                      <p className="text-xs text-gray-400">IGV 18%</p>
+                      <p className="text-xs text-gray-400">{form.afectoIgv ? "IGV 18%" : "IGV (no afecto)"}</p>
                       <p className="font-semibold text-gray-700">{totalesMostrados.igv.toFixed(2)}</p>
                     </div>
                     <div className="text-center">

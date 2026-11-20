@@ -69,7 +69,7 @@ const titulosOT = (ots) =>
 const totalesDuales = (c, tipoCambio) => {
   const total = Number(c.total) || 0;
   const igv = Number(c.igv) || 0;
-  const sinIgv = r2(igv > 0 ? total - igv : c.total != null ? total / 1.18 : Number(c.subtotal) || 0);
+  const sinIgv = r2(c.afectoIgv === false ? total : igv > 0 ? total - igv : c.total != null ? total / 1.18 : Number(c.subtotal) || 0);
   const tc = Number(tipoCambio) || 0;
   if (c.moneda === "USD") {
     return { pen: tc > 0 ? r2(sinIgv * tc) : null, usd: sinIgv };

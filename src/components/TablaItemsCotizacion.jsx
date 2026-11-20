@@ -374,7 +374,7 @@ export default function TablaItemsCotizacion({
                 {puedeEditar && <td />}
               </tr>
               <tr>
-                <td colSpan={colsIzquierda} className="px-4 py-2 text-right text-xs text-gray-500">IGV 18%</td>
+                <td colSpan={colsIzquierda} className="px-4 py-2 text-right text-xs text-gray-500">{totalesMostrados.afectoIgv === false ? "IGV (no afecto)" : "IGV 18%"}</td>
                 <td className="px-3 py-2 text-right font-medium tabular-nums">{totalesMostrados.igv.toFixed(2)}</td>
                 {puedeEditar && <td />}
               </tr>

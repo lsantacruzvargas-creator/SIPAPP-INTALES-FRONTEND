@@ -14,13 +14,13 @@ const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-n
 // Formato Intales: SUBTOTAL -> IGV (18%) -> TOTAL, con descuento global (%)
 // aplicado sobre el precio unitario de cada ítem — mismo criterio que
 // DetalleCotizacion.jsx (ver comentario ahí para el porqué de `pct=0` con ítems).
-function calcular(sub, descuentoPct = 0) {
+function calcular(sub, descuentoPct = 0, afectoIgv = true) {
   const s = r2(Number(sub)) || 0;
   const pct = Math.min(100, Math.max(0, Number(descuentoPct) || 0));
   const descuento = r2(s * (pct / 100));
   const subtotalConDescuento = r2((s - descuento));
-  const igv = r2(subtotalConDescuento * 0.18);
-  return { subtotal: s, descuentoPorcentaje: pct, descuento, subtotalConDescuento, igv, total: r2((subtotalConDescuento + igv)) };
+  const igv = afectoIgv ? r2(subtotalConDescuento * 0.18) : 0;
+  return { subtotal: s, descuentoPorcentaje: pct, descuento, subtotalConDescuento, afectoIgv, igv, total: r2((subtotalConDescuento + igv)) };
 }
 
 const FORM_VACIO = {
@@ -30,7 +30,7 @@ const FORM_VACIO = {
   validezOferta: "7", tipoDiasEntrega: "habiles",
   lugarEntrega: "",
   numeroGuiaEmision: "", numeroGuiaRemision: "", codigoSap: "", fechaSalida: "",
-  subtotal: "", descuentoGlobal: "", moneda: "PEN",
+  subtotal: "", descuentoGlobal: "", afectoIgv: true, moneda: "PEN",
 };
 
 const PASOS_VACIOS = [
@@ -84,10 +84,10 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
   const contactoSel = contactosPlanta.find(c => c.nombre === form.personaContacto);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setForm(prev => ({
       ...prev,
-      [name]: value,
+      [name]: type === "checkbox" ? checked : value,
       ...(name === "empresa" ? { planta: "", personaContacto: "" } : {}),
       ...(name === "planta" ? { personaContacto: "" } : {}),
     }));
@@ -115,8 +115,8 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
   const subtotalItems = parseFloat(items.reduce((acc, i) => acc + calcSubtotal(i, descuentoGlobalNum), 0).toFixed(2));
   const usarTotalesDeItems = items.length > 0;
   const totalesMostrados = usarTotalesDeItems
-    ? calcular(subtotalItems, 0)
-    : calcular(form.subtotal, form.descuentoGlobal);
+    ? calcular(subtotalItems, 0, form.afectoIgv)
+    : calcular(form.subtotal, form.descuentoGlobal, form.afectoIgv);
 
   const guardar = async () => {
     setIntentoGuardar(true);
@@ -141,6 +141,7 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
       moneda: form.moneda,
       subtotal: totalesMostrados.subtotal,
       descuentoGlobal: descuentoGlobalNum,
+      afectoIgv: form.afectoIgv,
       igv: totalesMostrados.igv,
       total: totalesMostrados.total,
       numeroGuiaEmision: form.numeroGuiaEmision,
@@ -453,9 +454,15 @@ export default function ModalNuevaCotizacion({ onClose, onCreada }) {
                     </p>
                   )}
                 </div>
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                  <input type="checkbox" name="afectoIgv" checked={form.afectoIgv} onChange={handleChange}
+                    className="h-4 w-4 accent-sky-600" />
+                  Afecto a IGV (18%)
+                  {!form.afectoIgv && <span className="text-xs text-amber-600">— trabajo en el extranjero, sin IGV</span>}
+                </label>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="text-center">
-                    <p className="text-xs text-gray-400">IGV 18%</p>
+                    <p className="text-xs text-gray-400">{form.afectoIgv ? "IGV 18%" : "IGV (no afecto)"}</p>
                     <p className="font-semibold text-gray-700">{totalesMostrados.igv.toFixed(2)}</p>
                   </div>
                   <div className="text-center">

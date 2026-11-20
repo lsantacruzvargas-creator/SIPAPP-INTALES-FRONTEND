@@ -67,6 +67,7 @@ export const itemDesdeDb = (item) => ({
 export function baseSinIgvCotizacion(cotizacion) {
   const total = Number(cotizacion.total) || 0;
   const igv = Number(cotizacion.igv) || 0;
+  if (cotizacion.afectoIgv === false && total > 0) return total;
   if (total > 0 && igv > 0) return r2((total - igv));
   return Number(cotizacion.subtotal) || 0;
 }
@@ -79,7 +80,8 @@ export function montoAjustadoItem(cotizacion, item) {
   const subtotalItems = (cotizacion.items || []).reduce((s, i) => s + calcSubtotal(i, dscto), 0);
   const total = Number(cotizacion.total) || 0;
   const igv = Number(cotizacion.igv) || 0;
-  const base = total > 0 && igv > 0 ? total - igv : subtotalItems;
+  const base = cotizacion.afectoIgv === false && total > 0 ? total
+    : total > 0 && igv > 0 ? total - igv : subtotalItems;
   const factor = subtotalItems > 0 ? base / subtotalItems : 1;
   return r2(calcSubtotal(item, dscto) * factor);
 }
