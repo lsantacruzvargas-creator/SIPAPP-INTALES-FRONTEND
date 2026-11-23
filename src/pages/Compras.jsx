@@ -105,7 +105,7 @@ const ACCEPT_DOCUMENTOS = [
 function FilaSeleccionable({
   seleccionado, onToggle, disabledCheckbox, ot, oc, cliente, planta,
   descripcion, observacion, proveedor, precio, flete, moneda, referencia, estado, cantidad, unidad, fecha, detalle, adjuntos,
-  anulacion, onDescartar,
+  anulacion, onDescartar, onCorregirMonto, correcciones,
 }) {
   return (
     <div className={`flex items-start gap-3 border-t border-gray-100 first:border-t-0 py-4 ${anulacion ? "opacity-60" : ""}`}>
@@ -166,11 +166,18 @@ function FilaSeleccionable({
         ) : (
           <>
             {detalle}
+            <HistorialCorrecciones correcciones={correcciones} />
             {adjuntos}
           </>
         )}
       </div>
       <div className="text-right shrink-0 flex flex-col items-end gap-1">
+        {onCorregirMonto && !anulacion && (
+          <button type="button" onClick={onCorregirMonto} title="Corregir monto" aria-label="Corregir monto"
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-amber-200 text-amber-600 text-base leading-none hover:bg-amber-50 hover:text-amber-700 hover:border-amber-400 transition">
+            ✎
+          </button>
+        )}
         {onDescartar && !anulacion && (
           <button type="button" onClick={onDescartar} title="Descartar compra" aria-label="Descartar compra"
             className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 text-lg leading-none hover:bg-red-50 hover:text-red-700 hover:border-red-400 transition">
@@ -196,6 +203,136 @@ function DetallePagoRecepcion({ x }) {
           {x.facturaRecepcion ? ` · Factura ${x.facturaRecepcion}` : ""}
         </p>
       )}
+    </div>
+  );
+}
+
+function HistorialCorrecciones({ correcciones = [] }) {
+  if (correcciones.length === 0) return null;
+  const fh = (d) => formatearFechaHora(d, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return (
+    <div className="mt-2 border-l-4 border-amber-400 bg-amber-50 rounded-r-lg px-3 py-1.5 space-y-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+        Monto corregido ({correcciones.length})
+      </p>
+      {correcciones.map((c) => (
+        <div key={c._id} className="text-xs text-gray-700">
+          <p>
+            {money(c.montoAnterior, c.monedaAnterior)} c/u → <span className="font-semibold">{money(c.montoNuevo, c.monedaNueva)} c/u</span>
+            {(c.fleteAnterior || 0) !== (c.fleteNuevo || 0) && <> · flete {money(c.fleteAnterior, c.monedaAnterior)} → {money(c.fleteNuevo, c.monedaNueva)}</>}
+            <span className="text-gray-400"> — {c.por || "—"}, {fh(c.fecha)}</span>
+          </p>
+          <p className="italic text-gray-600 whitespace-pre-line break-words">{c.motivo}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Solo admin: corrige monto unitario, flete o moneda de una compra ya procesada (aun pagada o recepcionada). El TC se
+// vuelve a tomar en el servidor solo si cambia la moneda.
+function ModalCorregirMonto({ ruta, descripcion, cantidad, unidad, actual, onCancelar, onCorregido }) {
+  const [form, setForm] = useState({
+    montoUnitario: String(actual.monto ?? ""),
+    costoTransporte: String(actual.flete || ""),
+    moneda: actual.moneda || "PEN",
+    motivo: "",
+  });
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [exito, setExito] = useState(false);
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const cant = Number(cantidad) || 0;
+  const totalActual = (Number(actual.monto) || 0) * cant + (Number(actual.flete) || 0);
+  const totalNuevo = (Number(form.montoUnitario) || 0) * cant + (Number(form.costoTransporte) || 0);
+
+  const guardar = async () => {
+    if (!(Number(form.montoUnitario) > 0)) return setError("Ingresa un monto por unidad válido.");
+    if (form.costoTransporte !== "" && !(Number(form.costoTransporte) >= 0)) return setError("El flete no puede ser negativo.");
+    if (!form.motivo.trim()) return setError("El motivo de la corrección es obligatorio.");
+    setError("");
+    setGuardando(true);
+    try {
+      const res = await fetchAuth(ruta, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          montoUnitario: Number(form.montoUnitario),
+          costoTransporte: form.costoTransporte === "" ? 0 : Number(form.costoTransporte),
+          moneda: form.moneda,
+          motivo: form.motivo.trim(),
+        }),
+      });
+      if (!res.ok) {
+        setError((await res.json().catch(() => ({}))).mensaje || "No se pudo corregir el monto.");
+        return;
+      }
+      setExito(true);
+      setTimeout(onCorregido, 1200);
+    } catch {
+      setError("Error de conexión con el servidor");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const input = "mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400";
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+        <div>
+          <h3 className="font-semibold text-gray-800">Corregir monto</h3>
+          <p className="text-sm text-gray-500 mt-0.5 break-words">{descripcion}</p>
+          <p className="text-xs text-gray-400 mt-0.5">Cantidad: {cantidad} {unidad || ""}</p>
+        </div>
+        {exito ? (
+          <p className="text-sm bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3">Monto corregido.</p>
+        ) : (
+          <>
+            <div className="space-y-3">
+              <label className="block">
+                <span className="text-xs font-medium text-gray-600">Moneda *</span>
+                <select name="moneda" value={form.moneda} onChange={handleChange} className={input}>
+                  <option value="PEN">Soles (S/)</option>
+                  <option value="USD">Dólares (US$)</option>
+                </select>
+                {form.moneda !== (actual.moneda || "PEN") && form.moneda === "USD" && (
+                  <span className="text-[11px] text-gray-400">Se guardará con el tipo de cambio vigente de hoy.</span>
+                )}
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-gray-600">Monto por unidad (sin IGV, {simboloMoneda(form.moneda)}) *</span>
+                <input type="number" min="0" step="0.01" name="montoUnitario" value={form.montoUnitario} onChange={handleChange} className={input} />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-gray-600">Flete ({simboloMoneda(form.moneda)}, opcional)</span>
+                <input type="number" min="0" step="0.01" name="costoTransporte" value={form.costoTransporte} onChange={handleChange} placeholder="0.00" className={input} />
+              </label>
+              <p className="text-xs text-gray-500">
+                Total: {money(totalActual, actual.moneda)} → <span className="font-semibold text-gray-800">{money(totalNuevo, form.moneda)}</span>
+              </p>
+              <label className="block">
+                <span className="text-xs font-medium text-gray-600">Motivo de la corrección *</span>
+                <textarea name="motivo" value={form.motivo} onChange={handleChange} rows={3} maxLength={500}
+                  placeholder="Ej. se registró el precio total en lugar del unitario"
+                  className={`${input} resize-none`} />
+              </label>
+            </div>
+            {error && <p className="text-xs text-red-500">{error}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={onCancelar} disabled={guardando}
+                className="text-sm px-4 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button type="button" onClick={guardar} disabled={guardando}
+                className="text-sm px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 font-medium disabled:opacity-60">
+                {guardando ? "Guardando…" : "Guardar corrección"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -308,6 +445,8 @@ export default function Compras() {
   const [porDescartar, setPorDescartar] = useState(null);
   const [descartando, setDescartando] = useState(false);
   const [errorDescarte, setErrorDescarte] = useState("");
+  // { tipo: "material" | "servicio", x }
+  const [porCorregir, setPorCorregir] = useState(null);
   const usuario = getUsuario();
   // "Procesar solicitud" (elegir proveedor + monto) — vendedor, admin, jefatura y coordinadora.
   const puedeProcesar = ["vendedor", "admin", "jefatura", "coordinadora"].includes(usuario?.rol);
@@ -449,6 +588,8 @@ export default function Compras() {
 
   // Descartar solo antes de pagar: una compra pagada ya suma al costo de la OT.
   const puedeDescartar = puedeProcesar && (tab === "por-procesar" || tab === "pendiente-pago");
+  // Corregir monto de una compra ya procesada (aun pagada o recepcionada) — solo admin.
+  const puedeCorregir = usuario?.rol === "admin" && tab !== "por-procesar";
   const datosAnulacion = (x) => x.anulado
     ? {
         motivo: x.motivoAnulacion,
@@ -627,6 +768,8 @@ export default function Compras() {
                   })()}
                   anulacion={datosAnulacion(it)}
                   onDescartar={puedeDescartar ? () => setPorDescartar({ tipo: "material", x: it }) : null}
+                  onCorregirMonto={puedeCorregir ? () => setPorCorregir({ tipo: "material", x: it }) : null}
+                  correcciones={it.correccionesMonto}
                   cantidad={it.cantidad}
                   unidad={it.materialAsociado?.unidad}
                   fecha={fmtFecha(it.fechaProcesado || it.createdAt)}
@@ -675,6 +818,8 @@ export default function Compras() {
                   })()}
                   anulacion={datosAnulacion(s)}
                   onDescartar={puedeDescartar ? () => setPorDescartar({ tipo: "servicio", x: s }) : null}
+                  onCorregirMonto={puedeCorregir ? () => setPorCorregir({ tipo: "servicio", x: s }) : null}
+                  correcciones={s.correccionesMonto}
                   cantidad={s.cantidad}
                   unidad=""
                   fecha={fmtFecha(s.fechaProcesado || s.createdAt)}
@@ -723,6 +868,26 @@ export default function Compras() {
           onConfirmar={(datos) => aplicarASeleccion("recepcionar", datos)}
         />
       )}
+
+      {porCorregir && (() => {
+        const { tipo, x } = porCorregir;
+        const esMat = tipo === "material";
+        return (
+          <ModalCorregirMonto
+            ruta={esMat ? `/requerimientos/${x.requerimiento._id}/items/${x._id}/corregir-monto` : `/servicios-externos/${x._id}/corregir-monto`}
+            descripcion={esMat ? descripcionMaterial(x) : (x.material || x.tipoTrabajo)}
+            cantidad={x.cantidad}
+            unidad={esMat ? x.materialAsociado?.unidad : ""}
+            actual={{
+              monto: esMat ? x.montoUnitario : x.costo,
+              flete: x.costoTransporte,
+              moneda: x.moneda,
+            }}
+            onCancelar={() => setPorCorregir(null)}
+            onCorregido={async () => { setPorCorregir(null); await cargar(); }}
+          />
+        );
+      })()}
 
       {porDescartar && (
         <PromptAccion
