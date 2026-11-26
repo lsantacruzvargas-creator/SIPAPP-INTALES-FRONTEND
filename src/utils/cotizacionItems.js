@@ -65,6 +65,8 @@ export const itemDesdeDb = (item) => ({
 // Monto sin IGV de cada ítem con el descuento global, escalado a la base de la
 // cotización (`total - igv`) según su peso en el subtotal: así la suma de todas
 // las OCs parciales por ítems da la base sin IGV de la cotización.
+// Copia en Backend/src/utils/partidasOC.js (`calcSubtotal`, `montoAjustadoItem`, que fija el monto
+// de cada partida de OC): cambiar uno obliga a cambiar el otro.
 export function montoAjustadoItem(cotizacion, item) {
   const dscto = Number(cotizacion.descuentoGlobal) || 0;
   const subtotalItems = (cotizacion.items || []).reduce((s, i) => s + calcSubtotal(i, dscto), 0);
