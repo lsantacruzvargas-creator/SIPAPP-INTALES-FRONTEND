@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
-import { veFacturas, rolDeSesion } from "../utils/roles";
+import { veFacturas, rolDeSesion } from "../utils/roles";
+
 import { anioLima, mesLima } from "../utils/fecha";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
@@ -403,7 +404,7 @@ export default function Dashboard() {
         <div>
           <h2 className="text-xl font-bold text-gray-800">
             Bienvenido, {usuario?.nombre}
-          </h2>
+          </h2>Intales
           <p className="text-sm text-gray-400 mt-0.5">Panel principal — SIP App Metalmecanica</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
