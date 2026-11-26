@@ -11,6 +11,23 @@ export const ocLegadoLibre = (o) => !o?.anulado && !(o?.partidas || []).length
 // se envió a SUNAT (el correlativo quedó consumido).
 export const noEnviado = (c) => c?.estado === "ANULADO" && !c.anuladoPor;
 
+export const estadoDePartida = (oc, p) => oc?.estadoFacturacion?.partidas?.find((e) => idDe(e._id) === idDe(p?._id));
+export const partidasFacturadas = (oc) =>
+  (oc?.estadoFacturacion?.partidas || []).filter((e) => e.estado === "facturada" || e.estado === "pagada").length;
+export const numerosFacturaDe = (oc) => (oc?.estadoFacturacion?.numerosFactura || "").split(/\s*,\s*/).filter(Boolean);
+
+// Con facturación por partidas una cadena puede tener varias facturas: se guardan todas para que la
+// búsqueda encuentre cualquiera de sus números.
+export function numerosFacturaPorCadena(facturas) {
+  const m = new Map();
+  (facturas || []).forEach((f) => {
+    if (!f.numeroFactura || f.numeroDocumento == null) return;
+    const previo = m.get(f.numeroDocumento);
+    m.set(f.numeroDocumento, previo ? `${previo}, ${f.numeroFactura}` : f.numeroFactura);
+  });
+  return m;
+}
+
 const lineaUnica = (descripcion, monto, unidad) => {
   const valor = r2(Number(monto) || 0);
   return {

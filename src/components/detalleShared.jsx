@@ -274,6 +274,30 @@ export const bloqueadoPorCadenaCerrada = (estadoCadena, rolActual) =>
 export const money = (v, moneda = "PEN") =>
   (moneda === "USD" ? "US$ " : "S/ ") + Number(v ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 });
 
+// Estado de facturación de una partida (estadoFacturacion.partidas[i]). Fuera de finanzas (asistente,
+// coordinadora) el backend reduce `factura` a { numeroFactura }: sin montos ni estadoPago.
+export function CeldaFacturaPartida({ estado }) {
+  if (!estado) return <span className="text-gray-300">—</span>;
+  if (estado.estado === "reservada") {
+    return <span title="Un comprobante en emisión incluye esta partida."><Chip className="bg-amber-100 text-amber-700">En emisión</Chip></span>;
+  }
+  if (estado.factura) {
+    // Una partida "pagada" con su factura aún por cobrar es una OC marcada como pagada a mano.
+    const pago = estado.estado === "pagada" ? "pagado" : estado.factura.estadoPago;
+    return (
+      <span className="flex flex-wrap items-center gap-1.5">
+        <span className="font-mono text-xs text-gray-700 whitespace-nowrap">{estado.factura.numeroFactura || estado.factura.codigo}</span>
+        {pago
+          ? <Chip className={badgePago(pago)}>{pago}</Chip>
+          : <Chip className="bg-blue-100 text-blue-700">facturada</Chip>}
+      </span>
+    );
+  }
+  if (estado.estado === "pagada") return <Chip className={badgePago("pagado")}>pagada</Chip>;
+  if (estado.estado === "facturada") return <Chip className="bg-blue-100 text-blue-700">facturada</Chip>;
+  return <span className="text-xs text-gray-400">Sin facturar</span>;
+}
+
 // Una OC tiene una partida por cotización (o más, si la anterior ya está tomada). En las tarjetas de OC
 // y Factura vistas desde una cotización u OT: posición "n/N" de las partidas de esa cotización o, con
 // `partidasIds`, de las que cubre la factura.

@@ -163,12 +163,13 @@ export default function Sidebar() {
   // - Compras (SC → licitación → OC a proveedor): admin, jefatura y vendedor.
   // - Tesorería (por pagar/cobrar, movimientos, SIRE): admin, jefatura, facturacion, tesorero y contador.
   // - tesorero y contador: Tesorería, Facturas y Fact. Electrónica (ver y descargar).
+  // - tesorero además: Órdenes de Compra de solo lectura, salvo "Marcar pagada" en el detalle.
   // - Contabilidad (plan de cuentas, asientos): admin, jefatura, tesorero y contador; escriben admin y contador.
   const NAV_ITEMS = [
     { to: "/dashboard", label: "Dashboard", Icon: IconHome, show: esAdmin || esJefatura || esPlanner || esCoordinadora || esAsistente },
     { to: "/ordenes-trabajo", label: "Orden de Trabajo", Icon: IconClipboard, show: esComercial || esTecnico || esSupervisor || esPlanner || esJefatura || esCoordinadora },
     { to: "/cotizaciones", label: "Cotizaciones", Icon: IconDocument, show: esComercial || esPlanner || esJefatura || esCoordinadora },
-    { to: "/ordenes-compra", label: "Órdenes de Compra", Icon: IconCart, show: esComercial || esFacturacion || esJefatura || esCoordinadora },
+    { to: "/ordenes-compra", label: "Órdenes de Compra", Icon: IconCart, show: esComercial || esFacturacion || esJefatura || esCoordinadora || usuario?.rol === "tesorero" },
     { to: "/facturas", label: "Facturas", Icon: IconReceipt, show: esAdmin || esFacturacion || esJefatura || esFinanzas },
     { to: "/reportes", label: "Reportes", Icon: IconChartBar, show: esAdmin || esFacturacion || esJefatura },
     // Administración (asistente) no ve "Fact. Electrónica" — en su lugar

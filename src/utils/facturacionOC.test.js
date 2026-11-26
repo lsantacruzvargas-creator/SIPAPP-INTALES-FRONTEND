@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { prellenadoDesdeOC, ocLegadoLibre, noEnviado } from "./facturacionOC.js";
+import {
+  prellenadoDesdeOC, ocLegadoLibre, noEnviado, estadoDePartida, partidasFacturadas, numerosFacturaDe, numerosFacturaPorCadena,
+} from "./facturacionOC.js";
 
 const cotA = {
   _id: "cA", titulo: "Mantenimiento A", tipo: "servicio", moneda: "USD", descuentoGlobal: 0, total: 354, igv: 54,
@@ -112,4 +114,39 @@ test("noEnviado: ANULADO sin la NC que lo anuló", () => {
   assert.equal(noEnviado({ estado: "ANULADO", anuladoPor: null, sunat: { mensaje: "No enviado: …" } }), true);
   assert.equal(noEnviado({ estado: "ANULADO", anuladoPor: "nc1" }), false);
   assert.equal(noEnviado({ estado: "ACEPTADO" }), false);
+});
+
+test("estado por partida, partidas facturadas y números de factura de la OC", () => {
+  const oc = {
+    partidas: [{ _id: "p1" }, { _id: "p2" }, { _id: "p3" }],
+    estadoFacturacion: {
+      estado: "facturada parcial",
+      numerosFactura: "F001-15,  F001-21",
+      partidas: [
+        { _id: "p1", estado: "pagada", factura: { numeroFactura: "F001-15" } },
+        { _id: "p2", estado: "facturada", factura: { numeroFactura: "F001-21" } },
+        { _id: "p3", estado: "reservada", factura: null },
+      ],
+    },
+  };
+  assert.equal(estadoDePartida(oc, { _id: "p2" }).estado, "facturada");
+  assert.equal(estadoDePartida(oc, { _id: "p9" }), undefined);
+  assert.equal(partidasFacturadas(oc), 2);
+  assert.deepEqual(numerosFacturaDe(oc), ["F001-15", "F001-21"]);
+  assert.deepEqual(numerosFacturaDe({}), []);
+  assert.equal(partidasFacturadas({}), 0);
+});
+
+test("numerosFacturaPorCadena: todas las facturas con número de cada cadena", () => {
+  const m = numerosFacturaPorCadena([
+    { numeroDocumento: 7, numeroFactura: "F001-1" },
+    { numeroDocumento: 7, numeroFactura: "F001-2" },
+    { numeroDocumento: 8, numeroFactura: "" },
+    { numeroDocumento: null, numeroFactura: "F001-3" },
+    { numeroDocumento: 0, numeroFactura: "F001-4" },
+  ]);
+  assert.equal(m.get(7), "F001-1, F001-2");
+  assert.equal(m.has(8), false);
+  assert.equal(m.get(0), "F001-4");
+  assert.equal(m.size, 2);
 });

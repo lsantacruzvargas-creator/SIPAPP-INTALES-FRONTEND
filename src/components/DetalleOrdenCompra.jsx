@@ -9,7 +9,7 @@ import { idDe, montoAjustadoItem } from "../utils/cotizacionItems";
 import ModalDetalleGuia from "./ModalDetalleGuia";
 import ModalReporteCosto from "./ModalReporteCosto";
 import {
-  FlujoNegocio, TarjetaRelacion, Chip,
+  FlujoNegocio, TarjetaRelacion, Chip, CeldaFacturaPartida,
   badgePago, badgeOT, money, BotonAnular, BotonDesanular, BannerAnulado,
 } from "./detalleShared";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
@@ -32,30 +32,6 @@ function calcular(sub, afectoIgv = true) {
   // depósito se hace en números enteros (sin decimales).
   const detraccion = afectoIgv && total >= 701 ? r0(total * 0.12) : 0;
   return { igv, total, detraccion, totalAPagar: r2(total - detraccion) };
-}
-
-// Fuera de finanzas (asistente, coordinadora) el backend reduce `factura` a { numeroFactura }: sin
-// montos ni estadoPago, solo el estado de la partida.
-function CeldaFacturaPartida({ estado }) {
-  if (!estado) return <span className="text-gray-300">—</span>;
-  if (estado.estado === "reservada") {
-    return <span title="Un comprobante en emisión incluye esta partida."><Chip className="bg-amber-100 text-amber-700">En emisión</Chip></span>;
-  }
-  if (estado.factura) {
-    // Una partida "pagada" con su factura aún por cobrar es una OC marcada como pagada a mano.
-    const pago = estado.estado === "pagada" ? "pagado" : estado.factura.estadoPago;
-    return (
-      <span className="flex flex-wrap items-center gap-1.5">
-        <span className="font-mono text-xs text-gray-700 whitespace-nowrap">{estado.factura.numeroFactura || estado.factura.codigo}</span>
-        {pago
-          ? <Chip className={badgePago(pago)}>{pago}</Chip>
-          : <Chip className="bg-blue-100 text-blue-700">facturada</Chip>}
-      </span>
-    );
-  }
-  if (estado.estado === "pagada") return <Chip className={badgePago("pagado")}>pagada</Chip>;
-  if (estado.estado === "facturada") return <Chip className="bg-blue-100 text-blue-700">facturada</Chip>;
-  return <span className="text-xs text-gray-400">Sin facturar</span>;
 }
 
 export default function DetalleOrdenCompra({ orden, onClose, onGuardada, facturaVinculada, onNavegar }) {
