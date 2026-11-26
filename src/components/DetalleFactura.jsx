@@ -8,8 +8,10 @@ import ModalMovimiento from "./tesoreria/ModalMovimiento";
 import ConfirmacionAccion from "./ConfirmacionAccion";
 import {
   FlujoNegocio, TarjetaRelacion, Chip,
-  badgeOT, badgePago, money, BotonAnular, BannerAnulado, bloqueadoPorCadenaCerrada,
+  badgeOT, badgePago, money, BotonAnular, BannerAnulado,
 } from "./detalleShared";
+import { bloqueadoPorPago } from "../utils/bloqueoPago";
+import { ocLegadoLibre } from "../utils/facturacionOC";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "./BarraEdicion";
 import { errorDelFormulario } from "../utils/bloqueo";
@@ -34,9 +36,9 @@ function BuscadorOC({ onSelect, onClose }) {
   useEffect(() => {
     fetchAuth("/ordenes-compra").then(r => r.ok && r.json()).then(d => setLista(d || []));
   }, []);
-  const filtradas = lista.filter(o => !q ||
+  const filtradas = lista.filter(o => ocLegadoLibre(o) && (!q ||
     [o.numeroOrden, o.titulo, o.empresa?.razonSocial, o.codigo]
-      .some(v => v?.toLowerCase().includes(q.toLowerCase())));
+      .some(v => v?.toLowerCase().includes(q.toLowerCase()))));
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh]">
@@ -50,7 +52,7 @@ function BuscadorOC({ onSelect, onClose }) {
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-1">
           {filtradas.length === 0
-            ? <p className="text-sm text-gray-400 text-center py-8">Sin resultados</p>
+            ? <p className="text-sm text-gray-400 text-center py-8">Sin resultados. Aquí solo aparecen las OC sin partidas y sin facturar; una OC por partidas se factura desde su detalle.</p>
             : filtradas.map(o => (
               <button key={o._id} onClick={() => onSelect(o)}
                 className="w-full text-left px-4 py-3 rounded-xl hover:bg-blue-50 border border-transparent hover:border-blue-100 transition">
@@ -95,7 +97,6 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
   const [buscadorOC, setBOC]      = useState(false);
   const [cot, setCot]             = useState(inicial.cotizacion || null);
   const [ot, setOt]               = useState(null);
-  const [consolidadas, setConsolidadas] = useState([]);
   const [informes, setInformes]   = useState([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState("");
@@ -112,8 +113,11 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
   // el resto de vistas de detalle (ver DetalleOrdenTrabajo/DetalleCotizacion/
   // DetalleOrdenCompra.jsx).
   const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(rolActual);
-  const cadenaCerrada = bloqueadoPorCadenaCerrada(inicial.estadoCadena, rolActual);
-  const bloqueo = useBloqueoEdicion("factura", inicial._id, inicial.updatedAt, { autoEditar: puedeEditar && !inicial.anulado && !cadenaCerrada });
+  const bloqueada = bloqueadoPorPago(inicial, rolActual);
+  // La OC y sus partidas marcan qué está facturado: una vez guardada, o con CPE aceptado, no cambia (FP-21; el
+  // PUT lo rechaza). Solo una OC elegida aquí y aún sin guardar se puede cambiar o quitar.
+  const ocFija = !!inicial.ordenCompra || (inicial.partidasOC || []).length > 0 || emitida;
+  const bloqueo = useBloqueoEdicion("factura", inicial._id, inicial.updatedAt, { autoEditar: puedeEditar && !inicial.anulado && !bloqueada });
 
   const abrirOC = async () => {
     if (!ocVinculada || cargandoOC) return;
@@ -159,24 +163,6 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
         (ots && cotResuelta && ots.find(o => (o.cotizacion?._id || o.cotizacion) === cotResuelta._id)) ||
         null;
       setOt(otResuelta || null);
-
-      // OC consolidada: la factura cubre varias cotizaciones enteras, cada una con su OT.
-      const lineas = ocVinculada?.lineas || [];
-      if (lineas.length && cots && ots) {
-        const partes = lineas.map((l) => {
-          const id = l.cotizacion?._id || l.cotizacion;
-          return {
-            linea: l,
-            cot: cots.find(c => c._id === id) || null,
-            ots: ots.filter(o => !o.ordenPadre && (o.cotizacion?._id || o.cotizacion) === id),
-          };
-        });
-        setConsolidadas(partes);
-        const idsOT = partes.flatMap(p => p.ots.map(o => o._id));
-        Promise.all(idsOT.map(id => fetchAuth(`/informes?ordenTrabajo=${id}`).then(r => (r.ok ? r.json() : []))))
-          .then(listas => setInformes(listas.flat()));
-        return;
-      }
 
       if (otResuelta) {
         fetchAuth(`/informes?ordenTrabajo=${otResuelta._id}`)
@@ -312,8 +298,8 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
                   <Chip className="mt-0.5 bg-white/20 text-white">{inicial.estadoPago}</Chip>
                 )}
               </div>
-              {!inicial.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} />}
-              {!inicial.anulado && !cadenaCerrada && puedeEditar && (emitida && inicial.comprobante ? (
+              {!inicial.anulado && !bloqueada && <BarraEdicion bloqueo={bloqueo} />}
+              {!inicial.anulado && !bloqueada && puedeEditar && (emitida && inicial.comprobante ? (
                 <div className="text-right shrink-0">
                   <button type="button"
                     onClick={() => navigate("/facturacion-electronica/emitir", { state: { comprobanteId: inicial.comprobante?._id || inicial.comprobante, tipoDocDestino: "07" } })}
@@ -323,7 +309,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
                   <p className="text-[10px] text-white/60 leading-tight">Aceptada por SUNAT: se anula con una nota de crédito</p>
                 </div>
               ) : <BotonAnular onAnular={anular} />)}
-              {!inicial.anulado && !cadenaCerrada && puedeEditar && (
+              {!inicial.anulado && !bloqueada && puedeEditar && (
                 <button onClick={() => guardar()} disabled={guardando || !bloqueo.editando}
                   className="bg-white text-emerald-700 text-sm px-5 py-2 rounded-lg hover:bg-emerald-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">
                   {guardando ? "Guardando…" : "Guardar cambios"}
@@ -351,7 +337,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
 
           {/* Datos editables */}
           <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 self-start">
-          <fieldset disabled={inicial.anulado || cadenaCerrada || !puedeEditar || !bloqueo.editando} className="space-y-5 min-w-0">
+          <fieldset disabled={inicial.anulado || bloqueada || !puedeEditar || !bloqueo.editando} className="space-y-5 min-w-0">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-5 rounded-full bg-emerald-500" />
               <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Datos de la factura</h2>
@@ -361,9 +347,9 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
               <BannerAnulado motivo={inicial.motivoAnulacion} por={inicial.anuladoPor} fecha={inicial.fechaAnulacion} />
             )}
 
-            {!inicial.anulado && cadenaCerrada && (
+            {!inicial.anulado && bloqueada && (
               <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                La cadena de este documento está cerrada (factura pagada) — de solo lectura. Solo Jefatura puede editarlo.
+                La factura está pagada (o su cadena está cerrada) — de solo lectura. Solo Jefatura puede editarla.
               </p>
             )}
 
@@ -380,11 +366,15 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
                     <span className="font-mono text-xs text-blue-600 flex-1">
                       {oc.codigo}{oc.numeroOrden ? ` · ${oc.numeroOrden}` : ""}
                     </span>
-                    <button onClick={() => setBOC(true)}
-                      className="text-xs text-gray-400 hover:text-blue-600 underline shrink-0">Cambiar</button>
-                    <button onClick={() => setOC(null)}
-                      className="text-gray-300 hover:text-red-400 text-lg leading-none">✕</button>
+                    {!ocFija && (<>
+                      <button type="button" onClick={() => setBOC(true)}
+                        className="text-xs text-gray-400 hover:text-blue-600 underline shrink-0">Cambiar</button>
+                      <button type="button" onClick={() => setOC(null)} aria-label="Quitar la orden de compra elegida"
+                        className="text-gray-300 hover:text-red-400 text-lg leading-none">✕</button>
+                    </>)}
                   </div>
+                ) : ocFija ? (
+                  <p className="px-3 py-2 text-sm text-gray-400 bg-gray-50 border border-gray-100 rounded-lg">Sin orden de compra</p>
                 ) : (
                   <button type="button" onClick={() => setBOC(true)}
                     className="w-full text-xs border border-dashed border-gray-300 px-3 py-2 rounded-lg hover:bg-gray-50 text-blue-600 transition text-left">
@@ -526,43 +516,19 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
               <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Relaciones</h2>
             </div>
 
-            {consolidadas.length > 0 ? (
-              <>
-                {consolidadas.map(({ linea, cot: c }) => (
-                  <TarjetaRelacion key={linea.cotizacion?._id || linea.cotizacion} tipo="cotizacion"
-                    codigo={c?.codigo} numero={c?.numeroCotizacion}
-                    onClick={c ? () => onNavegar?.({ tipo: "cotizacion", data: c }) : undefined}>
-                    <p className="text-sm text-gray-700 line-clamp-2">{linea.titulo || c?.titulo}</p>
-                    {puedeVerPrecios && <p className="text-xs text-gray-500">{money(linea.subtotal, c?.moneda)} sin IGV</p>}
-                  </TarjetaRelacion>
-                ))}
-                {consolidadas.flatMap(p => p.ots).map(o => (
-                  <TarjetaRelacion key={o._id} tipo="ot" codigo={o.codigo} numero={o.numeroOT}
-                    onClick={() => onNavegar?.({ tipo: "ot", data: o })}>
-                    {o.estado && <Chip className={badgeOT(o.estado)}>{o.estado}</Chip>}
-                    {o.personalEncargado?.nombre && (
-                      <p className="text-xs text-gray-500">Técnico: {o.personalEncargado.nombre}</p>
-                    )}
-                  </TarjetaRelacion>
-                ))}
-              </>
-            ) : (
-              <>
-                <TarjetaRelacion tipo="cotizacion" codigo={cot?.codigo} numero={cot?.numeroCotizacion} vacio={!cot}
-                  onClick={cot ? () => onNavegar?.({ tipo: "cotizacion", data: cot }) : undefined}>
-                  <p className="text-sm text-gray-700 line-clamp-2">{cot?.titulo}</p>
-                  {puedeVerPrecios && cot?.total > 0 && <p className="text-xs text-gray-500">{money(cot.total)}</p>}
-                </TarjetaRelacion>
+            <TarjetaRelacion tipo="cotizacion" codigo={cot?.codigo} numero={cot?.numeroCotizacion} vacio={!cot}
+              onClick={cot ? () => onNavegar?.({ tipo: "cotizacion", data: cot }) : undefined}>
+              <p className="text-sm text-gray-700 line-clamp-2">{cot?.titulo}</p>
+              {puedeVerPrecios && cot?.total > 0 && <p className="text-xs text-gray-500">{money(cot.total)}</p>}
+            </TarjetaRelacion>
 
-                <TarjetaRelacion tipo="ot" codigo={ot?.codigo} numero={ot?.numeroOT} vacio={!ot}
-                  onClick={ot ? () => onNavegar?.({ tipo: "ot", data: ot }) : undefined}>
-                  {ot?.estado && <Chip className={badgeOT(ot.estado)}>{ot.estado}</Chip>}
-                  {ot?.personalEncargado?.nombre && (
-                    <p className="text-xs text-gray-500">Técnico: {ot.personalEncargado.nombre}</p>
-                  )}
-                </TarjetaRelacion>
-              </>
-            )}
+            <TarjetaRelacion tipo="ot" codigo={ot?.codigo} numero={ot?.numeroOT} vacio={!ot}
+              onClick={ot ? () => onNavegar?.({ tipo: "ot", data: ot }) : undefined}>
+              {ot?.estado && <Chip className={badgeOT(ot.estado)}>{ot.estado}</Chip>}
+              {ot?.personalEncargado?.nombre && (
+                <p className="text-xs text-gray-500">Técnico: {ot.personalEncargado.nombre}</p>
+              )}
+            </TarjetaRelacion>
 
             <TarjetaRelacion
               tipo="informe"
@@ -582,7 +548,6 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
               onClick={oc ? abrirOC : undefined} cargando={cargandoOC}>
               {oc?.titulo && <p className="text-xs text-gray-500 line-clamp-2">{oc.titulo}</p>}
               {puedeVerPrecios && (oc?.monto || oc?.total) > 0 && <p className="text-xs text-gray-500">{money(oc.monto ?? oc.total)}</p>}
-              {consolidadas.length > 0 && <Chip className="bg-indigo-100 text-indigo-700">Consolidada · {consolidadas.length} cotizaciones</Chip>}
             </TarjetaRelacion>
 
             <TarjetaRelacion tipo="factura" codigo={inicial.codigo} numero={inicial.numeroFactura} actual>

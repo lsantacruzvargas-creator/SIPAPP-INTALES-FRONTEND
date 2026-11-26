@@ -9,6 +9,7 @@ import {
   estadoComprobanteClase,
 } from "../utils/catalogosSunat";
 import { generarComprobantePdf } from "../utils/comprobantePdf";
+import { noEnviado } from "../utils/facturacionOC";
 
 const FILTROS_VACIO = { tipoDoc: "", estado: "", desde: "", hasta: "", receptorDoc: "" };
 const SELECT = "input-field w-auto";
@@ -18,6 +19,22 @@ const ESTADOS = ESTADO_COMPROBANTE.some((e) => e.valor === "EN_PROCESO")
   ? ESTADO_COMPROBANTE
   : [...ESTADO_COMPROBANTE, { valor: "EN_PROCESO", label: "En proceso", cls: "bg-yellow-100 text-yellow-800" }];
 const estadoInfo = (v) => ESTADOS.find((e) => e.valor === v) ?? { label: v, cls: estadoComprobanteClase(v) };
+
+function ChipEstado({ c }) {
+  if (noEnviado(c)) {
+    return (
+      <span title={c.sunat?.mensaje || undefined}
+        className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200">
+        No enviado
+      </span>
+    );
+  }
+  return (
+    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${estadoInfo(c.estado).cls}`}>
+      {estadoInfo(c.estado).label}
+    </span>
+  );
+}
 
 const TIPO_DOC_CLASE = {
   "01": "bg-blue-100 text-blue-700",
@@ -286,9 +303,7 @@ export default function ListaComprobantes() {
                   </td>
                   <td className="px-4 py-3 text-center text-gray-500">{formatearFecha(c.fechaEmision)}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${estadoInfo(c.estado).cls}`}>
-                      {estadoInfo(c.estado).label}
-                    </span>
+                    <ChipEstado c={c} />
                   </td>
                 </tr>
               ))
@@ -330,10 +345,18 @@ export default function ListaComprobantes() {
                 </h3>
                 <span className="font-mono text-xs text-gray-400">{seleccionado.nombreArchivo}</span>
               </div>
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${estadoInfo(seleccionado.estado).cls}`}>
-                {estadoInfo(seleccionado.estado).label}
-              </span>
+              <ChipEstado c={seleccionado} />
             </div>
+
+            {noEnviado(seleccionado) && (
+              <div className="bg-orange-50 border border-orange-200 text-orange-800 text-sm rounded-lg px-4 py-3 mb-4">
+                <p className="font-medium">No enviado a SUNAT.</p>
+                {seleccionado.sunat?.mensaje && <p className="mt-1">{seleccionado.sunat.mensaje.replace(/^No enviado:?\s*/i, "")}</p>}
+                <p className="mt-1 text-xs">
+                  El correlativo se consumió, pero el comprobante nunca se envió: no existe en SUNAT ni reserva partidas de la orden de compra.
+                </p>
+              </div>
+            )}
 
             {/* ERROR = SUNAT no respondió (el correlativo ya se consumió): no es un rechazo. */}
             {seleccionado.estado === "ERROR" || (seleccionado.estado === "RECHAZADO" && /^\[HTTP\]/i.test(seleccionado.sunat?.mensaje || "")) ? (

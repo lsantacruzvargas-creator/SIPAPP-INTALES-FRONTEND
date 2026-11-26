@@ -6,6 +6,7 @@ import { fechaHoyLima } from "../utils/fecha";
 import { MSG_OC_SIN_IGV } from "../utils/catalogosSunat";
 import ConfirmacionAccion from "./ConfirmacionAccion";
 import { r2 } from "../utils/redondeo";
+import { ocLegadoLibre } from "../utils/facturacionOC";
 
 const INP     = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 const INP_DIS = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full";
@@ -28,9 +29,9 @@ function BuscadorOrdenCompra({ onSelect, onClose }) {
   useEffect(() => {
     fetchAuth("/ordenes-compra").then(r => r.ok && r.json()).then(d => setLista(d || []));
   }, []);
-  const filtradas = lista.filter(o => !q ||
+  const filtradas = lista.filter(o => ocLegadoLibre(o) && (!q ||
     [o.numeroOrden, o.titulo, o.empresa?.razonSocial, o.codigo]
-      .some(v => v?.toLowerCase().includes(q.toLowerCase())));
+      .some(v => v?.toLowerCase().includes(q.toLowerCase()))));
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh]">
@@ -44,7 +45,7 @@ function BuscadorOrdenCompra({ onSelect, onClose }) {
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-1">
           {filtradas.length === 0
-            ? <p className="text-sm text-gray-400 text-center py-8">Sin resultados</p>
+            ? <p className="text-sm text-gray-400 text-center py-8">Sin resultados. Aquí solo aparecen las OC sin partidas y sin facturar; una OC por partidas se factura desde su detalle.</p>
             : filtradas.map(o => (
               <button key={o._id} onClick={() => onSelect(o)}
                 className="w-full text-left px-4 py-3 rounded-xl hover:bg-blue-50 border border-transparent hover:border-blue-100 transition">
@@ -272,9 +273,19 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
         ordenCompra: ocId,
       }),
     });
-    const dataCpe = await resCpe.json();
+    const dataCpe = await resCpe.json().catch(() => ({}));
     if (!dataCpe.ok) {
-      setError(dataCpe.mensaje || dataCpe.error || "SUNAT rechazó el comprobante.");
+      const mensaje = dataCpe.mensaje || dataCpe.error || "SUNAT rechazó el comprobante.";
+      setError(resCpe.status === 409 && dataCpe.estado === "ANULADO" && dataCpe.serie
+        ? `${mensaje} El correlativo ${dataCpe.serie} quedó anulado sin enviarse a SUNAT.`
+        : mensaje);
+      setGuardando(false);
+      return;
+    }
+    // La factura siempre va con OC: su registro interno exige el comprobante ACEPTADO, y uno EN_PROCESO lo
+    // recibe del servidor al consultar su estado.
+    if (dataCpe.estado !== "ACEPTADO") {
+      setError(`La factura SUNAT ${dataCpe.serie} quedó EN PROCESO. El registro interno se creará cuando «Consultar estado» (Facturación Electrónica) confirme que SUNAT la aceptó.`);
       setGuardando(false);
       return;
     }

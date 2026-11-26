@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { fetchAuth } from "../utils/fetchAuth";
 import { fechaHoyLima } from "../utils/fecha";
-import { precioConDescuento } from "../utils/cotizacionItems";
+import { prellenadoDesdeOC, ocLegadoLibre } from "../utils/facturacionOC";
 import { r2, r0 } from "../utils/redondeo";
 import TablaScroll from "../components/TablaScroll";
 import {
@@ -97,6 +97,9 @@ export default function EmitirComprobante() {
   // con éxito, además crea el registro interno Factura vinculado a esta OC
   // (mismo paso 2 que hacía ModalCrearFactura.jsx).
   const [ocOrigen, setOcOrigen] = useState(null);
+  // _id de las partidas de `ocOrigen` que factura este comprobante ([] = OC legado, entera).
+  const [partidasOC, setPartidasOC] = useState([]);
+  const [montosFijos, setMontosFijos] = useState(false);
   const [facturaInterna, setFacturaInterna] = useState(null);
 
   const esNota = tipoDoc === "07" || tipoDoc === "08";
@@ -123,82 +126,24 @@ export default function EmitirComprobante() {
     })));
   };
 
-  // Precarga emisor (fijo), receptor, ítems y precios, y N° de OC a partir
-  // de la Cotización vinculada a la orden de compra — la OC en sí no tiene
-  // ítems propios, solo un monto global (ver OrdenCompra.js).
-  const aplicarPrellenadoOC = (oc, cotizacion) => {
+  // Precarga receptor, ítems, moneda y N° de OC desde las partidas elegidas en el detalle de la OC (ver
+  // prellenadoDesdeOC). Montos, moneda, bien/servicio, tipo de documento y N° de OC quedan fijos: el servidor
+  // valida la emisión contra las partidas.
+  const aplicarPrellenadoOC = (pre) => {
+    const { oc } = pre;
+    const p = prellenadoDesdeOC(pre);
     setOcOrigen(oc);
     setTipoDoc("01");
     setSerie(SERIE_POR_TIPO["01"]);
     const emp = oc.empresa;
-    if (emp) {
-      setReceptor({ schemeID: "6", numDoc: emp.ruc || "", nombre: emp.razonSocial || "" });
-    }
-    const esServicio = cotizacion?.tipo === "servicio";
-    const unidad = esServicio ? "ZZ" : "NIU";
-    setTipoBienServicio(esServicio ? "servicio" : "bien");
-    if (cotizacion?.moneda) setMoneda(cotizacion.moneda);
-    // OC consolidada: una línea por cotización anexada, por el monto de esa cotización en la OC.
-    if (oc.lineas?.length) {
-      setItems(oc.lineas.map((l) => {
-        const valor = r2(Number(l.subtotal) || 0);
-        return {
-          ...itemVacioComprobante(),
-          descripcion: l.titulo || l.cotizacion?.titulo || "",
-          cantidad: 1,
-          unidad,
-          valorUnitario: valor,
-          precioUnitario: precioUnitarioDesdeValor(valor, "10"),
-          afectacion: "10",
-          descuentoPorcentaje: 0,
-        };
-      }));
-      setNumeroOrdenCompra(oc.numeroOrden || oc.codigo || "");
-      setOrdenCompraId(oc._id || "");
-      return;
-    }
-    // El monto a facturar es el de la OC (puede diferir del de la cotización);
-    // las líneas de la cotización solo se usan si su suma cuadra con ese monto.
-    const montoOC = r2(Number(oc.subtotal) || 0);
-    // OC parcial (generada desde ítems puntuales): solo se facturan sus ítems.
-    const itemsDeOC = (cotizacion?.items || []).filter((i) => (i.ocGenerada?._id || i.ocGenerada) === oc._id);
-    const lineas = (itemsDeOC.length ? itemsDeOC : cotizacion?.items || []).map((i) => {
-      // Precio c/dscto = precio unitario neto del descuento global de la
-      // Cotización (mismo criterio que su tabla, ver cotizacionItems.js) —
-      // el valor unitario de la factura sale ya neto, no del bruto.
-      const valorUnitario = precioConDescuento(i, cotizacion?.descuentoGlobal);
-      return {
-        _key: Date.now() + Math.random(),
-        descripcion: i.descripcion,
-        cantidad: i.cantidad || 1,
-        unidad,
-        valorUnitario,
-        precioUnitario: precioUnitarioDesdeValor(valorUnitario, "10"),
-        afectacion: "10",
-        descuentoPorcentaje: 0,
-      };
-    });
-    const baseLineas = lineas.reduce((s, l) => s + calcularLineaComprobante(l).base, 0);
-    // Tolerancia: redondeo por línea (medio céntimo por ítem).
-    const cuadraConOC = !(montoOC > 0) || Math.abs(baseLineas - montoOC) <= 0.01 * lineas.length;
-    if (lineas.length && cuadraConOC) {
-      setItems(lineas);
-    } else if (montoOC > 0) {
-      setItems([{
-        ...itemVacioComprobante(),
-        descripcion: oc.descripcion || oc.titulo || lineas[0]?.descripcion || "",
-        cantidad: 1,
-        unidad,
-        valorUnitario: montoOC,
-        precioUnitario: precioUnitarioDesdeValor(montoOC, "10"),
-        afectacion: "10",
-        descuentoPorcentaje: 0,
-      }]);
-    } else {
-      setItems([{ ...itemVacioComprobante(), descripcion: oc.descripcion || oc.titulo || "", unidad }]);
-    }
-    setNumeroOrdenCompra(oc.numeroOrden || oc.codigo || "");
-    setOrdenCompraId(oc._id || "");
+    if (emp) setReceptor({ schemeID: "6", numDoc: emp.ruc || "", nombre: emp.razonSocial || "" });
+    setTipoBienServicio(p.tipoBienServicio);
+    setMoneda(p.moneda);
+    setItems(p.items);
+    setPartidasOC(p.partidasOC);
+    setMontosFijos(p.montosFijos);
+    setNumeroOrdenCompra(p.numeroOrdenCompra);
+    setOrdenCompraId(p.ordenCompraId);
   };
 
   useEffect(() => {
@@ -219,9 +164,7 @@ export default function EmitirComprobante() {
       });
     }
     const pre = location.state?.prellenarDesdeOC;
-    if (pre?.oc) {
-      aplicarPrellenadoOC(pre.oc, pre.cotizacion);
-    }
+    if (pre?.oc) aplicarPrellenadoOC(pre);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -383,6 +326,7 @@ export default function EmitirComprobante() {
   const ro = !!resultado?.ok;
 
   const ordenesCompraFiltradas = ordenesCompra.filter((o) => {
+    if (!ocLegadoLibre(o)) return false;
     if (!filtroOC.trim()) return true;
     const q = filtroOC.trim().toLowerCase();
     return (
@@ -503,6 +447,10 @@ export default function EmitirComprobante() {
     return null;
   };
 
+  // Con OC (elegida aquí, o resuelta por el servidor desde un N° a mano) la factura interna exige el comprobante
+  // ACEPTADO; uno EN_PROCESO la recibe del servidor al consultar su estado.
+  const conOC = (dataCpe) => !!ocOrigen || !!ordenCompraId || !!dataCpe?.ordenCompra;
+
   const emitir = async () => {
     // Una OC de una cotización no afecta a IGV (trabajo en el extranjero) necesita una factura de exportación
     // (tipo de operación 0200, afectación 40), que todavía no se emite desde acá: con afectación 10 saldría un
@@ -568,6 +516,7 @@ export default function EmitirComprobante() {
           numeroOrdenCompra: numeroOrdenCompra.trim(),
           ...(parsearGuiaRemision(guiaRelacionada) ? { guiaRelacionada: parsearGuiaRemision(guiaRelacionada) } : {}),
           ...(ordenCompraId ? { ordenCompra: ordenCompraId } : {}),
+          ...(ocOrigen ? { partidasOC } : {}),
           // Con respuesta ok el navegador crea la Factura interna (crearFacturaInterna, abajo); si no, el backend.
           facturaInternaDesdeCliente: !!ocOrigen || tipoDoc === "01",
           ...(detraccionAplica ? {
@@ -589,11 +538,15 @@ export default function EmitirComprobante() {
         };
       }
       const res  = await fetchAuth(endpoint, { method: "POST", body: JSON.stringify(body) });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       setResultado(data);
       if (!data.ok) {
-        setError(data.mensaje || data.error || "El comprobante fue rechazado por SUNAT.");
-      } else if (ocOrigen || tipoDoc === "01") {
+        const mensaje = data.mensaje || data.error || "El comprobante fue rechazado por SUNAT.";
+        // Choque con otro comprobante que ya reservaba las partidas: el correlativo se consumió sin enviarse.
+        setError(res.status === 409 && data.estado === "ANULADO" && data.serie
+          ? `${mensaje} El correlativo ${data.serie} quedó anulado sin enviarse a SUNAT.`
+          : mensaje);
+      } else if (tipoDoc === "01" && (!conOC(data) || data.estado === "ACEPTADO")) {
         await crearFacturaInterna(data);
       }
     } catch {
@@ -621,6 +574,7 @@ export default function EmitirComprobante() {
         numeroGuiaEmision:  ocOrigen.numeroGuiaEmision || "",
         numeroGuiaRemision: ocOrigen.numeroGuiaRemision || "",
         ordenCompra:        ocOrigen._id,
+        partidasOC,
         empresa:            ocOrigen.empresa?._id || ocOrigen.empresa,
         codigoSap:          ocOrigen.codigoSap,
         fechaSalida:        ocOrigen.fechaSalida,
@@ -666,6 +620,8 @@ export default function EmitirComprobante() {
     setGuiaRelacionada("");
     setOrdenCompraId("");
     setOcOrigen(null);
+    setPartidasOC([]);
+    setMontosFijos(false);
     setFacturaInterna(null);
     setResultado(null);
     setError("");
@@ -687,6 +643,11 @@ export default function EmitirComprobante() {
         <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-3 mb-5">
           Comprobante <strong>{resultado.serie}</strong> EN PROCESO — SUNAT aún no confirma el resultado.
           Verifica el estado más tarde en la lista de comprobantes.
+          {tipoDoc === "01" && conOC(resultado) && (
+            <span className="block mt-1">
+              El registro interno de la factura de la orden de compra se creará cuando «Consultar estado» confirme que SUNAT lo aceptó.
+            </span>
+          )}
         </div>
       )}
       {resultado?.aviso && (
@@ -722,7 +683,8 @@ export default function EmitirComprobante() {
           <span className="text-sm font-medium text-gray-500">Tipo de comprobante:</span>
           {[["01", "Factura"], ["03", "Boleta"], ["07", "Nota de Crédito"], ["08", "Nota de Débito"]].map(([v, label]) => (
             <button
-              key={v} type="button" disabled={ro}
+              key={v} type="button" disabled={ro || (!!ocOrigen && v !== "01")}
+              title={ocOrigen && v !== "01" ? "Una orden de compra solo se factura con Factura." : undefined}
               onClick={() => cambiarTipoDoc(v)}
               className={`px-5 py-1.5 rounded-full text-sm font-medium transition ${
                 tipoDoc === v
@@ -753,7 +715,7 @@ export default function EmitirComprobante() {
               <div className="flex gap-3">
                 {TIPO_MONEDA.map((m) => (
                   <button
-                    key={m.valor} type="button" disabled={ro}
+                    key={m.valor} type="button" disabled={ro || !!ocOrigen}
                     onClick={() => setMoneda(m.valor)}
                     className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
                       moneda === m.valor
@@ -930,7 +892,7 @@ export default function EmitirComprobante() {
           <span className="text-sm font-medium text-gray-500">Este comprobante es por:</span>
           {TIPO_ITEM.map((t) => (
             <button
-              key={t.valor} type="button" disabled={ro}
+              key={t.valor} type="button" disabled={ro || !!ocOrigen}
               onClick={() => cambiarTipoBienServicio(t.valor)}
               className={`px-5 py-1.5 rounded-full text-sm font-medium transition ${
                 tipoBienServicio === t.valor
@@ -973,12 +935,12 @@ export default function EmitirComprobante() {
                     <td className="px-3 py-2">
                       <input type="number" min="0" step="0.01" value={item.cantidad}
                         onChange={(e) => handleItem(item._key, "cantidad", e.target.value)} onWheel={(e) => e.target.blur()}
-                        required disabled={ro}
+                        required disabled={ro || montosFijos}
                         className="w-full input-field w-auto" />
                     </td>
                     <td className="px-3 py-2">
                       <select value={item.unidad} onChange={(e) => handleItem(item._key, "unidad", e.target.value)}
-                        disabled={ro || tipoBienServicio === "servicio"} className="w-full input-field w-auto">
+                        disabled={ro || montosFijos || tipoBienServicio === "servicio"} className="w-full input-field w-auto">
                         {unidadesPorTipoItem(tipoBienServicio).map((u) => (
                           <option key={u.valor} value={u.valor}>{u.label}</option>
                         ))}
@@ -987,12 +949,12 @@ export default function EmitirComprobante() {
                     <td className="px-3 py-2">
                       <input type="number" min="0" step="0.01" value={item.valorUnitario}
                         onChange={(e) => handleItem(item._key, "valorUnitario", e.target.value)} onWheel={(e) => e.target.blur()}
-                        required disabled={ro}
+                        required disabled={ro || montosFijos}
                         className="w-full input-field w-auto" />
                     </td>
                     <td className="px-3 py-2">
                       <select value={item.afectacion} onChange={(e) => handleItem(item._key, "afectacion", e.target.value)}
-                        disabled={ro} className="w-full input-field w-auto">
+                        disabled={ro || montosFijos} className="w-full input-field w-auto">
                         {AFECTACION_IGV.map((a) => (
                           <option key={a.valor} value={a.valor}>{a.label}</option>
                         ))}
@@ -1001,7 +963,7 @@ export default function EmitirComprobante() {
                     <td className="px-3 py-2">
                       <input type="number" min="0" max="100" step="1" value={item.descuentoPorcentaje}
                         onChange={(e) => handleItem(item._key, "descuentoPorcentaje", e.target.value)} onWheel={(e) => e.target.blur()}
-                        disabled={ro}
+                        disabled={ro || montosFijos}
                         className="w-full input-field w-auto" />
                     </td>
                     <td className="px-3 py-2 text-right font-medium text-gray-800">
@@ -1009,7 +971,9 @@ export default function EmitirComprobante() {
                     </td>
                     {!ro && (
                       <td className="px-3 py-2 text-center">
-                        <button type="button" onClick={() => eliminarItem(item._key)} className="text-red-400 hover:text-red-600">✕</button>
+                        {!montosFijos && (
+                          <button type="button" onClick={() => eliminarItem(item._key)} className="text-red-400 hover:text-red-600">✕</button>
+                        )}
                       </td>
                     )}
                   </tr>
@@ -1034,7 +998,7 @@ export default function EmitirComprobante() {
                 <tr>
                   <td colSpan={7} className="px-4 py-2 text-right text-xs text-gray-500">Otros cargos (no afectos a IGV)</td>
                   <td className="px-3 py-2 text-right">
-                    {ro ? otrosCargosNum.toFixed(2) : (
+                    {ro || montosFijos ? otrosCargosNum.toFixed(2) : (
                       <input type="number" min="0" step="0.01" value={otrosCargos}
                         onChange={(e) => setOtrosCargos(e.target.value)} onWheel={(e) => e.target.blur()}
                         placeholder="0.00"
@@ -1046,7 +1010,7 @@ export default function EmitirComprobante() {
                 <tr>
                   <td colSpan={7} className="px-4 py-2 text-right text-xs text-gray-500">Monto de redondeo</td>
                   <td className="px-3 py-2 text-right">
-                    {ro ? montoRedondeoNum.toFixed(2) : (
+                    {ro || montosFijos ? montoRedondeoNum.toFixed(2) : (
                       <input type="number" step="0.01" value={montoRedondeo}
                         onChange={(e) => setMontoRedondeo(e.target.value)} onWheel={(e) => e.target.blur()}
                         placeholder="0.00"
@@ -1063,7 +1027,12 @@ export default function EmitirComprobante() {
               </tfoot>
             </table>
           </TablaScroll>
-          {!ro && (
+          {!ro && montosFijos && (
+            <p className="px-4 py-3 border-t border-gray-100 text-xs text-gray-500">
+              Los montos salen de la orden de compra y no se editan; solo la descripción de cada línea.
+            </p>
+          )}
+          {!ro && !montosFijos && (
             <div className="px-4 py-3 border-t border-gray-100">
               <button type="button" onClick={agregarItem}
                 className="text-sm text-gray-500 hover:text-gray-800 transition">
@@ -1212,15 +1181,22 @@ export default function EmitirComprobante() {
                 <div className="flex gap-2">
                   <input value={numeroOrdenCompra}
                     onChange={(e) => { setNumeroOrdenCompra(e.target.value); setOrdenCompraId(""); }}
-                    disabled={ro}
+                    disabled={ro || !!ocOrigen}
+                    title={ocOrigen ? "Se factura desde esta orden de compra: no se puede cambiar." : undefined}
                     className="flex-1 input-field w-auto disabled:bg-gray-50 disabled:text-gray-500" />
-                  {!ro && (
+                  {!ro && !ocOrigen && (
                     <button type="button" onClick={abrirBuscadorOC}
                       className="px-4 py-2 rounded-lg text-sm border border-gray-300 text-gray-500 hover:text-gray-800 transition">
                       Buscar
                     </button>
                   )}
                 </div>
+                {ocOrigen && partidasOC.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1.5">
+                    Partidas de la OC que factura este comprobante ({partidasOC.length} de {ocOrigen.partidas?.length || partidasOC.length}):{" "}
+                    {(ocOrigen.partidas || []).filter((p) => partidasOC.includes(String(p._id))).map((p) => `«${p.titulo || p.cotizacion?.titulo || ""}»`).join(", ")}
+                  </p>
+                )}
               </div>
 
               <div className="mt-4 pt-4 border-t border-gray-100">
@@ -1316,7 +1292,9 @@ export default function EmitirComprobante() {
             <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
               {buscandoOC && <p className="text-sm text-gray-400 py-4 text-center">Cargando…</p>}
               {!buscandoOC && ordenesCompraFiltradas.length === 0 && (
-                <p className="text-sm text-gray-400 py-4 text-center">Sin resultados.</p>
+                <p className="text-sm text-gray-400 py-4 text-center">
+                  Sin resultados. Aquí solo aparecen las OC sin partidas y sin facturar; una OC por partidas se factura desde su detalle.
+                </p>
               )}
               {ordenesCompraFiltradas.map((o) => (
                 <button key={o._id} type="button" onClick={() => elegirOC(o)}
