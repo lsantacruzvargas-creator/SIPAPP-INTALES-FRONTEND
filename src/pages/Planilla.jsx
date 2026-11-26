@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { fechaHoyLima } from "../utils/fecha";
@@ -14,6 +14,7 @@ import PanelPerfilLaboral from "../components/planilla/PanelPerfilLaboral";
 import PanelVacaciones from "../components/planilla/PanelVacaciones";
 import PanelCts from "../components/planilla/PanelCts";
 import { resumenAvisosVacaciones } from "../utils/vacaciones";
+import useConfirmar from "../hooks/useConfirmar";
 
 const TABS = [
   { id: "mes", label: "Planilla del mes" },
@@ -50,6 +51,15 @@ export default function Planilla() {
   const [avisosCts, setAvisosCts] = useState([]);
   // Cada «Ir a los cesados» remonta el panel de trabajadores con «Ver cesados» marcado; 0 = entrada normal.
   const [irCesados, setIrCesados] = useState(0);
+  // Los paneles con edición en la pantalla (hoy CTS) avisan si tienen cambios sin guardar; los modales tapan las pestañas.
+  const sucio = useRef(false);
+  const onSucio = useCallback((v) => { sucio.current = v; }, []);
+  const { confirmar: confirmarDescarte, dialogo: dialogoDescarte } = useConfirmar("Sí, descartar", { peligro: true });
+  const irA = async (id, cesados = 0) => {
+    if (id !== tab && sucio.current && !(await confirmarDescarte("Hay cambios sin guardar. ¿Descartarlos?"))) return;
+    setIrCesados(cesados);
+    setTab(id);
+  };
 
   useEffect(() => {
     Promise.all([fetchAuth("/planilla/catalogos"), fetchAuth("/contabilidad/cuentas"), fetchAuth("/centros-costo")]).then(async ([rc, rp, rk]) => {
@@ -96,7 +106,7 @@ export default function Planilla() {
     } catch { /* los avisos son informativos: sin ellos la planilla sigue funcionando */ }
   }, []);
   useEffect(() => { const t = setTimeout(refrescarCts, 0); return () => clearTimeout(t); }, [refrescarCts, tab]);
-  const irACesados = () => { setIrCesados((n) => n + 1); setTab("trabajadores"); };
+  const irACesados = () => irA("trabajadores", irCesados + 1);
 
   const entendido = () => { guardarVisto(cambioPerfil.fecha); setCambioVisto(cambioPerfil.fecha); };
   const verCambio = mostrarCambioPerfil(cambioPerfil, cambioVisto);
@@ -117,7 +127,7 @@ export default function Planilla() {
       </div>
       <div className="flex border-b border-gray-200 gap-1 flex-wrap">
         {TABS.map((t) => (
-          <button key={t.id} onClick={() => { setTab(t.id); setIrCesados(0); }}
+          <button key={t.id} onClick={() => irA(t.id)}
             className={`px-4 py-2.5 text-sm font-medium transition border-b-2 -mb-px ${
               tab === t.id ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}>
@@ -137,19 +147,19 @@ export default function Planilla() {
             </p>
           )}
           {avisosPerfil.map((a, i) => <p key={i}>{a}</p>)}
-          <button onClick={() => setTab("perfil")} className="text-xs underline font-medium hover:text-amber-900">Ir al perfil laboral</button>
+          <button onClick={() => irA("perfil")} className="text-xs underline font-medium hover:text-amber-900">Ir al perfil laboral</button>
         </div>
       )}
       {avisosVacaciones.length > 0 && tab !== "vacaciones" && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800 space-y-1">
           {resumenAvisosVacaciones(avisosVacaciones).map((a, i) => <p key={i}>{a}</p>)}
-          <button onClick={() => setTab("vacaciones")} className="text-xs underline font-medium hover:text-amber-900">Ir a vacaciones</button>
+          <button onClick={() => irA("vacaciones")} className="text-xs underline font-medium hover:text-amber-900">Ir a vacaciones</button>
         </div>
       )}
       {avisosCts.length > 0 && tab !== "cts" && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800 space-y-1">
           {avisosCts.map((a, i) => <p key={i}>{a}</p>)}
-          <button onClick={() => setTab("cts")} className="text-xs underline font-medium hover:text-amber-900">Ir a CTS</button>
+          <button onClick={() => irA("cts")} className="text-xs underline font-medium hover:text-amber-900">Ir a CTS</button>
         </div>
       )}
       {avisosLiquidacion.length > 0 && (
@@ -160,11 +170,12 @@ export default function Planilla() {
       )}
       {catalogos && (
         <>
-          {tab === "mes" && <PanelPlanillaMes mes={mes} setMes={setMes} catalogos={catalogos} puedeEscribir={puedeEscribir} refrescarAvisos={refrescarAvisos} />}
+          {tab === "mes" && <PanelPlanillaMes mes={mes} setMes={setMes} catalogos={catalogos} puedeEscribir={puedeEscribir} refrescarAvisos={refrescarAvisos}
+            avisosGenerales={[...avisosPerfil, ...avisosLiquidacion]} />}
           {tab === "trabajadores" && <PanelTrabajadores key={irCesados} catalogos={catalogos} centrosCosto={centrosCosto} puedeEscribir={puedeEscribir}
             refrescarAvisos={refrescarAvisos} onLiquidacion={refrescarLiquidaciones} verCesadosInicial={irCesados > 0} />}
           {tab === "vacaciones" && <PanelVacaciones puedeEscribir={puedeEscribir} onAvisos={setAvisosVacaciones} />}
-          {tab === "cts" && <PanelCts catalogos={catalogos} puedeEscribir={puedeEscribir} onCambio={refrescarCts} />}
+          {tab === "cts" && <PanelCts catalogos={catalogos} puedeEscribir={puedeEscribir} onCambio={refrescarCts} onSucio={onSucio} />}
           {tab === "tregistro" && <PanelTRegistro puedeEscribir={puedeEscribir} refrescarAvisos={refrescarAvisos} />}
           {tab === "configtr" && <PanelConfigTRegistro catalogos={catalogos} puedeEscribir={puedeEscribir} onGuardado={refrescarCatalogos} />}
           {tab === "perfil" && <PanelPerfilLaboral catalogos={catalogos} puedeEscribir={puedeEscribir} onGuardado={(d) => { aplicarAvisos(d); refrescarCatalogos(); }} />}
@@ -173,6 +184,7 @@ export default function Planilla() {
           {tab === "cuentas" && <PanelCuentasPlanilla cuentas={cuentas} catalogos={catalogos} puedeEscribir={puedeEscribir} />}
         </>
       )}
+      {dialogoDescarte}
     </div>
   );
 }

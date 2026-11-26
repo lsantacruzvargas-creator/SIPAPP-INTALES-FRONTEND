@@ -129,6 +129,162 @@ Ramas remotas `feature/*` ya mergeadas (se pueden borrar si el usuario lo pide):
 
 ## 5. Pendientes
 
+**Pendiente (2026-11-18) — Estado de servicio de la OT igual en todas las tablas + "Con/Sin factura" de OC por el campo**
+(origen SIPAPP-HUAQUIAN, frontend `07aadd3`; pedido del usuario.)
+- **Estado de servicio:** en HUAQUIAN todas las vistas muestran el mismo valor (`estadoGeneral`, su estado calculado del
+  servicio) con la etiqueta «Estado de servicio» y el mismo color: tablas y filtros de OC, Ingreso de equipos y
+  Aprobación de cotizaciones, el Excel de Cotización y OC, y las tarjetas de Relaciones de los detalles de
+  Cotización/Factura/OC/OT/Sub-OT. Antes varias mostraban `estado` (solo el técnico). Aquí el «Estado de servicio» es
+  `estadoProgresoOT` (`detalleShared.jsx`), pero las tarjetas de Relaciones (`DetalleCotizacion`, `DetalleFactura`,
+  `DetalleOrdenCompra`, `DetalleOrdenTrabajo`) siguen mostrando `o.estado` crudo — portar usando
+  `estadoProgresoOT`. **Por decidir con el usuario:** si aquí debe ser `estadoProgresoOT` o el `estadoGeneral` de
+  esta rama, que tiene otros valores (no asignado/pendiente/en progreso/completada/entregada).
+- **Factura:** HUAQUIAN agregó a `ListaFacturas.jsx` la columna «Estado de servicio» y su filtro, también en el Excel.
+  El N° OT y el estado salen solo de la OT padre, porque las sub-OTs comparten `numeroDocumento` y el `Map` se
+  quedaba con la última. Aquí `otPorNumDoc` tiene el mismo problema.
+- **OC — «Con factura» / «Sin factura»:** en `ListaOrdenesCompra.jsx`, `tieneFactura` y la columna/Excel
+  «N° Factura» usan solo `o.numeroFactura` (el campo «N° de factura» del detalle). Ya no miran la Factura generada
+  (`factByOCMap`/`factMap`), que siguen solo para la búsqueda y el detalle. Emitir el CPE desde la OC llena el
+  campo cuando SUNAT acepta.
+
+**Pendiente (2026-11-16) — Lista de OTs: columnas de OC/plazo y orden por encabezado**
+(origen rama `modulo-venta/informes/comprabasico`, frontend `674889ba` + `f4b70039` (columnas e indicador de plazo)
+y `b5bfe47c` (orden por encabezado); pedido del usuario.)
+- En comprabasico la tabla de OTs (`pages/ListaOrdenesTrabajo.jsx`) muestra N° OC, Días de fabricación, Días desde
+  recibido (hábiles, desde la fecha de la OC del cliente vía `numeroDocumento`), Fecha recibida OC y Plazo (chip En fecha /
+  Cerca a plazo / Atrasado / Terminada según el margen `(días fabricación − días desde recibido) / días fabricación`).
+  Aquí la tabla sigue con N° Cotización, Servicio, Contacto y Fecha de Ingreso — no tiene esas columnas.
+- Orden por encabezado: Días desde recibido, Fecha recibida OC y Plazo ordenan con un clic (↓ desc, ↑ asc, ↕ inactiva);
+  los nulos van siempre al final; Plazo ordena por urgencia (más atrasada primero, terminadas al fondo). Estado `sortDir`
+  aparte del `sortBy` del select. Portar después de las columnas (o, mientras tanto, sobre Días desde recibido y Fecha de
+  Ingreso).
+
+**Hecho (2026-11-25, portado sin commit; antes «Pendiente 2026-11-11») — Adjuntos de la cotización asignables a cada OT y × de adjuntos por rol**
+(origen rama `modulo-venta/informes/comprabasico`, backend `6c967cd`, frontend `4a0a848d`; pedido del usuario).
+- Problema: todas las OT de una cotización veían todos sus adjuntos (el plano del ítem 2 aparecía en las OT de los
+  demás ítems).
+- `Cotizacion.archivos[].ordenesTrabajo: [ObjectId]`. Rutas `POST /ordenes-trabajo/:id/archivos-cotizacion/:archivoId/asignar`
+  y `/quitar` (admin/jefatura/planner/coordinadora; bloqueadas con OT anulada, cadena cerrada o cotización anulada):
+  `$addToSet`/`$pull` sobre `archivos.$.ordenesTrabajo`. El archivo **nunca sale de la cotización** — se probó antes
+  moverlo a la OT y se descartó porque borrarlo en la OT lo perdía también para la cotización. La cotización se
+  resuelve por `ot.cotizacion` o por el `numeroDocumento` compartido (OT creadas desde una OC).
+- Detalle de OT (`TarjetaArchivosRelacionados`): supervisor y técnicos ven solo los adjuntos de la cotización asignados a
+  esa OT; los roles que asignan ven todos con etiqueta «Asignado a esta OT» / «Cotización · sin asignar» y botón «Pasar a
+  esta OT» / «Quitar de esta OT».
+- Eliminar: `DELETE /ordenes-trabajo/:id/archivos/:archivoId` solo coordinadora/jefatura/admin y solo archivos propios de la
+  OT (la × se oculta al resto). `DELETE /cotizaciones/:id/archivos/:archivoId` además elimina los adjuntos subidos en una OT
+  de su cadena (solo coordinadora o superior); los propios de la cotización se siguen eliminando como antes.
+- Detalle de cotización: sus adjuntos muestran «Asignado a OT N, OT M»; los subidos en una OT, «De OT N» con × para
+  coordinadora o superior. `PUT /cotizaciones/:id` ignora `archivos`.
+- `TarjetaArchivosRelacionados`: props nuevas `accionArchivo(archivo, { vinculado })`, `puedeEliminar`,
+  `onEliminarVinculado` y `_etiqueta` por archivo; muestra el error al eliminar.
+- **Pendiente de seguridad (decisión del usuario, 2026-11-11: anotar, no hacer aún):** que supervisor/técnicos no vean
+  los adjuntos no asignados es solo filtro de pantalla. `GET /cotizaciones` no filtra por rol (esos roles ya reciben la
+  cotización completa, con todos los adjuntos y los precios) y `/uploads` sirve cualquier archivo a quien tenga sesión.
+  Arreglo propuesto: en `GET /cotizaciones` y `GET /cotizaciones/:id`, para supervisor/técnicos, quitar los `archivos`
+  cuyo `ordenesTrabajo` no incluya una OT suya (y aprovechar para ocultar precios), y controlar por rol la descarga de
+  `/uploads/cotizaciones-archivos`. Revisar antes qué otras pantallas de esos roles leen `/cotizaciones`.
+- Alerta (backend `39764a0`): al subir un archivo a una OT (`POST /ordenes-trabajo/:id/archivos`), si el rol es supervisor o
+  técnico se llama además `notificarAlerta` («Usuario X adjuntó el archivo "nombre" a la OT N título») — banner visible
+  para todos menos técnicos, para que la coordinadora vea el pedido. Los demás roles solo quedan en el historial.
+
+**Hecho (2026-11-25, portado sin commit; antes «Pendiente 2026-11-11») — Detalle del ítem cotizado en la OT, OC suelta con moneda y rueda del mouse en inputs numéricos**
+- **Diferencia con comprabasico:** las rutas `archivos-cotizacion/:archivoId/asignar|quitar` exigen además el bloqueo de edición de la OT
+  (`exigeBloqueo("ordenTrabajo")`), como el resto de escrituras de la OT. Test: `test/adjuntosOT.test.js`.
+- **Sigue pendiente:** en `DetalleCotizacion.jsx` la tarjeta OT todavía tiene «+ Crear otra OT» (`ModalNuevaOT`); las OT
+  creadas por ahí no copian `subItems`/`imagenes` del ítem. En comprabasico se quitó (las OT salen solo del check «OT»).
+(origen rama `modulo-venta/informes/comprabasico`, backend `368c251`, frontend `d1fa638a`; pedido del usuario).
+- `OrdenTrabajo`: campos nuevos `subItems: [String]` e `imagenes: [String]`. `PATCH /cotizaciones/:id/items/:index/generar-ot`
+  los copia del ítem (sin precio; `descripcion` sigue con los sub ítems unidos por `\n`). Cada ítem marcado con el check
+  «OT» genera su propia OT con su detalle.
+- `PUT /ordenes-trabajo/:id`: `imagenes` nunca se edita; `subItems` se ignora si el rol es `supervisor` o `tecnico*`, y
+  para el resto se valida (array, máx. 100, trim, vacíos fuera, 500 caracteres c/u) y sincroniza `descripcion`.
+- `DetalleOrdenTrabajo.jsx`: sección «Detalle del ítem cotizado» en «Datos de la orden de trabajo» — lista con
+  inputs, × y «+ agregar sub ítem» para admin/jefatura/planner/coordinadora; solo lectura para supervisor y técnicos;
+  imagen en miniatura (`ImagenProtegida`, clic abre). OTs antiguas: se lee `descripcion` partida por líneas.
+- `DetalleCotizacion.jsx`: la tarjeta OT ya no tiene botón de crear ni «+ Crear otra OT» (se quitó `ModalNuevaOT` de ese
+  detalle; el archivo queda). Se mantiene «+ Vincular OT existente».
+- `ModalCrearOrdenCompra.jsx` (Nueva OC desde la lista): selector de moneda Soles/Dólares, mandado como `moneda`; con
+  cotización vinculada queda bloqueado con la de la cotización (el `pre("save")` de `OrdenCompra` ya la fuerza). El
+  buscador de cotizaciones del modal muestra el símbolo de cada una.
+- `main.jsx`: listener global `wheel` (capture, passive) que hace `blur()` al `<input type="number">` activo cuando la
+  rueda cae sobre él — la rueda ya no cambia montos ni cantidades en ninguna pantalla (reemplaza los `onWheel` por input).
+  **Corrección 2026-11-25:** en esta rama el listener nunca llegó al código (ningún commit lo tuvo); se agregó recién
+  el 2026-11-25 (ver «Hecho (2026-11-25)»).
+- `detalleShared.jsx` `BotonAnular` (frontend `0f6ccdab`): el modal de anulación se dibuja dentro del header degradado
+  (`text-white`) y el preflight de Tailwind hace heredar el color a `button`/`textarea` — «Cancelar», el motivo y el
+  placeholder quedaban blancos sobre blanco. Ahora el modal fija `text-gray-800`, «Cancelar» `text-gray-700 bg-white` y
+  el textarea `text-gray-800 placeholder:text-gray-400`. Aplica a todos los documentos que usan `BotonAnular`.
+
+**Pendiente (2026-11-10) — Ocultar «+ Crear Sub-OT» y contraste de las tarjetas de Relaciones en modo oscuro**
+(origen rama `modulo-venta/informes/comprabasico`, frontend `72311167`; pedido del usuario).
+- `DetalleOrdenTrabajo.jsx`: se quitó el botón «+ Crear Sub-OT» (y el `ModalNuevaSubOT` de ese detalle; el archivo y la
+  ruta `POST /ordenes-trabajo/:id/sub-ot` quedan). La sección «Sub-Órdenes» solo se muestra si la OT ya tiene sub-OTs.
+  Las OTs ahora se crean por ítem desde la cotización o la OC.
+- Tarjetas de Relaciones (`TarjetaRelacion`, `detalleShared.jsx` + `index.css`): en oscuro el fondo pastel claro chocaba
+  con las piezas `bg-white` re-teñidas oscuras. Ahora cada tipo en `TEMAS` tiene `acento` ("R G B" del tono 500) y
+  `acentoClaro` (hex del 300), pasados como `--tarjeta-acento` / `--tarjeta-acento-claro`; en `[data-theme="oscuro"]` la
+  tarjeta es `--bg-surface` con un velo `rgb(var(--tarjeta-acento) / .16)` y borde `/ .5`, las piezas `bg-white` internas
+  van a `--bg-page`, el texto de acento (clase `tarjeta-acento-texto`) usa el claro y los links `text-blue-600` pasan a
+  `#93c5fd`. Sepia sigue con el pastel. No usar `color-mix()`: el build lo baja a un respaldo que en Chrome viejo
+  (tablets Huawei) deja el texto del mismo color que el fondo.
+
+**Pendiente (2026-11-10) — Crear OTs desde el detalle de una OC** (origen rama `modulo-venta/informes/comprabasico`,
+backend `ced97d1` + `63fc615`, frontend `485f50c0` + `2dd5cd1b`; pedido del usuario).
+Desde la lista de OC se crea una OC independiente; en su detalle, la tarjeta de OT muestra «+ Crear OT» (o «+ Agregar
+OTs» si ya tiene) y abre un modal con filas título / cantidad / días (agregar y quitar filas). Al crear, se genera una OT
+por fila.
+- Backend: `POST /ordenes-compra/:id/generar-ot` con `{ items: [{ titulo, cantidad, diasEntrega }] }` (1-50 ítems;
+  título obligatorio, cantidad > 0, días entero > 0; se valida todo antes de crear). Roles de crear OT: admin, asistente,
+  supervisor, planner, jefatura, coordinadora. Rechaza OC anulada o cadena cerrada (`bloqueadoPorCadenaCerrada`); no
+  bloquea si ya hay OTs (se pueden agregar más). Cada OT comparte el `numeroDocumento` de la OC (enlaza la cadena en
+  ambos sentidos), guarda `cantidad` y `tiempoFabricacion` = días, y hereda empresa, cotizacion (si la OC tiene), planta,
+  encargado, codigoSap, fechaSalida y guías; `numeroOT` correlativo. Se guardan en serie (el pre-save arma el código
+  desde la última OT).
+- Frontend (`DetalleOrdenCompra.jsx`): las OTs de la OC = las de su cotización o, si no tiene, las OTs padre con su
+  `numeroDocumento`. La tarjeta lista todas; informes, GRE, requerimientos, servicios y notificaciones (costo de
+  fabricación) se agregan de todas las OTs; «Crear GRE» lleva un ítem por OT. Modal inline `ModalCrearOTs`.
+  `DetalleOrdenTrabajo` y `ListaOrdenesCompra` ya resolvían OC/OT por `numeroDocumento`.
+
+**Pendiente (2026-11-09) — Fotos de celular grandes en las subidas** (origen SIPAPP-HUAQUIAN, frontend
+`b55d3e5`, backend `8cd5cca`). Fotos de 10-20 MB superan el tope de multer (`upload`, 15 MB): el backend
+respondía 500 genérico y el frontend descartaba la foto sin avisar (`if (res.ok) urls.push(...)`). Fix:
+(1) comprimir en el navegador antes de subir — si pesa ≥ 1,5 MB, `createImageBitmap` + canvas a 2000 px de lado
+mayor, JPEG 0,85; si algo falla, subir la original; (2) mostrar qué fotos no se subieron con el `mensaje` del
+backend; (3) en el error handler global, `err.code === "LIMIT_FILE_SIZE"` → 413 con mensaje claro (MulterError
+no trae `status`).
+- (3) ya está (`Backend/src/middleware/manejarErrores.js` mapea `LIMIT_FILE_SIZE`). (1)-(2): hoy el frontend no sube fotos a `/informes/subir-imagen`; aplicarlos cuando se agregue una subida de fotos.
+
+**Pendiente (2026-11-09) — OCs parciales por ítems de la cotización** (origen SIPAPP-HUAQUIAN,
+frontend `6a8fb9f`, backend `dacedf1`; reglas en la skill `erp-cadena-documento` §8). Seleccionar 1..n ítems
+de la cotización (columna "OC" con checkbox, al lado de la de OT) y generar UNA sola OC con N° propio, título =
+títulos de los ítems unidos por " / " (editable) y monto = subtotal de los ítems × (total − igv) / Σ subtotales
+(editable), para que la suma de OCs parciales dé la base sin IGV de la cotización. Requiere cotización aprobada
+y enviada; mismos roles que crean OC.
+- Backend: `items[].ocGenerada` (ref a la OC; el ítem se libera si la OC se anula; el PUT de la cotización la
+  preserva por índice igual que `otGenerada`), `OrdenCompra.desdeItemsCotizacion` (excluida de
+  `heredarTituloCotizacion`, ni su título ni la descripción de su factura se pisan) y
+  `POST /ordenes-compra/desde-items`.
+- Frontend: el detalle de la cotización lista TODAS sus OCs y facturas; la factura de cada OC se resuelve solo
+  por `Factura.ordenCompra` (el respaldo por cotización/`numeroDocumento` solo para facturas sin OC — también en
+  la lista de OCs y en el detalle de OT, que muestra la OC del ítem de esa OT); "Crear factura" desde la OC
+  prellena solo los ítems de esa OC.
+- Ojo: generar OT desde ítems con la cotización ya enviada no debe guardarla antes (el PUT rechaza enviadas → 400).
+
+**Pendiente (2026-11-06) — rol `coordinadora` con los mismos privilegios que `jefatura`, incluido el manejo de precios
+(decisión del usuario; origen rama `modulo-venta/informes/comprabasico`, sin commit al anotar):** la idea es que coordinadora
+pueda manejar precios igual que jefatura. Se le quitan las restricciones de "solo lectura / sin precios ni montos" en
+Cotizaciones y Órdenes de Compra, y recibe las mismas excepciones que jefatura (p. ej. operar sobre cadenas cerradas,
+`rol !== "jefatura"` en las rutas). **Excepto**: Guías (puede verlas, no crearlas ni emitirlas), Facturas y Fact.
+Electrónica, Tipo de Cambio y Sistema (no se le otorgan). Revisar `Frontend/src/components/Sidebar.jsx` (`NAV_ITEMS` y el
+comentario de la matriz de roles), los guards de `App.jsx`, los condicionales de rol de cada página y las listas de roles
+de `Backend/src/routes` y middlewares. **Aplicado en comprabasico (2026-11-06, sin commit al anotar):** además de lo
+anterior, a coordinadora se le quitó la emisión de guías, que antes tenía (`guias.js` `puedeEmitir`, ruta
+`/guias/emitir`, botones «Emitir Guía»/«Crear GRE»: se separó `puedeVerGRE` de `puedeGenerarGRE`), y en
+`DetalleOrdenCompra` sigue sin ver el total de la factura. **Decidido (2026-11-06):** coordinadora también ve Reportes (`routes/reportes.js`
+`puedeVer`, ruta y menú) y el Dashboard de admin/jefatura en vez del de Planner; al entrar va a `/dashboard`. Referencia: el diff de
+comprabasico.
+
 **Resuelto (2026-10-07) — el cobro de una venta con cuotas se registra cuota por cuota (Backend `85137db`, Frontend
 `1e04efb6`; pedido del usuario):** «Registrar cobro» muestra una tarjeta por cuota, cada una con su saldo, y el cobro
 del neto se guarda contra la elegida (`MovimientoTesoreria.documento.cuotaId`); no puede pasar del saldo de la cuota y
@@ -507,10 +663,7 @@ Worktree local en `/home/user/worktrees/venta-produc-compra-contaConcar/<repo>` 
 - **Fechas (backend):** al cerrar una cotización con fecha de pago, la factura se guarda a medianoche de Lima
   (`routes/cotizaciones.js`, antes medianoche UTC = día anterior en Lima); los rangos mensuales del resumen tributario
   y del SIRE ya no dependen del huso del servidor (`setUTCMonth`).
-- **Decisión pendiente del usuario:** las fechas de solo día de los módulos antiguos (cotización, OT, OC, ingreso de
-  equipo) se siguen **guardando** a medianoche UTC; se muestran bien, pero un reporte del servidor por rango en hora
-  de Lima puede contar el día 1 en el mes anterior. Unificar exige un cast global en Mongoose y **migrar los datos
-  existentes**: no se hizo sin su OK.
+- **Fechas a medianoche de Lima (2026-11-24, pedido del usuario; sin commit al anotar):** (1) conversión global en `Backend/src/config/fechasLima.js` (importada desde `config/db.js` y `test/helpers.js`): todo `"AAAA-MM-DD"` que entra a un campo `Date` —documentos, filtros y `findByIdAndUpdate`— queda a medianoche de Lima; (2) `comprobante.controller` y `guia.controller` usan `aFechaLima` (emisión, vencimiento, cuotas, traslado); (3) se quitaron los rangos de mes en UTC de SIRE (`registrosDelSistema`), asientos automáticos (`construirPeriodo`, `fechaUtcALima`) y resumen tributario (`ventasDelMes`), y las lecturas del día del comprobante pasan a hora Lima (`facturaInterna`, `facturas.js`, `tcDeVenta`, TC del resumen). Frontend: `PanelResumenTributario` ya no fuerza UTC; `utils/fecha.js` sigue leyendo en UTC los valores a medianoche UTC exacta (legado). Tests: `test/fechasLima.test.js` y fixtures de `sire`, `resumenTributario`, `asientosAutomaticos` y `retencionIgvCpe` a medianoche de Lima. **Pendiente (4): correr la migración en cada base** con `node scripts/migrarFechasLima.mjs` (simula; `--aplicar` escribe; `--uri` para otra base). Suma 5 h a todo valor `Date` a `00:00:00.000Z` exacto en todas las colecciones, salvo `createdAt`/`updatedAt`; es idempotente. Probada en una copia de la base local (28 valores: comprobantes, cuotas, cotizaciones, facturas; segunda pasada 0). Aún no aplicada en ninguna base. El usuario la correrá en la base del cliente. 2026-11-25: los listados de CPE y GRE filtraban `hasta` con `new Date(hasta)` (00:00Z) y dejaban fuera lo emitido ese día (05:00Z); ahora usan `aFechaLima` (test en `retencionIgvCpe`). El XML no cambia: fecha y hora salen de `fechaHoraEmisionLima()` y las cuotas viajan como texto. Sin migrar, un registro viejo del día 1 cae en el mes anterior del SIRE, los asientos y el resumen, y los lectores en hora Lima del backend lo muestran un día antes (en la base local de dev no hay ninguno del día 1).
 - Pendiente de la auditoría (no pedido): asignación masiva en cotizaciones/OT/OC, informes sin guarda de rol, cantidad
   negativa en movimientos de almacén y JWT sin revalidar usuario (el usuario dejó seguridad fuera por ahora).
 
@@ -561,7 +714,7 @@ Contabilidad → Configuración (semilla: gasto bancario 6391). Backend 369 test
 E2E del flujo integrado OK. Detalle en las secciones «Integración con main» de los specs de B7 y caja chica.
 
 **Decisiones por confirmar con el usuario** (tomadas al implementar los saldos; el usuario pidió dejarlas anotadas):
-1. El saldo inicial lo editan jefatura y admin (como el resto de Configuración); el tesorero no.
+1. ~~El saldo inicial lo editan jefatura y admin; el tesorero no.~~ **Resuelto (2026-11-12, decisión del usuario):** también el **contador**, pero solo el saldo inicial (nombre, estado, crear cuentas y el resto de Configuración siguen siendo de jefatura/admin; el contador ve la pestaña en solo lectura). Backend `routes/cuentasTesoreria.js` (`puedeEditarCuenta`, test en `saldosCuentas.test.js`); Frontend `Tesoreria.jsx` y `PanelConfiguracion.jsx` (`soloSaldoInicial`). Sin commit al anotar.
 2. Se agregaron transferencias entre cuentas propias de la misma moneda (el diseño no las pedía).
 3. Manuales en USD: el ingreso usa el TC de cobros (compra por defecto), el egreso el de pagos (venta) y la
    transferencia el de compra.
@@ -612,6 +765,13 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
   - En la base E2E, la tarjeta de BCP Dólares (US$ 2,217.82) y el cierre de dif. de cambio (US$ 2,276.82) difieren en
     el egreso MOV-0007 de S/ 59 (un comprobante en soles pagado desde la cuenta en dólares): revisar si un pago en otra
     moneda debe bloquearse o convertirse.
+- Base sin IGV de la OC distinta a la de su cotización (anotado 2026-11-12; origen HUAQUIAN frontend `f144de0`,
+  aplicado en INTALES `venta-produccion-comprabasico` sin commit al anotar): «Crear OC» desde la lista
+  (`ModalCrearOrdenCompra.jsx`) precarga `cot.total` (con IGV) como subtotal → OC inflada 18 %; la OC desde la
+  cotización (`ModalOrdenCompra.jsx`) precarga `cotizacion.subtotal`, que `DetalleCotizacion.jsx` guarda **bruto**
+  cuando no hay ítems (sin `descuentoGlobal`). Fix: precargar `total − igv` (`subtotal` solo si no hay `igv`) con un
+  helper `baseSinIgvCotizacion` en `utils/cotizacionItems.js`. Datos existentes: migrar solo las OC que coinciden exacto
+  con el monto erróneo; **las OC con factura no se tocan** (regla del usuario), solo se listan.
 
 ## 6. Índice de documentos
 
@@ -621,3 +781,97 @@ aplicación de NC; B18 anticipos; B19 correlativo de línea en asientos.
   comprobantes de compra, ventas US$/tributario).
 - `docs/superpowers/plans/` y `docs/superpowers/sdd/`: planes y ledgers (decisiones `Ruling:` y menores).
 - `docs/HANDOFF-comprobantes-compra.md`: traspaso histórico de las Fases 1–2 (cerrado).
+
+## Hecho (2026-11-19, portado desde SIPAPP-INTALES-venta-produccion-comprabasico Backend `ca569d1`/`c875353`, Frontend `427598db`/`f704bd25`/`878084a2`)
+
+- **Cotización «Afecto a IGV»** (casilla marcada por defecto; desmarcada = trabajo en el extranjero): `Cotizacion.afectoIgv`.
+  Sin IGV → `igv = 0`, `total = subtotal con descuento`, PDF «I.G.V (NO AFECTO)», lista y precarga de OC
+  (`ModalCrearOrdenCompra`) usan `total` como base, y al cerrar la cadena a mano no hay detracción. El backend
+  (`normalizarAfectoIgv`) fuerza `igv = 0`. La OC y la factura que nacen de ella tampoco llevan IGV (ver «Hecho
+  2026-11-20»); `ModalOrdenCompra` precarga `cotizacion.subtotal` (bruto, ver pendiente
+  «base sin IGV de la OC»).
+- **Filtro «Estado de servicio» de la lista de OTs:** filtra por `estadoProgresoOT` (lo que muestra el chip): No asignado /
+  Pendiente / En progreso / Completado / Entregado + Cerrada + Anulada. Las anuladas solo salen en «Todas» y «Anulada».
+- **Reporte Costos de Fabricación** (decisión del usuario): una fila por OT con su costo; OT↔OC del cliente por
+  `numeroDocumento` en `utils/costosOT.js` (entran OC sueltas y se suman todas las OC no anuladas de la cadena); el margen
+  es de la OC = OC sin IGV − costo de TODAS las OTs de la cadena (`costoCadena`, calculado en la ruta del listado). La
+  moneda sigue el selector S/ · US$ de la página (TC SUNAT de una fecha). OC solo en la primera OT de cada cadena
+  (`rowSpan` en pantalla; celdas vacías en el Excel).
+
+## Hecho (2026-11-20, sin commit al anotar)
+
+- **OC y factura de una cotización sin IGV tampoco llevan IGV** (decisión del usuario): `OrdenCompra.afectoIgv` se hereda de la
+  cotización en su `pre("save")` (y en el PUT al vincular otra cotización) y fuerza `igv = 0`, `total = subtotal`;
+  `Factura.afectoIgv` se hereda de su OC (o de su cotización) al crearla y deja IGV 0, sin detracción ni retención. Los modales
+  y detalles de OC y factura muestran «IGV (no afecto)». La factura del cierre de cadena lleva `afectoIgv`.
+- **CPE de exportación NO implementado:** `ModalCrearFactura` y `EmitirComprobante` (prellenado desde OC) **bloquean** la emisión
+  para una OC sin IGV (`MSG_OC_SIN_IGV` en `utils/catalogosSunat.js`): emitirla con afectación 10 sería un comprobante gravado
+  incorrecto, y con 40 sobre la operación 0101 SUNAT la rechazaría (correlativo quemado). **Pendiente de decidir con el
+  usuario:** factura de exportación de servicios (tipo de operación 0200, afectación 40, `9995`/`EXP`, receptor no domiciliado
+  `tipoDoc 0`, código de producto SUNAT por línea; skill `sunat-cpe-ubl21` §«Caso exportación») y su asiento (7011 exportación).
+- **Hoja «Detalle de compras» en el Excel de Reportes** (`GET /reportes/detalle-compras`, se pide al exportar): una fila por
+  compra sin duplicados, con OT / sub-OT, N° OC del cliente y su **fecha de creación** (decisión del usuario: la de la OC del
+  cliente), proveedor, descripción, cantidad, moneda, precio unitario sin IGV, flete y total. Mismas fuentes que `utils/costosOT.js`: líneas de OCP ligadas a la OT, ítems antiguos
+  procesados que no pasaron por una OCP y comprobantes sin OC ligados a la OT (sin NC). Test en
+  `test/costosFabricacion.test.js`.
+
+## Hecho (2026-11-25, sin commit al anotar) — evaluación heurística de UX (skill `heuristicas-nielsen-ux`)
+
+Revisión de las 10 heurísticas de Nielsen en todo el frontend; corregidos los S4 y S3. Backend y Frontend.
+
+- **Transversal:** `fetchAuth`/`uploadAuth` convierten la caída de red en una respuesta 503 con `mensaje` (ya no quedan
+  botones en «Guardando…»); 401 → `#/login?motivo=expirada` con aviso en Login; Login navega a `/` (redirección por
+  rol). Listener global `wheel` en `main.jsx`. `ConfirmacionAccion` (JSX, `peligro`, `textoProcesando`, Esc),
+  `PromptAccion` (`error`, `peligro`, `minLength`/`maxLength`, Esc), `useConfirmar(texto, { peligro })`.
+- **Ventas/CPE:** confirmación con resumen antes de emitir (ModalCrearFactura, EmitirComprobante, EmitirGuia); fecha de
+  emisión de solo lectura en ModalCrearFactura y la OC creada se reutiliza al reintentar; advertencia de NC con la regla
+  real; NC/ND responden `serie` y se muestra `aviso`; GRE EN_PROCESO en ámbar; serie y punto de partida restaurados en
+  «Nuevo»; filtro «hasta» de comprobantes y guías en hora Lima (backend + tests); ListaFacturas con moneda y totales por
+  moneda; estados cargando/error/vacío en listas; **factura aceptada por SUNAT no se anula internamente** (backend 400 +
+  botón «Emitir nota de crédito» → EmitirComprobante con `state.comprobanteId`); `BotonAnular` muestra el error dentro
+  del diálogo; EN_PROCESO en `ESTADO_COMPROBANTE`.
+- **Tesorería/contabilidad:** vista previa de ModalImpuestoVenta con moneda y TC; confirmación con conteo en Exportar
+  CONCAR, Contabilizar (todo/seleccionados), Dar por resuelto y Cerrar conciliación; tres estados en Por pagar/Por
+  cobrar/Movimientos/Caja chica/Diferencia de cambio; avisos «Guardado»/error junto al control en Configuración;
+  «Cambios sin guardar» en configuración contable; descartar cambios con confirmación (factura de proveedor, asiento,
+  conciliación).
+- **Almacén/operaciones:** ingreso en masa sin duplicar al reintentar; cantidad > 0 y precio ≥ 0; egreso exige lote y no
+  supera su disponible; confirmación con cantidad × precio = total; moneda de la OC al vincular/quitar cotización;
+  errores del backend en OT/OC; cambios de estado de OT con error visible; clases Tailwind rotas en Requerimientos.
+- **Planilla:** GET de la planilla devuelve `desactualizada` + motivos (banner con «Recalcular»), resumen al cerrar,
+  aviso de boletas quitadas al recalcular, avisos persistentes, confirmación al descartar cambios, modales de anular
+  unificados en PromptAccion. Dashboard, Reportes y Usuarios muestran error con «Reintentar».
+- **Pendientes de esta revisión:** NC sobre **boleta** no se puede emitir desde la pantalla (FC02/FD02 empiezan con F y la
+  validación exige la letra de la referencia): falta decidir serie BC/BD. `utils/leerError.js` común (hoy copiado en
+  ~10 archivos). Endpoint de vista previa de exportación CONCAR (hoy el frontend pagina asientos para contar). S2 no
+  abordados: etiquetas de rol en tres copias, diez pestañas planas de Planilla, búsqueda en listas de trabajadores,
+  buscadores de material sin teclado, filtros de fecha sin etiqueta en tesorería, paginación de asientos.
+
+
+## Hecho (2026-11-25, sin commit al anotar) — más funciones portadas desde comprabasico
+
+- **Servicios externos de la cotización en su moneda** (fix de comprabasico en `DetalleCotizacion.jsx`): cada fila muestra
+  `costo × cantidad + transporte` en la moneda del servicio y el total va en soles con el `tipoCambio` guardado de cada
+  servicio (`utils/montoCompra.js` `costoCompraSoles`), sin los anulados. Antes un servicio en US$ salía como S/ y el total
+  sumaba dólares como soles; además mostraba el costo unitario. En comprabasico el total aún ignora cantidad y transporte.
+- **Descripción del ítem de cotización en `<textarea rows={4}>`** (comprabasico `c4e54b98`).
+- **Fotos comprimidas antes de subir** (`utils/comprimirFoto.js`, comprabasico `16e3b547`): JPEG/PNG/WebP ≥ 1,5 MB a 2000 px
+  en JPEG 85 %; en `TarjetaArchivosRelacionados`, `ModalNuevaCotizacion`, `ModalNuevaOT`, imagen del ítem en
+  `TablaItemsCotizacion` y `compras/ArchivosProveedor`. No en `ModalFacturaProveedor` ni `PanelSire` (sustento tributario).
+- Detalle del ítem cotizado en la OT y adjuntos asignables por OT: ver las dos entradas «Hecho (2026-11-25…)» de §5.
+
+## Pendiente — funciones de comprabasico que necesitan decisión (anotado 2026-11-25)
+
+- **`anularFacturaInterna` + `PATCH /cpe/:id/anulacion-externa`** (comprabasico `c0d8fb2`): cuando una NC anula el CPE, la
+  factura interna se anula sola si no tiene pagos ni cadena cerrada (si los tiene, devuelve un aviso para regularizar); y
+  una anulación hecha fuera del ERP (NC en SOL o en SmartPSE, comunicación de baja) se registra a mano con documento y
+  motivo. En contaoficial la NC solo pone `comprobanteEmitido=false` y alguien anula la factura a mano. Al portar: revisar
+  cobros en tesorería (`saldosTesoreria.js`) además de `montoPagado`, y el asiento de la anulación.
+- **Corregir el monto de una compra procesada (solo admin)** (comprabasico `32b81a1`/`c2b1e731`): el esquema
+  `correccionesMonto` ya está, faltan ruta y pantalla. En contaoficial la compra pasa por OCP → factura del proveedor →
+  asientos y tesorería: corregir el requerimiento descuadraría la contabilidad. Propuesta: corregir sobre la factura del
+  proveedor (o NC del proveedor).
+- **Registrar pagos desde la factura** (comprabasico `PATCH /facturas/:id/estado-pago`, cuotas y detracción): en
+  contaoficial `estadoPago`/`montoPagado` se derivan de los cobros de tesorería; escribirlos a mano rompe el cálculo.
+  Propuesta: botón «Registrar cobro» en la factura que cree el cobro en tesorería. No urgente.
+

@@ -5,6 +5,7 @@ import { nombreTrabajador, textoPension, REGIMENES_SALUD, AREAS, TRABAJADOR_VACI
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
+import useConfirmar from "../../hooks/useConfirmar";
 import FichaTRegistro, { Lista } from "./FichaTRegistro";
 import ModalLiquidacion from "./ModalLiquidacion";
 import { TREGISTRO_VACIO, estadoTexto, camposBloqueados, puedeDesbloquear, puedeNuevoVinculo, lineaEdicion } from "../../utils/tregistro";
@@ -93,6 +94,14 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
   const [confirmaDesbloqueo, setConfirmaDesbloqueo] = useState(false);
   const [nuevoVinculo, setNuevoVinculo] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [inicial] = useState(form);
+  // Desbloquear no es un cambio de datos: no cuenta para «sin guardar».
+  const sucio = editable && JSON.stringify({ ...form, desbloqueo: inicial.desbloqueo }) !== JSON.stringify(inicial);
+  const { confirmar: confirmarDescarte, dialogo: dialogoDescarte } = useConfirmar("Sí, descartar", { peligro: true });
+  const cerrar = async () => {
+    if (sucio && !(await confirmarDescarte("Hay cambios sin guardar. ¿Descartarlos?"))) return;
+    onClose();
+  };
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const setPension = (k) => (e) => setForm((f) => ({ ...f, pension: { ...f.pension, [k]: e.target.value } }));
   const setCuentaCts = (k) => (e) => setForm((f) => ({ ...f, cuentaCts: { ...f.cuentaCts, [k]: e.target.value } }));
@@ -352,7 +361,7 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
         </fieldset>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">{editable ? "Cancelar" : "Cerrar"}</button>
+          <button onClick={cerrar} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">{editable ? "Cancelar" : "Cerrar"}</button>
           {editable && (
             <button onClick={guardar} disabled={guardando} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
               {guardando ? "Guardando…" : "Guardar"}
@@ -365,6 +374,7 @@ function ModalTrabajador({ trabajador, estado, perfil, catalogos, centrosCosto, 
         <ConfirmacionAccion mensaje="SUNAT no se actualiza: corrige también el dato en T-Registro. ¿Desbloquear para editar?" textoConfirmar="Desbloquear"
           onCancelar={() => setConfirmaDesbloqueo(false)} onConfirmar={() => { setForm((f) => ({ ...f, desbloqueo: true })); setConfirmaDesbloqueo(false); }} />
       )}
+      {dialogoDescarte}
     </div>
   );
 }

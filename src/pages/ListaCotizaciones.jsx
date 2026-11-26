@@ -10,6 +10,7 @@ import { ChipEstadoOT } from "../components/detalleShared";
 import TablaScroll from "../components/TablaScroll";
 import * as XLSX from "xlsx";
 import { veFacturas, rolDeSesion } from "../utils/roles";
+import { r2 } from "../utils/redondeo";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -66,11 +67,10 @@ const titulosOT = (ots) =>
 // decimales que, multiplicados por el TC, descuadraban la conversión en
 // ±0.01 (reportado por el usuario en HUAQUIAN, 2026-11-06). `/1.18` queda
 // solo de respaldo para filas sin `igv`.
-const r2 = (n) => Math.round(n * 100) / 100;
 const totalesDuales = (c, tipoCambio) => {
   const total = Number(c.total) || 0;
   const igv = Number(c.igv) || 0;
-  const sinIgv = r2(igv > 0 ? total - igv : c.total != null ? total / 1.18 : Number(c.subtotal) || 0);
+  const sinIgv = r2(c.afectoIgv === false ? total : igv > 0 ? total - igv : c.total != null ? total / 1.18 : Number(c.subtotal) || 0);
   const tc = Number(tipoCambio) || 0;
   if (c.moneda === "USD") {
     return { pen: tc > 0 ? r2(sinIgv * tc) : null, usd: sinIgv };
@@ -248,14 +248,20 @@ export default function ListaCotizaciones() {
     return m;
   };
 
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState("");
+
   const cargar = () =>
     Promise.all([
-      fetchAuth("/cotizaciones").then((r) => r.ok ? r.json() : []),
+      fetchAuth("/cotizaciones").then(async (r) => (r.ok ? r.json() : { error: (await r.json().catch(() => ({}))).mensaje || "No se pudieron cargar las cotizaciones." })),
       fetchAuth("/ordenes-trabajo").then((r) => r.ok ? r.json() : []),
       fetchAuth("/ordenes-compra").then((r) => r.ok ? r.json() : []),
       (veFacturas(rolDeSesion()) ? fetchAuth("/facturas").then((r) => r.ok ? r.json() : []) : Promise.resolve([])),
       fetchAuth("/tipo-cambio").then((r) => r.ok ? r.json() : null),
     ]).then(([cots, ots, ocs, facts, tc]) => {
+      setCargando(false);
+      if (!Array.isArray(cots)) { setErrorCarga(cots.error); return; }
+      setErrorCarga("");
       setCotizaciones(cots);
       setOtsSinCotizacion(ots.filter((o) => !o.cotizacion));
       setOtsPorCot(buildOtsMap(ots));
@@ -271,6 +277,8 @@ export default function ListaCotizaciones() {
     });
 
   useEffect(() => { cargar(); }, []);
+
+  const reintentar = () => { setCargando(true); setErrorCarga(""); cargar(); };
 
   // Las OT creadas sin cotización (flujo directo) se muestran como filas propias,
   // marcadas con `_esOT`, para que también aparezcan en esta vista.
@@ -360,6 +368,16 @@ export default function ListaCotizaciones() {
   // vivir en esa tabla, no duplicarse acá.
   const sinOT = filtradas.filter((c) => !c._esOT && !esCerrada(c) && !otsPorCot.get(c._id)?.length);
   const hayFiltro = Object.values(filtros).some(Boolean);
+  const mensajeVacio = (sinFiltro) => {
+    if (cargando) return "Cargando cotizaciones…";
+    if (errorCarga) return (
+      <span className="text-red-600">
+        {errorCarga}
+        <button onClick={reintentar} className="ml-2 underline hover:text-red-800">Reintentar</button>
+      </span>
+    );
+    return hayFiltro ? "Sin resultados para los filtros aplicados" : sinFiltro;
+  };
   const vistaEfectiva = vista;
 
   // Misma columnas que TablaCotizaciones — una hoja por cada tabla visible.
@@ -499,13 +517,20 @@ export default function ListaCotizaciones() {
         </button>
       </div>
 
+      {errorCarga && cotizaciones.length > 0 && (
+        <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-5 flex items-center justify-between gap-4">
+          <span>{errorCarga}</span>
+          <button onClick={reintentar} className="shrink-0 underline hover:text-red-900">Reintentar</button>
+        </div>
+      )}
+
       {vistaEfectiva === "todasLasCotizaciones" && (
         <TablaCotizaciones
           titulo="Todas las cotizaciones"
           acento="bg-blue-500"
           cotizaciones={filtradas}
           onSelect={seleccionarFila}
-          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin cotizaciones registradas"}
+          vacioMsg={mensajeVacio("Sin cotizaciones registradas")}
           tipoCambio={tipoCambio}
           puedeVerPrecios={puedeVerPrecios}
           mostrarEstadoServicio
@@ -521,7 +546,7 @@ export default function ListaCotizaciones() {
           acento="bg-indigo-500"
           cotizaciones={sinOT}
           onSelect={seleccionarFila}
-          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Todas las cotizaciones ya tienen OT"}
+          vacioMsg={mensajeVacio("Todas las cotizaciones ya tienen OT")}
           tipoCambio={tipoCambio}
           puedeVerPrecios={puedeVerPrecios}
         />
@@ -533,7 +558,7 @@ export default function ListaCotizaciones() {
           acento="bg-amber-500"
           cotizaciones={pendientes}
           onSelect={seleccionarFila}
-          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin cotizaciones pendientes"}
+          vacioMsg={mensajeVacio("Sin cotizaciones pendientes")}
           tipoCambio={tipoCambio}
           puedeVerPrecios={puedeVerPrecios}
           mostrarEstadoServicio
@@ -548,7 +573,7 @@ export default function ListaCotizaciones() {
           acento="bg-emerald-500"
           cotizaciones={conOC}
           onSelect={seleccionarFila}
-          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin cotizaciones con OC"}
+          vacioMsg={mensajeVacio("Sin cotizaciones con OC")}
           tipoCambio={tipoCambio}
           puedeVerPrecios={puedeVerPrecios}
           mostrarTituloOT
@@ -562,7 +587,7 @@ export default function ListaCotizaciones() {
           acento="bg-gray-500"
           cotizaciones={cerradas}
           onSelect={seleccionarFila}
-          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin cotizaciones cerradas"}
+          vacioMsg={mensajeVacio("Sin cotizaciones cerradas")}
           tipoCambio={tipoCambio}
           puedeVerPrecios={puedeVerPrecios}
           mostrarTituloOT

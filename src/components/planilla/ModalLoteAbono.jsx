@@ -10,6 +10,7 @@ import {
 } from "../../utils/abonos";
 import useConfirmar from "../../hooks/useConfirmar";
 import ConfirmacionAccion from "../ConfirmacionAccion";
+import PromptAccion from "../PromptAccion";
 import FormNuevoLoteAbono, { AvisosFijos } from "./FormNuevoLoteAbono";
 import TablaFilasLote from "./TablaFilasLote";
 
@@ -20,50 +21,6 @@ const cuando = (f) => formatearFechaHora(f, { day: "2-digit", month: "2-digit", 
 
 const pantallaDe = (l) => ({ fecha: l.fecha, referencia: l.referencia || "", cargo: l.formato === "bcp" ? { tipo: l.cargo?.tipo || "C", numero: l.cargo?.numero || "" } : { tipo: "", numero: "" }, editables: editablesDe(l.filas) });
 
-function ModalAnularLote({ lote, conEgreso, onCancelar, onAnulado }) {
-  const [motivo, setMotivo] = useState("");
-  const [error, setError] = useState("");
-  const [procesando, setProcesando] = useState(false);
-
-  const anular = async () => {
-    const texto = motivo.trim();
-    if (texto.length < 3) return setError("Escribe el motivo (de 3 a 200 caracteres).");
-    setProcesando(true);
-    setError("");
-    try {
-      const r = await fetchAuth(`/planilla/abonos/${lote._id}/anular`, { method: "POST", body: JSON.stringify({ motivo: texto }) });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) return setError(d.mensaje || "No se pudo anular el lote.");
-      onAnulado(d);
-    } catch {
-      setError(MENSAJE_RED);
-    } finally {
-      setProcesando(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm space-y-4">
-        <h4 className="font-semibold text-gray-800 text-sm">Anular el lote {lote.codigo}</h4>
-        <p className="text-sm text-gray-600">
-          Deja de contar como abonado{conEgreso ? " y se anula su egreso en Tesorería" : ""}{lote.tipo === "adelanto" ? "; se quita el 0701 de las boletas (la planilla debe estar en borrador)" : ""}.
-        </p>
-        <label className="text-xs text-gray-500 block">Motivo
-          <textarea autoFocus value={motivo} maxLength={200} rows={3} onChange={(e) => setMotivo(e.target.value)} className={`${INP} w-full resize-none`} />
-        </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={onCancelar} disabled={procesando} className={BTN}>Cancelar</button>
-          <button type="button" onClick={anular} disabled={procesando} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">
-            {procesando ? "Anulando…" : "Anular"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Un lote de abono: se crea (`nuevo`) o se abre (`loteId`). En borrador se corrigen montos y cabecera; confirmado se descarga.
 export default function ModalLoteAbono({ loteId, nuevo, puedeEscribir, onClose, onCambio }) {
   const [lote, setLote] = useState(null);
@@ -73,6 +30,8 @@ export default function ModalLoteAbono({ loteId, nuevo, puedeEscribir, onClose, 
   const [bajando, setBajando] = useState("");
   const [modal, setModal] = useState(null); // "confirmar" | "anular" | "eliminar"
   const { confirmar: preguntar, dialogo } = useConfirmar("Sí, confirmar");
+  const { confirmar: confirmarDescarte, dialogo: dialogoDescarte } = useConfirmar("Sí, descartar", { peligro: true });
+  const [errorAnular, setErrorAnular] = useState("");
 
   const aplicar = useCallback((l) => {
     setLote(l);
@@ -94,6 +53,10 @@ export default function ModalLoteAbono({ loteId, nuevo, puedeEscribir, onClose, 
   const esBcp = lote?.formato === "bcp";
   const sucio = editable && hayCambiosLote({ lote, ...pantalla });
   const set = (parche) => setPantalla((p) => ({ ...p, ...parche }));
+  const cerrar = async () => {
+    if (sucio && !(await confirmarDescarte("Hay cambios sin guardar. ¿Descartarlos?"))) return;
+    onClose();
+  };
 
   const llamar = async (ruta, opciones, textoError) => {
     setProcesando(true);
@@ -144,7 +107,21 @@ export default function ModalLoteAbono({ loteId, nuevo, puedeEscribir, onClose, 
     onCambio?.();
     onClose();
   };
-  const alAnular = (d) => { setModal(null); terminar(d); };
+  const anular = async (motivo) => {
+    setErrorAnular("");
+    setProcesando(true);
+    try {
+      const r = await fetchAuth(`/planilla/abonos/${lote._id}/anular`, { method: "POST", body: JSON.stringify({ motivo }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return setErrorAnular(d.mensaje || "No se pudo anular el lote.");
+      setModal(null);
+      terminar(d);
+    } catch {
+      setErrorAnular(MENSAJE_RED);
+    } finally {
+      setProcesando(false);
+    }
+  };
 
   const descargar = async (clave, tarea) => {
     setBajando(clave);
@@ -199,7 +176,7 @@ export default function ModalLoteAbono({ loteId, nuevo, puedeEscribir, onClose, 
               <span className={`text-xs px-2 py-1 rounded-full ${estado.clase}`}>{estado.texto}</span>
               <span className="text-xs text-gray-500">Formato {FORMATOS[lote.formato]} · Cuenta de cargo: {lote.cuentaCargo?.nombre}</span>
               <div className="flex-1" />
-              <button type="button" onClick={onClose} className={BTN}>Cerrar</button>
+              <button type="button" onClick={cerrar} className={BTN}>Cerrar</button>
             </div>
 
             <div className="grid sm:grid-cols-3 gap-3">
@@ -259,7 +236,7 @@ export default function ModalLoteAbono({ loteId, nuevo, puedeEscribir, onClose, 
                     {lote.formato === "excel"
                       ? <button type="button" onClick={descargarExcel} disabled={!!bajando || t.filasEnArchivo === 0} className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">{bajando === "excel" ? "Generando…" : "Descargar Excel"}</button>
                       : <button type="button" onClick={descargarTxt} disabled={!!bajando || t.filasEnArchivo === 0} className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">{bajando === "txt" ? "Descargando…" : "Descargar archivo (.txt)"}</button>}
-                    <button type="button" onClick={() => setModal("anular")} disabled={procesando} className="border border-red-300 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-50 disabled:opacity-50">Anular</button>
+                    <button type="button" onClick={() => { setErrorAnular(""); setModal("anular"); }} disabled={procesando} className="border border-red-300 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-50 disabled:opacity-50">Anular</button>
                   </>
                 )}
                 {editable && (
@@ -283,8 +260,15 @@ export default function ModalLoteAbono({ loteId, nuevo, puedeEscribir, onClose, 
         <ConfirmacionAccion procesando={procesando} textoConfirmar="Eliminar" onCancelar={() => setModal(null)} onConfirmar={eliminar}
           mensaje={`Se elimina el borrador ${lote.codigo}. Podrás armar otro. ¿Eliminar?`} />
       )}
-      {modal === "anular" && lote && <ModalAnularLote lote={lote} conEgreso={t.filasEnArchivo > 0} onCancelar={() => setModal(null)} onAnulado={alAnular} />}
+      {modal === "anular" && lote && (
+        <PromptAccion titulo={`Anular el lote ${lote.codigo}`} peligro minLength={3} maxLength={200} error={errorAnular}
+          label={<><span className="block text-sm text-gray-600 mb-3">
+            Deja de contar como abonado{t.filasEnArchivo > 0 ? " y se anula su egreso en Tesorería" : ""}{lote.tipo === "adelanto" ? "; se quita el 0701 de las boletas (la planilla debe estar en borrador)" : ""}.
+          </span>Motivo</>}
+          procesando={procesando} textoConfirmar="Anular" textoProcesando="Anulando…" onCancelar={() => setModal(null)} onConfirmar={anular} />
+      )}
       {dialogo}
+      {dialogoDescarte}
     </div>
   );
 }

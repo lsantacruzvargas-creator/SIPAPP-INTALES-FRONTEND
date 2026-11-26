@@ -13,6 +13,12 @@ import {
 const FILTROS_VACIO = { tipoGuia: "", estado: "", desde: "", hasta: "" };
 const SELECT = "input-field w-auto";
 
+// EN_PROCESO (SUNAT aún no responde) no está en ESTADO_COMPROBANTE del catálogo compartido.
+const ESTADOS = ESTADO_COMPROBANTE.some((e) => e.valor === "EN_PROCESO")
+  ? ESTADO_COMPROBANTE
+  : [...ESTADO_COMPROBANTE, { valor: "EN_PROCESO", label: "En proceso", cls: "bg-yellow-100 text-yellow-800" }];
+const estadoInfo = (v) => ESTADOS.find((e) => e.valor === v) ?? { label: v, cls: estadoComprobanteClase(v) };
+
 export default function ListaGuias() {
   const navigate = useNavigate();
   const [guias, setGuias] = useState([]);
@@ -21,17 +27,20 @@ export default function ListaGuias() {
   const [pagina, setPagina] = useState(1);
   const [paginacion, setPaginacion] = useState({ total: 0, pages: 1 });
   const [seleccionada, setSeleccionada] = useState(null);
-  const [cargando, setCargando] = useState(false);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState("");
 
   const cargar = async () => {
     setCargando(true);
+    setErrorCarga("");
     const params = new URLSearchParams();
     Object.entries(filtrosAplicados).forEach(([k, v]) => v && params.set(k, v));
     params.set("page", pagina);
     params.set("limit", 20);
     const res  = await fetchAuth(`/guias?${params.toString()}`);
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (data.ok) { setGuias(data.data); setPaginacion(data.pagination); }
+    else setErrorCarga(data.mensaje || data.error || "No se pudieron cargar las guías.");
     setCargando(false);
   };
 
@@ -78,7 +87,7 @@ export default function ListaGuias() {
         </select>
         <select name="estado" value={filtros.estado} onChange={handleFiltro} className={SELECT}>
           <option value="">Todo estado</option>
-          {ESTADO_COMPROBANTE.map((e) => (
+          {ESTADOS.map((e) => (
             <option key={e.valor} value={e.valor}>{e.label}</option>
           ))}
         </select>
@@ -112,6 +121,11 @@ export default function ListaGuias() {
           <tbody className="divide-y divide-gray-100">
             {cargando ? (
               <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">Cargando…</td></tr>
+            ) : errorCarga ? (
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-red-600">
+                {errorCarga}
+                <button onClick={cargar} className="ml-2 underline hover:text-red-800">Reintentar</button>
+              </td></tr>
             ) : guias.length === 0 ? (
               <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">Sin guías para los filtros aplicados</td></tr>
             ) : (
@@ -136,8 +150,8 @@ export default function ListaGuias() {
                   <td className="px-4 py-3 text-right font-medium">{g.pesoBrutoTotal != null ? `${g.pesoBrutoTotal} ${g.unidadPeso || "KGM"}` : "—"}</td>
                   <td className="px-4 py-3 text-center text-gray-500">{g.fechaTraslado ? formatearFecha(g.fechaTraslado) : "—"}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${estadoComprobanteClase(g.estado)}`}>
-                      {g.estado}
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${estadoInfo(g.estado).cls}`}>
+                      {estadoInfo(g.estado).label}
                     </span>
                   </td>
                 </tr>

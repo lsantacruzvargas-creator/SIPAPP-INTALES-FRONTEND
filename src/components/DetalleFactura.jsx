@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { formatearFecha, aInputFecha } from "../utils/fecha";
 import { round2 } from "../utils/compras";
@@ -16,9 +17,10 @@ import { errorDelFormulario } from "../utils/bloqueo";
 const INP    = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 w-full transition";
 const INP_RO = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full cursor-not-allowed";
 
-function calcular(sub, impuesto) {
+// `afectoIgv: false` = factura de una OC/cotización de trabajo en el extranjero: sin IGV (su impuesto es "ninguno").
+function calcular(sub, impuesto, afectoIgv = true) {
   const s = round2(Number(sub) || 0);
-  const igv = round2(s * 0.18);
+  const igv = afectoIgv ? round2(s * 0.18) : 0;
   const total = round2(s + igv);
   const tipo = impuesto?.tipo || "ninguno";
   const { monto } = calcularImpuesto({ tipo, codigoSunat: impuesto?.codigoSunat, total });
@@ -71,6 +73,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
 
   // Con comprobante aceptado por SUNAT, monto, número y cliente solo cambian con NC/ND (el servidor lo exige).
   const emitida = !!inicial.comprobanteEmitido;
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     numeroFactura:      inicial.numeroFactura      || "",
     fechaCancelacion:   inicial.fechaCancelacion
@@ -86,12 +89,13 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
     fechaSalida: inicial.fechaSalida
       ? aInputFecha(inicial.fechaSalida) : "",
   });
-  const [calc, setCalc]           = useState(calcular(subtotalInicial, inicial.impuesto));
+  const calc = calcular(form.subtotal, inicial.impuesto, inicial.afectoIgv !== false);
   const [ocVinculada, setOC]      = useState(inicial.ordenCompra || null);
   const [empresas, setEmpresas]   = useState([]);
   const [buscadorOC, setBOC]      = useState(false);
   const [cot, setCot]             = useState(inicial.cotizacion || null);
   const [ot, setOt]               = useState(null);
+  const [consolidadas, setConsolidadas] = useState([]);
   const [informes, setInformes]   = useState([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState("");
@@ -156,6 +160,24 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
         null;
       setOt(otResuelta || null);
 
+      // OC consolidada: la factura cubre varias cotizaciones enteras, cada una con su OT.
+      const lineas = ocVinculada?.lineas || [];
+      if (lineas.length && cots && ots) {
+        const partes = lineas.map((l) => {
+          const id = l.cotizacion?._id || l.cotizacion;
+          return {
+            linea: l,
+            cot: cots.find(c => c._id === id) || null,
+            ots: ots.filter(o => !o.ordenPadre && (o.cotizacion?._id || o.cotizacion) === id),
+          };
+        });
+        setConsolidadas(partes);
+        const idsOT = partes.flatMap(p => p.ots.map(o => o._id));
+        Promise.all(idsOT.map(id => fetchAuth(`/informes?ordenTrabajo=${id}`).then(r => (r.ok ? r.json() : []))))
+          .then(listas => setInformes(listas.flat()));
+        return;
+      }
+
       if (otResuelta) {
         fetchAuth(`/informes?ordenTrabajo=${otResuelta._id}`)
           .then(r => r.ok && r.json())
@@ -174,7 +196,6 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === "subtotal") setCalc(calcular(value, inicial.impuesto));
     setForm(prev => ({
       ...prev,
       [name]: value,
@@ -187,7 +208,6 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
     setBOC(false);
     setForm(prev => {
       const nuevoSub = prev.subtotal || (oc.subtotal > 0 ? String(oc.subtotal) : prev.subtotal);
-      if (!prev.subtotal && oc.subtotal > 0) setCalc(calcular(oc.subtotal, inicial.impuesto));
       return {
         ...prev,
         empresa:     prev.empresa     || oc.empresa?._id || "",
@@ -247,7 +267,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
     });
     if (res.ok) { onGuardada(await res.json()); return; }
     const data = await res.json().catch(() => ({}));
-    setError(errorDelFormulario(res.status, data, "Error al anular el documento.") || "");
+    return errorDelFormulario(res.status, data, "Error al anular el documento.");
   };
 
   const oc     = ocVinculada;
@@ -293,7 +313,16 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
                 )}
               </div>
               {!inicial.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} />}
-              {!inicial.anulado && !cadenaCerrada && puedeEditar && <BotonAnular onAnular={anular} />}
+              {!inicial.anulado && !cadenaCerrada && puedeEditar && (emitida && inicial.comprobante ? (
+                <div className="text-right shrink-0">
+                  <button type="button"
+                    onClick={() => navigate("/facturacion-electronica/emitir", { state: { comprobanteId: inicial.comprobante?._id || inicial.comprobante, tipoDocDestino: "07" } })}
+                    className="text-xs text-white/90 hover:text-white underline transition">
+                    Emitir nota de crédito
+                  </button>
+                  <p className="text-[10px] text-white/60 leading-tight">Aceptada por SUNAT: se anula con una nota de crédito</p>
+                </div>
+              ) : <BotonAnular onAnular={anular} />)}
               {!inicial.anulado && !cadenaCerrada && puedeEditar && (
                 <button onClick={() => guardar()} disabled={guardando || !bloqueo.editando}
                   className="bg-white text-emerald-700 text-sm px-5 py-2 rounded-lg hover:bg-emerald-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">
@@ -302,6 +331,11 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
               )}
             </div>
         </div>
+        {error && (
+          <div className="max-w-6xl mx-auto px-8 pb-2.5">
+            <p role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{error}</p>
+          </div>
+        )}
       </div>
 
       {/* Stepper de flujo */}
@@ -446,7 +480,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
               </div>
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div className="text-center">
-                  <p className="text-xs text-gray-400">IGV 18%</p>
+                  <p className="text-xs text-gray-400">{inicial.afectoIgv === false ? "IGV (no afecto)" : "IGV 18%"}</p>
                   <p className="font-semibold text-gray-700">{calc.igv.toFixed(2)}</p>
                 </div>
                 <div className="text-center">
@@ -476,7 +510,6 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
               </div>
             </div>
 
-            {error && <p className="text-xs text-red-500">{error}</p>}
           </fieldset>
           {puedeCobrar && !inicial.anulado && (inicial.saldoNeto > 0.009 || inicial.saldoImpuesto > 0.009) && (
             <button type="button" onClick={() => (bloqueo.editando ? setConfirmandoCobro(true) : setCobrando(true))}
@@ -493,19 +526,43 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
               <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Relaciones</h2>
             </div>
 
-            <TarjetaRelacion tipo="cotizacion" codigo={cot?.codigo} numero={cot?.numeroCotizacion} vacio={!cot}
-              onClick={cot ? () => onNavegar?.({ tipo: "cotizacion", data: cot }) : undefined}>
-              <p className="text-sm text-gray-700 line-clamp-2">{cot?.titulo}</p>
-              {puedeVerPrecios && cot?.total > 0 && <p className="text-xs text-gray-500">{money(cot.total)}</p>}
-            </TarjetaRelacion>
+            {consolidadas.length > 0 ? (
+              <>
+                {consolidadas.map(({ linea, cot: c }) => (
+                  <TarjetaRelacion key={linea.cotizacion?._id || linea.cotizacion} tipo="cotizacion"
+                    codigo={c?.codigo} numero={c?.numeroCotizacion}
+                    onClick={c ? () => onNavegar?.({ tipo: "cotizacion", data: c }) : undefined}>
+                    <p className="text-sm text-gray-700 line-clamp-2">{linea.titulo || c?.titulo}</p>
+                    {puedeVerPrecios && <p className="text-xs text-gray-500">{money(linea.subtotal, c?.moneda)} sin IGV</p>}
+                  </TarjetaRelacion>
+                ))}
+                {consolidadas.flatMap(p => p.ots).map(o => (
+                  <TarjetaRelacion key={o._id} tipo="ot" codigo={o.codigo} numero={o.numeroOT}
+                    onClick={() => onNavegar?.({ tipo: "ot", data: o })}>
+                    {o.estado && <Chip className={badgeOT(o.estado)}>{o.estado}</Chip>}
+                    {o.personalEncargado?.nombre && (
+                      <p className="text-xs text-gray-500">Técnico: {o.personalEncargado.nombre}</p>
+                    )}
+                  </TarjetaRelacion>
+                ))}
+              </>
+            ) : (
+              <>
+                <TarjetaRelacion tipo="cotizacion" codigo={cot?.codigo} numero={cot?.numeroCotizacion} vacio={!cot}
+                  onClick={cot ? () => onNavegar?.({ tipo: "cotizacion", data: cot }) : undefined}>
+                  <p className="text-sm text-gray-700 line-clamp-2">{cot?.titulo}</p>
+                  {puedeVerPrecios && cot?.total > 0 && <p className="text-xs text-gray-500">{money(cot.total)}</p>}
+                </TarjetaRelacion>
 
-            <TarjetaRelacion tipo="ot" codigo={ot?.codigo} numero={ot?.numeroOT} vacio={!ot}
-              onClick={ot ? () => onNavegar?.({ tipo: "ot", data: ot }) : undefined}>
-              {ot?.estado && <Chip className={badgeOT(ot.estado)}>{ot.estado}</Chip>}
-              {ot?.personalEncargado?.nombre && (
-                <p className="text-xs text-gray-500">Técnico: {ot.personalEncargado.nombre}</p>
-              )}
-            </TarjetaRelacion>
+                <TarjetaRelacion tipo="ot" codigo={ot?.codigo} numero={ot?.numeroOT} vacio={!ot}
+                  onClick={ot ? () => onNavegar?.({ tipo: "ot", data: ot }) : undefined}>
+                  {ot?.estado && <Chip className={badgeOT(ot.estado)}>{ot.estado}</Chip>}
+                  {ot?.personalEncargado?.nombre && (
+                    <p className="text-xs text-gray-500">Técnico: {ot.personalEncargado.nombre}</p>
+                  )}
+                </TarjetaRelacion>
+              </>
+            )}
 
             <TarjetaRelacion
               tipo="informe"
@@ -525,6 +582,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
               onClick={oc ? abrirOC : undefined} cargando={cargandoOC}>
               {oc?.titulo && <p className="text-xs text-gray-500 line-clamp-2">{oc.titulo}</p>}
               {puedeVerPrecios && (oc?.monto || oc?.total) > 0 && <p className="text-xs text-gray-500">{money(oc.monto ?? oc.total)}</p>}
+              {consolidadas.length > 0 && <Chip className="bg-indigo-100 text-indigo-700">Consolidada · {consolidadas.length} cotizaciones</Chip>}
             </TarjetaRelacion>
 
             <TarjetaRelacion tipo="factura" codigo={inicial.codigo} numero={inicial.numeroFactura} actual>

@@ -5,6 +5,7 @@ import { TIPOS_CONCEPTO, textoPension, detalleGratificacion, detalleSubsidio, RO
 import EtiquetaPlame, { LeyendaPlame } from "./EtiquetaPlame";
 import { generarBoletaPdf } from "../../utils/boletaPdf";
 import { validarDiasVendidos } from "../../utils/vacaciones";
+import useConfirmar from "../../hooks/useConfirmar";
 
 const SE_PAGAN_CON_FACTURA = ["0803", "0805", "0810"];
 const INP = "border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
@@ -22,6 +23,14 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const [guardado, setGuardado] = useState(false);
+  // Lo último guardado (o lo que llegó al abrir): contra esto se decide si cerrar pierde cambios.
+  const [base, setBase] = useState(form);
+  const sucio = editable && JSON.stringify(form) !== JSON.stringify(base);
+  const { confirmar: confirmarDescarte, dialogo: dialogoDescarte } = useConfirmar("Sí, descartar", { peligro: true });
+  const cerrar = async () => {
+    if (sucio && !(await confirmarDescarte("Hay cambios sin guardar. ¿Descartarlos?"))) return;
+    onClose();
+  };
 
   const cambiar = (campo, valor) => { setForm((f) => ({ ...f, [campo]: valor })); setGuardado(false); };
   const fila = (campo, i, parche) => cambiar(campo, form[campo].map((x, j) => (j === i ? { ...x, ...parche } : x)));
@@ -35,6 +44,7 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
     if (errorVenta) return setError(errorVenta);
     setGuardando(true);
     setError("");
+    const enviado = form;
     try {
       const r = await fetchAuth(`/planilla/boletas/${boleta._id}`, { method: "PUT", body: JSON.stringify({
         asistencia: { suspensiones: form.suspensiones.map((s) => ({ tipo: s.tipo, dias: Number(s.dias) })), horasExtras25: Number(form.horasExtras25) || 0, horasExtras35: Number(form.horasExtras35) || 0, diasVendidos: Number(form.diasVendidos) || 0, minutosTardanza: Number(form.minutosTardanza) || 0 },
@@ -43,6 +53,7 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
       const d = await r.json().catch(() => ({}));
       if (!r.ok) return setError(d.mensaje || "No se pudo guardar la boleta.");
       setBoleta(d);
+      setBase(enviado);
       setGuardado(true);
       onCambio();
     } catch {
@@ -189,7 +200,7 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">Cerrar</button>
+          <button onClick={cerrar} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">Cerrar</button>
           {editable && (
             <button onClick={guardar} disabled={guardando} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
               {guardando ? "Calculando…" : "Guardar y recalcular"}
@@ -197,6 +208,7 @@ export default function ModalBoleta({ boleta: inicial, catalogos, editable, borr
           )}
         </div>
       </div>
+      {dialogoDescarte}
     </div>
   );
 }

@@ -19,7 +19,7 @@ const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-n
 
 // Planilla de un mes: se genera con los trabajadores vigentes, se completa boleta por boleta y se cierra. Cerrada,
 // de ella salen los archivos del PLAME y el asiento contable (Contabilidad → Automáticos).
-export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir, refrescarAvisos }) {
+export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir, refrescarAvisos, avisosGenerales = [] }) {
   const periodo = periodoDeMes(mes);
   const [cargado, setCargado] = useState(null);
   const [abonos, setAbonos] = useState(null);
@@ -31,6 +31,8 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
   const [tramitesPendientes, setTramitesPendientes] = useState(0);
   const [generando, setGenerando] = useState(null); // "zip" | "pdf" mientras se arman las boletas
   const [resultadoBoletas, setResultadoBoletas] = useState({ clave: "", avisos: [], error: "" });
+  // Avisos del último «Generar» / «Recalcular» del mes: quedan a la vista hasta que se cierran o se vuelve a recalcular.
+  const [avisosGenerar, setAvisosGenerar] = useState({ periodo: "", lista: [] });
 
   const cargar = useCallback(async () => {
     if (!/^\d{6}$/.test(periodo)) return;
@@ -61,7 +63,7 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
       const r = await fetchAuth(`/planilla/${periodo}/${ruta}`, { method: "POST" });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) return setAviso(d.mensaje || textoError);
-      if (d.avisos?.length) setAviso(d.avisos.join(" · "));
+      if (ruta === "generar") setAvisosGenerar({ periodo, lista: d.avisos || [] });
       await cargar();
       refrescarAvisos?.();
     } catch {
@@ -75,6 +77,20 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
   const planilla = datos?.planilla, boletas = datos?.boletas || [];
   const cerrada = planilla?.estado === "cerrada";
   const totales = totalesPlanilla(boletas);
+  const listaAvisosGenerar = avisosGenerar.periodo === periodo ? avisosGenerar.lista : [];
+  const motivosDesactualizada = (!cerrada && datos?.motivosDesactualizada) || [];
+  const netoNegativo = boletas.filter((b) => b.totales.neto < 0).map((b) => b.datos.nombre);
+  const abonadoDeMas = datosAbonos?.abonado
+    ? boletas.filter((b) => b.totales.neto >= 0 && abonadoMayorQueNeto(b, datosAbonos.abonado[idDe(b.trabajador)])).map((b) => b.datos.nombre) : [];
+  // Lo que conviene revisar antes de congelar las boletas: se resume en la confirmación de «Cerrar planilla».
+  const avisosAlCerrar = [
+    ...(motivosDesactualizada.length ? [`La planilla está desactualizada (${motivosDesactualizada.join("; ")}): recalcúlala antes de cerrar`] : []),
+    ...(netoNegativo.length ? [`El neto sale negativo para ${netoNegativo.join(", ")}: no se podrá cerrar`] : []),
+    ...(abonadoDeMas.length ? [`Abonado mayor que el neto: ${abonadoDeMas.join(", ")}`] : []),
+    ...(tramitesPendientes > 0 ? [`${tramitesPendientes} trámite(s) pendientes en T-Registro`] : []),
+    ...listaAvisosGenerar,
+    ...avisosGenerales,
+  ];
   const exportar = () => exportarHoja(`planilla-${periodo}.xlsx`, "Planilla", filasExcelPlanilla(boletas, catalogos.afps), [{
     "Trabajador": "TOTAL", "Total ingresos": totales.ingresos, "Descuentos": totales.descuentos, "Neto a pagar": totales.neto, "EsSalud y EPS": totales.aportesEmpleador,
   }]);
@@ -144,6 +160,26 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
         <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           Antes de generar, revisa y guarda los parámetros de {textoPeriodo(periodo)} en la pestaña «Parámetros» (las tasas de AFP cambian cada mes).
         </p>
+      )}
+      {motivosDesactualizada.length > 0 && (
+        <div className="text-sm text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 flex flex-wrap items-start gap-3">
+          <div className="flex-1 min-w-[16rem]">
+            <p className="font-medium">La planilla está desactualizada: los montos no reflejan los cambios hechos después de generarla.</p>
+            <ul className="list-disc pl-5 mt-1">{motivosDesactualizada.map((m) => <li key={m}>{m}</li>)}</ul>
+          </div>
+          {puedeEscribir && (
+            <button onClick={() => accion("generar", "No se pudo recalcular la planilla.")} disabled={procesando}
+              className="bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-amber-700 disabled:opacity-50">
+              {procesando ? "Recalculando…" : "Recalcular"}
+            </button>
+          )}
+        </div>
+      )}
+      {listaAvisosGenerar.length > 0 && (
+        <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex gap-3">
+          <ul className="flex-1 list-disc pl-5">{listaAvisosGenerar.map((a) => <li key={a}>{a}</li>)}</ul>
+          <button onClick={() => setAvisosGenerar({ periodo: "", lista: [] })} className="text-xs underline self-start">Cerrar</button>
+        </div>
       )}
       {avisosBoletas.length > 0 && (
         <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex gap-3">
@@ -236,10 +272,19 @@ export default function PanelPlanillaMes({ mes, setMes, catalogos, puedeEscribir
       )}
       {confirmando && (
         <ConfirmacionAccion procesando={procesando} onCancelar={() => setConfirmando(null)}
-          textoConfirmar={confirmando === "cerrar" ? "Sí, cerrar" : "Sí, reabrir"}
-          mensaje={confirmando === "cerrar"
-            ? `¿Cerrar la planilla de ${textoPeriodo(periodo)}? Las boletas quedan fijas y se habilitan el asiento y los archivos del PLAME.`
-            : `¿Reabrir la planilla de ${textoPeriodo(periodo)}? Si ya declaraste el PLAME con ella, tendrás que rectificar.`}
+          textoConfirmar={confirmando === "cerrar" ? "Sí, cerrar" : "Sí, reabrir"} textoProcesando={confirmando === "cerrar" ? "Cerrando…" : "Reabriendo…"}
+          mensaje={confirmando === "cerrar" ? (
+            <div className="space-y-2">
+              <p>¿Cerrar la planilla de {textoPeriodo(periodo)}? Las boletas quedan fijas y se habilitan el asiento y los archivos del PLAME.</p>
+              <p className="font-medium">{boletas.length} {boletas.length === 1 ? "trabajador" : "trabajadores"} · Neto a pagar {money(totales.neto)}</p>
+              {avisosAlCerrar.length > 0 && (
+                <div className="text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <p className="font-medium">Avisos vigentes:</p>
+                  <ul className="list-disc pl-5">{avisosAlCerrar.map((a) => <li key={a}>{a}</li>)}</ul>
+                </div>
+              )}
+            </div>
+          ) : `¿Reabrir la planilla de ${textoPeriodo(periodo)}? Si ya declaraste el PLAME con ella, tendrás que rectificar.`}
           onConfirmar={() => accion(confirmando, "No se pudo completar la acción.")} />
       )}
       {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}

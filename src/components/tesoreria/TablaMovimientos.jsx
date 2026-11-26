@@ -27,11 +27,17 @@ export default function TablaMovimientos() {
   const { confirmar, dialogo } = useConfirmar("Sí, anular");
   const puedeManual = puedeMovimientoManual(rolDeSesion());
 
+  const [carga, setCarga] = useState({ cargando: true, error: "" });
   const cargar = useCallback(() => Promise.all([fetchAuth("/movimientos-tesoreria"), fetchAuth("/cuentas-tesoreria")]).then(async ([rm, rc]) => {
-    if (rm.ok) setMovs(await rm.json());
-    if (rc.ok) setCuentas(await rc.json());
+    const [dm, dc] = await Promise.all([rm.json().catch(() => null), rc.json().catch(() => null)]);
+    if (rm.ok && dm) setMovs(dm);
+    if (rc.ok && dc) setCuentas(dc);
+    const fallo = !(rm.ok && dm) ? dm?.mensaje || "No se pudieron cargar los movimientos."
+      : !(rc.ok && dc) ? dc?.mensaje || "No se pudieron cargar las cuentas y sus saldos." : "";
+    setCarga({ cargando: false, error: fallo });
   }), []);
   useEffect(() => { cargar(); }, [cargar]);
+  const reintentar = () => { setCarga({ cargando: true, error: "" }); cargar(); };
 
   const set = (campo) => (e) => setFiltros((f) => ({ ...f, [campo]: e.target.value }));
   const filtrados = movs.filter((m) => {
@@ -112,6 +118,11 @@ export default function TablaMovimientos() {
         <button onClick={exportarExcel} className="ml-auto border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">Exportar Excel</button>
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
+      {carga.error && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {carga.error} <button onClick={reintentar} className="ml-2 underline font-medium">Reintentar</button>
+        </p>
+      )}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <TablaScroll className="overflow-x-auto">
           <table className="w-full text-sm" style={{ minWidth: "1000px" }}>
@@ -119,7 +130,7 @@ export default function TablaMovimientos() {
               <tr>{["Código", "Fecha", "Tipo", "Documento", "Tercero", "Parte", "Cuenta", "N° operación", "Monto", ""].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtrados.length === 0 && <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">Sin movimientos</td></tr>}
+              {filtrados.length === 0 && <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">{carga.cargando ? "Cargando…" : carga.error ? "No se pudieron cargar los datos." : "Sin movimientos"}</td></tr>}
               {filtrados.map((m) => (
                 <tr key={m._id} className={m.anulado ? "opacity-40 line-through" : ""}>
                   <td className="px-3 py-2 font-medium">{m.codigo}</td>

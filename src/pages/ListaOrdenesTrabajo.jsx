@@ -51,6 +51,18 @@ const TH = "px-4 py-3 font-semibold text-gray-500 whitespace-nowrap";
 // (decisión del usuario, ver DetalleOrdenTrabajo.jsx).
 const progresoLabel = estadoProgresoOT;
 
+// `valor` de los estados = lo que devuelve estadoProgresoOT (ESTADOS_PROGRESO_OT).
+const FILTROS_ESTADO = [
+  { valor: "todos",       label: "Todas las Órdenes de Trabajo", titulo: "Todas las Órdenes de Trabajo", hoja: "Todas",       acento: "bg-indigo-500", vacio: "Sin órdenes de trabajo" },
+  { valor: "No asignado", label: "No asignado",                  titulo: "Órdenes no asignadas",          hoja: "Sin asignar", acento: "bg-red-500",    vacio: "Sin órdenes por asignar" },
+  { valor: "pendiente",   label: "Pendiente",                    titulo: "Órdenes pendientes",            hoja: "Pendientes",  acento: "bg-amber-500",  vacio: "Sin órdenes pendientes" },
+  { valor: "en progreso", label: "En progreso",                  titulo: "Órdenes en progreso",           hoja: "En progreso", acento: "bg-blue-500",   vacio: "Sin órdenes en progreso" },
+  { valor: "completado",  label: "Completado",                   titulo: "Órdenes completadas",           hoja: "Completadas", acento: "bg-green-500",  vacio: "Sin órdenes completadas" },
+  { valor: "entregado",   label: "Entregado",                    titulo: "Órdenes entregadas",            hoja: "Entregadas",  acento: "bg-teal-500",   vacio: "Sin órdenes entregadas" },
+  { valor: "cerrada",     label: "Cerrada",                      titulo: "Órdenes cerradas",              hoja: "Cerradas",    acento: "bg-gray-500",   vacio: "Sin órdenes cerradas" },
+  { valor: "anulada",     label: "Anulada",                      titulo: "Órdenes anuladas",              hoja: "Anuladas",    acento: "bg-red-300",    vacio: "Sin órdenes anuladas" },
+];
+
 const diaLima = (fecha) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" }).format(new Date(fecha));
 
 // Días hábiles (lun–vie, sin feriados) desde que se recibió la OC hasta hoy en
@@ -413,41 +425,25 @@ export default function ListaOrdenesTrabajo() {
   const esCerrada = (o) => o.estadoCadena === "cerrado";
   const abiertas = filtradas.filter((o) => !esCerrada(o));
 
-  // "No asignado" (estadoGeneral, ver Backend/src/utils/estadoGeneralOT.js)
-  // — mismo criterio de duplicar por sub-OT: la OT padre puede tener técnico
-  // asignado mientras una sub-OT suya sigue sin nadie (o al revés).
-  const noAsignadas = [];
-  abiertas.forEach((o) => {
-    const subsSinAsignar = (o.subOTs || []).filter((s) => s.estadoGeneral === "no asignado");
-    if (o.estadoGeneral === "no asignado" || subsSinAsignar.length) {
-      noAsignadas.push({ ...o, subOTs: subsSinAsignar });
-    }
+  // Filtra por el mismo valor que pinta la columna "Estado de servicio"
+  // (estadoProgresoOT), no por `estadoGeneral`: así lo que se elige en el
+  // select es exactamente lo que se ve en el chip. Una OT padre entra si ella
+  // o alguna de sus sub-OTs tiene ese estado, mostrando solo las sub-OTs que
+  // coinciden. Las anuladas solo salen en "Todas" y "Anuladas".
+  const vigentes = abiertas.filter((o) => !o.anulado);
+  const porEstado = (estado) => vigentes.flatMap((o) => {
+    const subs = (o.subOTs || []).filter((s) => !s.anulado && progresoLabel(s) === estado);
+    return progresoLabel(o) === estado || subs.length ? [{ ...o, subOTs: subs }] : [];
   });
+  const cerradas = filtradas.filter((o) => esCerrada(o) && !o.anulado);
+  const anuladas = filtradas.filter((o) => o.anulado);
 
-  const cerradas = filtradas.filter((o) => esCerrada(o));
-
-  // Un solo set de 4 grupos, para todos los roles — agrupa directo por
-  // `estadoGeneral` (calculado y persistido en el backend, ver
-  // estadoGeneralOT.js). Un solo cálculo, una sola fuente de verdad.
-  const asignadasPlanner = abiertas.filter((o) => o.encargado?.trim());
-  const plannerEntregadas  = asignadasPlanner.filter((o) => o.estadoGeneral === "entregada");
-  const plannerCompletadas = asignadasPlanner.filter((o) => o.estadoGeneral === "completada");
-  const plannerEnProgreso  = asignadasPlanner.filter((o) => o.estadoGeneral === "pendiente" || o.estadoGeneral === "en progreso");
-
-  // Tabla "Todas las Órdenes de Trabajo": una sola lista global (sin separar
-  // por track ni por asignación) sobre la que responde el filtro de Estado —
-  // misma categorización que las 5 tablas de la vista simplificada, para que
-  // "Todo estado" muestre exactamente la unión de esas 5.
-  const categoriaGlobal = (o) => {
-    if (esCerrada(o)) return "cerrada";
-    if (o.estadoGeneral === "no asignado") return "noAsignada";
-    if (o.estadoGeneral === "completada") return "completada";
-    if (o.estadoGeneral === "entregada") return "entregada";
-    return "enProgreso";
-  };
-  const todasOTs = filtradas.filter(
-    (o) => filtroEstadoPlanner === "todos" || categoriaGlobal(o) === filtroEstadoPlanner
-  );
+  const ordenesFiltroEstado = (valor) =>
+    valor === "todos" ? filtradas
+      : valor === "cerrada" ? cerradas
+      : valor === "anulada" ? anuladas
+      : porEstado(valor);
+  const filtroActual = FILTROS_ESTADO.find((f) => f.valor === filtroEstadoPlanner) || FILTROS_ESTADO[0];
 
   const hayFiltro = Object.values(filtros).some(Boolean);
   // Mismas columnas que TablaOTs (ver el nuevo orden ahí) — una hoja por
@@ -469,15 +465,9 @@ export default function ListaOrdenesTrabajo() {
 
   const exportarExcel = () => {
     const wb = XLSX.utils.book_new();
-    [
-      ["Sin asignar", noAsignadas],
-      ["En progreso", plannerEnProgreso],
-      ["Completadas", plannerCompletadas],
-      ["Entregadas", plannerEntregadas],
-      ["Cerradas", cerradas],
-    ].forEach(([nombre, lista]) => {
-      const ws = XLSX.utils.json_to_sheet(lista.map(filaOT));
-      XLSX.utils.book_append_sheet(wb, ws, nombre);
+    FILTROS_ESTADO.filter((f) => f.valor !== "todos").forEach((f) => {
+      const ws = XLSX.utils.json_to_sheet(ordenesFiltroEstado(f.valor).map(filaOT));
+      XLSX.utils.book_append_sheet(wb, ws, f.hoja);
     });
     XLSX.writeFile(wb, "ordenes-de-trabajo.xlsx");
   };
@@ -526,12 +516,9 @@ export default function ListaOrdenesTrabajo() {
         </select>
 
         <select value={filtroEstadoPlanner} onChange={(e) => setFiltroEstadoPlanner(e.target.value)} className={SELECT}>
-          <option value="todos">Todas las Órdenes de Trabajo</option>
-          <option value="noAsignada">No asignada</option>
-          <option value="enProgreso">En progreso</option>
-          <option value="completada">Completada</option>
-          <option value="entregada">Entregada</option>
-          <option value="cerrada">Cerrada</option>
+          {FILTROS_ESTADO.map((f) => (
+            <option key={f.valor} value={f.valor}>{f.label}</option>
+          ))}
         </select>
 
         <select name="empresa" value={filtros.empresa} onChange={handleEmpresa} className={SELECT}>
@@ -597,67 +584,13 @@ export default function ListaOrdenesTrabajo() {
         )}
       </div>
 
-      <>
-          {filtroEstadoPlanner === "todos" && (
-            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
-              titulo="Todas las Órdenes de Trabajo"
-              acento="bg-indigo-500"
-              ordenes={todasOTs}
-              onSelect={setSeleccionada}
-              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de trabajo"}
-            />
-          )}
-
-          {filtroEstadoPlanner === "noAsignada" && (
-            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
-              titulo="Órdenes no asignadas"
-              acento="bg-red-500"
-              ordenes={noAsignadas}
-              onSelect={setSeleccionada}
-              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes por asignar"}
-            />
-          )}
-
-          {filtroEstadoPlanner === "enProgreso" && (
-            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
-              titulo="Órdenes en progreso"
-              acento="bg-blue-500"
-              ordenes={plannerEnProgreso}
-              onSelect={setSeleccionada}
-              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes en progreso"}
-            />
-          )}
-
-          {filtroEstadoPlanner === "completada" && (
-            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
-              titulo="Órdenes completadas"
-              acento="bg-green-500"
-              ordenes={plannerCompletadas}
-              onSelect={setSeleccionada}
-              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes completadas"}
-            />
-          )}
-
-          {filtroEstadoPlanner === "entregada" && (
-            <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
-              titulo="Órdenes entregadas"
-              acento="bg-teal-500"
-              ordenes={plannerEntregadas}
-              onSelect={setSeleccionada}
-              vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes entregadas"}
-            />
-          )}
-        </>
-
-      {filtroEstadoPlanner === "cerrada" && (
-        <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
-          titulo="Órdenes cerradas"
-          acento="bg-gray-500"
-          ordenes={cerradas}
-          onSelect={setSeleccionada}
-          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes cerradas"}
-        />
-      )}
+      <TablaOTs ocPorNumDoc={ocPorNumDoc} orden={orden}
+        titulo={filtroActual.titulo}
+        acento={filtroActual.acento}
+        ordenes={ordenesFiltroEstado(filtroActual.valor)}
+        onSelect={setSeleccionada}
+        vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : filtroActual.vacio}
+      />
     </div>
 
     {seleccionada && (

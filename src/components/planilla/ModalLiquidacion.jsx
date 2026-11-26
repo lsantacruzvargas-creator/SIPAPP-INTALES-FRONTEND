@@ -6,6 +6,8 @@ import { fechaDMA } from "../../utils/vacaciones";
 import { formatearFechaHora } from "../../utils/fecha";
 import { totalesEnPantalla, liquidacionVigente, fusionarRespuesta, cuerpoParaEnviar } from "../../utils/liquidacion";
 import ConfirmacionAccion from "../ConfirmacionAccion";
+import PromptAccion from "../PromptAccion";
+import useConfirmar from "../../hooks/useConfirmar";
 import EtiquetaPlame from "./EtiquetaPlame";
 
 const INP = "border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
@@ -39,48 +41,6 @@ const formDe = (l) => ({
   observaciones: l.observaciones || "",
 });
 
-function ModalAnular({ codigo, onCancelar, onAnulada, id }) {
-  const [motivo, setMotivo] = useState("");
-  const [error, setError] = useState("");
-  const [procesando, setProcesando] = useState(false);
-
-  const anular = async () => {
-    const texto = motivo.trim();
-    if (texto.length < 3) return setError("Escribe el motivo (de 3 a 200 caracteres).");
-    setProcesando(true);
-    setError("");
-    try {
-      const r = await fetchAuth(`/planilla/liquidaciones/${id}/anular`, { method: "POST", body: JSON.stringify({ motivo: texto }) });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) return setError(d.mensaje || "No se pudo anular la liquidación.");
-      onAnulada(d);
-    } catch {
-      setError(MENSAJE_RED);
-    } finally {
-      setProcesando(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4" style={{ zIndex: 200 }}>
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm space-y-4">
-        <h4 className="font-semibold text-gray-800 text-sm">Anular la liquidación {codigo}</h4>
-        <p className="text-sm text-gray-600">Se quitan sus líneas de la boleta del mes de cese y se recalcula. Después puedes crear otra.</p>
-        <label className="text-xs text-gray-500 block">Motivo
-          <textarea autoFocus value={motivo} maxLength={200} rows={3} onChange={(e) => setMotivo(e.target.value)} className={`${INP} w-full resize-none`} />
-        </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={onCancelar} disabled={procesando} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
-          <button type="button" onClick={anular} disabled={procesando} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">
-            {procesando ? "Anulando…" : "Anular"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Liquidación de beneficios sociales del cese de un trabajador (spec 2026-11-06-liquidacion §4–§5). El servidor arma la
 // propuesta y la vista previa de los descuentos de ley; aquí se editan bases, meses, días, líneas y observaciones.
 // `onPdf(liquidacion)`: la descarga del PDF; sin ella no se muestra el botón.
@@ -92,6 +52,8 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
   const [error, setError] = useState("");
   const [confirmar, setConfirmar] = useState(null); // "propuesta" | "eliminar" | "confirmar"
   const [anulando, setAnulando] = useState(false);
+  const [errorAnular, setErrorAnular] = useState("");
+  const { confirmar: confirmarDescarte, dialogo: dialogoDescarte } = useConfirmar("Sí, descartar", { peligro: true });
   const [fallo, setFallo] = useState(false);
   const [intento, setIntento] = useState(0);
 
@@ -237,6 +199,26 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
   const guardado = liq ? formDe(liq) : null;
   const sucio = Boolean(liq) && JSON.stringify(form) !== JSON.stringify(guardado);
   const ocupado = procesando || guardando;
+  const cerrar = async () => {
+    if (editable && sucio && !(await confirmarDescarte("Hay cambios sin guardar. ¿Descartarlos?"))) return;
+    onClose();
+  };
+  const anular = async (motivo) => {
+    setErrorAnular("");
+    setProcesando(true);
+    try {
+      const r = await fetchAuth(`/planilla/liquidaciones/${liq._id}/anular`, { method: "POST", body: JSON.stringify({ motivo }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return setErrorAnular(d.mensaje || "No se pudo anular la liquidación.");
+      setAnulando(false);
+      mostrar(d);
+      onCambio?.();
+    } catch {
+      setErrorAnular(MENSAJE_RED);
+    } finally {
+      setProcesando(false);
+    }
+  };
   // En los botones de acción: sin esto, el clic saca el foco del campo, el guardado al salir los desactiva y el clic se pierde.
   const sinBlur = (e) => e.preventDefault();
   const ajustada = (l) => l.editada || Number(l.monto) !== Number(guardado.lineas.find((g) => g.clave === l.clave)?.monto ?? l.monto);
@@ -502,7 +484,8 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
               <button type="button" onMouseDown={sinBlur} onClick={() => setConfirmar("propuesta")} disabled={ocupado} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Volver a la propuesta</button>
             </>
           )}
-          <button type="button" onClick={onClose} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">Cerrar</button>
+          {/* Sin blur: salir de una base la guardaría a medias; con cambios pendientes se pregunta antes de descartarlos. */}
+          <button type="button" onMouseDown={sinBlur} onClick={cerrar} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">Cerrar</button>
           {editable && (
             <>
               <button type="button" onMouseDown={sinBlur} onClick={() => enviar(true)} disabled={ocupado || !sucio} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
@@ -513,7 +496,7 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
             </>
           )}
           {puedeEscribir && liq?.estado === "confirmada" && (
-            <button type="button" onClick={() => setAnulando(true)} disabled={procesando} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">Anular</button>
+            <button type="button" onClick={() => { setErrorAnular(""); setAnulando(true); }} disabled={procesando} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">Anular</button>
           )}
         </div>
       </div>
@@ -529,9 +512,11 @@ export default function ModalLiquidacion({ trabajador, catalogos, puedeEscribir,
           onCancelar={() => setConfirmar(null)} onConfirmar={ejecutar} />
       )}
       {anulando && (
-        <ModalAnular id={liq._id} codigo={liq.codigo} onCancelar={() => setAnulando(false)}
-          onAnulada={(d) => { setAnulando(false); mostrar(d); onCambio?.(); }} />
+        <PromptAccion titulo={`Anular la liquidación ${liq.codigo}`} peligro minLength={3} maxLength={200} error={errorAnular}
+          label={<><span className="block text-sm text-gray-600 mb-3">Se quitan sus líneas de la boleta del mes de cese y se recalcula. Después puedes crear otra.</span>Motivo</>}
+          procesando={procesando} textoConfirmar="Anular" textoProcesando="Anulando…" onCancelar={() => setAnulando(false)} onConfirmar={anular} />
       )}
+      {dialogoDescarte}
     </div>
   );
 }

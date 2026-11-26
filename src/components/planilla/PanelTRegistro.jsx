@@ -7,6 +7,7 @@ import {
 } from "../../utils/tregistro";
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
+import PromptAccion from "../PromptAccion";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
 const BOTON = "border border-purple-300 text-purple-700 px-3 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50";
@@ -107,18 +108,16 @@ function ModalMarcar({ trabajadores, marcando, onCerrar, onMarcado, onConflicto 
   );
 }
 
+// El servidor acepta hasta 120 caracteres en el motivo de la anulación del alta.
 function ModalAnular({ anulando, onCerrar, onAnulada }) {
-  const [motivo, setMotivo] = useState("");
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
 
-  const confirmar = async () => {
-    const texto = motivo.trim();
-    if (!texto) return setError("Indica el motivo de la anulación.");
+  const confirmar = async (motivo) => {
     setGuardando(true);
     setError("");
     try {
-      const r = await fetchAuth("/planilla/tregistro/anular-alta", { method: "POST", body: JSON.stringify({ id: anulando._id, motivo: texto }) });
+      const r = await fetchAuth("/planilla/tregistro/anular-alta", { method: "POST", body: JSON.stringify({ id: anulando._id, motivo }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) return setError(d.mensaje || "No se pudo anular el alta.");
       onAnulada();
@@ -130,25 +129,11 @@ function ModalAnular({ anulando, onCerrar, onAnulada }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md space-y-4">
-        <h3 className="font-semibold text-gray-800">Anular el alta de {anulando.nombre}</h3>
-        <p className="text-sm text-gray-600">
-          Úsalo cuando el alta no debe registrarse en SUNAT (por ejemplo, el ingreso no se concretó o la ficha se creó por error). El trabajador sigue en la planilla con sus fechas de ingreso y cese.
-        </p>
-        <label className="text-xs text-gray-500 block">Motivo de la anulación
-          <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={120} rows={3} className={`${INP} w-full`} />
-          <span className="block text-right text-[11px] text-gray-400">{motivo.length}/120</span>
-        </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex justify-end gap-3">
-          <button onClick={onCerrar} disabled={guardando} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
-          <button onClick={confirmar} disabled={guardando} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">
-            {guardando ? "Guardando…" : "Anular alta"}
-          </button>
-        </div>
-      </div>
-    </div>
+    <PromptAccion titulo={`Anular el alta de ${anulando.nombre}`} peligro minLength={3} maxLength={120} error={error}
+      label={<><span className="block text-sm text-gray-600 mb-3">
+        Úsalo cuando el alta no debe registrarse en SUNAT (por ejemplo, el ingreso no se concretó o la ficha se creó por error). El trabajador sigue en la planilla con sus fechas de ingreso y cese.
+      </span>Motivo de la anulación</>}
+      procesando={guardando} textoConfirmar="Anular alta" textoProcesando="Anulando…" onCancelar={onCerrar} onConfirmar={confirmar} />
   );
 }
 

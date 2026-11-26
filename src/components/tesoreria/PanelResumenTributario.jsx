@@ -149,8 +149,7 @@ export default function PanelResumenTributario() {
               {!ventas.length && <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">Sin ventas en el mes</td></tr>}
               {ventas.map((v) => (
                 <tr key={v._id} className={v.totalSoles < 0 ? "text-red-700" : ""}>
-                  {/* Los comprobantes electrónicos guardan el día a medianoche UTC: se lee en UTC. */}
-                  <td className="px-3 py-2">{formatearFecha(v.fechaEmision, { timeZone: "UTC" })}</td>
+                  <td className="px-3 py-2">{formatearFecha(v.fechaEmision)}</td>
                   <td className="px-3 py-2">{TIPOS_VENTA[v.tipoDoc] || v.tipoDoc} {v.serie}-{v.correlativo}</td>
                   <td className="px-3 py-2">{v.clienteRazonSocial}<span className="block text-[11px] text-gray-400">{v.clienteRuc}</span></td>
                   <td className="px-3 py-2">{v.moneda}</td>

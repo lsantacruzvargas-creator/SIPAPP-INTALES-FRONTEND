@@ -6,6 +6,8 @@ import { opcionesDeposito, totalesCts, tieneHoja, estadoTrasGuardar, textoAsient
 import { generarHojaCtsPdf, zipHojasCts } from "../../utils/ctsPdf";
 import TablaScroll from "../TablaScroll";
 import ConfirmacionAccion from "../ConfirmacionAccion";
+import PromptAccion from "../PromptAccion";
+import useConfirmar from "../../hooks/useConfirmar";
 import { LotesDeDeposito } from "./PanelAbonos";
 
 const INP = "border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50 disabled:text-gray-700";
@@ -22,50 +24,8 @@ const cuando = (f) => formatearFechaHora(f, { day: "2-digit", month: "2-digit", 
 const soloImporte = (v) => v.replace(/[^\d.]/g, "");
 const soloEntero = (v) => v.replace(/\D/g, "");
 
-function ModalAnular({ deposito, onCancelar, onAnulado }) {
-  const [motivo, setMotivo] = useState("");
-  const [error, setError] = useState("");
-  const [procesando, setProcesando] = useState(false);
-
-  const anular = async () => {
-    const texto = motivo.trim();
-    if (texto.length < 3) return setError("Escribe el motivo (de 3 a 200 caracteres).");
-    setProcesando(true);
-    setError("");
-    try {
-      const r = await fetchAuth(`/planilla/cts/${deposito._id}/anular`, { method: "POST", body: JSON.stringify({ motivo: texto }) });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) return setError(d.mensaje || "No se pudo anular el depósito.");
-      onAnulado(d);
-    } catch {
-      setError(MENSAJE_RED);
-    } finally {
-      setProcesando(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4" style={{ zIndex: 200 }}>
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm space-y-4">
-        <h4 className="font-semibold text-gray-800 text-sm">Anular el depósito {deposito.codigo}</h4>
-        <p className="text-sm text-gray-600">Se quita su asiento (si aún no está contabilizado). Después puedes calcular otro.</p>
-        <label className="text-xs text-gray-500 block">Motivo
-          <textarea autoFocus value={motivo} maxLength={200} rows={3} onChange={(e) => setMotivo(e.target.value)} className={`${INP} w-full resize-none`} />
-        </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={onCancelar} disabled={procesando} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
-          <button type="button" onClick={anular} disabled={procesando} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">
-            {procesando ? "Anulando…" : "Anular"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // CTS semestral (spec 2026-11-07 §6): el servidor calcula el depósito; aquí se revisa, se corrige, se confirma y se imprimen las hojas.
-export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
+export default function PanelCts({ catalogos, puedeEscribir, onCambio, onSucio }) {
   const [anio, setAnio] = useState(() => Number(fechaHoyLima().slice(0, 4)));
   // El depósito que toca: mayo hasta mayo, noviembre desde junio.
   const [periodo, setPeriodo] = useState(() => `${fechaHoyLima().slice(0, 4)}${Number(fechaHoyLima().slice(5, 7)) > 5 ? "11" : "05"}`);
@@ -81,6 +41,8 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
   const [procesando, setProcesando] = useState(false);
   const [modal, setModal] = useState(null); // "confirmar" | "anular" | "eliminar"
   const [generando, setGenerando] = useState(false);
+  const [errorAnular, setErrorAnular] = useState("");
+  const { confirmar: confirmarDescarte, dialogo: dialogoDescarte } = useConfirmar("Sí, descartar", { peligro: true });
 
   const entradas = (lista || []).filter((e) => e.periodo === periodo);
   const vigente = entradas.find((e) => e.estado !== "anulado");
@@ -129,6 +91,11 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
     return () => { cancelado = true; clearTimeout(t); };
   }, [idActivo, aplicar]);
 
+  // Cambiar de año, de depósito o abrir un anulado reemplaza las filas en pantalla.
+  const siDescarta = async (accion) => {
+    if (sinGuardar && !(await confirmarDescarte("Hay cambios sin guardar. ¿Descartarlos?"))) return;
+    accion();
+  };
   const elegirAnio = (n) => { anioVigente.current = n; setAnio(n); setLista(null); setPeriodo(`${n}${periodo.slice(4)}`); setIdAnulado(""); setError(""); setAvisos([]); };
   const elegirPeriodo = (p) => { setPeriodo(p); setIdAnulado(""); setError(""); setAvisos([]); };
 
@@ -191,10 +158,21 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
     await cargarLista();
     onCambio?.();
   };
-  const alAnular = async (d) => {
-    setModal(null);
-    setIdAnulado(d._id);
-    await terminar(d);
+  const anular = async (motivo) => {
+    setErrorAnular("");
+    setProcesando(true);
+    try {
+      const r = await fetchAuth(`/planilla/cts/${actual._id}/anular`, { method: "POST", body: JSON.stringify({ motivo }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return setErrorAnular(d.mensaje || "No se pudo anular el depósito.");
+      setModal(null);
+      setIdAnulado(d._id);
+      await terminar(d);
+    } catch {
+      setErrorAnular(MENSAJE_RED);
+    } finally {
+      setProcesando(false);
+    }
   };
 
   const cambiar = (id, parche) => setEditables((l) => l.map((e) => (e.trabajador === id ? { ...e, ...parche } : e)));
@@ -216,6 +194,13 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
   };
 
   const sucio = actual ? hayCambiosCts(editables, actual.trabajadores) : false;
+  const fechaSinGuardar = puedeEscribir && actual && actual.estado !== "anulado" && fechaDeposito !== (actual.fechaDeposito || "");
+  const sinGuardar = (editable && sucio) || Boolean(fechaSinGuardar);
+  // Planilla.jsx pregunta antes de cambiar de pestaña.
+  useEffect(() => {
+    onSucio?.(sinGuardar);
+    return () => onSucio?.(false);
+  }, [sinGuardar, onSucio]);
   const totales = actual ? totalesCts(actual.trabajadores) : null;
   const hojas = actual ? hojasDisponibles(actual) : [];
   const porId = new Map((actual?.trabajadores || []).map((f) => [f.trabajador, f]));
@@ -225,12 +210,12 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-xs text-gray-500">Año
-          <select value={anio} onChange={(e) => elegirAnio(Number(e.target.value))} className={`${INP} block`}>
+          <select value={anio} onChange={(e) => { const n = Number(e.target.value); siDescarta(() => elegirAnio(n)); }} className={`${INP} block`}>
             {Array.from({ length: 5 }, (_, i) => Number(fechaHoyLima().slice(0, 4)) + 1 - i).map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
         </label>
         <label className="text-xs text-gray-500">Depósito
-          <select value={periodo} onChange={(e) => elegirPeriodo(e.target.value)} className={`${INP} block`}>
+          <select value={periodo} onChange={(e) => { const p = e.target.value; siDescarta(() => elegirPeriodo(p)); }} className={`${INP} block`}>
             {opcionesDeposito(anio).map((o) => <option key={o.periodo} value={o.periodo}>{o.texto}</option>)}
           </select>
         </label>
@@ -257,7 +242,7 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
           </>
         )}
         {puedeEscribir && actual?.estado === "confirmado" && (
-          <button onClick={() => setModal("anular")} disabled={procesando} className="border border-red-300 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-50 disabled:opacity-50">Anular</button>
+          <button onClick={() => { setErrorAnular(""); setModal("anular"); }} disabled={procesando} className="border border-red-300 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-50 disabled:opacity-50">Anular</button>
         )}
       </div>
 
@@ -277,7 +262,7 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
         <p className="text-xs text-gray-500">
           Anulados de este semestre:{" "}
           {anulados.map((a) => (
-            <button key={a._id} onClick={() => setIdAnulado(a._id)} className="underline mr-2 hover:text-gray-700">{a.codigo}</button>
+            <button key={a._id} onClick={() => siDescarta(() => setIdAnulado(a._id))} className="underline mr-2 hover:text-gray-700">{a.codigo}</button>
           ))}
           {idAnulado && <button onClick={() => setIdAnulado("")} className="underline text-purple-700">Cerrar vista</button>}
         </p>
@@ -411,7 +396,12 @@ export default function PanelCts({ catalogos, puedeEscribir, onCambio }) {
         <ConfirmacionAccion procesando={procesando} textoConfirmar="Eliminar" onCancelar={() => setModal(null)} onConfirmar={eliminar}
           mensaje={`Se elimina el borrador ${actual.codigo} con sus ajustes. Podrás calcular otro. ¿Eliminar?`} />
       )}
-      {modal === "anular" && actual && <ModalAnular deposito={actual} onCancelar={() => setModal(null)} onAnulado={alAnular} />}
+      {modal === "anular" && actual && (
+        <PromptAccion titulo={`Anular el depósito ${actual.codigo}`} peligro minLength={3} maxLength={200} error={errorAnular}
+          label={<><span className="block text-sm text-gray-600 mb-3">Se quita su asiento (si aún no está contabilizado). Después puedes calcular otro.</span>Motivo</>}
+          procesando={procesando} textoConfirmar="Anular" textoProcesando="Anulando…" onCancelar={() => setModal(null)} onConfirmar={anular} />
+      )}
+      {dialogoDescarte}
     </div>
   );
 }

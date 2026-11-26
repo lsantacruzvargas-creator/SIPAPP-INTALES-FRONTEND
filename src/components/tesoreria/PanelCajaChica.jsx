@@ -29,29 +29,43 @@ export default function PanelCajaChica({ centrosCosto }) {
   const [procesando, setProcesando] = useState(false);
   const { confirmar, dialogo } = useConfirmar();
   const pedido = useRef(0);
+  const [cajasCargadas, setCajasCargadas] = useState(false);
+  const [errorCajas, setErrorCajas] = useState("");
+  const [cargaVista, setCargaVista] = useState({ cargando: true, error: "" });
 
   const cargarCajas = useCallback(() => fetchAuth("/caja-chica").then(async (r) => {
-    if (!r.ok) return;
-    const lista = await r.json();
+    const lista = await r.json().catch(() => null);
+    setCajasCargadas(true);
+    if (!r.ok || !lista) return setErrorCajas(lista?.mensaje || "No se pudieron cargar las cajas chicas.");
+    setErrorCajas("");
     setCajas(lista);
     // Si la caja elegida dejó de ser caja chica, se pasa a la primera.
     setSel((s) => (lista.some((c) => c._id === s) ? s : lista[0]?._id || ""));
-  }).catch(() => setError("Error de conexión con el servidor.")), []);
+  }), []);
   useEffect(() => {
     cargarCajas();
     fetchAuth("/cuentas-tesoreria").then(async (r) => {
-      if (r.ok) setBancos((await r.json()).filter((c) => c.activo && c.tipo === "banco" && c.moneda === "PEN"));
-    }).catch(() => {});
+      const d = await r.json().catch(() => null);
+      if (r.ok && d) setBancos(d.filter((c) => c.activo && c.tipo === "banco" && c.moneda === "PEN"));
+      else setError(d?.mensaje || "No se pudieron cargar los bancos para reponer la caja.");
+    });
   }, [cargarCajas]);
   const cargarVista = useCallback(() => {
     if (!sel) return Promise.resolve();
     const n = ++pedido.current;
     return fetchAuth(`/caja-chica/${sel}/${vista}`).then(async (r) => {
-      const d = await r.json().catch(() => []);
-      if (n === pedido.current) setDatos(r.ok ? d : []);
-    }).catch(() => {});
+      const d = await r.json().catch(() => null);
+      if (n !== pedido.current) return;
+      setDatos(r.ok && d ? d : []);
+      setCargaVista({ cargando: false, error: r.ok && d ? "" : d?.mensaje || "No se pudo cargar la lista." });
+    });
   }, [sel, vista]);
   useEffect(() => { cargarVista(); }, [cargarVista]);
+  const reintentarVista = () => { setCargaVista({ cargando: true, error: "" }); cargarVista(); };
+  const reintentarCajas = () => { setCajasCargadas(false); setErrorCajas(""); cargarCajas(); };
+  const vacio = (texto) => (cargaVista.cargando ? "Cargando…" : cargaVista.error ? (
+    <span className="text-red-600">{cargaVista.error} <button onClick={reintentarVista} className="ml-2 underline font-medium">Reintentar</button></span>
+  ) : texto);
 
   const caja = cajas.find((c) => c._id === sel);
   const res = caja?.resumen;
@@ -109,14 +123,15 @@ export default function PanelCajaChica({ centrosCosto }) {
   };
 
   if (!cajas.length) {
-    if (error) return <p className="text-sm text-red-600">{error}</p>;
+    if (!cajasCargadas) return <p className="text-sm text-gray-500">Cargando…</p>;
+    if (errorCajas) return <p className="text-sm text-red-600">{errorCajas} <button onClick={reintentarCajas} className="ml-2 underline font-medium">Reintentar</button></p>;
     return <p className="text-sm text-gray-500">No hay cajas chicas. Jefatura o admin la configura en Tesorería → Configuración (una cuenta de tipo caja en soles con responsable y monto del fondo); luego se abre el fondo con una transferencia desde Bancos.</p>;
   }
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap gap-3 items-center">
         {cajas.length > 1 && (
-          <select value={sel} onChange={(e) => { setSel(e.target.value); setDatos([]); }} className={INP}>
+          <select value={sel} onChange={(e) => { setSel(e.target.value); setDatos([]); setCargaVista({ cargando: true, error: "" }); }} className={INP}>
             {cajas.map((c) => <option key={c._id} value={c._id}>{c.nombre}</option>)}
           </select>
         )}
@@ -152,10 +167,11 @@ export default function PanelCajaChica({ centrosCosto }) {
         </div>
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {errorCajas && <p className="text-sm text-red-600">{errorCajas} <button onClick={reintentarCajas} className="ml-2 underline font-medium">Reintentar</button></p>}
 
       <div className="flex border-b border-gray-200 gap-1">
         {VISTAS.map(([id, label]) => (
-          <button key={id} onClick={() => { setVista(id); setDatos([]); }}
+          <button key={id} onClick={() => { if (id === vista) return; setVista(id); setDatos([]); setCargaVista({ cargando: true, error: "" }); }}
             className={`px-3 py-2 text-sm border-b-2 -mb-px ${vista === id ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}>{label}</button>
         ))}
       </div>
@@ -175,7 +191,7 @@ export default function PanelCajaChica({ centrosCosto }) {
                       <td className="px-3 py-2 text-right tabular-nums">{money(m.monto)}</td>
                     </tr>
                   ))}
-                  {!datos.length && <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-400">Nada por rendir</td></tr>}
+                  {!datos.length && <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-400">{vacio("Nada por rendir")}</td></tr>}
                 </tbody>
               </>
             )}
@@ -195,7 +211,7 @@ export default function PanelCajaChica({ centrosCosto }) {
                       <td className="px-3 py-2 text-right">{!g.anulado && !g.movimiento?.rendicion && <button onClick={() => setModal({ anularGasto: g })} disabled={ocupado} className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40">Anular</button>}</td>
                     </tr>
                   ))}
-                  {!datos.length && <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400">Sin gastos</td></tr>}
+                  {!datos.length && <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400">{vacio("Sin gastos")}</td></tr>}
                 </tbody>
               </>
             )}
@@ -213,7 +229,7 @@ export default function PanelCajaChica({ centrosCosto }) {
                       <td className="px-3 py-2 text-right"><button onClick={() => verRendicion(r._id)} className="text-xs text-purple-700 hover:underline">Excel</button></td>
                     </tr>
                   ))}
-                  {!datos.length && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400">Sin rendiciones</td></tr>}
+                  {!datos.length && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400">{vacio("Sin rendiciones")}</td></tr>}
                 </tbody>
               </>
             )}
@@ -233,7 +249,7 @@ export default function PanelCajaChica({ centrosCosto }) {
                       <td className="px-3 py-2">{a.registradoPor}</td>
                     </tr>
                   ))}
-                  {!datos.length && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400">Sin arqueos</td></tr>}
+                  {!datos.length && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400">{vacio("Sin arqueos")}</td></tr>}
                 </tbody>
               </>
             )}
@@ -304,11 +320,13 @@ export default function PanelCajaChica({ centrosCosto }) {
       )}
       {modal === "anularRend" && res?.rendicionPendiente && (
         <PromptAccion titulo={`Anular la rendición ${res.rendicionPendiente.codigo}`} label="Motivo" procesando={procesando}
-          textoConfirmar="Anular" onCancelar={() => setModal(null)} onConfirmar={anularRend} />
+          textoConfirmar="Anular" textoProcesando="Anulando…" peligro error={error}
+          onCancelar={() => { setModal(null); setError(""); }} onConfirmar={anularRend} />
       )}
       {modal?.anularGasto && (
         <PromptAccion titulo={`Anular el gasto ${modal.anularGasto.codigo}`} label="Motivo" procesando={procesando}
-          textoConfirmar="Anular" onCancelar={() => setModal(null)} onConfirmar={anularGasto} />
+          textoConfirmar="Anular" textoProcesando="Anulando…" peligro error={error}
+          onCancelar={() => { setModal(null); setError(""); }} onConfirmar={anularGasto} />
       )}
       {dialogo}
     </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { comprimirFoto } from "../utils/comprimirFoto";
 import { fetchAuth, uploadAuth } from "../utils/fetchAuth";
 import SelectorEmpresas from "./SelectorEmpresas";
 import TarjetaArchivosRelacionados from "./TarjetaArchivosRelacionados";
@@ -105,7 +106,7 @@ export default function ModalNuevaOT({ cotizacion, onClose, onCreada }) {
 
   const guardar = async () => {
     if (!form.numeroOT.trim()) return setError("El N° de Orden de Trabajo es obligatorio.");
-    if (!form.titulo.trim()) return setError("La descripción es obligatoria.");
+    if (!form.titulo.trim()) return setError("El título de la OT es obligatorio.");
     setGuardando(true);
     setError("");
 
@@ -136,41 +137,47 @@ export default function ModalNuevaOT({ cotizacion, onClose, onCreada }) {
     if (!body.empresa) delete body.empresa;
     if (!body.cotizacion) delete body.cotizacion;
 
-    const res = await fetchAuth("/ordenes-trabajo", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    try {
+      const res = await fetchAuth("/ordenes-trabajo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
 
-    if (res.ok) {
-      const nueva = await res.json();
-      // Los archivos quedaron pendientes en memoria (la OT no tenía _id
-      // todavía) — se suben recién ahora, uno por uno (mismo criterio que
-      // TarjetaArchivosRelacionados: nunca en paralelo sobre el mismo
-      // documento). Best-effort: si alguno falla, la OT ya quedó creada
-      // igual, no se bloquea la creación por esto.
-      if (archivosPendientes.length) {
-        const fallas = [];
-        await conBloqueo("ordenTrabajo", nueva._id, async (h) => {
-          for (const pendiente of archivosPendientes) {
-            const fd = new FormData();
-            fd.append("archivo", pendiente.file);
-            const r = await uploadAuth(`/ordenes-trabajo/${nueva._id}/archivos`, fd, h).catch(() => null);
-            if (!r?.ok) fallas.push(`${pendiente.file.name} (${(r && (await r.json().catch(() => ({}))).mensaje) || "error de conexión"})`);
+      if (res.ok) {
+        const nueva = await res.json();
+        // Los archivos quedaron pendientes en memoria (la OT no tenía _id
+        // todavía) — se suben recién ahora, uno por uno (mismo criterio que
+        // TarjetaArchivosRelacionados: nunca en paralelo sobre el mismo
+        // documento). Best-effort: si alguno falla, la OT ya quedó creada
+        // igual, no se bloquea la creación por esto.
+        if (archivosPendientes.length) {
+          const fallas = [];
+          await conBloqueo("ordenTrabajo", nueva._id, async (h) => {
+            for (const pendiente of archivosPendientes) {
+              const fd = new FormData();
+              fd.append("archivo", await comprimirFoto(pendiente.file));
+              const r = await uploadAuth(`/ordenes-trabajo/${nueva._id}/archivos`, fd, h).catch(() => null);
+              if (!r?.ok) fallas.push(`${pendiente.file.name} (${(r && (await r.json().catch(() => ({}))).mensaje) || "error de conexión"})`);
+            }
+            return new Response(null, { status: 204 });
+          });
+          if (fallas.length) {
+            setError(`La Orden de Trabajo se creó, pero no se pudieron subir: ${fallas.join("; ")}. Adjúntalos desde su detalle.`);
+            setCreada(nueva);
+            setGuardando(false);
+            return;
           }
-          return new Response(null, { status: 204 });
-        });
-        if (fallas.length) {
-          setError(`La Orden de Trabajo se creó, pero no se pudieron subir: ${fallas.join("; ")}. Adjúntalos desde su detalle.`);
-          setCreada(nueva);
-          setGuardando(false);
-          return;
         }
+        onCreada?.(nueva);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.mensaje || "Error al crear la Orden de Trabajo");
+        setGuardando(false);
       }
-      onCreada?.(nueva);
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setError(data.mensaje || "Error al crear la Orden de Trabajo");
+    } catch {
+      // Solo llega aquí si falló algo después de responder el POST: la OT pudo haberse creado.
+      setError("Error al crear la Orden de Trabajo. Revisa la lista antes de reintentar.");
       setGuardando(false);
     }
   };

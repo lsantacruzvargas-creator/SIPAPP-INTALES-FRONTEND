@@ -17,9 +17,12 @@ export default function ModalImpuestoVenta({ factura, onClose, onGuardada }) {
   const [error, setError] = useState("");
   const set = (campo) => (e) => setForm((f) => ({ ...f, [campo]: e.target.value }));
 
-  const { monto } = calcularImpuesto({ tipo: form.tipo, codigoSunat: form.codigoSunat, total: factura.total });
+  // Igual que el servidor: el impuesto se calcula y se paga en soles; el neto queda en la moneda de la factura.
+  const moneda = factura.moneda || "PEN";
+  const tipoCambio = factura.tipoCambio || 1;
+  const { monto } = calcularImpuesto({ tipo: form.tipo, codigoSunat: form.codigoSunat, total: factura.total, moneda, tipoCambio });
   const quien = form.tipo === "detraccion" ? form.quienDeposita : "cliente";
-  const { neto } = partes({ lado: "venta", total: factura.total, impuesto: { tipo: form.tipo, monto, quienDeposita: quien } });
+  const { neto } = partes({ lado: "venta", total: factura.total, moneda, tipoCambio, impuesto: { tipo: form.tipo, monto, quienDeposita: quien } });
 
   const guardar = async () => {
     setGuardando(true);
@@ -62,7 +65,7 @@ export default function ModalImpuestoVenta({ factura, onClose, onGuardada }) {
         )}
         <div className="flex justify-between text-sm border-t border-gray-100 pt-3">
           <span>Impuesto {money(monto)}</span>
-          <span className="font-bold text-emerald-700">Neto a cobrar {money(neto)}</span>
+          <span className="font-bold text-emerald-700">Neto a cobrar {money(neto, moneda)}</span>
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">

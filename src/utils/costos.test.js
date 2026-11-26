@@ -36,11 +36,22 @@ test("filas del reporte y del Excel en la moneda elegida", () => {
   const r = filaResumenCosto(enUSD, (e) => e.razonSocial, 3.8);
   assert.equal(r["Moneda"], "USD");
   assert.equal(r["TC"], 3.8);
-  assert.equal(r["Costo total"], 180);
-  assert.equal(r["Margen"], 20);
-  assert.equal(filaResumenCosto(costoEn({ ...c, ocSubtotal: null }, "PEN", 3.8), (e) => e.razonSocial, 3.8)["Margen"], "—");
+  assert.equal(r["Costo OT"], 180);
+  assert.equal(r["Margen OC"], 20);
+  assert.equal(filaResumenCosto(costoEn({ ...c, ocSubtotal: null }, "PEN", 3.8), (e) => e.razonSocial, 3.8)["Margen OC"], null);
   assert.deepEqual(Object.keys(filaComprometido(enUSD)), ["N° OT", "Moneda", "Materiales", "Servicios", "Flete", "Otros", "Total comprometido"]);
   assert.equal(filaConsumido(enUSD)["HH"], 20);
+});
+
+test("margen de la OC contra el costo de todas las OTs de su cadena; la OC solo en la primera fila", () => {
+  // OC US$ 200; esta OT cuesta S/ 684 pero la cadena entera S/ 722 → US$ 190 → margen US$ 10.
+  const enUSD = costoEn({ ...c, costoCadena: 722, primeraDeCadena: true }, "USD", 3.8);
+  assert.equal(enUSD.costoCadena, 190);
+  assert.equal(enUSD.margen, 10);
+  const segunda = filaResumenCosto({ ...enUSD, primeraDeCadena: false }, (e) => e.razonSocial, 3.8);
+  assert.equal(segunda["Costo OT"], 180);
+  assert.equal(segunda["OC sin IGV"], null);
+  assert.equal(segunda["Margen OC"], null);
 });
 
 test("origenTC: nombra la fuente y la fecha real del TC; solo apiperu/bd cuentan como valor SUNAT", () => {

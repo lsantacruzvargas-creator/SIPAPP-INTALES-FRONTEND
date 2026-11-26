@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { comprimirFoto } from "../utils/comprimirFoto";
 import SelectorCatalogoServicios from "./SelectorCatalogoServicios";
 import ConfirmacionAccion from "./ConfirmacionAccion";
 import TablaScroll from "./TablaScroll";
 import ImagenProtegida from "./ImagenProtegida";
+import { CeldaOCItem, BotonGenerarOC } from "./detalleShared";
 import { uploadAuth } from "../utils/fetchAuth";
 import {
   calcSubtotal, montoDescuentoItem, itemVacioServicio, UNIDADES,
@@ -20,6 +22,7 @@ export default function TablaItemsCotizacion({
   items, onItemsChange,
   tipo, puedeEditar, disabled, intentoGuardar, totalesMostrados, descuentoGlobal = 0,
   seleccionables = false, seleccionados = new Set(), onToggleSeleccion, onGenerarOT, generando = false, onVerOT, onQuitarOT,
+  seleccionablesOC = false, seleccionadosOC = new Set(), onToggleSeleccionOC, onGenerarOC, generandoOC = false, onVerOC,
   puedeVerPrecios = true,
 }) {
   const [catalogoOpen, setCatalogoOpen] = useState(false);
@@ -45,7 +48,7 @@ export default function TablaItemsCotizacion({
     const archivo = files?.[0];
     if (!archivo) return;
     const fd = new FormData();
-    fd.append("imagen", archivo);
+    fd.append("imagen", await comprimirFoto(archivo));
     setErrorImagen("");
     const res = await uploadAuth("/cotizaciones/subir-imagen", fd).catch(() => null);
     if (!res?.ok) {
@@ -132,7 +135,7 @@ export default function TablaItemsCotizacion({
   // columna "Quitar" (puedeEditar) NO se suma acá: tiene su propia celda
   // vacía en cada fila del tfoot, así que colsIzquierda debe quedar fijo
   // para que la celda de valor caiga siempre bajo "Precio total".
-  const colsIzquierda = 8 + (seleccionables ? 1 : 0);
+  const colsIzquierda = 8 + (seleccionables ? 1 : 0) + (seleccionablesOC ? 1 : 0);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -145,6 +148,7 @@ export default function TablaItemsCotizacion({
           </h2>
         </div>
         <div className="flex items-center gap-2">
+          {seleccionablesOC && <BotonGenerarOC cantidad={seleccionadosOC.size} onClick={onGenerarOC} disabled={generandoOC} />}
           {seleccionables && seleccionados.size > 0 && (
             <button type="button" onClick={onGenerarOT} disabled={generando}
               className="bg-emerald-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-60 transition font-medium">
@@ -177,8 +181,9 @@ export default function TablaItemsCotizacion({
           <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
             <tr>
               {seleccionables && <th className="px-3 py-3 w-12 text-center">OT</th>}
+              {seleccionablesOC && <th className="px-3 py-3 w-12 text-center">OC</th>}
               <th className="px-3 py-3 text-center w-12">Item</th>
-              <th className="px-3 py-3 text-left w-28">Código</th>
+              <th className="px-3 py-3 text-left w-px">Código</th>
               <th className="px-3 py-3 text-left">Descripción *</th>
               <th className="px-3 py-3 text-center w-24">Unidad</th>
               <th className="px-3 py-3 text-center w-24">Cantidad *</th>
@@ -192,7 +197,7 @@ export default function TablaItemsCotizacion({
           <tbody className="divide-y divide-gray-100">
             {items.length === 0 ? (
               <tr>
-                <td colSpan={6 + (seleccionables ? 1 : 0) + (puedeVerPrecios ? 3 : 0) + (puedeEditar ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={6 + (seleccionables ? 1 : 0) + (seleccionablesOC ? 1 : 0) + (puedeVerPrecios ? 3 : 0) + (puedeEditar ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">
                   Sin ítems agregados{puedeAgregar
                     ? (tipo === "servicio"
                       ? " — usa “+ Agregar ítem manual” para escribir uno o “+ Agregar ítem de plantilla” para elegir del catálogo de servicios."
@@ -226,12 +231,20 @@ export default function TablaItemsCotizacion({
                       )}
                     </td>
                   )}
+                  {seleccionablesOC && (
+                    <CeldaOCItem item={item} idx={idx} seleccionados={seleccionadosOC}
+                      onToggle={onToggleSeleccionOC} onVerOC={onVerOC} deshabilitado={generandoOC} />
+                  )}
                   <td className="px-3 py-3 text-center text-gray-400">{idx + 1}</td>
                   <td className="px-3 py-3">
-                    <input value={item.codigo || ""} disabled={!editable}
-                      onChange={(e) => handleItem(item._key, "codigo", e.target.value)}
+                    {/* Textarea de 2 filas x ~10 caracteres: un código de 20
+                        dígitos se ve completo sin ensanchar la columna a costa
+                        de Descripción. break-all porque un número sin guiones
+                        no tiene dónde partirse. */}
+                    <textarea value={item.codigo || ""} disabled={!editable} rows={2}
+                      onChange={(e) => handleItem(item._key, "codigo", e.target.value.replace(/\n/g, ""))}
                       placeholder="—"
-                      className={`w-full ${editable ? INP : "bg-transparent border-transparent text-sm px-2 py-1"}`} />
+                      className={`${editable ? INP : "bg-transparent border-transparent text-sm px-2 py-1"} w-[calc(10ch+1.75rem)]! resize-none break-all leading-snug`} />
                   </td>
                   <td className="px-3 py-3">
                     {/* La clase `uppercase` de abajo solo transforma la
@@ -241,12 +254,12 @@ export default function TablaItemsCotizacion({
                         el valor a mayúsculas acá es lo que realmente lo deja
                         en mayúsculas también en el PDF. */}
                     {editable ? (
-                      <input value={item.descripcion}
+                      <textarea value={item.descripcion} rows={4}
                         onChange={(e) => handleItem(item._key, "descripcion", e.target.value.toUpperCase())}
                         placeholder="Descripción del ítem"
-                        className={`w-full font-semibold text-gray-800 text-xs uppercase tracking-wide border border-transparent rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-300 focus:border-sky-300 ${intentoGuardar && descripcionInvalida(item) ? "border-red-400 ring-1 ring-red-300" : ""}`} />
+                        className={`w-full resize-y font-semibold text-gray-800 text-xs uppercase tracking-wide border border-transparent rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-sky-300 focus:border-sky-300 ${intentoGuardar && descripcionInvalida(item) ? "border-red-400 ring-1 ring-red-300" : ""}`} />
                     ) : (
-                      <p className="font-semibold text-gray-800 text-xs uppercase tracking-wide">{item.descripcion}</p>
+                      <p className="font-semibold text-gray-800 text-xs uppercase tracking-wide whitespace-pre-line">{item.descripcion}</p>
                     )}
                     {item.subItems?.length > 0 && (
                       <ul className="mt-1.5 space-y-1">
@@ -361,7 +374,7 @@ export default function TablaItemsCotizacion({
                 {puedeEditar && <td />}
               </tr>
               <tr>
-                <td colSpan={colsIzquierda} className="px-4 py-2 text-right text-xs text-gray-500">IGV 18%</td>
+                <td colSpan={colsIzquierda} className="px-4 py-2 text-right text-xs text-gray-500">{totalesMostrados.afectoIgv === false ? "IGV (no afecto)" : "IGV 18%"}</td>
                 <td className="px-3 py-2 text-right font-medium tabular-nums">{totalesMostrados.igv.toFixed(2)}</td>
                 {puedeEditar && <td />}
               </tr>

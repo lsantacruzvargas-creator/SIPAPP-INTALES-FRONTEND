@@ -16,7 +16,8 @@ const ESTADO_ITEM = {
   rechazado: "bg-red-100 text-red-700",
 };
 
-const money = (v) => "S/ " + Number(v ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 });
+// Las compras de comprabasico pueden estar en dólares (moneda + tipoCambio guardados al procesar).
+const money = (v, moneda = "PEN") => (moneda === "USD" ? "US$ " : "S/ ") + Number(v ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 });
 
 function resumenCompra(item) {
   return Object.entries(item.camposCompra || {}).map(([k, v]) => `${k}: ${v}`).join(" · ");
@@ -49,18 +50,23 @@ function PanelSalida({ requerimientoId, item, onClose, onListo }) {
   const confirmar = async () => {
     if (!lote || !cantidad || cantidad <= 0) { setError("Selecciona el lote e ingresa la cantidad."); return; }
     setGuardando(true);
-    const r = await conBloqueo("requerimiento", requerimientoId, (h) => fetchAuth(`/requerimientos/${requerimientoId}/items/${item._id}/salida`, {
-      method: "PATCH",
-      headers: h,
-      body: JSON.stringify({ lote, cantidad: Number(cantidad), precioUnitario: precioAuto }),
-    }));
-    if (r.ok) {
-      onListo(await r.json());
-    } else {
-      const d = await r.json().catch(() => ({}));
-      setError(d.mensaje || "Error al registrar la salida");
+    try {
+      const r = await conBloqueo("requerimiento", requerimientoId, (h) => fetchAuth(`/requerimientos/${requerimientoId}/items/${item._id}/salida`, {
+        method: "PATCH",
+        headers: h,
+        body: JSON.stringify({ lote, cantidad: Number(cantidad), precioUnitario: precioAuto }),
+      }));
+      if (r.ok) {
+        onListo(await r.json());
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setError(d.mensaje || "Error al registrar la salida");
+      }
+    } catch {
+      setError("Error al registrar la salida");
+    } finally {
+      setGuardando(false);
     }
-    setGuardando(false);
   };
 
   return (
@@ -123,18 +129,23 @@ function PanelDevolucion({ requerimientoId, item, onClose, onListo }) {
   const confirmar = async () => {
     if (!cantidad || cantidad <= 0) { setError("Ingresa una cantidad válida."); return; }
     setGuardando(true);
-    const r = await conBloqueo("requerimiento", requerimientoId, (h) => fetchAuth(`/requerimientos/${requerimientoId}/items/${item._id}/devolucion`, {
-      method: "PATCH",
-      headers: h,
-      body: JSON.stringify({ cantidad: Number(cantidad) }),
-    }));
-    if (r.ok) {
-      onListo(await r.json());
-    } else {
-      const d = await r.json().catch(() => ({}));
-      setError(d.mensaje || "Error al registrar la devolución");
+    try {
+      const r = await conBloqueo("requerimiento", requerimientoId, (h) => fetchAuth(`/requerimientos/${requerimientoId}/items/${item._id}/devolucion`, {
+        method: "PATCH",
+        headers: h,
+        body: JSON.stringify({ cantidad: Number(cantidad) }),
+      }));
+      if (r.ok) {
+        onListo(await r.json());
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setError(d.mensaje || "Error al registrar la devolución");
+      }
+    } catch {
+      setError("Error al registrar la devolución");
+    } finally {
+      setGuardando(false);
     }
-    setGuardando(false);
   };
 
   return (
@@ -200,9 +211,12 @@ function FilaItem({ requerimiento, item, puedeAtender, onActualizado }) {
 
   const rechazar = async (motivo) => {
     setRechazando(true);
-    await accion("rechazar", { motivo });
-    setRechazando(false);
-    setConfirmandoRechazo(false);
+    try {
+      await accion("rechazar", { motivo });
+    } finally {
+      setRechazando(false);
+      setConfirmandoRechazo(false);
+    }
   };
 
   const vincular = (material) => {
@@ -442,6 +456,7 @@ export default function Requerimientos() {
       "CLIENTE": nombreEmpresa(ot?.empresa) || "—",
       "MATERIALES": [it.categoriaNombre, resumenCompra(it)].filter(Boolean).join(" — "),
       "PROVEEDOR": it.proveedorNombre || "—",
+      "MONEDA": it.moneda || "PEN",
       "COSTO": costo,
       "CANTIDAD": cantidad,
       "FLETE": flete,
@@ -463,6 +478,7 @@ export default function Requerimientos() {
       "CLIENTE": nombreEmpresa(ot?.empresa) || "—",
       "MATERIALES": [s.tipoTrabajo, s.material].filter(Boolean).join(" — "),
       "PROVEEDOR": s.nombreProveedor || "—",
+      "MONEDA": s.moneda || "PEN",
       "COSTO": costo,
       "CANTIDAD": cantidad,
       "FLETE": flete,
@@ -500,11 +516,16 @@ export default function Requerimientos() {
       ? itemsSeleccionadosPagoMateriales.map((it) => ["requerimiento", it.requerimiento._id, `/requerimientos/${it.requerimiento._id}/items/${it._id}/pagar`])
       : serviciosSeleccionadosPago.map((s) => ["servicioExterno", s._id, `/servicios-externos/${s._id}/pagar`]);
     const fallos = [];
-    for (const [entidad, id, url] of pagos) {
-      const r = await conBloqueo(entidad, id, (h) => fetchAuth(url, { method: "PATCH", headers: h }));
-      if (!r.ok) fallos.push((await r.json().catch(() => ({}))).mensaje || "Error al marcar como pagado");
+    try {
+      for (const [entidad, id, url] of pagos) {
+        const r = await conBloqueo(entidad, id, (h) => fetchAuth(url, { method: "PATCH", headers: h }));
+        if (!r.ok) fallos.push((await r.json().catch(() => ({}))).mensaje || "Error al marcar como pagado");
+      }
+    } catch {
+      fallos.push("Error al marcar como pagado");
+    } finally {
+      setPagando(false);
     }
-    setPagando(false);
     await cargar();
     setSeleccionados(new Set());
     if (fallos.length) {
@@ -632,7 +653,7 @@ export default function Requerimientos() {
           {(() => {
             const items = tabMateriales === "pendiente-pago" ? itemsPendientePago : itemsPagados;
             if (items.length === 0) {
-              return <p className="text-center py-10 text-gray-00 text-md">Sin solicitudes de compra en esta vista</p>;
+              return <p className="text-center py-10 text-gray-400 text-sm">Sin solicitudes de compra en esta vista</p>;
             }
             return items.map((it) => {
               const key = filaMaterialKey(it);
@@ -653,7 +674,7 @@ export default function Requerimientos() {
                   fecha={fmtFecha(it.fechaProcesado || it.createdAt)}
                   chips={
                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                      <span className={`px-2 py-0.5 rounded-full text-[1px] font-semibold ${ESTADO_ITEM[it.estado]}`}>{it.estado}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${ESTADO_ITEM[it.estado]}`}>{it.estado}</span>
                       {it.proveedorNombre && (
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">
                           {it.proveedorNombre}
@@ -661,7 +682,7 @@ export default function Requerimientos() {
                       )}
                       {it.montoUnitario != null && (
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
-                          {money(it.montoUnitario)}/u{it.costoTransporte > 0 ? ` + ${money(it.costoTransporte)} transporte` : ""}
+                          {money(it.montoUnitario, it.moneda)}/u{it.costoTransporte > 0 ? ` + ${money(it.costoTransporte, it.moneda)} transporte` : ""}
                         </span>
                       )}
                     </div>
@@ -701,13 +722,13 @@ export default function Requerimientos() {
                   chips={
                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
                       {s.nombreProveedor && (
-                        <span className="text-[px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">
                           {s.nombreProveedor}
                         </span>
                       )}
                       {s.costo > 0 && (
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
-                          {money(s.costo)}/u{s.costoTransporte > 0 ? ` + ${money(s.costoTransporte)} transporte` : ""}
+                          {money(s.costo, s.moneda)}/u{s.costoTransporte > 0 ? ` + ${money(s.costoTransporte, s.moneda)} transporte` : ""}
                         </span>
                       )}
                     </div>

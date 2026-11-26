@@ -8,10 +8,13 @@ import { money } from "../../utils/compras";
 import { fechaConsultableTc, estadoTcComprobante } from "../../utils/tesoreria";
 import { totalesAsiento, validarLineas, lineasParaEnviar, lineasDeAsiento, lineaIntacta, SUBDIARIOS, SUBDIARIOS_MANUALES } from "../../utils/contabilidad";
 import BuscadorCuenta from "./BuscadorCuenta";
+import useConfirmar from "../../hooks/useConfirmar";
 
 const INP = "w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-50";
 const lineaVacia = () => ({ cuenta: "", glosa: "", debe: "", haber: "", centroCosto: "", tercero: { tipoDoc: "6", numDoc: "", nombre: "" } });
 const fechaInput = (d) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" }).format(new Date(d));
+// El TC lo rellena solo la consulta a SUNAT: no cuenta como cambio del usuario.
+const huella = (form, lineas) => JSON.stringify([{ ...form, tipoCambio: undefined }, lineas]);
 
 // Crear un asiento manual o editar uno existente, manual o automático (el automático sale de su documento y se
 // completa aquí: más cuentas, otra distribución). No se editan los anulados ni los ya exportados.
@@ -30,6 +33,8 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
     tipoCambio: asiento?.moneda === "USD" ? String(asiento.tipoCambio) : "",
   }));
   const [lineas, setLineas] = useState(() => (asiento ? lineasDeAsiento(asiento) : [lineaVacia(), lineaVacia()]));
+  const [inicial] = useState(() => huella(form, lineas));
+  const { confirmar, dialogo } = useConfirmar("Sí, descartar", { peligro: true });
   const [tcAviso, setTcAviso] = useState("");
   const [tcSoloLectura, setTcSoloLectura] = useState(false);
   const [error, setError] = useState("");
@@ -97,6 +102,10 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
     } finally {
       setGuardando(false);
     }
+  };
+
+  const cancelar = async () => {
+    if (!editable || huella(form, lineas) === inicial || await confirmar(<p>El asiento tiene cambios sin guardar. ¿Descartar los cambios?</p>)) onClose();
   };
 
   const simbolo = form.moneda === "USD" ? "US$" : "S/";
@@ -226,7 +235,7 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-3">
-          <button onClick={onClose} disabled={guardando} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">
+          <button onClick={cancelar} disabled={guardando} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">
             {editable ? "Cancelar" : "Cerrar"}
           </button>
           {editable && (
@@ -238,6 +247,7 @@ export default function ModalAsiento({ asiento, cuentas, centrosCosto, puedeEscr
           )}
         </div>
       </div>
+      {dialogo}
     </div>
   );
 }

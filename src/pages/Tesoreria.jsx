@@ -22,12 +22,15 @@ const TABS = [
   { id: "sire", label: "SIRE" },
   { id: "resumen-tributario", label: "Resumen tributario" },
   { id: "diferencia-cambio", label: "Dif. de cambio" },
-  { id: "configuracion", label: "Configuración", soloJefatura: true },
+  { id: "configuracion", label: "Configuración", configuracion: true },
 ];
 
 // El modal de factura vive aquí porque lo abren dos pestañas (Por pagar y SIRE).
 export default function Tesoreria() {
-  const puedeConfigurar = ["jefatura", "admin"].includes(getUsuario()?.rol);
+  const rol = getUsuario()?.rol;
+  const puedeConfigurar = ["jefatura", "admin"].includes(rol);
+  // El contador entra a Configuración solo para cargar saldos iniciales.
+  const veConfiguracion = puedeConfigurar || rol === "contador";
   const [tab, setTab] = useState("por-pagar");
   const [catalogos, setCatalogos] = useState({ proveedores: [], centrosCosto: [], esAgenteRetencion: false, tipoCambio: 3.75 });
   const [modalFactura, setModalFactura] = useState(null);
@@ -52,13 +55,13 @@ export default function Tesoreria() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-screen-2xl mx-auto px-4 py-8 space-y-6">
       <div>
         <h1 className="text-xl font-bold text-gray-800">Tesorería</h1>
         <p className="text-sm text-gray-400 mt-0.5">Cuentas por pagar y por cobrar, pagos, detracciones y retenciones, bancos, conciliación bancaria y caja chica, conciliación con el SIRE</p>
       </div>
       <div className="flex border-b border-gray-200 gap-1 flex-wrap">
-        {TABS.filter((t) => !t.soloJefatura || puedeConfigurar).map((t) => (
+        {TABS.filter((t) => !t.configuracion || veConfiguracion).map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`px-4 py-2.5 text-sm font-medium transition border-b-2 -mb-px ${
               tab === t.id ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"
@@ -76,7 +79,7 @@ export default function Tesoreria() {
       {tab === "sire" && <PanelSire onRegistrarFactura={setModalFactura} />}
       {tab === "resumen-tributario" && <PanelResumenTributario />}
       {tab === "diferencia-cambio" && <PanelDiferenciaCambio />}
-      {tab === "configuracion" && puedeConfigurar && <PanelConfiguracion onCambio={cargarCatalogos} />}
+      {tab === "configuracion" && veConfiguracion && <PanelConfiguracion onCambio={cargarCatalogos} soloSaldoInicial={!puedeConfigurar} />}
       {modalFactura && (
         <ModalFacturaProveedor ocpId={modalFactura.ocpId} precarga={modalFactura.precarga} catalogos={catalogos}
           onClose={() => setModalFactura(null)} onGuardada={facturaGuardada} />

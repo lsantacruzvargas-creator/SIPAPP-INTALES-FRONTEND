@@ -5,6 +5,7 @@ import { formatearFecha } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { round2, SUBDIARIOS } from "../../utils/contabilidad";
 import { exportarHoja } from "../../utils/exportarTabla";
+import { TIPOS_COMPROBANTE_COMPRA } from "../../utils/tesoreria";
 import TablaScroll from "../TablaScroll";
 import PromptAccion from "../PromptAccion";
 import AvisoAccion from "../AvisoAccion";
@@ -14,10 +15,20 @@ const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-n
 const fecha = (d) => formatearFecha(d, { day: "2-digit", month: "2-digit", year: "numeric" });
 const ESTADOS = { borrador: "Borrador", contabilizado: "Contabilizado", anulado: "Anulado" };
 const total = (a, k) => round2(a.lineas.reduce((s, l) => s + (l[k] || 0), 0));
+const TIPOS_DOC = Object.fromEntries(TIPOS_COMPROBANTE_COMPRA.map((t) => [t.valor, t.label]));
+const ORIGENES = {
+  manual: "Manual", FacturaProveedor: "Compras", Comprobante: "Ventas", MovimientoTesoreria: "Tesorería",
+  Planilla: "Planilla", DepositoCts: "CTS", DiferenciaCambio: "Diferencia de cambio", TraspasoSubcuenta: "Traspaso a subcuenta",
+};
+// El documento va por línea: se toma el de la línea del tercero (proveedor/cliente) o, si no hay, el primero que aparezca.
+const documentoDe = (a) => {
+  const l = a.lineas.find((x) => x.rol === "tercero" && x.documento?.numero) || a.lineas.find((x) => x.documento?.numero);
+  return l ? { ...l.documento, tercero: l.tercero } : null;
+};
 
 export default function PanelAsientos({ cuentas, centrosCosto, puedeEscribir }) {
   const [datos, setDatos] = useState({ asientos: [], total: 0 });
-  const [filtros, setFiltros] = useState({ periodo: "", subdiario: "", cuenta: "", estado: "", q: "" });
+  const [filtros, setFiltros] = useState({ periodo: "", subdiario: "", cuenta: "", estado: "", tipoDoc: "", origen: "", q: "" });
   const [modal, setModal] = useState(null); // { asiento? }
   const [anulando, setAnulando] = useState(null);
   const [procesando, setProcesando] = useState(false);
@@ -78,7 +89,9 @@ export default function PanelAsientos({ cuentas, centrosCosto, puedeEscribir }) 
     }
   };
   const exportarAsientos = (lista) => exportarHoja("asientos.xlsx", "Asientos", lista.flatMap((a) => a.lineas.map((l) => ({
-    "CUO": a.cuo, "Fecha": fecha(a.fecha), "Subdiario": SUBDIARIOS[a.subdiario], "Glosa": a.glosa, "Estado": ESTADOS[a.estado],
+    "CUO": a.cuo, "Fecha": fecha(a.fecha), "Subdiario": SUBDIARIOS[a.subdiario],
+    "Tipo doc.": l.documento?.tipo || "", "N° documento": l.documento?.numero ? `${l.documento.serie}-${l.documento.numero}` : "",
+    "Glosa": a.glosa, "Estado": ESTADOS[a.estado],
     "Moneda": a.moneda, "TC": a.tipoCambio, "Cuenta": l.cuenta, "Glosa línea": l.glosa, "Debe S/": l.debe, "Haber S/": l.haber,
     "Debe ME": l.debeME, "Haber ME": l.haberME, "Tercero": l.tercero?.numDoc || "",
   }))), [{
@@ -113,9 +126,27 @@ export default function PanelAsientos({ cuentas, centrosCosto, puedeEscribir }) 
           </select>
         </div>
         <div>
-          <label className="text-xs text-gray-500 block">Glosa o CUO</label>
-          <input value={filtros.q} onChange={set("q")} className={`${INP} w-56`} />
+          <label className="text-xs text-gray-500 block">Tipo de documento</label>
+          <select value={filtros.tipoDoc} onChange={set("tipoDoc")} className={INP}>
+            <option value="">Todos</option>
+            {TIPOS_COMPROBANTE_COMPRA.map((t) => <option key={t.valor} value={t.valor}>{t.valor} · {t.label}</option>)}
+          </select>
         </div>
+        <div>
+          <label className="text-xs text-gray-500 block">Origen</label>
+          <select value={filtros.origen} onChange={set("origen")} className={INP}>
+            <option value="">Todos</option>
+            {Object.entries(ORIGENES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block">Buscar</label>
+          <input type="search" value={filtros.q} onChange={set("q")} placeholder="Glosa, CUO, F001-123, RUC o razón social" className={`${INP} w-72`} />
+        </div>
+        {Object.values(filtros).some(Boolean) && (
+          <button onClick={() => setFiltros({ periodo: "", subdiario: "", cuenta: "", estado: "", tipoDoc: "", origen: "", q: "" })}
+            className="text-sm text-purple-600 hover:underline py-2">Limpiar filtros</button>
+        )}
         <div className="flex-1" />
         <button onClick={exportar} className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50">Exportar Excel</button>
         {puedeEscribir && (
@@ -131,19 +162,26 @@ export default function PanelAsientos({ cuentas, centrosCosto, puedeEscribir }) 
           <thead>
             <tr className="text-left text-xs text-gray-500 border-b">
               <th className="py-2 pr-3">Fecha</th><th className="py-2 pr-3">CUO</th><th className="py-2 pr-3">Subdiario</th>
+              <th className="py-2 pr-3">Tipo doc.</th><th className="py-2 pr-3">N° documento</th>
               <th className="py-2 pr-3">Glosa</th><th className="py-2 pr-3 text-right">Debe S/</th><th className="py-2 pr-3 text-right">Haber S/</th>
               <th className="py-2 pr-3">Estado</th><th className="py-2" />
             </tr>
           </thead>
           <tbody>
-            {datos.asientos.map((a) => (
+            {datos.asientos.map((a) => { const doc = documentoDe(a); return (
               <tr key={a._id} className={`border-b border-gray-100 ${a.estado === "anulado" ? "text-gray-400 line-through" : ""}`}>
                 <td className="py-1.5 pr-3 whitespace-nowrap">{fecha(a.fecha)}</td>
-                <td className="py-1.5 pr-3 font-mono text-xs whitespace-nowrap">{a.cuo}</td>
+                <td className="py-1.5 pr-3 font-mono text-xs break-all w-44 min-w-44">{a.cuo}</td>
                 <td className="py-1.5 pr-3">{SUBDIARIOS[a.subdiario]}</td>
-                <td className="py-1.5 pr-3">{a.glosa}{a.moneda === "USD" && <span className="ml-1 text-xs text-blue-600">US$ · TC {a.tipoCambio}</span>}</td>
-                <td className="py-1.5 pr-3 text-right tabular-nums">{money(total(a, "debe"))}</td>
-                <td className="py-1.5 pr-3 text-right tabular-nums">{money(total(a, "haber"))}</td>
+                <td className="py-1.5 pr-3 w-28 min-w-28 text-xs leading-tight" title={TIPOS_DOC[doc?.tipo] || ""}>
+                  {doc ? <><span className="font-mono">{doc.tipo}</span> <span className="text-gray-500">{TIPOS_DOC[doc.tipo] || ""}</span></> : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="py-1.5 pr-3 font-mono text-xs whitespace-nowrap" title={doc?.tercero ? `${doc.tercero.numDoc} · ${doc.tercero.nombre}` : ""}>
+                  {doc ? `${doc.serie}-${doc.numero}` : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="py-1.5 pr-3 min-w-80">{a.glosa}{a.moneda === "USD" && <span className="ml-1 text-xs text-blue-600">US$ · TC {a.tipoCambio}</span>}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums whitespace-nowrap">{money(total(a, "debe"))}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums whitespace-nowrap">{money(total(a, "haber"))}</td>
                 <td className="py-1.5 pr-3 text-xs no-underline">
                   {ESTADOS[a.estado]}
                   {a.origen?.tipo !== "manual" && <span className="ml-1 text-gray-400">· automático{a.editadoManualmente ? " (editado)" : ""}</span>}
@@ -159,7 +197,7 @@ export default function PanelAsientos({ cuentas, centrosCosto, puedeEscribir }) 
                   )}
                 </td>
               </tr>
-            ))}
+            ); })}
           </tbody>
         </table>
       </TablaScroll>

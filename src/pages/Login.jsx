@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { version as APP_VERSION } from "../../package.json";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function Login() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const sesionExpirada = params.get("motivo") === "expirada";
   const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -27,7 +29,7 @@ export default function Login() {
       if (!res.ok) return setError(data.mensaje || "Error al iniciar sesión");
       sessionStorage.setItem("token", data.token);
       sessionStorage.setItem("usuario", JSON.stringify(data.usuario));
-      navigate("/dashboard");
+      navigate("/");
     } catch {
       setError("No se pudo conectar con el servidor");
     } finally {
@@ -39,7 +41,7 @@ export default function Login() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="card w-full max-w-sm">
         <div className="flex items-center justify-center gap-3 mb-6">
-          <img src={`${import.meta.env.BASE_URL}assets/logos/logo_huaquian.jpg`} alt="Intales"
+          <img src={`${import.meta.env.BASE_URL}assets/logos/intales_icon.png`} alt="Intales"
             className="w-9 h-9 rounded-xl object-contain" />
           <div>
             <p className="font-bold text-gray-800">
@@ -49,6 +51,11 @@ export default function Login() {
           </div>
         </div>
 
+        {sesionExpirada && !error && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2 mb-4">
+            Tu sesión venció. Si estabas guardando algo, no se registró: vuelve a ingresar y repítelo.
+          </div>
+        )}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">
             {error}

@@ -977,6 +977,13 @@ function SeccionComponentes() {
 // a cada fila recién al guardar (ver guardarMasa).
 const filaIngresoVacia = () => ({ _key: Date.now() + Math.random(), material: "", busqueda: "", cantidad: "", precioUnitario: "" });
 
+// Un ingreso negativo bajaría el stock sin pasar por el control de stock insuficiente (solo aplica a egresos).
+const errorCantidadPrecio = ({ cantidad, precioUnitario }) => {
+  if (!(Number(cantidad) > 0)) return "La cantidad debe ser mayor a 0.";
+  if (precioUnitario !== undefined && !(Number(precioUnitario) >= 0)) return "El precio unitario no puede ser negativo.";
+  return "";
+};
+
 function ModalIngreso({ materialInicial, onClose, onGuardado }) {
   const [form, setForm] = useState({
     material: materialInicial?._id || "",
@@ -1053,6 +1060,8 @@ function ModalIngreso({ materialInicial, onClose, onGuardado }) {
       setError("Material, cantidad y precio son obligatorios.");
       return;
     }
+    const errorMontos = errorCantidadPrecio(form);
+    if (errorMontos) { setError(errorMontos); return; }
     setError("");
     setConfirmando(true);
   };
@@ -1101,31 +1110,50 @@ function ModalIngreso({ materialInicial, onClose, onGuardado }) {
       setError("Hay filas sin completar (material, cantidad o precio) — complétalas o quítalas antes de guardar.");
       return;
     }
+    for (const f of filasCompletasMasa) {
+      const errorMontos = errorCantidadPrecio(f);
+      if (errorMontos) { setError(`"${f.busqueda}": ${errorMontos}`); return; }
+    }
     setError("");
     setConfirmando(true);
   };
 
+  // Cada fila guardada sale de la tabla en cuanto el servidor la confirma: si
+  // una falla a mitad, el reintento solo manda las que faltan (antes volvía a
+  // mandar todas y duplicaba los ingresos ya registrados).
   const guardarMasa = async () => {
     setConfirmando(false);
     setGuardando(true);
     setError("");
-    const filasCompletas = filasCompletasMasa;
-    for (const f of filasCompletas) {
-      const r = await fetchAuth("/movimientos-almacen", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          material: f.material, cantidad: f.cantidad, precioUnitario: f.precioUnitario,
-          lote: form.lote, guiaProveedor: form.guiaProveedor, ordenCompra: form.ordenCompra,
-          proveedor: form.proveedor, notas: form.notas, tipo: "ingreso",
-        }),
-      });
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
-        setError(`"${f.busqueda}": ${d.mensaje || "Error al guardar"}`);
+    const total = filasCompletasMasa.length;
+    let guardadas = 0;
+    for (const f of filasCompletasMasa) {
+      let r;
+      try {
+        r = await fetchAuth("/movimientos-almacen", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            material: f.material, cantidad: f.cantidad, precioUnitario: f.precioUnitario,
+            lote: form.lote, guiaProveedor: form.guiaProveedor, ordenCompra: form.ordenCompra,
+            proveedor: form.proveedor, notas: form.notas, tipo: "ingreso",
+          }),
+        });
+      } catch {
+        r = null;
+      }
+      if (!r?.ok) {
+        const d = r ? await r.json().catch(() => ({})) : {};
+        const motivo = r ? d.mensaje || "Error al guardar" : "sin conexión con el servidor (revisa el kárdex: pudo haberse guardado)";
+        setError(`${guardadas ? `Se guardaron ${guardadas} de ${total} y ya no aparecen abajo. ` : ""}Falló "${f.busqueda}": ${motivo}. Corrige y vuelve a registrar las restantes.`);
         setGuardando(false);
         return;
       }
+      guardadas++;
+      setFilasMasa((prev) => {
+        const resto = prev.filter((x) => x._key !== f._key);
+        return resto.length ? resto : [filaIngresoVacia()];
+      });
     }
     setGuardando(false);
     onGuardado();
@@ -1265,12 +1293,29 @@ function ModalIngreso({ materialInicial, onClose, onGuardado }) {
 
       {confirmando && (
         <ConfirmacionAccion
-          mensaje={modoMasa
-            ? `¿Confirmas el ingreso de ${filasCompletasMasa.length} SKU(s)?`
-            : `¿Confirmas el ingreso de ${form.cantidad} ${materialSel?.unidad || ""} de "${materialSel?.nombre || "este material"}"?`}
+          mensaje={modoMasa ? (
+            <>
+              <p className="mb-2">¿Confirmas el ingreso de {filasCompletasMasa.length} SKU(s)?</p>
+              <ul className="text-xs space-y-0.5 max-h-48 overflow-y-auto mb-2">
+                {filasCompletasMasa.map((f) => (
+                  <li key={f._key} className="flex justify-between gap-3">
+                    <span className="truncate">{f.busqueda}</span>
+                    <span className="shrink-0 font-mono">{f.cantidad} × S/ {Number(f.precioUnitario).toFixed(2)} = S/ {(f.cantidad * f.precioUnitario).toFixed(2)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="font-semibold text-right">Total S/ {filasCompletasMasa.reduce((s, f) => s + f.cantidad * f.precioUnitario, 0).toFixed(2)}</p>
+            </>
+          ) : (
+            <>
+              <p className="mb-2">¿Confirmas el ingreso de {form.cantidad} {materialSel?.unidad || ""} de "{materialSel?.nombre || "este material"}"?</p>
+              <p className="font-mono">{form.cantidad} × S/ {Number(form.precioUnitario).toFixed(2)} = <strong>S/ {(form.cantidad * form.precioUnitario).toFixed(2)}</strong></p>
+            </>
+          )}
           onCancelar={() => setConfirmando(false)}
           onConfirmar={modoMasa ? guardarMasa : guardar}
           procesando={guardando}
+          textoProcesando="Guardando…"
           textoConfirmar="Confirmar ingreso"
         />
       )}
@@ -1333,6 +1378,17 @@ function ModalEgreso({ onClose, onGuardado }) {
       setError("Material y cantidad son obligatorios.");
       return;
     }
+    const errorMontos = errorCantidadPrecio({ cantidad: form.cantidad });
+    if (errorMontos) { setError(errorMontos); return; }
+    // Sin lote el egreso se valoriza en 0 y el lote sigue mostrando un disponible que ya salió.
+    if (lotes.length > 0) {
+      const lote = lotes.find((l) => l.lote === form.loteOrigen);
+      if (!lote) { setError("Elige el lote del que sale el material."); return; }
+      if (Number(form.cantidad) > Number(lote.cantidadDisponible)) {
+        setError(`El lote ${lote.lote} solo tiene ${lote.cantidadDisponible} disponible(s).`);
+        return;
+      }
+    }
     setError("");
     setConfirmando(true);
   };
@@ -1344,21 +1400,26 @@ function ModalEgreso({ onClose, onGuardado }) {
     // que se deja que el backend use su propio `Date.now` (instante real,
     // sin el bug de mandar un "YYYY-MM-DD" suelto que Mongoose interpreta
     // como medianoche UTC — eso sí puede caer en el día anterior en hora Lima).
-    const r = await fetchAuth("/movimientos-almacen", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        material: form.material, cantidad: form.cantidad, loteOrigen: form.loteOrigen, notas: form.notas,
-        tipo: "egreso", precioUnitario: precioAuto,
-      }),
-    });
-    if (r.ok) {
-      onGuardado(await r.json());
-    } else {
-      const d = await r.json();
-      setError(d.mensaje || "Error al guardar");
+    try {
+      const r = await fetchAuth("/movimientos-almacen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          material: form.material, cantidad: form.cantidad, loteOrigen: form.loteOrigen, notas: form.notas,
+          tipo: "egreso", precioUnitario: precioAuto,
+        }),
+      });
+      if (r.ok) {
+        onGuardado(await r.json());
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setError(d.mensaje || "Error al guardar");
+      }
+    } catch {
+      setError("Sin conexión con el servidor. Revisa el kárdex antes de reintentar: el egreso pudo haberse guardado.");
+    } finally {
+      setGuardando(false);
     }
-    setGuardando(false);
   };
 
   return (

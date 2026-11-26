@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { fetchAuth } from "../utils/fetchAuth";
 import { fechaHoyLima } from "../utils/fecha";
@@ -158,6 +158,7 @@ export default function EmitirGuia() {
   const [confirmando, setConfirmando] = useState(false);
   const [cargando, setCargando]       = useState(false);
   const [error, setError]             = useState("");
+  const errorRef = useRef(null);
   const [resultado, setResultado]     = useState(null);
 
   useEffect(() => {
@@ -201,6 +202,11 @@ export default function EmitirGuia() {
     if (tipoGuia !== "REMITENTE") return;
     setPuntoPartida({ ubigeo: INTALES_DOMICILIO.ubigeo, direccion: INTALES_DOMICILIO.direccion });
   }, [tipoGuia]);
+
+  // El banner está arriba y «Emitir» al pie de un formulario largo: sin esto el error queda fuera de la vista.
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error]);
 
   const abrirSelectorDireccion = async (destino = "destinatario") => {
     setDestinoSelectorDireccion(destino);
@@ -464,7 +470,7 @@ export default function EmitirGuia() {
   };
 
   const nuevo = () => {
-    setSerie("");
+    setSerie(SERIE_POR_TIPO_GUIA[tipoGuia]);
     setModalidadTraslado("02");
     setMotivoTraslado("01");
     setDescripcionMotivo("");
@@ -477,7 +483,10 @@ export default function EmitirGuia() {
     setRemitente(PARTE_VACIA);
     setProveedor(PARTE_VACIA);
     setComprador(PARTE_VACIA);
-    setPuntoPartida(DIRECCION_VACIA);
+    // El efecto que pone el domicilio depende de tipoGuia, que no cambia aquí: no se vuelve a disparar.
+    setPuntoPartida(tipoGuia === "REMITENTE"
+      ? { ubigeo: INTALES_DOMICILIO.ubigeo, direccion: INTALES_DOMICILIO.direccion }
+      : DIRECCION_VACIA);
     setPuntoLlegada(DIRECCION_VACIA);
     setTransportista(TRANSPORTISTA_VACIO);
     setVehiculo(VEHICULO_VACIO);
@@ -512,13 +521,19 @@ export default function EmitirGuia() {
           Ítems y destinatario prellenados desde la Orden de Trabajo — revisa antes de emitir.
         </div>
       )}
-      {resultado?.ok && (
+      {resultado?.ok && resultado.estado !== "EN_PROCESO" && (
         <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-5">
           Guía <strong>{resultado.nombre}</strong> ACEPTADA por SUNAT.
         </div>
       )}
+      {resultado?.estado === "EN_PROCESO" && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-3 mb-5">
+          Guía <strong>{resultado.nombre}</strong> EN PROCESO — SUNAT aún no confirma el resultado.
+          {resultado.mensaje ? ` ${resultado.mensaje}` : " Consulta su estado en la lista de guías antes de volver a emitirla."}
+        </div>
+      )}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-5 whitespace-pre-wrap">
+        <div ref={errorRef} role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-5 whitespace-pre-wrap">
           {error}
         </div>
       )}
@@ -1303,8 +1318,16 @@ export default function EmitirGuia() {
       {confirmando && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
-            <h3 className="font-semibold text-gray-800 mb-2">¿Emitir guía de remisión?</h3>
-            <p className="text-sm text-gray-500 mb-6">
+            <h3 className="font-semibold text-gray-800 mb-3">¿Emitir guía de remisión?</h3>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm mb-3">
+              <dt className="text-gray-400">Serie</dt><dd>{serie} (correlativo al emitir)</dd>
+              <dt className="text-gray-400">Motivo</dt><dd>{MOTIVO_TRASLADO.find((m) => m.valor === motivoTraslado)?.label}</dd>
+              <dt className="text-gray-400">Destinatario</dt><dd>{destinatario.nombre} · <span className="font-mono">{destinatario.numDoc}</span></dd>
+              <dt className="text-gray-400">Llegada</dt><dd>{puntoLlegada.direccion}</dd>
+              <dt className="text-gray-400">Traslado</dt><dd>{fechaTraslado.split("-").reverse().join("/")}</dd>
+              <dt className="text-gray-400">Ítems</dt><dd>{items.length} · {pesoBrutoTotal} {unidadPeso}</dd>
+            </dl>
+            <p className="text-xs text-gray-500 mb-6">
               Se enviará a SUNAT a través del hub. Esta acción genera un correlativo nuevo aunque la guía sea rechazada.
             </p>
             <div className="flex justify-end gap-3">

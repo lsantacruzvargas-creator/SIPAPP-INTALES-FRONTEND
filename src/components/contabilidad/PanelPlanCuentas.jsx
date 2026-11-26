@@ -52,7 +52,7 @@ export default function PanelPlanCuentas({ cuentas, onCambio, puedeEscribir }) {
       const errores = d.errores.length
         ? ` No se importaron ${d.errores.length}: ${d.errores.slice(0, 5).map((x) => `${x.codigo} (${x.mensaje})`).join("; ")}${d.errores.length > 5 ? "…" : ""}`
         : "";
-      setAviso(`Cuentas creadas: ${d.creadas}. Ya existían: ${d.existentes}.${errores}`);
+      setAviso(`Cuentas creadas: ${d.creadas}. Ya existían: ${d.existentes}.${errores}${d.avisos?.length ? ` ${d.avisos.join(" ")}` : ""}`);
       onCambio();
     } catch {
       setAviso("No se pudo leer el archivo: usa un Excel (.xlsx o .xls) o CSV.");
@@ -137,7 +137,7 @@ export default function PanelPlanCuentas({ cuentas, onCambio, puedeEscribir }) {
       </TablaScroll>
       {modal && (
         <ModalCuenta cuenta={modal.cuenta} padre={modal.padre} cuentas={cuentas}
-          onClose={() => setModal(null)} onGuardada={() => { setModal(null); onCambio(); }} />
+          onClose={() => setModal(null)} onGuardada={(d) => { setModal(null); onCambio(); if (d?.avisos?.length) setAviso(d.avisos.join(" ")); }} />
       )}
       {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
     </div>

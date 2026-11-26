@@ -60,12 +60,13 @@ export function impuestoVentaPorDefecto(total, moneda = "PEN", tipoCambio = 1) {
 export const monedaFactura = ({ oc, elegida }) => (oc?.moneda === "USD" || oc?.moneda === "PEN" ? oc.moneda : elegida === "USD" ? "USD" : "PEN");
 
 // Vista previa de la factura de venta: detracción en S/, total a pagar en la moneda de la factura.
-export function calculoVenta({ subtotal, descuentoPct = 0, moneda = "PEN", tipoCambio = 1 }) {
+// `afectoIgv: false` = venta de un trabajo en el extranjero: sin IGV ni detracción.
+export function calculoVenta({ subtotal, descuentoPct = 0, moneda = "PEN", tipoCambio = 1, afectoIgv = true }) {
   const sub = round2(Number(subtotal) || 0);
   const base = round2(sub * (1 - (Number(descuentoPct) || 0) / 100));
-  const igv = round2(base * 0.18);
+  const igv = afectoIgv ? round2(base * 0.18) : 0;
   const total = round2(base + igv);
-  const detraccion = impuestoVentaPorDefecto(total, moneda, tipoCambio).monto;
+  const detraccion = afectoIgv ? impuestoVentaPorDefecto(total, moneda, tipoCambio).monto : 0;
   const enDoc = moneda === "USD" && tipoCambio > 0 ? detraccion / tipoCambio : detraccion;
   return { base, igv, total, detraccion, totalAPagar: round2(total - enDoc) };
 }

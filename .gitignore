@@ -4,3 +4,5 @@ dist-electron/
 dist/
 node_modules/
 informes-templates-BACKUP-original/
+
+.superpowers/

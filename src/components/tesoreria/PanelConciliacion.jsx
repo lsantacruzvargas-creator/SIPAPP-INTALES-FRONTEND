@@ -8,6 +8,7 @@ import useBloqueoEdicion from "../../hooks/useBloqueoEdicion";
 import BarraEdicion from "../BarraEdicion";
 import PromptAccion from "../PromptAccion";
 import TablaScroll from "../TablaScroll";
+import useConfirmar from "../../hooks/useConfirmar";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
 const fecha = (d) => formatearFecha(d, { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -29,15 +30,23 @@ export default function PanelConciliacion() {
   const abierta = conc?.estado === "abierta";
   const bloqueo = useBloqueoEdicion("conciliacionBancaria", conc?._id, conc?.updatedAt, { autoEditar: abierta });
   const editable = abierta && bloqueo.editando;
+  const confCerrar = useConfirmar("Sí, cerrar");
+  const confDescartar = useConfirmar("Sí, descartar", { peligro: true });
 
   useEffect(() => {
     fetchAuth("/cuentas-tesoreria").then(async (r) => {
-      if (r.ok) setCuentas((await r.json()).filter((c) => c.activo && c.tipo !== "caja"));
-    }).catch(() => {});
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) setCuentas(d.filter((c) => c.activo && c.tipo !== "caja"));
+      else setError(d.mensaje || "No se pudieron cargar las cuentas bancarias.");
+    });
   }, []);
   const cargarHistorial = useCallback(() => {
     if (!cuenta) return Promise.resolve();
-    return fetchAuth(`/bancos/conciliaciones?cuenta=${cuenta}`).then(async (r) => { if (r.ok) setHistorial(await r.json()); }).catch(() => {});
+    return fetchAuth(`/bancos/conciliaciones?cuenta=${cuenta}`).then(async (r) => {
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) setHistorial(d);
+      else setError(d.mensaje || "No se pudo cargar el historial de conciliaciones.");
+    });
   }, [cuenta]);
   useEffect(() => { cargarHistorial(); }, [cargarHistorial]);
 
@@ -62,11 +71,27 @@ export default function PanelConciliacion() {
     }
   };
 
+  const sinGuardar = editable && (
+    String(extracto ?? "") !== String(conc.saldoExtracto ?? "")
+    || [...marcados].sort().join() !== conc.calculo.pendientes.filter((m) => m.marcado).map((m) => m._id).sort().join()
+  );
+  const puedeDescartar = async () => !sinGuardar || confDescartar.confirmar(
+    <p>Hay cambios sin guardar en la conciliación de {conc.cuenta?.nombre} {textoPeriodo(conc.periodo)} (saldo del extracto o movimientos marcados). ¿Descartar los cambios?</p>
+  );
+
+  const cambiarCuenta = async (id) => {
+    if (!(await puedeDescartar())) return;
+    setCuenta(id);
+    setConc(null);
+    setHistorial([]);
+  };
   const abrir = async () => {
+    if (!(await puedeDescartar())) return;
     const d = await pedir(() => fetchAuth("/bancos/conciliaciones", { method: "POST", body: JSON.stringify({ cuenta, periodo: periodoDeMes(mes) }) }), "No se pudo abrir la conciliación.");
     if (d) { mostrar(d); cargarHistorial(); }
   };
   const ver = async (id) => {
+    if (!(await puedeDescartar())) return;
     const d = await pedir(() => fetchAuth(`/bancos/conciliaciones/${id}`), "No se pudo abrir la conciliación.");
     if (d) mostrar(d);
   };
@@ -78,6 +103,10 @@ export default function PanelConciliacion() {
     return d;
   };
   const cerrar = async () => {
+    const ok = await confCerrar.confirmar(
+      <p>Cerrar la conciliación de <b>{conc.cuenta?.nombre} {textoPeriodo(conc.periodo)}</b>. Ya no se podrá editar; solo jefatura o admin puede reabrirla. ¿Continuar?</p>
+    );
+    if (!ok) return;
     if (!(await guardar())) return;
     const d = await pedir(() => bloqueo.fetch(`/bancos/conciliaciones/${conc._id}/cerrar`, { method: "POST" }), "No se pudo cerrar.");
     if (d) { mostrar(d); cargarHistorial(); }
@@ -97,7 +126,7 @@ export default function PanelConciliacion() {
     <div className="space-y-5">
       <div className="flex flex-wrap gap-3 items-end">
         <label className="text-xs text-gray-500">Cuenta
-          <select value={cuenta} onChange={(e) => { setCuenta(e.target.value); setConc(null); setHistorial([]); }} className={`${INP} block`}>
+          <select value={cuenta} onChange={(e) => cambiarCuenta(e.target.value)} className={`${INP} block`}>
             <option value="">Elige…</option>
             {cuentas.map((c) => <option key={c._id} value={c._id}>{c.nombre} ({c.moneda})</option>)}
           </select>
@@ -198,6 +227,8 @@ export default function PanelConciliacion() {
         <PromptAccion titulo={`Reabrir la conciliación de ${textoPeriodo(conc.periodo)}`} label="Motivo de la reapertura" procesando={procesando}
           textoConfirmar="Reabrir" onCancelar={() => setReabriendo(false)} onConfirmar={reabrir} />
       )}
+      {confCerrar.dialogo}
+      {confDescartar.dialogo}
     </div>
   );
 }

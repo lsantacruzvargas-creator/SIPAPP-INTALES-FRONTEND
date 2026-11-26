@@ -291,20 +291,26 @@ export default function Dashboard() {
   const [cots, setCots]   = useState([]);
   const [ocs, setOcs]     = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(false);
+  const [intento, setIntento] = useState(0);
   const [filtroAno, setFiltroAno] = useState("");
   const [filtroMes, setFiltroMes] = useState("");
 
+  // Un error no se convierte en lista vacía: mostraría indicadores en S/ 0.00 como si fueran reales.
   useEffect(() => {
+    const json = (r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))));
     Promise.all([
-      fetchAuth("/ordenes-trabajo").then((r) => r.ok ? r.json() : []),
-      (veFacturas(rolDeSesion()) ? fetchAuth("/facturas").then((r) => r.ok ? r.json() : []) : Promise.resolve([])),
-      fetchAuth("/cotizaciones").then((r) => r.ok ? r.json() : []),
-      fetchAuth("/ordenes-compra").then((r) => r.ok ? r.json() : []),
+      fetchAuth("/ordenes-trabajo").then(json),
+      (veFacturas(rolDeSesion()) ? fetchAuth("/facturas").then(json) : Promise.resolve([])),
+      fetchAuth("/cotizaciones").then(json),
+      fetchAuth("/ordenes-compra").then(json),
     ]).then(([o, f, c, oc]) => {
       setOts(o); setFacts(f); setCots(c); setOcs(oc);
-      setCargando(false);
-    });
-  }, []);
+      setError(false);
+    }).catch(() => setError(true))
+      .finally(() => setCargando(false));
+  }, [intento]);
+  const reintentar = () => { setCargando(true); setError(false); setIntento((n) => n + 1); };
 
   // ── Años disponibles (union de todos los datos) ──────────────────────────
   const anos = [...new Set([
@@ -367,6 +373,16 @@ export default function Dashboard() {
 
   if (cargando) {
     return <div className="p-8 text-sm text-gray-400">Cargando dashboard…</div>;
+  }
+  if (error) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 inline-flex items-center gap-3">
+          No se pudo cargar el dashboard.
+          <button onClick={reintentar} className="underline hover:text-red-900">Reintentar</button>
+        </p>
+      </div>
+    );
   }
 
   // Planner, Coordinadora y Administración ("asistente" es el valor de rol

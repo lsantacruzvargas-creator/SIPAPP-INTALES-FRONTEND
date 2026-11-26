@@ -17,6 +17,7 @@ const CUENTAS = [
 // Contrapartida de cada ingreso/egreso manual de Tesorería (si el movimiento no trae su cuenta).
 const MANUALES = [["aporte", "Aporte (ej. 50 o 52)"], ["prestamo", "Préstamo (ej. 45)"], ["retiro", "Retiro (ej. 14)"], ["gasto_bancario", "Gasto bancario (6391)"], ["otros", "Otros"]];
 const SUBDIARIOS = [["compras", "Compras"], ["comprasDetraccion", "Compras con detracción"], ["boletas", "Boletas de compra"], ["honorarios", "Honorarios"], ["ventas", "Ventas"], ["cajaBancos", "Caja y bancos"], ["diario", "Diario (manuales)"]];
+const textoCodigos = (config) => Object.entries(config.detraccion?.codigos || {}).map(([k, v]) => `${k}=${v}`).join(", ");
 const TIPOS = { "01": "Factura", "02": "Recibo por honorarios", "03": "Boleta", "07": "Nota de crédito", "08": "Nota de débito", "12": "Ticket", "14": "Servicios públicos" };
 
 // Configuración contable (C2): cuentas por rol, subdiarios y datos de CONCAR, cuentas de bancos y centros de costo.
@@ -36,7 +37,7 @@ export default function PanelConfiguracionContable({ cuentas, puedeEscribir }) {
       if (soloListas === true) return setDatos((x) => ({ ...d, config: x?.config || d.config }));
       setDatos(d);
       setForm(d.config);
-      setCodigosDet(Object.entries(d.config.detraccion?.codigos || {}).map(([k, v]) => `${k}=${v}`).join(", "));
+      setCodigosDet(textoCodigos(d.config));
     } catch (e) {
       setAviso(e.message || "Error de conexión con el servidor.");
     }
@@ -44,6 +45,7 @@ export default function PanelConfiguracionContable({ cuentas, puedeEscribir }) {
   useEffect(() => { const t = setTimeout(cargar, 0); return () => clearTimeout(t); }, [cargar]);
 
   if (!form) return <p className="text-sm text-gray-400">Cargando…</p>;
+  const sinGuardar = JSON.stringify(form) !== JSON.stringify(datos.config) || codigosDet !== textoCodigos(datos.config);
   const set = (ruta, v) => setForm((f) => {
     const n = structuredClone(f);
     const partes = ruta.split(".");
@@ -92,6 +94,18 @@ export default function PanelConfiguracionContable({ cuentas, puedeEscribir }) {
 
   return (
     <div className="space-y-6">
+      {puedeEscribir && (
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 bg-white/95 backdrop-blur border border-gray-200 rounded-xl px-4 py-2">
+          <p className="text-xs text-gray-500 flex-1 min-w-64">
+            Las cuentas de los asientos automáticos y los datos de CONCAR se guardan con este botón; las cuentas de cajas y
+            bancos y los centros de costo (más abajo), al cambiarlos.
+          </p>
+          {sinGuardar && <span className="text-xs font-medium text-amber-700">Cambios sin guardar</span>}
+          <button onClick={guardar} disabled={procesando || !sinGuardar} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
+            {procesando ? "Guardando…" : "Guardar configuración"}
+          </button>
+        </div>
+      )}
       <section className="space-y-2">
         <h3 className="text-sm font-semibold text-gray-700">Cuentas de los asientos automáticos</h3>
         <table className="text-sm">
@@ -147,9 +161,6 @@ export default function PanelConfiguracionContable({ cuentas, puedeEscribir }) {
           <input type="checkbox" checked={!!form.generarDestinos} disabled={ro} onChange={(e) => set("generarDestinos", e.target.checked)} />
           Generar los destinos 9x/79 en el asiento (normalmente los genera CONCAR)
         </label>
-        {puedeEscribir && (
-          <button onClick={guardar} disabled={procesando} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">Guardar configuración</button>
-        )}
       </section>
 
       <section className="space-y-2">

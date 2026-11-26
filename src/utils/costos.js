@@ -18,24 +18,33 @@ export function costoEn(c, moneda, tc) {
   const ocMoneda = c.ocMoneda || "PEN";
   const sinTC = ocMoneda !== moneda && !(tc > 0);
   const ocSubtotal = c.ocSubtotal == null || sinTC ? null : convertir(c.ocSubtotal, ocMoneda, moneda, tc);
-  return { ...c, moneda, comprometido, consumido, costoTotal, ocSubtotal, margen: ocSubtotal == null ? null : r2(ocSubtotal - costoTotal) };
+  // En el reporte el margen es de la OC: contra el costo de TODAS las OTs de su
+  // cadena (`costoCadena`, del servidor); sin él, contra el costo de esta OT.
+  const costoCadena = c.costoCadena != null ? desdeSoles(c.costoCadena) : costoTotal;
+  return { ...c, moneda, comprometido, consumido, costoTotal, costoCadena, ocSubtotal, margen: ocSubtotal == null ? null : r2(ocSubtotal - costoCadena) };
 }
 
 // Filas del reporte "Costos de fabricación" (tabla y Excel) sobre filas ya convertidas:
 // comprometido = comprado y aún no pagado; consumido = pagado por Tesorería + HH/HM.
-export const filaResumenCosto = (c, nombreEmpresa, tc) => ({
-  "N° OT": c.numeroOT,
-  "N° Orden de Compra": c.numeroOrdenCompra || "—",
-  "Titulo": c.titulo,
-  "Empresa": nombreEmpresa(c.empresa),
-  "Moneda": c.moneda,
-  "TC": c.moneda === "USD" ? tc : "",
-  "OC sin IGV": c.ocSubtotal ?? "—",
-  "Comprometido": c.comprometido.total,
-  "Consumido": c.consumido.total,
-  "Costo total": c.costoTotal,
-  "Margen": c.margen ?? "—",
-});
+// Los datos de la OC van solo en la primera OT de cada cadena (sumar la columna
+// no cuenta la OC dos veces) y los montos vacíos quedan como celda vacía.
+export const filaResumenCosto = (c, nombreEmpresa, tc) => {
+  const deOC = c.primeraDeCadena !== false;
+  return {
+    "N° OT": c.numeroOT,
+    "N° Orden de Compra": c.numeroOrdenCompra || "",
+    "Titulo": c.titulo,
+    "Empresa": nombreEmpresa(c.empresa),
+    "Moneda": c.moneda,
+    "TC": c.moneda === "USD" ? tc : null,
+    "Comprometido": c.comprometido.total,
+    "Consumido": c.consumido.total,
+    "Costo OT": c.costoTotal,
+    "OC sin IGV": deOC ? c.ocSubtotal : null,
+    "Costo total OC": deOC ? c.costoCadena : null,
+    "Margen OC": deOC ? c.margen : null,
+  };
+};
 
 export const filaComprometido = (c) => ({
   "N° OT": c.numeroOT,

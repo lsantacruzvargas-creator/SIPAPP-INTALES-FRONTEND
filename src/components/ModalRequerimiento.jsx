@@ -82,20 +82,25 @@ export default function ModalRequerimiento({ ot, onClose, onCreado }) {
         ? { esSolicitudCompra: true, cantidad: it.cantidad, categoriaMaterial: it.categoriaMaterial, categoriaNombre: it.categoriaNombre, camposCompra: it.camposCompra, tipoArticulo: it.tipoArticulo }
         : { esSolicitudCompra: false, material: it.material, cantidad: it.cantidad }),
     };
-    const r = await fetchAuth("/requerimientos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (r.ok) {
-      const data = await r.json();
-      setExito(`Requerimiento ${data.codigo} registrado.`);
-      setTimeout(() => onCreado(data), 1800);
-    } else {
-      const d = await r.json();
-      setError(d.mensaje || "Error al guardar el requerimiento");
+    try {
+      const r = await fetchAuth("/requerimientos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        setExito(`Requerimiento ${data.codigo} registrado.`);
+        setTimeout(() => onCreado(data), 1800);
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setError(d.mensaje || "Error al guardar el requerimiento");
+      }
+    } catch {
+      setError("Error al guardar el requerimiento");
+    } finally {
+      setGuardando(false);
     }
-    setGuardando(false);
   };
 
   return (

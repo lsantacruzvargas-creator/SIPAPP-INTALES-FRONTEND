@@ -12,6 +12,8 @@ const VACIO = { facturacion: [], valorizado: { total: 0, materiales: [] }, costo
 
 const nombreEmpresa = (e) => e?.razonSocial || "Sin empresa";
 const fecha = (f) => f ? formatearFecha(f) : "—";
+// Un error no se convierte en lista vacía: la pantalla y el Excel lo mostrarían como «Sin datos».
+const json = (r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))));
 
 const estadoMoraClase = (e) => {
   if (e === "No ha pagado") return "bg-red-100 text-red-700";
@@ -50,6 +52,10 @@ function Seccion({ titulo, acento, count, ayuda, extra, children }) {
 export default function Reportes() {
   const [data, setData]         = useState(VACIO);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(false);
+  const [intento, setIntento] = useState(0);
+  const [exportando, setExportando] = useState(false);
+  const [errorExportar, setErrorExportar] = useState("");
   // Costos de fabricación en S/ o US$ al TC SUNAT de una fecha (spec 2026-09-30).
   const [vista, setVista] = useState({ moneda: "PEN", fecha: fechaHoyLima(), tc: null, error: false });
   const monedaVista = vista.moneda === "USD" && vista.tc ? "USD" : "PEN";
@@ -59,19 +65,37 @@ export default function Reportes() {
 
   useEffect(() => {
     Promise.all([
-      fetchAuth("/reportes/facturacion-por-empresa").then((r) => r.ok ? r.json() : []),
-      fetchAuth("/reportes/valorizado-almacen").then((r) => r.ok ? r.json() : { total: 0, materiales: [] }),
-      fetchAuth("/reportes/costos-fabricacion").then((r) => r.ok ? r.json() : []),
-      fetchAuth("/reportes/oc-sin-hes-acta").then((r) => r.ok ? r.json() : []),
-      fetchAuth("/reportes/ranking-ot-cliente").then((r) => r.ok ? r.json() : []),
-      fetchAuth("/reportes/mora-pago").then((r) => r.ok ? r.json() : []),
+      fetchAuth("/reportes/facturacion-por-empresa").then(json),
+      fetchAuth("/reportes/valorizado-almacen").then(json),
+      fetchAuth("/reportes/costos-fabricacion").then(json),
+      fetchAuth("/reportes/oc-sin-hes-acta").then(json),
+      fetchAuth("/reportes/ranking-ot-cliente").then(json),
+      fetchAuth("/reportes/mora-pago").then(json),
     ]).then(([facturacion, valorizado, costosFabricacion, ocSinHesActa, ranking, mora]) => {
       setData({ facturacion, valorizado, costosFabricacion, ocSinHesActa, ranking, mora });
-      setCargando(false);
-    });
-  }, []);
+      setError(false);
+    }).catch(() => setError(true))
+      .finally(() => setCargando(false));
+  }, [intento]);
+  const reintentar = () => { setCargando(true); setError(false); setIntento((n) => n + 1); };
 
-  const exportarExcel = () => {
+  const exportarExcel = async () => {
+    setErrorExportar("");
+    setExportando(true);
+    try {
+      // El detalle de compras solo va en el Excel: se pide recién al exportar.
+      const detalleCompras = await fetchAuth("/reportes/detalle-compras").then(json).catch(() => null);
+      if (!detalleCompras) return setErrorExportar("No se pudo cargar el detalle de compras: el Excel no se generó. Vuelve a intentarlo.");
+      armarExcel(detalleCompras);
+    } catch (e) {
+      console.error(e);
+      setErrorExportar("No se pudo generar el Excel. Vuelve a intentarlo.");
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  const armarExcel = (detalleCompras) => {
     const wb = XLSX.utils.book_new();
 
     const filaFacturacion = (r) => ({
@@ -88,6 +112,23 @@ export default function Reportes() {
       "Tipo":       m.tipoMaterial,
       "Stock":      m.stock,
       "Valorizado": m.valorizado,
+    });
+    // Una fila por compra (sin duplicados), precio sin IGV en su moneda; la fecha es la de creación de la OC del cliente.
+    const filaCompra = (c) => ({
+      "N° OT":                c.numeroOT || "",
+      "Sub-OT":               c.subOT || "",
+      "N° OC cliente":        c.numeroOC || "",
+      "Fecha creación OC":    (c.fechasOC || []).map(fecha).join(", "),
+      "Tipo":                 c.tipo,
+      "Código":               c.codigo,
+      "Proveedor":            c.proveedor,
+      "Descripción":          c.descripcion,
+      "Cantidad":             c.cantidad,
+      "Moneda":               c.moneda,
+      "Precio unitario (sin IGV)": c.precioUnitario,
+      "Flete":                c.flete,
+      "Total (sin IGV)":      c.total,
+      "Fecha de compra":      c.fechaCompra ? fecha(c.fechaCompra) : "",
     });
     const filaOCsinHesActa = (o) => ({
       "N° Orden":   o.numeroOrden,
@@ -117,11 +158,12 @@ export default function Reportes() {
       ["Costos de Fabricacion", costos.map((c) => filaResumenCosto(c, nombreEmpresa, vista.tc))],
       ["Costo comprometido",    costosComprometidos.map(filaComprometido)],
       ["Costo consumido",       costosConsumidos.map(filaConsumido)],
+      ["Detalle de compras",    detalleCompras.map(filaCompra)],
       ["OC sin HES-Acta",       data.ocSinHesActa.map(filaOCsinHesActa)],
       ["Ranking OT Cliente",    data.ranking.map(filaRanking)],
       ["Mora de Pago",          data.mora.map(filaMora)],
     ].forEach(([nombre, filas]) => {
-      const ws = XLSX.utils.json_to_sheet(filas);
+      const ws = filas.length ? XLSX.utils.json_to_sheet(filas) : XLSX.utils.aoa_to_sheet([["Sin datos"]]);
       XLSX.utils.book_append_sheet(wb, ws, nombre);
     });
 
@@ -131,6 +173,16 @@ export default function Reportes() {
   if (cargando) {
     return <div className="p-8 text-sm text-gray-400">Cargando reportes…</div>;
   }
+  if (error) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 inline-flex items-center gap-3">
+          No se pudieron cargar los reportes.
+          <button onClick={reintentar} className="underline hover:text-red-900">Reintentar</button>
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 mx-auto">
@@ -139,11 +191,17 @@ export default function Reportes() {
           <h2 className="text-lg font-bold text-gray-800">Reportes</h2>
           <p className="text-xs text-gray-400 mt-0.5">Indicadores generales del negocio</p>
         </div>
-        <button onClick={exportarExcel}
-          className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
-          Exportar Excel
+        <button onClick={exportarExcel} disabled={exportando}
+          className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition disabled:opacity-50">
+          {exportando ? "Generando…" : "Exportar Excel"}
         </button>
       </div>
+      {errorExportar && (
+        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4 flex gap-3">
+          <span className="flex-1">{errorExportar}</span>
+          <button onClick={() => setErrorExportar("")} className="text-xs underline self-start">Cerrar</button>
+        </p>
+      )}
 
       {/* 1. Facturación por Empresa */}
       <Seccion titulo="Facturación por Empresa" acento="bg-blue-500" count={data.facturacion.length}>
@@ -227,31 +285,40 @@ export default function Reportes() {
             <th className={`${TH} text-left`}>N° OC</th>
             <th className={`${TH} text-left`}>Título</th>
             <th className={`${TH} text-left`}>Empresa</th>
-            <th className={`${TH} text-right`}>OC sin IGV</th>
             <th className={`${TH} text-right`}>Comprometido</th>
             <th className={`${TH} text-right`}>Consumido</th>
-            <th className={`${TH} text-right`}>Costo total</th>
-            <th className={`${TH} text-right`}>Margen</th>
+            <th className={`${TH} text-right`}>Costo OT</th>
+            <th className={`${TH} text-right border-l border-gray-200`}>OC sin IGV</th>
+            <th className={`${TH} text-right`}>Costo total OC</th>
+            <th className={`${TH} text-right`}>Margen OC</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
           {costos.length === 0 ? (
-            <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">Sin datos</td></tr>
+            <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">Sin datos</td></tr>
           ) : costos.map((c) => (
             <tr key={c.otId} className="hover:bg-gray-50 transition-colors">
               <td className="px-4 py-3.5 font-semibold text-gray-800 whitespace-nowrap">{c.numeroOT}</td>
               <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{c.numeroOrdenCompra || "—"}</td>
               <td className="px-4 py-3.5 text-gray-600">{c.titulo}</td>
               <td className="px-4 py-3.5 text-gray-700">{nombreEmpresa(c.empresa)}</td>
-              <td className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">
-                {c.ocSubtotal != null ? money(c.ocSubtotal, monedaVista) : "—"}
-              </td>
               <td className="px-4 py-3.5 text-right font-semibold text-amber-700 tabular-nums whitespace-nowrap">{money(c.comprometido.total, monedaVista)}</td>
               <td className="px-4 py-3.5 text-right font-semibold text-emerald-700 tabular-nums whitespace-nowrap">{money(c.consumido.total, monedaVista)}</td>
               <td className="px-4 py-3.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">{money(c.costoTotal, monedaVista)}</td>
-              <td className={`px-4 py-3.5 text-right font-bold tabular-nums whitespace-nowrap ${c.margen == null ? "text-gray-400" : c.margen >= 0 ? "text-green-600" : "text-red-600"}`}>
-                {c.margen != null ? money(c.margen, monedaVista) : "—"}
-              </td>
+              {c.primeraDeCadena !== false && (
+                <>
+                  <td rowSpan={c.otsEnCadena || 1} className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap align-top border-l border-gray-200">
+                    {c.ocSubtotal != null ? money(c.ocSubtotal, monedaVista) : "—"}
+                  </td>
+                  <td rowSpan={c.otsEnCadena || 1} className="px-4 py-3.5 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap align-top">
+                    {money(c.costoCadena, monedaVista)}
+                    {c.otsEnCadena > 1 && <p className="text-[11px] font-normal text-gray-400">{c.otsEnCadena} OTs</p>}
+                  </td>
+                  <td rowSpan={c.otsEnCadena || 1} className={`px-4 py-3.5 text-right font-bold tabular-nums whitespace-nowrap align-top ${c.margen == null ? "text-gray-400" : c.margen >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {c.margen != null ? money(c.margen, monedaVista) : "—"}
+                  </td>
+                </>
+              )}
             </tr>
           ))}
         </tbody>

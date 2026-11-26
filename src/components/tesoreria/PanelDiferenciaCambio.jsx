@@ -15,6 +15,7 @@ const PARTIDA = { porCobrar: "Por cobrar", porPagar: "Por pagar", cuenta: "Cuent
 export default function PanelDiferenciaCambio() {
   const [fecha, setFecha] = useState(fechaHoyLima());
   const [resultado, setResultado] = useState(null);
+  const [intento, setIntento] = useState(0);
   const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(fecha) && fecha >= "2000-01-01";
   const cargando = fechaValida && resultado?.fecha !== fecha;
   const datos = resultado?.fecha === fecha ? resultado.datos : null;
@@ -31,7 +32,8 @@ export default function PanelDiferenciaCambio() {
       .catch(() => ({ datos: null, error: "Error de conexión con el servidor." }))
       .then((res) => { if (vigente) setResultado({ fecha, ...res }); });
     return () => { vigente = false; };
-  }, [fecha, fechaValida]);
+  }, [fecha, fechaValida, intento]);
+  const reintentar = () => { setResultado(null); setIntento((n) => n + 1); };
 
   const partidas = datos?.partidas || [];
   const t = datos?.totales;
@@ -53,7 +55,11 @@ export default function PanelDiferenciaCambio() {
           </span>
         )}
       </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {error} <button onClick={reintentar} className="ml-2 underline font-medium">Reintentar</button>
+        </p>
+      )}
       {t && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {[["Ganancia (776)", t.ganancia, "text-emerald-700"], ["Pérdida (676)", t.perdida, "text-red-600"], ["Neto", t.neto, "text-gray-800"]].map(([l, v, cls]) => (
@@ -71,7 +77,9 @@ export default function PanelDiferenciaCambio() {
               <tr>{["Partida", "Detalle", "TC doc.", "Saldo US$", "Libros S/", "Al cierre S/", "Diferencia S/"].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {!partidas.length && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">Sin saldos en dólares a esa fecha</td></tr>}
+              {!partidas.length && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">
+                {!fechaValida ? "Elige una fecha válida" : cargando ? "Calculando…" : error ? "No se pudo calcular la diferencia de cambio." : "Sin saldos en dólares a esa fecha"}
+              </td></tr>}
               {partidas.map((p, i) => (
                 <tr key={`${p.tipo}-${p.documento?.id || p.cuenta?.id || i}`}>
                   <td className="px-3 py-2">{PARTIDA[p.tipo]}</td>

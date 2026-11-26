@@ -5,7 +5,7 @@ import ModalEmpresa from "./ModalEmpresa";
 // OT, Detalle de OT, etc.) — clic en una fila selecciona esa empresa en el
 // formulario que lo abrió; "Editar" o "+ Nueva" abren ModalEmpresa apilado
 // encima. z-index por encima de cualquier modal padre conocido (máx. z-[70]).
-export default function SelectorEmpresas({ empresas, onClose, onSeleccionar, onCambio }) {
+export default function SelectorEmpresas({ empresas, tipoInicial, onClose, onSeleccionar, onCambio }) {
   const [busqueda, setBusqueda] = useState("");
   const [editando, setEditando] = useState(null); // empresa | "nueva" | null
 
@@ -82,6 +82,7 @@ export default function SelectorEmpresas({ empresas, onClose, onSeleccionar, onC
       {editando && (
         <ModalEmpresa
           empresa={editando === "nueva" ? null : editando}
+          tipoInicial={tipoInicial}
           onClose={() => setEditando(null)}
           onGuardada={(guardada) => {
             const esNueva = editando === "nueva";

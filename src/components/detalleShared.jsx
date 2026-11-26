@@ -1,6 +1,7 @@
 import { Fragment, useState } from "react";
 import { formatearFechaHora } from "../utils/fecha";
 import ConfirmacionAccion from "./ConfirmacionAccion";
+import PromptAccion from "./PromptAccion";
 
 /* ─── Iconos SVG (stroke, currentColor) ─────────────────────────── */
 const svg = "w-5 h-5";
@@ -271,50 +272,67 @@ export const bloqueadoPorCadenaCerrada = (estadoCadena, rolActual) =>
 export const money = (v, moneda = "PEN") =>
   (moneda === "USD" ? "US$ " : "S/ ") + Number(v ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 });
 
+// OC consolidada (varias cotizaciones enteras en una OC, ver OrdenCompra.lineas): etiqueta para las
+// tarjetas de OC y Factura vistas desde una de sus cotizaciones u OTs, con la parte que le toca.
+export function ParteConsolidada({ oc, cotizacionId, moneda, verPrecios }) {
+  const lineas = oc?.lineas || [];
+  if (!lineas.length) return null;
+  const linea = lineas.find((l) => (l.cotizacion?._id || l.cotizacion) === cotizacionId);
+  return (
+    <>
+      <Chip className="bg-indigo-100 text-indigo-700">Consolidada · {lineas.length} cotizaciones</Chip>
+      {verPrecios && linea && (
+        <p className="text-xs text-gray-500">Esta cotización: {money(linea.subtotal, moneda)} sin IGV</p>
+      )}
+    </>
+  );
+}
+
 /* ─── Anulación de documentos ────────────────────────────────────── */
+// `onAnular(motivo)` devuelve el mensaje de error si falla: se muestra dentro del diálogo, que sigue abierto
+// (en la página quedaría detrás del overlay). Si no devuelve texto, el diálogo se cierra.
 export function BotonAnular({ onAnular }) {
   const [abierto, setAbierto]   = useState(false);
-  const [motivo, setMotivo]     = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [error, setError]       = useState("");
 
-  if (!abierto) {
-    return (
+  const cerrar = () => { setAbierto(false); setError(""); };
+
+  const confirmar = async (motivo) => {
+    setEnviando(true);
+    setError("");
+    try {
+      const err = await onAnular(motivo);
+      if (typeof err === "string" && err) setError(err);
+      else cerrar();
+    } catch {
+      setError("No se pudo anular el documento. Intenta de nuevo.");
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <>
       <button onClick={() => setAbierto(true)}
         className="text-xs text-white/70 hover:text-white underline transition">
         Anular documento
       </button>
-    );
-  }
-
-  const confirmar = async () => {
-    if (!motivo.trim()) return;
-    setEnviando(true);
-    await onAnular(motivo.trim());
-    setEnviando(false);
-  };
-
-  return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-        <h4 className="font-semibold text-gray-800">Anular documento</h4>
-        <p className="text-sm text-gray-500">
-          Esta acción es permanente y no se puede deshacer. Indica el motivo:
-        </p>
-        <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} autoFocus
+      {abierto && (
+        <PromptAccion
+          titulo="Anular documento"
+          label="Motivo de la anulación (es permanente y no se puede deshacer)"
           placeholder="Motivo de la anulación…"
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 resize-none" />
-        <div className="flex gap-3 justify-end">
-          <button onClick={() => { setAbierto(false); setMotivo(""); }} disabled={enviando}
-            className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition disabled:opacity-50">
-            Cancelar
-          </button>
-          <button onClick={confirmar} disabled={!motivo.trim() || enviando}
-            className="text-sm bg-red-600 text-white px-5 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition font-medium">
-            {enviando ? "Anulando…" : "Confirmar anulación"}
-          </button>
-        </div>
-      </div>
-    </div>
+          onCancelar={cerrar}
+          onConfirmar={confirmar}
+          procesando={enviando}
+          textoConfirmar="Confirmar anulación"
+          textoProcesando="Anulando…"
+          peligro
+          error={error}
+        />
+      )}
+    </>
   );
 }
 
@@ -394,5 +412,37 @@ export function BannerAnulado({ motivo, por, fecha }) {
         </p>
       </div>
     </div>
+  );
+}
+
+/* ─── Selección de ítems de cotización para generar OC (OCs parciales) ─── */
+// Un ítem está cubierto si su OC existe y no fue anulada.
+const itemConOC = (item) => !!item.ocGenerada && !item.ocGenerada.anulado;
+
+export function CeldaOCItem({ item, idx, seleccionados, onToggle, onVerOC, deshabilitado, className = "px-3 py-3" }) {
+  return (
+    <td className={`${className} text-center`}>
+      {itemConOC(item) ? (
+        <button type="button" onClick={() => onVerOC?.(item.ocGenerada)}
+          title="Orden de compra que cubre este ítem"
+          className="text-[11px] font-mono font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 hover:bg-amber-100 transition whitespace-nowrap">
+          {item.ocGenerada.numeroOrden || item.ocGenerada.codigo}
+        </button>
+      ) : (
+        <input type="checkbox" checked={seleccionados.has(idx)}
+          onChange={() => onToggle?.(idx)} disabled={deshabilitado}
+          className="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-400" />
+      )}
+    </td>
+  );
+}
+
+export function BotonGenerarOC({ cantidad, onClick, disabled }) {
+  if (!cantidad) return null;
+  return (
+    <button type="button" onClick={onClick} disabled={disabled}
+      className="bg-amber-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-amber-700 disabled:opacity-60 transition font-medium">
+      Generar OC con {cantidad} ítem{cantidad !== 1 ? "s" : ""}
+    </button>
   );
 }

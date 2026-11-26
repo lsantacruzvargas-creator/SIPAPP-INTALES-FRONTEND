@@ -24,35 +24,48 @@ export default function CentrosCosto() {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
-  const cargar = () => fetchAuth("/centros-costo").then((r) => r.ok && r.json()).then((d) => setCentros(d || []));
+  const cargar = () => fetchAuth("/centros-costo").then(async (r) => {
+    const d = await r.json().catch(() => null);
+    if (r.ok && d) setCentros(d);
+    else setError(d?.mensaje || "No se pudieron cargar los centros de costo.");
+  });
   useEffect(() => { cargar(); }, []);
 
   const crear = async () => {
     if (!nombre.trim()) return setError("Ingresa un nombre.");
     setGuardando(true);
     setError("");
-    const r = await fetchAuth("/centros-costo", {
-      method: "POST",
-      body: JSON.stringify({ nombre: nombre.trim(), tipo: tipo || null }),
-    });
-    if (r.ok) {
-      setNombre("");
-      setTipo("");
-      await cargar();
-    } else {
-      const d = await r.json().catch(() => ({}));
-      setError(d.mensaje || "Error al crear el centro de costo.");
+    try {
+      const r = await fetchAuth("/centros-costo", {
+        method: "POST",
+        body: JSON.stringify({ nombre: nombre.trim(), tipo: tipo || null }),
+      });
+      if (r.ok) {
+        setNombre("");
+        setTipo("");
+        await cargar();
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setError(d.mensaje || "Error al crear el centro de costo.");
+      }
+    } catch {
+      setError("Error de conexión con el servidor, intenta de nuevo.");
+    } finally {
+      setGuardando(false);
     }
-    setGuardando(false);
   };
 
   const actualizar = async (centro, cambios) => {
     setError("");
-    const r = await conBloqueo("centroCosto", centro._id, (h) => fetchAuth(`/centros-costo/${centro._id}`, { method: "PUT", headers: h, body: JSON.stringify(cambios) }));
-    if (r.ok) await cargar();
-    else {
-      const d = await r.json().catch(() => ({}));
-      setError(d.mensaje || "No se pudo actualizar el centro de costo.");
+    try {
+      const r = await conBloqueo("centroCosto", centro._id, (h) => fetchAuth(`/centros-costo/${centro._id}`, { method: "PUT", headers: h, body: JSON.stringify(cambios) }));
+      if (r.ok) await cargar();
+      else {
+        const d = await r.json().catch(() => ({}));
+        setError(d.mensaje || "No se pudo actualizar el centro de costo.");
+      }
+    } catch {
+      setError("Error de conexión con el servidor, intenta de nuevo.");
     }
   };
 

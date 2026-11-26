@@ -6,6 +6,7 @@ import { calcularImpuesto, partes, sugerirImpuesto, diasCredito, sumarDias, dias
 import { conBloqueo } from "../../utils/bloqueoApi";
 import { enviarConSobregiro } from "../../utils/sobregiro";
 import useConfirmar from "../../hooks/useConfirmar";
+import SelectorEmpresas from "../SelectorEmpresas";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-full";
 const MEDIOS_PAGO = [["transferencia", "Transferencia"], ["deposito", "Depósito"], ["efectivo", "Efectivo"], ["cheque", "Cheque"]];
@@ -40,8 +41,21 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   const [registrada, setRegistrada] = useState(null);
   const [cuentas, setCuentas] = useState([]);
   const { confirmar, dialogo } = useConfirmar();
+  const confDescartar = useConfirmar("Sí, descartar", { peligro: true });
+  // Se marca con cualquier cambio del usuario; lo que rellenan solos la OC o el TC SUNAT no cuenta.
+  const [tocado, setTocado] = useState(false);
+  const cancelar = async () => {
+    if (!tocado || await confDescartar.confirmar(<p>El comprobante tiene datos sin registrar. ¿Descartar los cambios?</p>)) onClose();
+  };
+  const [empresasOpen, setEmpresasOpen] = useState(false);
+  const [empresasNuevas, setEmpresasNuevas] = useState([]);
+  const proveedores = [...catalogos.proveedores.filter((p) => !empresasNuevas.some((n) => n._id === p._id)), ...empresasNuevas];
   useEffect(() => {
-    fetchAuth("/cuentas-tesoreria").then(async (r) => { if (r.ok) setCuentas(await r.json()); }).catch(() => {});
+    fetchAuth("/cuentas-tesoreria").then(async (r) => {
+      const d = await r.json().catch(() => null);
+      if (r.ok && d) setCuentas(d);
+      else setError(d?.mensaje || "No se pudieron cargar las cuentas de tesorería (para «Ya se pagó»).");
+    });
   }, []);
   // TC de un comprobante en USD: el venta SUNAT de la fecha de emisión, pedido al cambiar
   // la fecha o la moneda (solo lectura salvo que la consulta falle).
@@ -71,7 +85,9 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
   const tcSoloLectura = !consultandoTc && tcConsulta?.clave === claveTc && tcConsulta.soloLectura;
 
   useEffect(() => {
-    fetchAuth("/tesoreria/por-pagar").then((r) => (r.ok ? r.json() : { ocps: [] })).then((d) => {
+    fetchAuth("/tesoreria/por-pagar").then(async (r) => {
+      const d = await r.json().catch(() => null);
+      if (!r.ok || !d) return setError(d?.mensaje || "No se pudieron cargar las órdenes de compra y comprobantes del proveedor.");
       setOcps(d.ocps);
       setComprobantes(d.facturas || []);
       const o = ocpId && d.ocps.find((x) => x._id === ocpId);
@@ -183,7 +199,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4" style={{ zIndex: 50 }}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-6 space-y-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-6 space-y-4" onChangeCapture={() => setTocado(true)}>
         <h3 className="text-lg font-bold text-gray-800">Registrar comprobante de compra</h3>
         <fieldset disabled={!!registrada} className="space-y-4 disabled:opacity-60">
         <div className="flex gap-4 text-sm">
@@ -215,10 +231,13 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
           )}
           {form.modo !== "oc" && (
             <label className="text-xs text-gray-500 col-span-2">{form.modo === "flete" ? "Transportista" : "Proveedor"}
-              <select value={form.proveedor} onChange={set("proveedor")} className={INP}>
-                <option value="">Elegir…</option>
-                {catalogos.proveedores.map((p) => <option key={p._id} value={p._id}>{nombreEmpresa(p)}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <select value={form.proveedor} onChange={set("proveedor")} className={INP}>
+                  <option value="">Elegir…</option>
+                  {proveedores.map((p) => <option key={p._id} value={p._id}>{nombreEmpresa(p)}</option>)}
+                </select>
+                <button type="button" onClick={() => setEmpresasOpen(true)} className="shrink-0 text-xs border border-gray-300 px-3 rounded-lg hover:bg-gray-50 transition">Empresas</button>
+              </div>
             </label>
           )}
           {form.modo === "sinOc" && (
@@ -383,7 +402,7 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
         <div className="flex justify-end gap-2">
           {registrada
             ? <button onClick={() => onGuardada(registrada)} disabled={guardando} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Terminar sin PDF</button>
-            : <button onClick={onClose} disabled={guardando} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>}
+            : <button onClick={cancelar} disabled={guardando} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>}
           <button onClick={guardar} disabled={guardando || !(subtotal > 0) || (registrada && !archivo) || (!registrada && form.moneda === "USD" && (consultandoTc || !tcValido(form.tipoCambio))) || (!registrada && puedeYaPagado && form.yaPagado && !form.pagoCuenta) || (!registrada && esNota && !form.documentoOrigen)}
             className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50">
             {guardando ? "Guardando…" : registrada ? "Reintentar subir PDF" : "Registrar comprobante"}
@@ -391,6 +410,20 @@ export default function ModalFacturaProveedor({ ocpId, precarga, catalogos, onCl
         </div>
       </div>
       {dialogo}
+      {confDescartar.dialogo}
+      {empresasOpen && (
+        <SelectorEmpresas
+          empresas={proveedores}
+          tipoInicial="proveedor"
+          onClose={() => setEmpresasOpen(false)}
+          onSeleccionar={(e) => { setForm((f) => ({ ...f, proveedor: e._id })); setTocado(true); setEmpresasOpen(false); }}
+          onCambio={(guardada, { esNueva }) => {
+            if (guardada.tipo === "cliente") return;
+            setEmpresasNuevas((l) => [...l.filter((x) => x._id !== guardada._id), guardada]);
+            if (esNueva) setForm((f) => ({ ...f, proveedor: guardada._id }));
+          }}
+        />
+      )}
     </div>
   );
 }

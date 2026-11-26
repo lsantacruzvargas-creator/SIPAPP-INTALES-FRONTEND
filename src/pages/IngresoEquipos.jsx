@@ -7,6 +7,8 @@ import { ChipEstadoOT, estadoProgresoOT, ESTADOS_PROGRESO_OT } from "../componen
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "../components/BarraEdicion";
 
+const leerError = async (r, fallback) => (await r.json().catch(() => null))?.mensaje || fallback;
+
 const ESTADOS = ["recibido", "en diagnóstico", "en reparación", "listo", "entregado"];
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
@@ -111,20 +113,25 @@ export default function IngresoEquipos() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...form, garantia: form.garantia === "true" }),
     };
-    const res = await (seleccionado ? bloqueo.fetch(url, opciones) : fetchAuth(url, opciones));
-    if (res.ok) {
-      const data = await res.json();
-      if (seleccionado) await bloqueo.terminar(data.updatedAt);
-      setIngresos((prev) =>
-        seleccionado
-          ? prev.map((i) => i._id === data._id ? data : i)
-          : [data, ...prev]
-      );
-      cerrar();
-    } else {
+    try {
+      const res = await (seleccionado ? bloqueo.fetch(url, opciones) : fetchAuth(url, opciones));
+      if (res.ok) {
+        const data = await res.json();
+        if (seleccionado) await bloqueo.terminar(data.updatedAt);
+        setIngresos((prev) =>
+          seleccionado
+            ? prev.map((i) => i._id === data._id ? data : i)
+            : [data, ...prev]
+        );
+        cerrar();
+      } else {
+        setError(await leerError(res, "Error al guardar. Intenta de nuevo."));
+      }
+    } catch {
       setError("Error al guardar. Intenta de nuevo.");
+    } finally {
+      setGuardando(false);
     }
-    setGuardando(false);
   };
 
   const aniosLista = [...new Set(ingresos.map((i) => anioLima(i.fechaIngreso)))].sort((a, b) => b - a);

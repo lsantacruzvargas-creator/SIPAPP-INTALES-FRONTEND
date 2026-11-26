@@ -3,6 +3,9 @@ import { fetchAuth } from "../utils/fetchAuth";
 import { calculoVenta, monedaFactura, tcValido } from "../utils/tesoreria";
 import { origenTC } from "../utils/costos";
 import { fechaHoyLima } from "../utils/fecha";
+import { MSG_OC_SIN_IGV } from "../utils/catalogosSunat";
+import ConfirmacionAccion from "./ConfirmacionAccion";
+import { r2 } from "../utils/redondeo";
 
 const INP     = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 const INP_DIS = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full";
@@ -106,7 +109,9 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
       .then((res) => { if (vigente) setTcConsulta({ clave: claveTc, ...res }); });
     return () => { vigente = false; };
   }, [claveTc]);
-  const calc = calculoVenta({ subtotal: form.subtotal, descuentoPct: form.descuentoPorcentaje, moneda, tipoCambio });
+  // OC de una cotización sin IGV (trabajo en el extranjero): sin IGV ni detracción, y no se emite desde aquí.
+  const afectoIgv = ocVinculada?.afectoIgv !== false;
+  const calc = calculoVenta({ subtotal: form.subtotal, descuentoPct: form.descuentoPorcentaje, moneda, tipoCambio, afectoIgv });
   const [empresas, setEmpresas]   = useState([]);
   const [buscadorOC, setBOC]      = useState(false);
   const [formaPago, setFormaPago] = useState("Contado");
@@ -114,6 +119,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState("");
   const [exito, setExito]         = useState(null);
+  const [confirmando, setConfirmando] = useState(false);
 
   const cambiarFormaPago = (v) => {
     setFormaPago(v);
@@ -188,27 +194,49 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
     });
     if (!resOC.ok) return { error: "No se pudo crear la orden de compra." };
     const newOC = await resOC.json();
+    // Si SUNAT rechaza y el usuario reintenta, se reutiliza esta OC en vez de crear otra huérfana.
+    setOcVinc(newOC);
     return { ocId: newOC._id };
   };
 
-  const guardar = async () => {
-    if (!form.descripcion.trim()) return setError("La descripción es obligatoria.");
-    if (!form.subtotal || Number(form.subtotal) <= 0) return setError("El valor unitario debe ser mayor a 0.");
+  const errorDeValidacion = () => {
+    if (!afectoIgv) return MSG_OC_SIN_IGV;
+    if (!form.descripcion.trim()) return "La descripción es obligatoria.";
+    if (!form.subtotal || Number(form.subtotal) <= 0) return "El valor unitario debe ser mayor a 0.";
     if (!empresaSeleccionada?.ruc || !/^\d{11}$/.test(empresaSeleccionada.ruc))
-      return setError("La empresa seleccionada no tiene un RUC válido — la factura SUNAT requiere un receptor con RUC.");
+      return "La empresa seleccionada no tiene un RUC válido — la factura SUNAT requiere un receptor con RUC.";
     if (formaPago === "Credito") {
-      if (cuotas.length === 0) return setError("Agrega al menos una cuota de pago para el crédito.");
+      if (cuotas.length === 0) return "Agrega al menos una cuota de pago para el crédito.";
       for (const c of cuotas) {
-        if (!c.monto || Number(c.monto) <= 0) return setError("Cada cuota debe tener un monto mayor a 0.");
-        if (!c.fechaVencimiento) return setError("Cada cuota debe tener una fecha de vencimiento.");
+        if (!c.monto || Number(c.monto) <= 0) return "Cada cuota debe tener un monto mayor a 0.";
+        if (!c.fechaVencimiento) return "Cada cuota debe tener una fecha de vencimiento.";
       }
       if (Math.abs(sumaCuotas - calc.total) >= 0.01) {
-        return setError(`La suma de las cuotas (${sim} ${sumaCuotas.toFixed(2)}) debe ser igual al total (${sim} ${calc.total.toFixed(2)}).`);
+        return `La suma de las cuotas (${sim} ${sumaCuotas.toFixed(2)}) debe ser igual al total (${sim} ${calc.total.toFixed(2)}).`;
       }
     }
-    if (moneda === "USD" && !tcValido(tipoCambio)) return setError("Falta el tipo de cambio SUNAT de la fecha de emisión.");
-    setError(""); setGuardando(true);
+    if (moneda === "USD" && !tcValido(tipoCambio)) return "Falta el tipo de cambio SUNAT de la fecha de emisión.";
+    return "";
+  };
 
+  const pedirConfirmacion = () => {
+    const err = errorDeValidacion();
+    setError(err);
+    if (!err) setConfirmando(true);
+  };
+
+  const guardar = async () => {
+    setConfirmando(false);
+    setError(""); setGuardando(true);
+    try {
+      await emitir();
+    } catch {
+      setError("Se perdió la conexión con el servidor. No sabemos si la factura llegó a SUNAT: revisa la lista de comprobantes antes de reintentar.");
+      setGuardando(false);
+    }
+  };
+
+  const emitir = async () => {
     const { ocId, error: errorOC } = await resolverOrdenCompra();
     if (errorOC) { setError(errorOC); setGuardando(false); return; }
 
@@ -218,6 +246,8 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
       body: JSON.stringify({
         tipoDoc: "01",
         serie: SERIE_FACTURA,
+        // El paso 2 de abajo crea la Factura interna: el backend no la duplica.
+        facturaInternaDesdeCliente: true,
         rucEmisor: RUC_EMISOR,
         receptor: { numDoc: empresaSeleccionada.ruc, nombre: empresaSeleccionada.razonSocial, schemeID: "6" },
         items: [{
@@ -225,7 +255,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
           cantidad: 1,
           unidad: "ZZ",
           valorUnitario: Number(form.subtotal),
-          precioUnitario: Math.round(Number(form.subtotal) * 1.18 * 100) / 100,
+          precioUnitario: r2(Number(form.subtotal) * 1.18),
           afectacion: "10",
           descuentoPorcentaje: (Number(form.descuentoPorcentaje) || 0) / 100,
         }],
@@ -304,7 +334,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
 
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <h3 className="font-semibold text-gray-800">Nueva Factura</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl">✕</button>
+          <button onClick={onClose} disabled={guardando} className="text-gray-400 hover:text-gray-700 disabled:opacity-30 text-xl">✕</button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -355,7 +385,8 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
             </div>
             <div>
               <label className="text-xs text-gray-500 block mb-1">Fecha emisión</label>
-              <input type="date" name="fechaEmision" value={form.fechaEmision} onChange={handleChange} className={INP} />
+              <input value={form.fechaEmision.split("-").reverse().join("/")} disabled className={INP_DIS} />
+              <span className="block mt-1 text-[11px] text-gray-400">SUNAT la emite con la fecha de hoy</span>
             </div>
             <div>
               <label className="text-xs text-gray-500 block mb-1">Fecha cancelación</label>
@@ -405,7 +436,7 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
                 step="0.01" min="0" max="100" className={INP} />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block mb-1">IGV 18% ({sim})</label>
+              <label className="text-xs text-gray-500 block mb-1">{afectoIgv ? "IGV 18%" : "IGV (no afecto)"} ({sim})</label>
               <input value={calc.igv.toFixed(2)} disabled className={INP_DIS} />
             </div>
             <div>
@@ -533,23 +564,50 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
               Factura <strong>{exito}</strong> creada exitosamente.
             </div>
           )}
-          {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end shrink-0">
-          <button onClick={onClose}
-            className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
-            Cancelar
-          </button>
-          <button onClick={guardar} disabled={guardando}
-            className="text-sm bg-blue-700 text-white px-5 py-2 rounded-lg hover:bg-blue-800 disabled:opacity-50 transition font-medium">
-            {guardando ? "Emitiendo…" : "Emitir y crear factura"}
-          </button>
+        <div className="px-6 py-4 border-t border-gray-100 shrink-0">
+          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{error}</p>}
+          <div className="flex gap-3 justify-end">
+            <button onClick={onClose} disabled={guardando}
+              className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition">
+              Cancelar
+            </button>
+            <button onClick={pedirConfirmacion} disabled={guardando}
+              className="text-sm bg-blue-700 text-white px-5 py-2 rounded-lg hover:bg-blue-800 disabled:opacity-50 transition font-medium">
+              {guardando ? "Emitiendo…" : "Emitir y crear factura"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
     {buscadorOC && <BuscadorOrdenCompra onSelect={seleccionarOC} onClose={() => setBOC(false)} />}
+    {confirmando && (
+      <ConfirmacionAccion
+        textoConfirmar="Emitir a SUNAT"
+        onCancelar={() => setConfirmando(false)}
+        onConfirmar={guardar}
+        mensaje={
+          <>
+            <h3 className="font-semibold text-gray-800 mb-3">¿Emitir la factura a SUNAT?</h3>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 mb-3">
+              <dt className="text-gray-400">Serie</dt><dd>{SERIE_FACTURA} (correlativo al emitir)</dd>
+              <dt className="text-gray-400">Cliente</dt><dd>{empresaSeleccionada?.razonSocial}</dd>
+              <dt className="text-gray-400">RUC</dt><dd className="font-mono">{empresaSeleccionada?.ruc}</dd>
+              <dt className="text-gray-400">Moneda</dt><dd>{moneda === "USD" ? `Dólares · TC ${tipoCambio.toFixed(3)}` : "Soles"}</dd>
+              <dt className="text-gray-400">Valor venta</dt><dd>{sim} {calc.base.toFixed(2)}</dd>
+              <dt className="text-gray-400">IGV</dt><dd>{sim} {calc.igv.toFixed(2)}</dd>
+              <dt className="text-gray-400">Total</dt><dd className="font-semibold">{sim} {calc.total.toFixed(2)}</dd>
+              <dt className="text-gray-400">Pago</dt><dd>{formaPago === "Credito" ? `Crédito en ${cuotas.length} cuota(s)` : "Contado"}</dd>
+            </dl>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Genera un correlativo nuevo aunque SUNAT la rechace. Una vez aceptada, solo se corrige con nota de crédito o débito.
+            </p>
+          </>
+        }
+      />
+    )}
     </>
   );
 }

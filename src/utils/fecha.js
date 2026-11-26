@@ -5,9 +5,9 @@
 // ya resolvió el mismo problema del lado del servidor para comprobantes/guías).
 const TZ = "America/Lima";
 
-// Un campo de solo fecha guardado desde un "YYYY-MM-DD" (cotizaciones, OT, OC, comprobantes electrónicos) queda a
-// medianoche UTC exacta: es un día de calendario y se lee en UTC (en Lima caería en el día anterior). Todo lo demás
-// es un instante y se lee en hora de Lima.
+// Desde el 2026-11-24 el backend guarda todo "YYYY-MM-DD" como medianoche de Lima. Los registros anteriores de
+// cotizaciones, OT, OC y comprobantes electrónicos quedaron a medianoche UTC exacta: esos se leen en UTC (en Lima
+// caerían en el día anterior). Todo lo demás se lee en hora de Lima.
 const zonaDe = (d) => (d.getTime() % 86400000 === 0 ? "UTC" : TZ);
 
 export const formatearFecha = (fecha, opts) => {

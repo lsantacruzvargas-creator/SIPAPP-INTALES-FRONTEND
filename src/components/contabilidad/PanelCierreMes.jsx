@@ -61,8 +61,9 @@ export default function PanelCierreMes({ puedeCerrar }) {
     setAviso(`El mes ${textoPeriodo(periodo)} quedó cerrado.`);
   });
   const reabrir = (motivo) => accion(async () => {
-    await leer(await fetchAuth(`/contabilidad/periodos/${reabriendo}/reabrir`, { method: "POST", body: JSON.stringify({ motivo }) }), "No se pudo reabrir el mes.");
+    const d = await leer(await fetchAuth(`/contabilidad/periodos/${reabriendo}/reabrir`, { method: "POST", body: JSON.stringify({ motivo }) }), "No se pudo reabrir el mes.");
     setReabriendo(null);
+    if (d.avisos?.length) setAviso(d.avisos.join(" "));
   });
 
   return (

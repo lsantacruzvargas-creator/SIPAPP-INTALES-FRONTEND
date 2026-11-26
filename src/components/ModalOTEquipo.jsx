@@ -3,6 +3,8 @@ import { fetchAuth } from "../utils/fetchAuth";
 import { formatearFecha } from "../utils/fecha";
 import { INP, INP_RO } from "../utils/cotizacionItems";
 
+const leerError = async (r, fallback) => (await r.json().catch(() => null))?.mensaje || fallback;
+
 const PRIORIDADES = ["alta", "media", "baja"];
 
 const colorPrioridad = (p, activa) => {
@@ -47,18 +49,23 @@ export default function ModalOTEquipo({ ingreso, onClose, onCreada }) {
     if (empresa?._id) body.empresa = empresa._id;
     if (!body.personalAsignado) delete body.personalAsignado;
 
-    const res = await fetchAuth("/ordenes-trabajo", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    try {
+      const res = await fetchAuth("/ordenes-trabajo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
 
-    if (res.ok) {
-      onCreada(await res.json());
-    } else {
+      if (res.ok) {
+        onCreada(await res.json());
+      } else {
+        setError(await leerError(res, "Error al crear la orden de trabajo."));
+      }
+    } catch {
       setError("Error al crear la orden de trabajo.");
+    } finally {
+      setGuardando(false);
     }
-    setGuardando(false);
   };
 
   return (

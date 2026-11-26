@@ -26,13 +26,13 @@ export default function TipoCambio() {
   const [cargandoSunat, setCargandoSunat] = useState(puedeEditar);
 
   const cargar = () => {
-    fetchAuth("/tipo-cambio").then((r) => r.ok && r.json()).then((d) => {
+    fetchAuth("/tipo-cambio").then((r) => r.ok && r.json().catch(() => null)).then((d) => {
       if (d) { setTc(d); setValor(String(d.valor)); }
     });
   };
 
   const cargarSunat = () => {
-    fetchAuth("/sunat/tipo-cambio").then((r) => r.ok && r.json()).then((d) => {
+    fetchAuth("/sunat/tipo-cambio").then((r) => r.ok && r.json().catch(() => null)).then((d) => {
       if (d) setTcSunat(d);
     }).finally(() => setCargandoSunat(false));
   };
@@ -55,19 +55,24 @@ export default function TipoCambio() {
     setGuardando(true);
     setError("");
     setOk(false);
-    const r = await fetchAuth("/tipo-cambio", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ valor: num }),
-    });
-    if (r.ok) {
-      setTc(await r.json());
-      setOk(true);
-    } else {
-      const d = await r.json();
-      setError(d.mensaje || "Error al guardar");
+    try {
+      const r = await fetchAuth("/tipo-cambio", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ valor: num }),
+      });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d) {
+        setTc(d);
+        setOk(true);
+      } else {
+        setError(d?.mensaje || "No se pudo guardar el tipo de cambio.");
+      }
+    } catch {
+      setError("Error de conexión con el servidor, intenta de nuevo.");
+    } finally {
+      setGuardando(false);
     }
-    setGuardando(false);
   };
 
   return (

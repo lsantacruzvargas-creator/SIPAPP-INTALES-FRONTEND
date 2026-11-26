@@ -15,6 +15,12 @@ const fecha = (d) => (d ? formatearFecha(d, { day: "2-digit", month: "2-digit", 
 const COLOR_VENC = { vencida: "text-red-600 font-semibold", por_vencer: "text-amber-600", al_dia: "text-gray-600" };
 const Check = ({ ok, visible = true }) => (visible ? <span className={ok ? "text-emerald-600" : "text-gray-300"}>{ok ? "☑" : "☐"}</span> : <span className="text-gray-300">—</span>);
 
+// El tipo puede partirse en líneas; la serie-número no.
+const Comprobante = ({ texto }) => {
+  const i = texto.lastIndexOf(" ");
+  return i < 0 ? texto : <>{texto.slice(0, i)} <span className="whitespace-nowrap">{texto.slice(i + 1)}</span></>;
+};
+
 export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
   const [datos, setDatos] = useState({ ocps: [], facturas: [] });
   const [vista, setVista] = useState("oc");
@@ -26,10 +32,16 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
   const [error, setError] = useState("");
   const hoyIso = fechaHoyLima();
 
+  const [carga, setCarga] = useState({ cargando: true, error: "" });
   const cargar = useCallback(() => fetchAuth("/tesoreria/por-pagar").then(async (r) => {
-    if (r.ok) setDatos(await r.json());
+    const d = await r.json().catch(() => null);
+    if (r.ok && d) {
+      setDatos(d);
+      setCarga({ cargando: false, error: "" });
+    } else setCarga({ cargando: false, error: d?.mensaje || "No se pudieron cargar las cuentas por pagar." });
   }), []);
   useEffect(() => { cargar(); }, [cargar, recarga]);
+  const reintentar = () => { setCarga({ cargando: true, error: "" }); cargar(); };
   // Tras un pago o cobro, la tabla aún trae los saldos viejos hasta que termina la recarga: mientras tanto no se
   // puede volver a registrar (con red lenta invitaba a pagar dos veces).
   const [recargando, setRecargando] = useState(false);
@@ -114,6 +126,11 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
         <button onClick={() => onRegistrarFactura({})} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700">+ Comprobante sin OC</button>
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
+      {carga.error && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {carga.error} <button onClick={reintentar} className="ml-2 underline font-medium">Reintentar</button>
+        </p>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <TablaScroll className="overflow-x-auto">
@@ -123,7 +140,7 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
                 <tr>{["OC", "Fecha", "Proveedor", "Total", "Facturado", "Por facturar", "Saldo neto", "Saldo impuesto", "Próx. vencimiento", ""].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {ocps.length === 0 && <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">Sin órdenes de compra vigentes</td></tr>}
+                {ocps.length === 0 && <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">{carga.cargando ? "Cargando…" : carga.error ? "No se pudieron cargar los datos." : "Sin órdenes de compra vigentes"}</td></tr>}
                 {ocps.map((o) => {
                   const sem = semaforo(o.proximoVencimiento, o.saldoNeto + o.saldoImpuesto > 0.009, hoyIso);
                   return (
@@ -161,31 +178,31 @@ export default function TablaPorPagar({ recarga, onRegistrarFactura }) {
           ) : (
             <table className="w-full text-sm" style={{ minWidth: "1200px" }}>
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                <tr>{["FP", "Comprobante", "Proveedor", "OC", "Emisión", "Vence", "Total", "Impuesto", "☐ Imp.", "Neto", "☐ Neto", "Saldo", ""].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr>
+                <tr>{["FP", "Comprobante", "Proveedor", "OC", "Emisión", "Vence", "Total", "Impuesto", "☐ Imp.", "Neto", "☐ Neto", "Saldo", ""].map((h) => <th key={h} className="px-3 py-2 text-left whitespace-nowrap">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {facturas.length === 0 && <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">Sin comprobantes</td></tr>}
+                {facturas.length === 0 && <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">{carga.cargando ? "Cargando…" : carga.error ? "No se pudieron cargar los datos." : "Sin comprobantes"}</td></tr>}
                 {facturas.map((f) => {
                   const pendiente = f.saldoNeto > 0.009 || f.saldoImpuesto > 0.009;
                   const sem = semaforo(f.fechaVencimiento, pendiente, hoyIso);
                   const hayImpuesto = f.impuesto?.tipo !== "ninguno" && f.impuesto?.quienDeposita !== "proveedor";
                   return (
                     <tr key={f._id}>
-                      <td className="px-3 py-2 font-medium">{f.codigo}</td>
-                      <td className="px-3 py-2">{etiquetaComprobante(f)}</td>
-                      <td className="px-3 py-2">{f.proveedorRazonSocial}</td>
-                      <td className="px-3 py-2">{f.ordenCompraProveedor?.codigo || (f.esFleteDe ? `Flete ${f.esFleteDe.codigo || ""}` : "—")}</td>
-                      <td className="px-3 py-2">{fecha(f.fechaEmision)}</td>
-                      <td className={`px-3 py-2 ${COLOR_VENC[sem] || "text-gray-400"}`}>{fecha(f.fechaVencimiento)}</td>
-                      <td className="px-3 py-2 tabular-nums">{money(f.total, f.moneda)}</td>
-                      <td className="px-3 py-2 text-xs">{f.impuesto?.tipo === "ninguno" ? "—" : `${etiquetaImpuesto(f.impuesto)} ${money(f.impuesto.monto)}${f.impuesto.quienDeposita === "proveedor" ? " (proveedor)" : ""}`}</td>
+                      <td className="px-3 py-2 font-medium whitespace-nowrap">{f.codigo}</td>
+                      <td className="px-3 py-2 min-w-40"><Comprobante texto={etiquetaComprobante(f)} /></td>
+                      <td className="px-3 py-2 min-w-60">{f.proveedorRazonSocial}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{f.ordenCompraProveedor?.codigo || (f.esFleteDe ? `Flete ${f.esFleteDe.codigo || ""}` : "—")}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{fecha(f.fechaEmision)}</td>
+                      <td className={`px-3 py-2 whitespace-nowrap ${COLOR_VENC[sem] || "text-gray-400"}`}>{fecha(f.fechaVencimiento)}</td>
+                      <td className="px-3 py-2 tabular-nums whitespace-nowrap">{money(f.total, f.moneda)}</td>
+                      <td className="px-3 py-2 text-xs min-w-32">{f.impuesto?.tipo === "ninguno" ? "—" : `${etiquetaImpuesto(f.impuesto)} ${money(f.impuesto.monto)}${f.impuesto.quienDeposita === "proveedor" ? " (proveedor)" : ""}`}</td>
                       <td className="px-3 py-2 text-center"><Check ok={f.saldoImpuesto <= 0.009} visible={hayImpuesto} /></td>
-                      <td className="px-3 py-2 tabular-nums">{money(f.netoAPagar, f.moneda)}</td>
+                      <td className="px-3 py-2 tabular-nums whitespace-nowrap">{money(f.netoAPagar, f.moneda)}</td>
                       <td className="px-3 py-2 text-center"><Check ok={f.saldoNeto <= 0.009} /></td>
-                      <td className="px-3 py-2 tabular-nums">
+                      <td className="px-3 py-2 tabular-nums whitespace-nowrap">
                         {f.tipoComprobante === "07"
                           ? <span className="text-green-700">A favor {money(f.saldoAFavor, f.moneda)}</span>
-                          : <>{money(f.saldoNeto, f.moneda)}{f.saldoImpuesto > 0.009 ? ` + ${money(f.saldoImpuesto)}` : ""}</>}
+                          : <>{money(f.saldoNeto, f.moneda)}{f.saldoImpuesto > 0.009 && <span className="block text-xs text-gray-500">+ {money(f.saldoImpuesto)} imp.</span>}</>}
                         {f.aplicadoNC > 0.009 && <span className="block text-[11px] text-gray-400">NC aplicadas {money(f.aplicadoNC, f.moneda)}</span>}
                       </td>
                       <td className="px-3 py-2 text-right whitespace-nowrap space-x-2">

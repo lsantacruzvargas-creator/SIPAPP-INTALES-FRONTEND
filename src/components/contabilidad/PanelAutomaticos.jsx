@@ -3,11 +3,12 @@ import { fetchAuth } from "../../utils/fetchAuth";
 import { formatearFecha } from "../../utils/fecha";
 import { money } from "../../utils/compras";
 import { round2, SUBDIARIOS } from "../../utils/contabilidad";
-import { mesAnteriorLima, periodoDeMes } from "../../utils/bancos";
+import { mesAnteriorLima, periodoDeMes, textoPeriodo } from "../../utils/bancos";
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
 import BuscadorCuenta from "./BuscadorCuenta";
 import ModalAsiento from "./ModalAsiento";
+import useConfirmar from "../../hooks/useConfirmar";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
 const fecha = (d) => formatearFecha(d, { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -27,6 +28,8 @@ export default function PanelAutomaticos({ cuentas, centrosCosto, puedeGenerar, 
   const [procesando, setProcesando] = useState(false);
   const [aviso, setAviso] = useState("");
   const periodo = periodoDeMes(mes);
+  const confContabilizar = useConfirmar("Sí, contabilizar");
+  const confResolver = useConfirmar("Sí, dar por resuelto");
 
   const leer = async (r, msj) => {
     const d = await r.json().catch(() => ({}));
@@ -59,7 +62,18 @@ export default function PanelAutomaticos({ cuentas, centrosCosto, puedeGenerar, 
     setResultado(d);
   });
   // Por selección o todo el mes; los que no se pueden contabilizar se informan y los demás siguen.
-  const contabilizar = (todoElMes) => accion(async () => {
+  const contabilizar = async (todoElMes) => {
+    const n = todoElMes ? borradores.length : elegidos.size;
+    const ok = await confContabilizar.confirmar(
+      <p>
+        Se contabilizarán <b>{n} asiento(s)</b> {todoElMes ? `(todos los borradores de ${textoPeriodo(periodo)})` : "seleccionados"}.
+        Ya no se regenerarán desde su documento: si este cambia, quedarán observados y habrá que anularlos o ajustarlos.
+        Quedan listos para exportar a CONCAR. ¿Continuar?
+      </p>
+    );
+    if (ok) contabilizarConfirmado(todoElMes);
+  };
+  const contabilizarConfirmado = (todoElMes) => accion(async () => {
     const cuerpo = todoElMes ? { periodo } : { ids: [...elegidos] };
     const d = await leer(await fetchAuth("/contabilidad/automaticos/contabilizar", { method: "POST", body: JSON.stringify(cuerpo) }), "No se pudo contabilizar.");
     setAviso(`${d.contabilizados} asiento(s) contabilizados.${d.errores?.length ? ` No se contabilizaron ${d.errores.length}: ${d.errores.slice(0, 5).join(" · ")}${d.errores.length > 5 ? " …" : ""}` : ""}`);
@@ -71,7 +85,16 @@ export default function PanelAutomaticos({ cuentas, centrosCosto, puedeGenerar, 
       ? `Ajuste por diferencia de cambio en borrador (TC compra ${d.tcCompra}, venta ${d.tcVenta}): ganancia ${money(d.ganancia)} y pérdida ${money(d.perdida)}. Revísalo abajo y contabilízalo.`
       : `Sin diferencia de cambio por ajustar al ${formatearFecha(`${d.fecha}T12:00:00-05:00`)}.`);
   });
-  const resolver = (a) => accion(async () => {
+  const resolver = async (a) => {
+    const ok = await confResolver.confirmar(
+      <p>
+        Dar por resuelto el asiento <b>{a.cuo}</b> ({a.origenAnulado ? "documento anulado" : "documento cambiado"}). Deja de
+        aparecer aquí y el asiento queda como está: hazlo solo si ya lo anulaste o registraste el ajuste. ¿Continuar?
+      </p>
+    );
+    if (ok) resolverConfirmado(a);
+  };
+  const resolverConfirmado = (a) => accion(async () => {
     await leer(await fetchAuth(`/contabilidad/automaticos/${a._id}/resolver`, { method: "POST" }), "No se pudo resolver.");
   });
   const asignar = (p) => accion(async () => {
@@ -233,6 +256,8 @@ export default function PanelAutomaticos({ cuentas, centrosCosto, puedeGenerar, 
         <ModalAsiento asiento={modal} cuentas={cuentas} centrosCosto={centrosCosto} puedeEscribir={puedeEscribir}
           onClose={() => setModal(null)} onGuardado={() => { setModal(null); cargar(); }} />
       )}
+      {confContabilizar.dialogo}
+      {confResolver.dialogo}
       {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
     </div>
   );

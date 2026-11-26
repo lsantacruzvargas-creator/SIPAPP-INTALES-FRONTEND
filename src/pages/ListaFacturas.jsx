@@ -58,18 +58,28 @@ const compararTexto = (na, nb) => {
   return String(nb).localeCompare(String(na));
 };
 
-function TablaFacturas({ titulo, acento, facturas, onSelect, vacioMsg }) {
-  // Las anuladas siguen visibles en la tabla, pero no cuentan en los totales
-  const noAnuladas = facturas.filter(f => !f.anulado);
-  const totales = {
-    subtotal:    noAnuladas.reduce((s, f) => s + (Number(f.subtotal ?? f.monto)    || 0), 0),
-    igv:         noAnuladas.reduce((s, f) => s + (Number(f.igv)                   || 0), 0),
-    total:       noAnuladas.reduce((s, f) => s + (Number(f.total)                 || 0), 0),
+const monedaDe = (f) => (f.moneda === "USD" ? "USD" : "PEN");
+const SIMBOLO = { PEN: "S/", USD: "US$" };
+
+function sumar(lista) {
+  return {
+    cantidad:    lista.length,
+    subtotal:    lista.reduce((s, f) => s + (Number(f.subtotal ?? f.monto)    || 0), 0),
+    igv:         lista.reduce((s, f) => s + (Number(f.igv)                   || 0), 0),
+    total:       lista.reduce((s, f) => s + (Number(f.total)                 || 0), 0),
     // Misma cifra que la celda de cada fila: detracción o retención (impuesto.monto).
-    detraccion:  noAnuladas.reduce((s, f) => s + (Number(f.impuesto?.monto ?? f.detraccion) || 0), 0),
-    totalAPagar: noAnuladas.reduce((s, f) => s + (Number(f.totalAPagar)           || 0), 0),
-    pagado:      noAnuladas.reduce((s, f) => s + (Number(f.montoPagado)           || 0), 0),
+    detraccion:  lista.reduce((s, f) => s + (Number(f.impuesto?.monto ?? f.detraccion) || 0), 0),
+    totalAPagar: lista.reduce((s, f) => s + (Number(f.totalAPagar)           || 0), 0),
+    pagado:      lista.reduce((s, f) => s + (Number(f.montoPagado)           || 0), 0),
   };
+}
+
+function TablaFacturas({ titulo, acento, facturas, onSelect, vacioMsg }) {
+  // Las anuladas siguen visibles en la tabla, pero no cuentan en los totales; soles y dólares no se suman entre sí.
+  const noAnuladas = facturas.filter(f => !f.anulado);
+  const monedas = ["PEN", "USD"].filter(m => noAnuladas.some(f => monedaDe(f) === m));
+  const totalesPorMoneda = (monedas.length ? monedas : ["PEN"])
+    .map(m => ({ moneda: m, ...sumar(noAnuladas.filter(f => monedaDe(f) === m)) }));
 
   return (
     <div className="mb-6">
@@ -89,18 +99,19 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, vacioMsg }) {
                 <th className={`${TH} text-center`}>Fecha cancelación</th>
                 <th className={`${TH} text-left`}>Orden de Compra</th>
                 <th className={`${TH} text-left`}>Empresa</th>
-                <th className={`${TH} text-right`}>Subtotal (S/)</th>
-                <th className={`${TH} text-right`}>IGV 18% (S/)</th>
-                <th className={`${TH} text-right`}>Total (S/)</th>
-                <th className={`${TH} text-right`}>Detracción / Retención (S/)</th>
-                <th className={`${TH} text-right`}>Total a pagar (S/)</th>
+                <th className={`${TH} text-center`}>Moneda</th>
+                <th className={`${TH} text-right`}>Subtotal</th>
+                <th className={`${TH} text-right`}>IGV 18%</th>
+                <th className={`${TH} text-right`}>Total</th>
+                <th className={`${TH} text-right`}>Detracción / Retención</th>
+                <th className={`${TH} text-right`}>Total a pagar</th>
                 <th className={`${TH} text-center`}>Estado pago</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {facturas.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
+                  <td colSpan={13} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
                 </tr>
               ) : (
                 <>
@@ -139,6 +150,9 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, vacioMsg }) {
                       <td className="px-3 py-3.5 text-gray-700">
                         {f.empresa?.razonSocial || <span className="text-gray-300">—</span>}
                       </td>
+                      <td className="px-3 py-3.5 text-center whitespace-nowrap">
+                        <span className={`text-xs font-medium ${monedaDe(f) === "USD" ? "text-blue-700" : "text-gray-500"}`}>{SIMBOLO[monedaDe(f)]}</span>
+                      </td>
                       <td className={`${TD_NUM} text-gray-400`}>
                         {Number(f.subtotal ?? f.monto ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
                       </td>
@@ -146,7 +160,7 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, vacioMsg }) {
                         {Number(f.igv ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
                       </td>
                       <td className={`${TD_NUM} text-gray-600`}>
-                        {f.moneda === "USD" ? "US$ " : ""}{Number(f.total ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                        {Number(f.total ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
                         {f.aplicadoNC > 0 && (
                           <span className="block text-[11px] text-red-600" title={(f.notasCredito || []).map((n) => n.serieNumero).join(", ")}>
                             NC −{Number(f.aplicadoNC).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
@@ -192,6 +206,7 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, vacioMsg }) {
                         </td>
                         <td className="px-3 py-2"></td>
                         <td className="px-3 py-2"></td>
+                        <td className="px-3 py-2"></td>
                         <td className={`${TD_NUM} text-gray-300`}></td>
                         <td className={`${TD_NUM} text-gray-300`}></td>
                         <td className={`${TD_NUM} text-gray-300`}></td>
@@ -208,11 +223,13 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, vacioMsg }) {
 
                   return [filaPrincipal, ...filasCuotas];
                 })}
-                {/* Fila de totales */}
-                <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold text-sm">
+                {/* Una fila de totales por moneda */}
+                {totalesPorMoneda.map((totales, i) => (
+                <tr key={totales.moneda} className={`bg-gray-50 font-semibold text-sm ${i === 0 ? "border-t-2 border-gray-200" : ""}`}>
                   <td colSpan={6} className="px-3 py-3.5 text-right text-xs uppercase tracking-wide text-gray-400">
-                    Totales ({facturas.length})
+                    Totales {totalesPorMoneda.length > 1 ? `en ${SIMBOLO[totales.moneda]} ` : ""}({totales.cantidad})
                   </td>
+                  <td className={`px-3 py-3.5 text-center text-xs ${totales.moneda === "USD" ? "text-blue-700" : "text-gray-500"}`}>{SIMBOLO[totales.moneda]}</td>
                   <td className={`${TD_NUM} text-gray-500`}>{totales.subtotal.toLocaleString("es-PE", { minimumFractionDigits: 2 })}</td>
                   <td className={`${TD_NUM} text-gray-500`}>{totales.igv.toLocaleString("es-PE", { minimumFractionDigits: 2 })}</td>
                   <td className={`${TD_NUM} text-gray-700`}>{totales.total.toLocaleString("es-PE", { minimumFractionDigits: 2 })}</td>
@@ -225,6 +242,7 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, vacioMsg }) {
                     </div>
                   </td>
                 </tr>
+                ))}
                 </>
               )}
             </tbody>
@@ -243,13 +261,18 @@ export default function ListaFacturas() {
   const [importarOpen, setImportarOpen] = useState(false);
   const [sortBy, setSortBy]           = useState("fecha");
   const [vista, setVista]             = useState("todas");
+  const [cargando, setCargando]       = useState(true);
+  const [errorCarga, setErrorCarga]   = useState("");
 
   const cargar = () =>
     Promise.all([
-      fetchAuth("/facturas").then(r => r.ok ? r.json() : []),
+      fetchAuth("/facturas").then(async r => (r.ok ? r.json() : { error: (await r.json().catch(() => ({}))).mensaje || "No se pudieron cargar las facturas." })),
       fetchAuth("/cotizaciones").then(r => r.ok ? r.json() : []),
       fetchAuth("/ordenes-trabajo").then(r => r.ok ? r.json() : []),
     ]).then(([facts, cots, ots]) => {
+      setCargando(false);
+      if (!Array.isArray(facts)) { setErrorCarga(facts.error); return; }
+      setErrorCarga("");
       // La Factura no siempre trae su propia cotizacion/OT pobladas (p.ej.
       // creada por la cadena vía OC) — se resuelven por numeroDocumento
       // compartido, igual que en DetalleFactura.jsx.
@@ -264,6 +287,8 @@ export default function ListaFacturas() {
     });
 
   useEffect(() => { cargar(); }, []);
+
+  const reintentar = () => { setCargando(true); setErrorCarga(""); cargar(); };
 
   const empresasLista = [
     ...new Map(
@@ -314,6 +339,16 @@ export default function ListaFacturas() {
   const cerradas = filtradas.filter(f => f.estadoCadena === "cerrado");
   const abiertas = filtradas.filter(f => f.estadoCadena !== "cerrado");
   const hayFiltro = Object.values(filtros).some(Boolean);
+  const mensajeVacio = (sinFiltro) => {
+    if (cargando) return "Cargando facturas…";
+    if (errorCarga) return (
+      <span className="text-red-600">
+        {errorCarga}
+        <button onClick={reintentar} className="ml-2 underline hover:text-red-800">Reintentar</button>
+      </span>
+    );
+    return hayFiltro ? "Sin resultados para los filtros aplicados" : sinFiltro;
+  };
 
   // Mismas columnas que TablaFacturas, agregando Monto pagado (hoy solo visible
   // en el chip de estado de pago).
@@ -324,6 +359,7 @@ export default function ListaFacturas() {
     "Fecha cancelación": f.fechaCancelacion ? formatearFecha(f.fechaCancelacion) : "—",
     "Orden de Compra":   f.ordenCompra?.numeroOrden || f.numeroOrdenCompra || "—",
     "Empresa":           f.empresa?.razonSocial || "—",
+    "Moneda":            monedaDe(f),
     "Subtotal":          Number(f.subtotal ?? f.monto ?? 0).toFixed(2),
     "IGV 18%":           Number(f.igv ?? 0).toFixed(2),
     "Total":             Number(f.total ?? 0).toFixed(2),
@@ -417,13 +453,20 @@ export default function ListaFacturas() {
         )}
       </div>
 
+      {errorCarga && facturas.length > 0 && (
+        <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-5 flex items-center justify-between gap-4">
+          <span>{errorCarga}</span>
+          <button onClick={reintentar} className="shrink-0 underline hover:text-red-900">Reintentar</button>
+        </div>
+      )}
+
       {vista === "todas" && (
         <TablaFacturas
           titulo="Todas las facturas"
           acento="bg-blue-500"
           facturas={filtradas}
           onSelect={setSeleccionada}
-          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin facturas registradas"}
+          vacioMsg={mensajeVacio("Sin facturas registradas")}
         />
       )}
 
@@ -433,7 +476,7 @@ export default function ListaFacturas() {
           acento="bg-emerald-500"
           facturas={abiertas}
           onSelect={setSeleccionada}
-          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin facturas abiertas"}
+          vacioMsg={mensajeVacio("Sin facturas abiertas")}
         />
       )}
 
@@ -443,7 +486,7 @@ export default function ListaFacturas() {
           acento="bg-gray-500"
           facturas={cerradas}
           onSelect={setSeleccionada}
-          vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin facturas cerradas"}
+          vacioMsg={mensajeVacio("Sin facturas cerradas")}
         />
       )}
     </div>

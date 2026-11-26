@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { comprimirFoto } from "../../utils/comprimirFoto";
 import { fetchAuth, uploadAuth, abrirArchivoProtegido } from "../../utils/fetchAuth";
 import { conBloqueo } from "../../utils/bloqueoApi";
 
@@ -27,7 +28,7 @@ export default function ArchivosProveedor({ licitacionId, proveedor, puedeSubir 
     // Secuencial: cada subida hace push sobre el mismo documento.
     for (const file of files) {
       const fd = new FormData();
-      fd.append("archivo", file);
+      fd.append("archivo", await comprimirFoto(file));
       const r = await (bloqueo ? bloqueo.upload(base, fd) : conBloqueo("licitacion", licitacionId, (h) => uploadAuth(base, fd, h)));
       if (r.ok) ultima = await r.json();
       else if (r.status === 423) { setError((await r.json().catch(() => ({}))).mensaje); break; }

@@ -1,13 +1,18 @@
 import { useState } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
+import { montoAjustadoItem } from "../utils/cotizacionItems";
+import { r2 } from "../utils/redondeo";
+import { money } from "./detalleShared";
+
+const leerError = async (r, fallback) => (await r.json().catch(() => null))?.mensaje || fallback;
 
 const INP    = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 const INP_RO = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full cursor-not-allowed";
 
-function calcular(sub) {
-  const s = Math.round(Number(sub) * 100) / 100 || 0;
-  const igv = Math.round(s * 0.18 * 100) / 100;
-  return { subtotal: s, igv, total: Math.round((s + igv) * 100) / 100 };
+function calcular(sub, afectoIgv = true) {
+  const s = r2(Number(sub)) || 0;
+  const igv = afectoIgv ? r2(s * 0.18) : 0;
+  return { subtotal: s, igv, total: r2(s + igv) };
 }
 
 export default function ModalOrdenCompra({ cotizacion, onClose, onCreada }) {
@@ -36,32 +41,37 @@ export default function ModalOrdenCompra({ cotizacion, onClose, onCreada }) {
     if (!esAsistente && (!monto || Number(monto) <= 0)) return setError("El monto es obligatorio.");
     setGuardando(true);
     setError("");
-    const calc = calcular(Number(monto)); // `monto` ya es el subtotal sin IGV
-    const res = await fetchAuth("/ordenes-compra", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        cotizacion:    cotizacion._id,
-        empresa:       emp?._id,
-        titulo:        cotizacion.titulo,
-        numeroOrden:   numeroOrden || undefined,
-        monto:         calc.subtotal,
-        ...calc,
-        planta:             cotizacion.planta,
-        encargado:          cotizacion.encargado,
-        numeroGuiaEmision:  cotizacion.numeroGuiaEmision,
-        numeroGuiaRemision: cotizacion.numeroGuiaRemision,
-        codigoSap:          cotizacion.codigoSap,
-        fechaSalida:        cotizacion.fechaSalida,
-      }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setExito(data.codigo);
-      setTimeout(() => onCreada(data), 1800);
-      // No se reactiva `guardando`: el botón queda deshabilitado durante el
-      // mensaje de éxito, evitando una segunda creación por doble click.
-    } else {
+    const calc = calcular(Number(monto), cotizacion.afectoIgv !== false); // `monto` ya es el subtotal sin IGV
+    try {
+      const res = await fetchAuth("/ordenes-compra", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cotizacion:    cotizacion._id,
+          empresa:       emp?._id,
+          titulo:        cotizacion.titulo,
+          numeroOrden:   numeroOrden || undefined,
+          monto:         calc.subtotal,
+          ...calc,
+          planta:             cotizacion.planta,
+          encargado:          cotizacion.encargado,
+          numeroGuiaEmision:  cotizacion.numeroGuiaEmision,
+          numeroGuiaRemision: cotizacion.numeroGuiaRemision,
+          codigoSap:          cotizacion.codigoSap,
+          fechaSalida:        cotizacion.fechaSalida,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setExito(data.codigo);
+        setTimeout(() => onCreada(data), 1800);
+        // No se reactiva `guardando`: el botón queda deshabilitado durante el
+        // mensaje de éxito, evitando una segunda creación por doble click.
+      } else {
+        setError(await leerError(res, "Error al crear la orden de compra."));
+        setGuardando(false);
+      }
+    } catch {
       setError("Error al crear la orden de compra.");
       setGuardando(false);
     }
@@ -151,6 +161,125 @@ export default function ModalOrdenCompra({ cotizacion, onClose, onCreada }) {
           </button>
           <button onClick={guardar} disabled={guardando}
             className="text-sm bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition font-medium">
+            {guardando ? "Creando…" : "Crear Orden de Compra"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Una OC que agrupa uno o varios ítems de la cotización (OCs parciales).
+// `enviar`: el bloqueo.fetch del detalle si se está editando la cotización — la OC marca sus
+// ítems (cambia su versión) y así el formulario abierto adopta la nueva y puede seguir guardando.
+export function ModalOrdenCompraItems({ cotizacion, indices, enviar = fetchAuth, onClose, onCreada }) {
+  const esAsistente = getUsuario()?.rol === "asistente";
+  const elegidos = indices.map((idx) => ({ idx, item: cotizacion.items[idx] })).filter((e) => e.item);
+  const sumaAjustada = r2(elegidos.reduce((s, e) => s + montoAjustadoItem(cotizacion, e.item), 0));
+  const [form, setForm] = useState(() => ({
+    numeroOrden: "",
+    titulo: elegidos.map((e) => e.item.descripcion).filter(Boolean).join(" / "),
+    monto: sumaAjustada,
+  }));
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+  const [exito, setExito] = useState(null);
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const guardar = async () => {
+    if (!form.numeroOrden.trim()) return setError("El número de orden de compra es obligatorio.");
+    if (!form.titulo.trim()) return setError("El título es obligatorio.");
+    if (!(Number(form.monto) > 0)) return setError("El monto debe ser mayor a 0.");
+    setGuardando(true);
+    setError("");
+    try {
+      const res = await enviar("/ordenes-compra/desde-items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cotizacion: cotizacion._id,
+          indices: elegidos.map((e) => e.idx),
+          numeroOrden: form.numeroOrden.trim(),
+          titulo: form.titulo.trim(),
+          subtotal: Number(form.monto),
+        }),
+      });
+      if (!res.ok) {
+        setError(await leerError(res, "Error al crear la orden de compra."));
+        setGuardando(false);
+        return;
+      }
+      const data = await res.json();
+      setExito(data.numeroOrden || data.codigo);
+      // `guardando` queda en true: el botón sigue deshabilitado durante el mensaje de éxito.
+      setTimeout(() => onCreada(data), 1500);
+    } catch {
+      setError("Error de conexión con el servidor.");
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <h3 className="font-semibold text-gray-800">Nueva Orden de Compra por ítems</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
+        </div>
+
+        <div className="p-6 space-y-4 overflow-y-auto">
+          <div className="bg-gray-50 rounded-xl p-4">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+              Ítems de {cotizacion.numeroCotizacion || cotizacion.codigo} ({elegidos.length})
+            </p>
+            <ul className="divide-y divide-gray-200 text-sm">
+              {elegidos.map(({ idx, item }) => (
+                <li key={idx} className="flex items-start justify-between gap-3 py-1.5">
+                  <span className="text-gray-700"><span className="text-gray-400 mr-1.5">{idx + 1}.</span>{item.descripcion}</span>
+                  {!esAsistente && (
+                    <span className="text-gray-600 tabular-nums whitespace-nowrap">{money(montoAjustadoItem(cotizacion, item), cotizacion.moneda)}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Número de orden de compra *</label>
+            <input name="numeroOrden" value={form.numeroOrden} onChange={handleChange} className={INP} placeholder="Ej. 4500012345" />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Título *</label>
+            <textarea name="titulo" value={form.titulo} onChange={handleChange} rows={2} className={INP} />
+          </div>
+
+          {!esAsistente && (
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Monto sin IGV ({cotizacion.moneda === "USD" ? "US$" : "S/"})</label>
+              <input name="monto" type="number" min="0" step="0.01" value={form.monto} onChange={handleChange} className={INP} />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Suma de los ítems con el descuento de la cotización: {money(sumaAjustada, cotizacion.moneda)}
+              </p>
+            </div>
+          )}
+
+          {exito && (
+            <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3">
+              Orden <strong>{exito}</strong> creada exitosamente.
+            </div>
+          )}
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end shrink-0">
+          <button onClick={onClose} disabled={guardando}
+            className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition disabled:opacity-50">
+            Cancelar
+          </button>
+          <button onClick={guardar} disabled={guardando}
+            className="text-sm bg-amber-600 text-white px-5 py-2 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition font-medium">
             {guardando ? "Creando…" : "Crear Orden de Compra"}
           </button>
         </div>

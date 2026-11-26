@@ -4,6 +4,8 @@ import { formatearFecha } from "../utils/fecha";
 import * as XLSX from "xlsx";
 import TablaScroll from "./TablaScroll";
 
+const leerError = async (r, fallback) => (await r.json().catch(() => null))?.mensaje || fallback;
+
 /* Config por tipo: columnas del Excel (orden = plantilla) */
 export const COLS_FACTURAS = [
   { key: "numeroFactura",      label: "N° Factura" },
@@ -236,21 +238,26 @@ export default function ModalImportarExcel({ tipo, columnas, endpoint, color = "
 
   const confirmar = async () => {
     if (modo === "reemplazar" && !reemplazarListo) return;
-    setImp(true);
-    const res = await fetchAuth(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filas: validas.map(f => f.datos), reemplazar: modo === "reemplazar" }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setRes(data);
-      setPaso("resultado");
-      onImportado?.();
-    } else {
+    setImp(true); setErrG("");
+    try {
+      const res = await fetchAuth(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filas: validas.map(f => f.datos), reemplazar: modo === "reemplazar" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRes(data);
+        setPaso("resultado");
+        onImportado?.();
+      } else {
+        setErrG(await leerError(res, "Error al importar. Intenta nuevamente."));
+      }
+    } catch {
       setErrG("Error al importar. Intenta nuevamente.");
+    } finally {
+      setImp(false);
     }
-    setImp(false);
   };
 
   return (

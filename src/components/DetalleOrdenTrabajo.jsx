@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAuth, getUsuario } from "../utils/fetchAuth";
+import { fetchAuth, getUsuario, abrirArchivoProtegido } from "../utils/fetchAuth";
+import ImagenProtegida from "./ImagenProtegida";
 import { formatearFecha, aInputFecha } from "../utils/fecha";
 import { exportarOrdenTrabajoPdf } from "../utils/ordenTrabajoPdf";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
@@ -18,12 +19,14 @@ import ModalDetalleGuia from "./ModalDetalleGuia";
 import ConfirmacionAccion from "./ConfirmacionAccion";
 import AvisoAccion from "./AvisoAccion";
 import {
-  FlujoNegocio, TarjetaRelacion, Chip,
+  FlujoNegocio, TarjetaRelacion, Chip, ParteConsolidada,
   badgePago, badgeOT, estadoProgresoOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
 } from "./detalleShared";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "./BarraEdicion";
 import { veFacturas, rolDeSesion } from "../utils/roles";
+
+const leerError = async (r, fallback) => (await r.json().catch(() => null))?.mensaje || fallback;
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 w-full transition";
 const RO = "bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm text-gray-600 w-full";
@@ -70,6 +73,11 @@ const estadoItem = (it) => it.esSolicitudCompra
 export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardada, onNavegar }) {
   const [ot, setOt] = useState(inicial);
   const [form, setForm] = useState({
+    // Las OT generadas antes de existir `subItems` solo tienen el detalle
+    // unido con saltos de línea en `descripcion`.
+    subItems: inicial.subItems?.length
+      ? inicial.subItems
+      : (inicial.descripcion || "").split("\n").map((s) => s.trim()).filter(Boolean),
     numeroOT: inicial.numeroOT || "",
     codigoSap: inicial.codigoSap || "",
     empresa: inicial.empresa?._id || "",
@@ -96,6 +104,9 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   // Supervisor edita los campos de la OT, pero no puede anularla. Igual que
   // técnico, supervisor no ve el resto de la cadena (Cotización/OC/Factura).
   const puedeEditarCampos = ["admin", "jefatura", "supervisor", "planner", "coordinadora"].includes(rolActual);
+  const puedeEditarDetalleItem = puedeEditarCampos && rolActual !== "supervisor";
+  const puedeAsignarAdjuntos = ["admin", "jefatura", "planner", "coordinadora"].includes(rolActual);
+  const puedeEliminarAdjuntos = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
   // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
   const puedeAnular = ["admin", "jefatura"].includes(rolActual);
@@ -143,10 +154,31 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const [detalleNotificacion, setDetalleNotificacion] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  const [cambiandoProgreso, setCambiandoProgreso] = useState(false);
+  const [errorProgreso, setErrorProgreso] = useState("");
   const [avisoVinculo, setAvisoVinculo] = useState(null); // { mensaje, cotizacion }
   const [crearOCOpen, setCrearOCOpen] = useState(false);
   const [crearSubOTOpen, setCrearSubOTOpen] = useState(false);
   const [generarGREOpen, setGenerarGREOpen] = useState(false);
+
+  // Los adjuntos de la cotización siguen siendo de la cotización: acá solo se
+  // asignan o quitan de esta OT. Supervisor y técnicos ven únicamente los
+  // asignados; quien asigna ve también el resto, para poder elegirlos.
+  const asignadoAEstaOT = (a) => (a.ordenesTrabajo || []).some((id) => String(id) === String(ot._id));
+  const adjuntosCotizacion = (cot?.archivos || [])
+    .filter((a) => puedeAsignarAdjuntos || asignadoAEstaOT(a))
+    .map((a) => ({
+      ...a,
+      _etiqueta: !puedeAsignarAdjuntos ? "De la Cotización"
+        : asignadoAEstaOT(a) ? "Asignado a esta OT" : "Cotización · sin asignar",
+    }));
+  const asignarAdjunto = async (archivo, accion) => {
+    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/archivos-cotizacion/${archivo._id}/${accion}`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return data.mensaje || "No se pudo actualizar el adjunto.";
+    setCot(prev => (prev ? { ...prev, archivos: data.archivos } : prev));
+    return null;
+  };
 
   const cargarRelaciones = () => {
     Promise.all([
@@ -161,7 +193,12 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
         null;
       setCot(cotResuelta);
 
+      // Con OCs parciales por ítems, la OC de esta OT es la que cubre su ítem.
+      const itemDeOT = cotResuelta?.items?.find(i => (i.otGenerada?._id || i.otGenerada) === ot._id);
+      const idOCDelItem = itemDeOT?.ocGenerada && !itemDeOT.ocGenerada.anulado
+        ? (itemDeOT.ocGenerada._id || itemDeOT.ocGenerada) : null;
       const ocResuelta =
+        (idOCDelItem && ocs.find(o => o._id === idOCDelItem)) ||
         (cotResuelta && ocs.find(o => (o.cotizacion?._id || o.cotizacion) === cotResuelta._id)) ||
         (ot.numeroDocumento != null && ocs.find(o => o.numeroDocumento === ot.numeroDocumento)) ||
         null;
@@ -169,7 +206,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
 
       const factResuelta =
         (ocResuelta && facts.find(f => (f.ordenCompra?._id || f.ordenCompra) === ocResuelta._id)) ||
-        (ot.numeroDocumento != null && facts.find(f => f.numeroDocumento === ot.numeroDocumento)) ||
+        (ot.numeroDocumento != null && facts.find(f => f.numeroDocumento === ot.numeroDocumento && !f.ordenCompra)) ||
         null;
       setFactura(factResuelta);
     });
@@ -270,6 +307,12 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     }));
   };
 
+  const cambiarSubItem = (idx, valor) =>
+    setForm(prev => ({ ...prev, subItems: prev.subItems.map((s, i) => (i === idx ? valor : s)) }));
+  const quitarSubItem = (idx) =>
+    setForm(prev => ({ ...prev, subItems: prev.subItems.filter((_, i) => i !== idx) }));
+  const agregarSubItem = () => setForm(prev => ({ ...prev, subItems: [...prev.subItems, ""] }));
+
   const guardar = async () => {
     if (!form.titulo.trim()) { setError("El título de la OT es obligatorio."); return; }
     setGuardando(true); setError("");
@@ -278,55 +321,70 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
       contactoNombre: contactoSel?.nombre || "",
       contactoTelefono: contactoSel?.telefono || "",
     };
+    if (puedeEditarDetalleItem) body.subItems = form.subItems.map(s => s.trim()).filter(Boolean);
+    else delete body.subItems;
     if (!body.empresa) delete body.empresa;
     if (!body.fechaSalida) delete body.fechaSalida;
     body.cantidad = body.cantidad === "" ? null : Number(body.cantidad);
 
-    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      const actualizada = await res.json();
-      setOt(actualizada);
-      await bloqueo.terminar(actualizada.updatedAt);
-      onGuardada?.(actualizada);
-    } else {
+    try {
+      const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const actualizada = await res.json();
+        setOt(actualizada);
+        if (puedeEditarDetalleItem) setForm(prev => ({ ...prev, subItems: actualizada.subItems || [] }));
+        await bloqueo.terminar(actualizada.updatedAt);
+        onGuardada?.(actualizada);
+      } else {
+        setError(await leerError(res, "Error al guardar los cambios."));
+      }
+    } catch {
       setError("Error al guardar los cambios.");
+    } finally {
+      setGuardando(false);
     }
-    setGuardando(false);
   };
 
   // Cambian de inmediato (sin pasar por "Guardar cambios", que técnico no
   // puede usar) — no llaman `onGuardada` a propósito: ese callback cierra el
   // modal entero (ver DetalleDocumento.jsx `cerrarGuardando`), y marcar un
   // estado no debería sacar al usuario de la vista.
-  const cambiarEstado = async (nuevo) => {
-    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/estado`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ estado: nuevo }),
-    });
-    if (res.ok) {
-      const actualizada = await res.json();
-      setOt(actualizada);
-      setForm((f) => ({ ...f, estado: actualizada.estado }));
+  const cambiarProgreso = async (url, body, fallback, aplicar) => {
+    setCambiandoProgreso(true); setErrorProgreso("");
+    try {
+      const res = await bloqueo.fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) aplicar(await res.json());
+      else setErrorProgreso(await leerError(res, fallback));
+    } catch {
+      setErrorProgreso(fallback);
+    } finally {
+      setCambiandoProgreso(false);
     }
   };
 
-  const cambiarEncargado = async (campo, nombre) => {
-    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/encargados`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [campo]: nombre }),
-    });
-    if (res.ok) {
-      const actualizada = await res.json();
+  const cambiarEstado = (nuevo) => cambiarProgreso(
+    `/ordenes-trabajo/${ot._id}/estado`, { estado: nuevo }, "No se pudo cambiar el estado.",
+    (actualizada) => {
+      setOt(actualizada);
+      setForm((f) => ({ ...f, estado: actualizada.estado }));
+    },
+  );
+
+  const cambiarEncargado = (campo, nombre) => cambiarProgreso(
+    `/ordenes-trabajo/${ot._id}/encargados`, { [campo]: nombre }, "No se pudo cambiar el encargado.",
+    (actualizada) => {
       setOt(actualizada);
       setForm((f) => ({ ...f, [campo]: actualizada[campo] }));
-    }
-  };
+    },
+  );
 
   const anular = async (motivo) => {
     const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/anular`, {
@@ -339,7 +397,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
       setOt(actualizada);
       onGuardada?.(actualizada);
     } else {
-      setError("Error al anular el documento.");
+      return leerError(res, "Error al anular el documento.");
     }
   };
 
@@ -350,7 +408,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
       setOt(actualizada);
       onGuardada?.(actualizada);
     } else {
-      setError("Error al desanular el documento.");
+      setError(await leerError(res, "Error al desanular el documento."));
     }
   };
 
@@ -365,7 +423,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
       setOt(actualizada);
       onGuardada?.(actualizada);
     } else {
-      setError("Error al cerrar/abrir la cadena.");
+      setError(await leerError(res, "Error al cerrar/abrir la cadena."));
     }
   };
 
@@ -381,6 +439,8 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
 
     const body = {
       numeroDocumento: ot.numeroDocumento,
+      // Si la OT es de una cotización anexada a una OC consolidada, la nueva queda en su misma sub-cadena.
+      numeroDocumentoOriginal: ot.numeroDocumentoOriginal ?? null,
       titulo: ot.titulo,
       tipo: "venta",
       moneda: "PEN",
@@ -400,7 +460,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!res.ok) { setError("Error al crear la cotización."); setCreandoCotizacion(false); setConfirmandoCrearCotizacion(false); return; }
+    if (!res.ok) { setError(await leerError(res, "Error al crear la cotización.")); setCreandoCotizacion(false); setConfirmandoCrearCotizacion(false); return; }
     const nueva = await res.json();
     // Vincular exige el bloqueo de la OT: si otro la está editando (o se cae la red)
     // la cotización ya existe pero queda suelta — se avisa antes de ir a ella.
@@ -526,7 +586,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
               usuario coincide con `encargado` de esta OT. */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2 md:max-w-sm">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Progreso — Encargado de Progreso</p>
-            <select value={ot.encargado || ""} disabled={ot.anulado || cadenaCerrada || !puedeEditarEncargados}
+            <select value={ot.encargado || ""} disabled={ot.anulado || cadenaCerrada || !puedeEditarEncargados || cambiandoProgreso}
               onChange={(e) => cambiarEncargado("encargado", e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500">
               <option value="">Sin asignar</option>
@@ -536,7 +596,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
             </select>
             <div className="flex gap-2">
               {ESTADOS.map(e => (
-                <button key={e} type="button" disabled={hayHijasSanas || !puedeEditarEstado}
+                <button key={e} type="button" disabled={hayHijasSanas || !puedeEditarEstado || cambiandoProgreso}
                   onClick={() => cambiarEstado(e)}
                   className={`flex-1 py-1.5 rounded-lg text-xs font-medium capitalize transition disabled:opacity-60 disabled:cursor-not-allowed ${colorEstado(e, ot.estado === e)}`}>
                   {e}
@@ -544,6 +604,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
               ))}
             </div>
             {hayHijasSanas && <p className="text-xs text-gray-400">Calculado automáticamente según las sub-órdenes.</p>}
+            {errorProgreso && <p className="text-xs text-red-500">{errorProgreso}</p>}
           </div>
         </div>
 
@@ -687,6 +748,48 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                   placeholder="Título de la OT" className={`${INP} resize-y`} />
               </div>
 
+              {(puedeEditarDetalleItem || form.subItems.length > 0 || ot.imagenes?.length > 0) && (
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Detalle del ítem cotizado</label>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 space-y-2">
+                    {puedeEditarDetalleItem ? (
+                      <div className="space-y-1.5">
+                        {form.subItems.map((s, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <span className="text-sky-500 text-sm">•</span>
+                            <input value={s} onChange={(e) => cambiarSubItem(i, e.target.value)} maxLength={500}
+                              placeholder="Sub ítem" className={`${INP} py-1.5`} />
+                            <button type="button" onClick={() => quitarSubItem(i)} title="Quitar sub ítem"
+                              aria-label="Quitar sub ítem"
+                              className="text-gray-400 hover:text-red-500 text-lg leading-none px-1">×</button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={agregarSubItem}
+                          className="text-xs text-blue-600 hover:text-blue-800">+ agregar sub ítem</button>
+                      </div>
+                    ) : form.subItems.length > 0 && (
+                      <ul className="space-y-1">
+                        {form.subItems.map((s, i) => (
+                          <li key={i} className="flex gap-2 text-sm text-gray-700">
+                            <span className="text-sky-500">•</span>
+                            <span className="whitespace-pre-wrap break-words">{s}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {ot.imagenes?.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {ot.imagenes.map((url) => (
+                          <ImagenProtegida key={url} src={url} alt="Imagen del ítem cotizado"
+                            onClick={() => abrirArchivoProtegido(url)}
+                            className="w-24 h-24 object-cover rounded-lg border border-gray-200 cursor-pointer" />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div hidden>
                 <label className="text-xs text-gray-500 block mb-1">Condición</label>
                 <input name="condicion" value={form.condicion} onChange={handleChange} className={INP} />
@@ -817,6 +920,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                   onClick={oc ? () => onNavegar?.({ tipo: "oc", data: oc, extra: factura }) : undefined}
                   onCrear={!oc && cot && !ot.anulado ? () => setCrearOCOpen(true) : undefined} crearLabel="OC">
                   {puedeVerPrecios && oc?.monto > 0 && <p className="text-xs text-gray-500">{money(oc.monto, cot?.moneda)}</p>}
+                  <ParteConsolidada oc={oc} cotizacionId={cot?._id} moneda={cot?.moneda} verPrecios={puedeVerPrecios} />
                 </TarjetaRelacion>
 
                 {veFacturas(rolDeSesion()) && (
@@ -826,6 +930,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                     <p className="text-xs text-gray-500">{money(factura.totalAPagar ?? factura.total, cot?.moneda)}</p>
                   )}
                   {factura?.estadoPago && <Chip className={badgePago(factura.estadoPago)}>{factura.estadoPago}</Chip>}
+                  {factura && <ParteConsolidada oc={oc} cotizacionId={cot?._id} moneda={cot?.moneda} verPrecios={puedeVerPrecios} />}
                 </TarjetaRelacion>
                 )}
               </>
@@ -872,8 +977,14 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
             ordenId={ot._id}
             bloqueo={bloqueo}
             archivos={ot.archivos}
-            archivosVinculados={cot?.archivos || []}
+            archivosVinculados={adjuntosCotizacion}
             vinculadoLabel="la Cotización"
+            puedeEliminar={puedeEliminarAdjuntos}
+            accionArchivo={puedeAsignarAdjuntos ? (a, { vinculado }) => !vinculado ? null
+              : asignadoAEstaOT(a)
+                ? { label: "Quitar de esta OT", onClick: (x) => asignarAdjunto(x, "quitar") }
+                : { label: "Pasar a esta OT", onClick: (x) => asignarAdjunto(x, "asignar") }
+              : undefined}
             soloLectura={ot.anulado || cadenaCerrada}
             onCambio={(actualizada) => setOt(actualizada)}
           />

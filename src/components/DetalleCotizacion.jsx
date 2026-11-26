@@ -6,7 +6,7 @@ import { exportarCotizacionPdf } from "../utils/cotizacionPdf";
 import { calcSubtotal, itemDesdeDb, itemInvalido } from "../utils/cotizacionItems";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
 import ModalNuevaOT from "./ModalNuevaOT";
-import ModalOrdenCompra from "./ModalOrdenCompra";
+import ModalOrdenCompra, { ModalOrdenCompraItems } from "./ModalOrdenCompra";
 import ModalDetalleGuia from "./ModalDetalleGuia";
 import BuscadorOrdenTrabajo from "./BuscadorOrdenTrabajo";
 import SelectorEmpresas from "./SelectorEmpresas";
@@ -15,13 +15,21 @@ import ConfirmacionAccion from "./ConfirmacionAccion";
 import TablaItemsCotizacion from "./TablaItemsCotizacion";
 import TarjetaArchivosRelacionados from "./TarjetaArchivosRelacionados";
 import {
-  FlujoNegocio, TarjetaRelacion, Chip,
+  FlujoNegocio, TarjetaRelacion, Chip, ParteConsolidada,
   badgePago, badgeOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
 } from "./detalleShared";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "./BarraEdicion";
 import { conBloqueo } from "../utils/bloqueoApi";
+import { errorDelFormulario } from "../utils/bloqueo";
 import { veFacturas, rolDeSesion } from "../utils/roles";
+import { r2 } from "../utils/redondeo";
+import { costoCompraSoles } from "../utils/montoCompra";
+
+const totalServicio = (s) => (Number(s.costo) || 0) * (Number(s.cantidad) || 0) + (Number(s.costoTransporte) || 0);
+const servicioEnSoles = (s) => costoCompraSoles({
+  unitario: s.costo, cantidad: s.cantidad, flete: s.costoTransporte, moneda: s.moneda, tipoCambio: s.tipoCambio,
+});
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 w-full transition";
 const codigoDeGuia = (g) => `${g.serie}-${String(g.correlativo).padStart(4, "0")}`;
@@ -33,19 +41,20 @@ const codigoDeGuia = (g) => `${g.serie}-${String(g.correlativo).padStart(4, "0")
 // vuelve a aplicar acá (se llama con 0) para no descontar dos veces; el
 // único caso que sí aplica `pct` acá es el subtotal tipeado a mano (sin
 // ítems), donde `sub` es bruto.
-function calcular(sub, descuentoPct = 0) {
-  const s = Math.round(Number(sub) * 100) / 100 || 0;
+function calcular(sub, descuentoPct = 0, afectoIgv = true) {
+  const s = r2(Number(sub)) || 0;
   const pct = Math.min(100, Math.max(0, Number(descuentoPct) || 0));
-  const descuento = Math.round(s * (pct / 100) * 100) / 100;
-  const subtotalConDescuento = Math.round((s - descuento) * 100) / 100;
-  const igv = Math.round(subtotalConDescuento * 0.18 * 100) / 100;
+  const descuento = r2(s * (pct / 100));
+  const subtotalConDescuento = r2(s - descuento);
+  const igv = afectoIgv ? r2(subtotalConDescuento * 0.18) : 0;
   return {
     subtotal: s,
     descuentoPorcentaje: pct,
     descuento,
     subtotalConDescuento,
+    afectoIgv,
     igv,
-    total: Math.round((subtotalConDescuento + igv) * 100) / 100,
+    total: r2(subtotalConDescuento + igv),
   };
 }
 
@@ -56,6 +65,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const [form, setForm] = useState({
     subtotal: subtotalInicial > 0 ? String(subtotalInicial) : "",
     descuentoGlobal: inicial.descuentoGlobal ? String(inicial.descuentoGlobal) : "",
+    afectoIgv: inicial.afectoIgv !== false,
     numeroCotizacion: inicial.numeroCotizacion || inicial.codigo || "",
     empresa: inicial.empresa?._id || "",
     tipo: inicial.tipo || "venta",
@@ -93,8 +103,10 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const [informes, setInformes] = useState([]);
   const [gres, setGres] = useState([]);
   const [guiaDetalle, setGuiaDetalle] = useState(null);
-  const [oc, setOc] = useState(null);
-  const [factura, setFactura] = useState(null);
+  const [ocs, setOcs] = useState([]);
+  const [facturas, setFacturas] = useState([]);
+  const oc = ocs[0] || null;
+  const factura = facturas[0] || null;
   const [servicios, setServicios] = useState([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
@@ -109,6 +121,9 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const [reasignandoOT, setReasignandoOT] = useState(false);
   const [seleccionados, setSeleccionados] = useState(() => new Set());
   const [generandoOT, setGenerandoOT] = useState(false);
+  const [seleccionadosOC, setSeleccionadosOC] = useState(() => new Set());
+  const [indicesNuevaOC, setIndicesNuevaOC] = useState(null);
+  const [preparandoOC, setPreparandoOC] = useState(false);
   const rolActual = getUsuario()?.rol;
   const puedeEditar = ["admin", "asistente", "facturacion", "jefatura", "coordinadora", "planner"].includes(rolActual);
   // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
@@ -127,13 +142,16 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   // Mismo set de roles que ve el card de GRE en DetalleOrdenTrabajo.jsx.
   const puedeGenerarGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
   const cadenaCerrada = bloqueadoPorCadenaCerrada(cot.estadoCadena, rolActual);
+  // OC por ítems: mismos roles que crean OC (puedeEditar de Backend/src/routes/ordenesCompra.js).
+  const puedeGenerarOC = ["admin", "asistente", "facturacion", "jefatura", "coordinadora"].includes(rolActual)
+    && !cot.anulado && !cadenaCerrada;
   const bloqueo = useBloqueoEdicion("cotizacion", cot._id, cot.updatedAt, { autoEditar: puedeEditar && !cot.anulado && !cadenaCerrada });
   // Desglose mostrado en el modal de "Cerrar cadena" — mismo criterio de
   // detracción SUNAT que ya usa DetalleOrdenCompra.jsx (12% cuando el total
   // supera S/700), calculado sobre el total ya persistido de la cotización.
-  const detraccionCierreAplica = Number(cot.total) > 700;
-  const detraccionCierreMonto = detraccionCierreAplica ? Math.round(Number(cot.total) * 0.12 * 100) / 100 : 0;
-  const totalAPagarCierre = Math.round((Number(cot.total) - detraccionCierreMonto) * 100) / 100;
+  const detraccionCierreAplica = cot.afectoIgv !== false && Number(cot.total) > 700;
+  const detraccionCierreMonto = detraccionCierreAplica ? r2(Number(cot.total) * 0.12) : 0;
+  const totalAPagarCierre = r2((Number(cot.total) - detraccionCierreMonto));
 
   const cargarRelaciones = () => {
     Promise.all([
@@ -151,14 +169,19 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       } else {
         setGres([]);
       }
-      const ocFound = ocs.find(o => (o.cotizacion?._id || o.cotizacion) === cot._id) || null;
-      setOc(ocFound);
-      // La factura de la cadena comparte numeroDocumento; si no, se resuelve por la OC.
-      const factFound =
-        (cot.numeroDocumento != null && facts.find(f => f.numeroDocumento === cot.numeroDocumento)) ||
-        (ocFound && facts.find(f => (f.ordenCompra?._id || f.ordenCompra) === ocFound._id)) ||
-        null;
-      setFactura(factFound);
+      // Varias OCs por cotización (OCs parciales por ítems), más la OC consolidada a
+      // la que esta cotización está anexada (sus líneas) — en orden de creación.
+      const ocsFound = ocs
+        .filter(o => (o.cotizacion?._id || o.cotizacion) === cot._id
+          || (o.lineas || []).some(l => (l.cotizacion?._id || l.cotizacion) === cot._id))
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      setOcs(ocsFound);
+      // La factura de cada OC va por su enlace; la de la cadena comparte numeroDocumento.
+      const idsOC = new Set(ocsFound.map(o => o._id));
+      setFacturas(facts.filter(f =>
+        idsOC.has(f.ordenCompra?._id || f.ordenCompra) ||
+        (cot.numeroDocumento != null && f.numeroDocumento === cot.numeroDocumento)
+      ));
       if (otsFound.length > 0) {
         Promise.all(
           otsFound.map(o => fetchAuth(`/informes?ordenTrabajo=${o._id}`).then(r => r.ok ? r.json() : []))
@@ -197,10 +220,10 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const contactoSel = contactosPlanta.find(c => c.nombre === form.personaContacto);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setForm(prev => ({
       ...prev,
-      [name]: value,
+      [name]: type === "checkbox" ? checked : value,
       ...(name === "empresa" ? { planta: "", personaContacto: "" } : {}),
       ...(name === "planta" ? { personaContacto: "" } : {}),
     }));
@@ -262,6 +285,41 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     });
   };
 
+  // La factura de cada OC va por su enlace directo (`ordenCompra`); con una
+  // sola OC se acepta además la de la cadena (facturas antiguas sin enlace).
+  const facturaDeOC = (o) =>
+    facturas.find(f => (f.ordenCompra?._id || f.ordenCompra) === o?._id) ||
+    (ocs.length === 1 ? facturas.find(f => !f.ordenCompra) : null) ||
+    null;
+
+  const abrirOC = (o) => {
+    const full = ocs.find(x => x._id === o._id) || o;
+    onNavegar?.({ tipo: "oc", data: full, extra: facturaDeOC(full) });
+  };
+
+  const toggleSeleccionOC = (idx) => setSeleccionadosOC(prev => {
+    const next = new Set(prev);
+    if (next.has(idx)) next.delete(idx); else next.add(idx);
+    return next;
+  });
+
+  // El backend identifica los ítems por índice: se guardan antes los cambios
+  // pendientes para que la selección coincida con lo persistido.
+  const abrirNuevaOCItems = async () => {
+    setPreparandoOC(true);
+    const guardada = puedeEditar && bloqueo.editando ? await guardarCotizacion() : cot;
+    setPreparandoOC(false);
+    if (guardada) setIndicesNuevaOC([...seleccionadosOC].sort((a, b) => a - b));
+  };
+
+  // La OC nueva marca `ocGenerada` en sus ítems: se refleja sin recargar la cotización.
+  const marcarItemsConOC = (indices, nueva) => {
+    const ref = { _id: nueva._id, codigo: nueva.codigo, numeroOrden: nueva.numeroOrden, anulado: false };
+    const marcar = (lista) => (lista || []).map((it, i) => (indices.includes(i) ? { ...it, ocGenerada: ref } : it));
+    setCot(prev => ({ ...prev, items: marcar(prev.items) }));
+    setItems(marcar);
+  };
+
   const toggleSeleccion = (idx) => setSeleccionados(prev => {
     const next = new Set(prev);
     if (next.has(idx)) next.delete(idx); else next.add(idx);
@@ -310,6 +368,17 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     }
   };
 
+  // Adjuntos que se ven acá porque están en una OT de la cadena: el backend
+  // los quita de esa OT (solo Coordinadora o superior).
+  const eliminarAdjuntoDeOT = async (archivo) => {
+    const res = await bloqueo.fetch(`/cotizaciones/${cot._id}/archivos/${archivo._id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    cargarRelaciones();
+    if (!res.ok) return data.mensaje || "No se pudo eliminar el archivo.";
+    setCot(data);
+    return null;
+  };
+
   const descuentoGlobalNum = Number(form.descuentoGlobal) || 0;
   const subtotalItems = parseFloat(items.reduce((acc, i) => acc + calcSubtotal(i, descuentoGlobalNum), 0).toFixed(2));
   const usarTotalesDeItems = items.length > 0;
@@ -318,8 +387,8 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   // descontar dos veces; sin ítems, el subtotal tipeado a mano es bruto y
   // sí necesita que `calcular` le aplique el % una sola vez.
   const totalesMostrados = usarTotalesDeItems
-    ? calcular(subtotalItems, 0)
-    : calcular(form.subtotal, form.descuentoGlobal);
+    ? calcular(subtotalItems, 0, form.afectoIgv)
+    : calcular(form.subtotal, form.descuentoGlobal, form.afectoIgv);
 
   // Arma el objeto para el PDF con lo que hay en pantalla ahora mismo, sin
   // depender de que se haya guardado antes (Guardar cambios cierra el modal).
@@ -337,6 +406,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     moneda: form.moneda,
     subtotal: totalesMostrados.subtotal,
     descuentoGlobal: descuentoGlobalNum,
+    afectoIgv: form.afectoIgv,
     igv: totalesMostrados.igv,
     total: totalesMostrados.total,
     personaContacto: form.personaContacto,
@@ -384,6 +454,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       moneda: form.moneda,
       subtotal: totalesMostrados.subtotal,
       descuentoGlobal: descuentoGlobalNum,
+      afectoIgv: form.afectoIgv,
       igv: totalesMostrados.igv,
       total: totalesMostrados.total,
       numeroGuiaEmision: form.numeroGuiaEmision,
@@ -423,7 +494,8 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       setIntentoGuardar(false);
       return actualizada;
     }
-    setError("Error al guardar los cambios.");
+    const data = await res.json().catch(() => ({}));
+    setError(errorDelFormulario(res.status, data, "Error al guardar los cambios.") || "");
     return null;
   };
 
@@ -452,9 +524,10 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       const actualizada = await res.json();
       setCot(actualizada);
       onGuardada?.(actualizada);
-    } else {
-      setError("Error al anular el documento.");
+      return;
     }
+    const data = await res.json().catch(() => ({}));
+    return errorDelFormulario(res.status, data, "Error al anular el documento.");
   };
 
   const desanular = async () => {
@@ -464,7 +537,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       setCot(actualizada);
       onGuardada?.(actualizada);
     } else {
-      setError("Error al desanular el documento.");
+      setError(errorDelFormulario(res.status, await res.json().catch(() => ({})), "Error al desanular el documento.") || "");
     }
   };
 
@@ -479,7 +552,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       setCot(actualizada);
       onGuardada?.(actualizada);
     } else {
-      setError("Error al cerrar/abrir la cadena.");
+      setError(errorDelFormulario(res.status, await res.json().catch(() => ({})), "Error al cerrar/abrir la cadena.") || "");
     }
   };
 
@@ -561,6 +634,11 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
             )}
           </div>
         </div>
+        {error && (
+          <div className="max-w-6xl mx-auto px-8 pb-2.5">
+            <p role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">{error}</p>
+          </div>
+        )}
       </div>
 
       {/* Stepper de flujo */}
@@ -838,9 +916,15 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                       </p>
                     )}
                   </div>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                    <input type="checkbox" name="afectoIgv" checked={form.afectoIgv} onChange={handleChange}
+                      className="h-4 w-4 accent-sky-600" />
+                    Afecto a IGV (18%)
+                    {!form.afectoIgv && <span className="text-xs text-amber-600">— trabajo en el extranjero, sin IGV</span>}
+                  </label>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="text-center">
-                      <p className="text-xs text-gray-400">IGV 18%</p>
+                      <p className="text-xs text-gray-400">{form.afectoIgv ? "IGV 18%" : "IGV (no afecto)"}</p>
                       <p className="font-semibold text-gray-700">{totalesMostrados.igv.toFixed(2)}</p>
                     </div>
                     <div className="text-center">
@@ -853,7 +937,6 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               )}
             </fieldset>
 
-            {error && <p className="text-xs text-red-500">{error}</p>}
           </div>
 
           {/* Relaciones */}
@@ -930,23 +1013,37 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               )}
             </TarjetaRelacion>
 
-            {rolActual !== "coordinadora" && (
-              <TarjetaRelacion tipo="oc" codigo={oc?.codigo} numero={oc?.numeroOrden} vacio={!oc}
-                onClick={oc ? () => onNavegar?.({ tipo: "oc", data: oc, extra: factura }) : undefined}
-                onCrear={!oc && !cot.anulado ? () => setCrearOCOpen(true) : undefined} crearLabel="OC">
-                {puedeVerPrecios && oc?.monto > 0 && <p className="text-xs text-gray-500">{money(oc.monto, cot.moneda)}</p>}
-              </TarjetaRelacion>
-            )}
+            {rolActual !== "coordinadora" && (ocs.length === 0 ? (
+              <TarjetaRelacion tipo="oc" vacio
+                onCrear={!cot.anulado ? () => setCrearOCOpen(true) : undefined} crearLabel="OC" />
+            ) : (
+              ocs.map(o => (
+                <TarjetaRelacion key={o._id} tipo="oc" codigo={o.codigo} numero={o.numeroOrden} onClick={() => abrirOC(o)}>
+                  {o.desdeItemsCotizacion && <p className="text-sm text-gray-600 line-clamp-2">{o.titulo}</p>}
+                  {puedeVerPrecios && o.monto > 0 && <p className="text-xs text-gray-500">{money(o.monto, cot.moneda)}</p>}
+                  {o.anulado && <Chip className="bg-red-100 text-red-600">Anulada</Chip>}
+                  <ParteConsolidada oc={o} cotizacionId={cot._id} moneda={cot.moneda} verPrecios={puedeVerPrecios} />
+                </TarjetaRelacion>
+              ))
+            ))}
 
-            {rolActual !== "coordinadora" && veFacturas(rolDeSesion()) && (
-              <TarjetaRelacion tipo="factura" codigo={factura?.codigo} numero={factura?.numeroFactura} vacio={!factura}
-                onClick={factura ? () => onNavegar?.({ tipo: "factura", data: factura }) : undefined}>
-                {puedeVerPrecios && (factura?.totalAPagar || factura?.total) > 0 && (
-                  <p className="text-xs text-gray-500">{money(factura.totalAPagar ?? factura.total, cot.moneda)}</p>
-                )}
-                {factura?.estadoPago && <Chip className={badgePago(factura.estadoPago)}>{factura.estadoPago}</Chip>}
-              </TarjetaRelacion>
-            )}
+            {rolActual !== "coordinadora" && veFacturas(rolDeSesion()) && (facturas.length === 0 ? (
+              <TarjetaRelacion tipo="factura" vacio />
+            ) : (
+              facturas.map(f => {
+                const ocDeFactura = ocs.find(o => o._id === (f.ordenCompra?._id || f.ordenCompra)) || (ocs.length === 1 ? oc : null);
+                return (
+                  <TarjetaRelacion key={f._id} tipo="factura" codigo={f.codigo} numero={f.numeroFactura}
+                    onClick={() => onNavegar?.({ tipo: "factura", data: f })}>
+                    {puedeVerPrecios && (f.totalAPagar || f.total) > 0 && (
+                      <p className="text-xs text-gray-500">{money(f.totalAPagar ?? f.total, cot.moneda)}</p>
+                    )}
+                    {f.estadoPago && <Chip className={badgePago(f.estadoPago)}>{f.estadoPago}</Chip>}
+                    <ParteConsolidada oc={ocDeFactura} cotizacionId={cot._id} moneda={cot.moneda} verPrecios={puedeVerPrecios} />
+                  </TarjetaRelacion>
+                );
+              })
+            ))}
 
             {puedeVerServicios && (
               <TarjetaRelacion
@@ -963,19 +1060,21 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                     </thead>
                     <tbody>
                       {servicios.map(s => (
-                        <tr key={s._id} className="border-t border-white/60">
+                        <tr key={s._id} className={`border-t border-white/60 ${s.anulado ? "opacity-50 line-through" : ""}`}>
                           <td className="py-1 pr-2 text-gray-600">
                             {s.rucProveedor ? `${s.rucProveedor} — ` : ""}{s.nombreProveedor} · {s.tipoTrabajo} ({s.cantidad})
                           </td>
-                          <td className="py-1 text-right text-gray-700 tabular-nums whitespace-nowrap">{money(s.costo)}</td>
+                          <td className="py-1 text-right text-gray-700 tabular-nums whitespace-nowrap">{money(totalServicio(s), s.moneda)}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr className="border-t border-white/60 font-semibold">
-                        <td className="py-1 pr-2 text-gray-700">Total</td>
+                        <td className="py-1 pr-2 text-gray-700">
+                          Total{servicios.some(s => !s.anulado && s.moneda === "USD") ? " en soles (US$ al TC de cada servicio)" : ""}
+                        </td>
                         <td className="py-1 text-right text-gray-800 tabular-nums whitespace-nowrap">
-                          {money(servicios.reduce((s, v) => s + (Number(v.costo) || 0), 0))}
+                          {money(servicios.filter(s => !s.anulado).reduce((t, s) => t + servicioEnSoles(s), 0))}
                         </td>
                       </tr>
                     </tfoot>
@@ -986,10 +1085,10 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
           </section>
         </div>
 
-        {/* Ítems — ancho ampliado (80vw, pedido del usuario) para que la
+        {/* Ítems — ancho ampliado (90vw, pedido del usuario) para que la
             tabla respire más que el resto del modal, debajo de Datos +
             Relaciones */}
-        <div className="w-[80vw] max-w-none mx-auto px-8 pb-8">
+        <div className="w-[90vw] max-w-none mx-auto px-8 pb-8">
           <TablaItemsCotizacion
             items={items}
             onItemsChange={setItems}
@@ -1006,6 +1105,12 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
             generando={generandoOT}
             onVerOT={(o) => onNavegar?.({ tipo: "ot", data: ots.find(x => x._id === o._id) || o })}
             onQuitarOT={quitarOT}
+            seleccionablesOC={puedeGenerarOC}
+            seleccionadosOC={seleccionadosOC}
+            onToggleSeleccionOC={toggleSeleccionOC}
+            onGenerarOC={abrirNuevaOCItems}
+            generandoOC={preparandoOC}
+            onVerOC={abrirOC}
             puedeVerPrecios={puedeVerPrecios}
           />
         </div>
@@ -1018,9 +1123,18 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
             ordenId={cot._id}
             endpoint="cotizaciones"
             bloqueo={bloqueo}
-            archivos={cot.archivos}
-            archivosVinculados={ots.flatMap(o => o.archivos || [])}
+            archivos={(cot.archivos || []).map(a => {
+              const asignadas = ots.filter(o => (a.ordenesTrabajo || []).some(id => String(id) === String(o._id)));
+              return asignadas.length
+                ? { ...a, _etiqueta: `Asignado a ${asignadas.map(o => `OT ${o.numeroOT || o.codigo}`).join(", ")}` }
+                : a;
+            })}
+            archivosVinculados={ots.flatMap(o => (o.archivos || []).map(a => ({
+              ...a,
+              _etiqueta: `De OT ${o.numeroOT || o.codigo}`,
+            })))}
             vinculadoLabel="la OT"
+            onEliminarVinculado={["admin", "jefatura", "coordinadora"].includes(rolActual) ? eliminarAdjuntoDeOT : undefined}
             soloLectura={cot.anulado}
             onCambio={(actualizada) => setCot(actualizada)}
           />
@@ -1083,6 +1197,21 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
           cotizacion={cot}
           onClose={() => setCrearOCOpen(false)}
           onCreada={() => { setCrearOCOpen(false); cargarRelaciones(); }}
+        />
+      )}
+
+      {indicesNuevaOC && (
+        <ModalOrdenCompraItems
+          cotizacion={cot}
+          indices={indicesNuevaOC}
+          enviar={bloqueo.editando ? bloqueo.fetch : undefined}
+          onClose={() => setIndicesNuevaOC(null)}
+          onCreada={(nueva) => {
+            marcarItemsConOC(indicesNuevaOC, nueva);
+            setIndicesNuevaOC(null);
+            setSeleccionadosOC(new Set());
+            cargarRelaciones();
+          }}
         />
       )}
 

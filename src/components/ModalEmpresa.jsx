@@ -21,8 +21,8 @@ const formDesde = (empresa) => (!empresa ? FORM_VACIO : {
   plantas: empresa.plantas || [],
 });
 
-export default function ModalEmpresa({ empresa, onClose, onGuardada }) {
-  const [form, setForm] = useState(() => formDesde(empresa));
+export default function ModalEmpresa({ empresa, tipoInicial, onClose, onGuardada }) {
+  const [form, setForm] = useState(() => (!empresa && tipoInicial ? { ...FORM_VACIO, tipo: tipoInicial } : formDesde(empresa)));
   const [plantaInput, setPlantaInput] = useState(PLANTA_VACIA);
   const [errorPlanta, setErrorPlanta] = useState("");
   const [error, setError] = useState("");

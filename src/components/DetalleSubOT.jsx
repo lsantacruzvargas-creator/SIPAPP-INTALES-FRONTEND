@@ -10,6 +10,8 @@ import { Chip, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bl
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "./BarraEdicion";
 
+const leerError = async (r, fallback) => (await r.json().catch(() => null))?.mensaje || fallback;
+
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 w-full transition";
 
 const ESTADOS = ["pendiente", "en progreso", "completado", "entregado"];
@@ -100,6 +102,8 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   const [detalleNotificacion, setDetalleNotificacion] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  const [cambiandoProgreso, setCambiandoProgreso] = useState(false);
+  const [errorProgreso, setErrorProgreso] = useState("");
   // Notificar trabajo (HH/HM) — supervisor, +admin como excepción.
   const puedeNotificarTrabajo = ["supervisor", "admin"].includes(rolActual);
 
@@ -138,50 +142,62 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
     if (!body.personalAsignado) delete body.personalAsignado;
     if (!body.fechaEntrega) delete body.fechaEntrega;
 
-    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      const actualizada = await res.json();
-      setOt(actualizada);
-      await bloqueo.terminar(actualizada.updatedAt);
-      onGuardada?.(actualizada);
-    } else {
+    try {
+      const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const actualizada = await res.json();
+        setOt(actualizada);
+        await bloqueo.terminar(actualizada.updatedAt);
+        onGuardada?.(actualizada);
+      } else {
+        setError(await leerError(res, "Error al guardar los cambios."));
+      }
+    } catch {
       setError("Error al guardar los cambios.");
+    } finally {
+      setGuardando(false);
     }
-    setGuardando(false);
   };
 
   // Cambian de inmediato (sin pasar por "Guardar cambios", que técnico no
   // puede usar) — no llaman `onGuardada` a propósito: ese callback cierra el
   // modal entero, y marcar un estado no debería sacar al usuario de la vista.
-  const cambiarEstado = async (nuevo) => {
-    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/estado`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ estado: nuevo }),
-    });
-    if (res.ok) {
-      const actualizada = await res.json();
-      setOt(actualizada);
-      setForm((f) => ({ ...f, estado: actualizada.estado }));
+  const cambiarProgreso = async (url, body, fallback, aplicar) => {
+    setCambiandoProgreso(true); setErrorProgreso("");
+    try {
+      const res = await bloqueo.fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) aplicar(await res.json());
+      else setErrorProgreso(await leerError(res, fallback));
+    } catch {
+      setErrorProgreso(fallback);
+    } finally {
+      setCambiandoProgreso(false);
     }
   };
 
-  const cambiarEncargado = async (campo, nombre) => {
-    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/encargados`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [campo]: nombre }),
-    });
-    if (res.ok) {
-      const actualizada = await res.json();
+  const cambiarEstado = (nuevo) => cambiarProgreso(
+    `/ordenes-trabajo/${ot._id}/estado`, { estado: nuevo }, "No se pudo cambiar el estado.",
+    (actualizada) => {
+      setOt(actualizada);
+      setForm((f) => ({ ...f, estado: actualizada.estado }));
+    },
+  );
+
+  const cambiarEncargado = (campo, nombre) => cambiarProgreso(
+    `/ordenes-trabajo/${ot._id}/encargados`, { [campo]: nombre }, "No se pudo cambiar el encargado.",
+    (actualizada) => {
       setOt(actualizada);
       setForm((f) => ({ ...f, [campo]: actualizada[campo] }));
-    }
-  };
+    },
+  );
 
   const anular = async (motivo) => {
     const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/anular`, {
@@ -194,7 +210,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
       setOt(actualizada);
       onGuardada?.(actualizada);
     } else {
-      setError("Error al anular el documento.");
+      return leerError(res, "Error al anular el documento.");
     }
   };
 
@@ -205,7 +221,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
       setOt(actualizada);
       onGuardada?.(actualizada);
     } else {
-      setError("Error al desanular el documento.");
+      setError(await leerError(res, "Error al desanular el documento."));
     }
   };
 
@@ -220,7 +236,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
       setOt(actualizada);
       onGuardada?.(actualizada);
     } else {
-      setError("Error al cerrar/abrir la cadena.");
+      setError(await leerError(res, "Error al cerrar/abrir la cadena."));
     }
   };
 
@@ -298,7 +314,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
               fieldset principal. */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2 md:max-w-sm">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Progreso — Encargado de Progreso</p>
-            <select value={ot.encargado || ""} disabled={!puedeEditarEncargados}
+            <select value={ot.encargado || ""} disabled={!puedeEditarEncargados || cambiandoProgreso}
               onChange={(e) => cambiarEncargado("encargado", e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500">
               <option value="">Sin asignar</option>
@@ -308,13 +324,14 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
             </select>
             <div className="flex gap-2">
               {ESTADOS.map(e => (
-                <button key={e} type="button" disabled={!puedeEditarEstado}
+                <button key={e} type="button" disabled={!puedeEditarEstado || cambiandoProgreso}
                   onClick={() => cambiarEstado(e)}
                   className={`flex-1 py-1.5 rounded-lg text-xs font-medium capitalize transition disabled:opacity-60 disabled:cursor-not-allowed ${colorEstado(e, ot.estado === e)}`}>
                   {e}
                 </button>
               ))}
             </div>
+            {errorProgreso && <p className="text-xs text-red-500">{errorProgreso}</p>}
           </div>
         </div>
 

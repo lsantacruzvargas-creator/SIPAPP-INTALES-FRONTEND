@@ -5,6 +5,7 @@ import { mesAnteriorLima, periodoDeMes, textoPeriodo } from "../../utils/bancos"
 import { libroConcar, nombreArchivoConcar } from "../../utils/concar";
 import TablaScroll from "../TablaScroll";
 import AvisoAccion from "../AvisoAccion";
+import useConfirmar from "../../hooks/useConfirmar";
 
 const INP = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300";
 const NOMBRES = { compras: "Compras", comprasDetraccion: "Compras con detracción", boletas: "Boletas", honorarios: "Honorarios", ventas: "Ventas", cajaBancos: "Caja y bancos", diario: "Diario" };
@@ -43,13 +44,54 @@ export default function PanelExportarConcar({ puedeEscribir }) {
   }, [periodo]);
   useEffect(() => { const t = setTimeout(cargar, 200); return () => clearTimeout(t); }, [cargar]);
   useEffect(() => {
-    fetchAuth("/contabilidad/configuracion").then(async (r) => { if (r.ok) setSubdiarios((await r.json()).config.subdiarios || {}); }).catch(() => {});
+    fetchAuth("/contabilidad/configuracion").then(async (r) => {
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) setSubdiarios(d.config?.subdiarios || {});
+      else setAviso(`${d.mensaje || "No se pudo cargar la configuración contable."} Sin ella no se muestran los números iniciales por subdiario.`);
+    });
   }, []);
+  const { confirmar, dialogo } = useConfirmar("Sí, exportar", { peligro: true });
+
+  // Mismo filtro que el servidor (contabilizados del periodo; con «solo nuevos», sin lote): se cuenta antes de exportar.
+  const porExportar = async () => {
+    const lista = [];
+    for (let pagina = 1; ; pagina++) {
+      const r = await fetchAuth(`/contabilidad/asientos?periodo=${periodo}&estado=contabilizado&pagina=${pagina}`);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.mensaje || "No se pudieron contar los asientos por exportar.");
+      lista.push(...d.asientos);
+      if (!d.asientos.length || lista.length >= d.total) break;
+    }
+    const elegidos = soloNuevos ? lista.filter((a) => !a.exportacion?.lote) : lista;
+    const porSubdiario = {};
+    for (const a of elegidos) {
+      const sd = a.subdiarioExport || subdiarios.diario || "?";
+      porSubdiario[sd] = (porSubdiario[sd] || 0) + 1;
+    }
+    return { cantidad: elegidos.length, yaExportados: lista.length - lista.filter((a) => !a.exportacion?.lote).length, porSubdiario };
+  };
 
   const exportar = async () => {
     setAviso("");
     setProcesando(true);
     try {
+      const { cantidad, yaExportados, porSubdiario } = await porExportar();
+      if (!cantidad) return setAviso(soloNuevos ? "No hay asientos contabilizados nuevos en el periodo." : "No hay asientos contabilizados en el periodo.");
+      const ok = await confirmar(
+        <div className="space-y-2">
+          <p>Se exportarán <b>{cantidad} asiento(s)</b> de {textoPeriodo(periodo)}:</p>
+          <ul className="list-disc pl-5 text-xs">
+            {Object.entries(porSubdiario).sort().map(([sd, n]) => (
+              <li key={sd}>Subdiario {sd}: {n}{iniciales[sd] ? ` (desde el n.º ${iniciales[sd]})` : ""}</li>
+            ))}
+          </ul>
+          {!soloNuevos && yaExportados > 0 && (
+            <p className="text-amber-700">«Solo los no exportados» está desmarcado: se vuelven a exportar también {yaExportados} asiento(s) ya exportados.</p>
+          )}
+          <p>Los asientos exportados ya no se pueden editar ni anular. ¿Continuar?</p>
+        </div>
+      );
+      if (!ok) return;
       const r = await fetchAuth("/contabilidad/exportaciones", { method: "POST", body: JSON.stringify({ periodo, soloNuevos, numerosIniciales: iniciales }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) return setAviso(d.mensaje || "No se pudo exportar.");
@@ -58,8 +100,8 @@ export default function PanelExportarConcar({ puedeEscribir }) {
       // La exportación ya quedó registrada: si falla solo la descarga, se baja desde la lista.
       await descargar(d).catch(() => setAviso(`La exportación ${d.codigo} se registró, pero no se pudo armar el Excel: descárgala desde la lista.`));
       if (d.avisos?.length) setAviso((a) => [a, ...d.avisos].filter(Boolean).join(" "));
-    } catch {
-      setAviso("Error de conexión con el servidor.");
+    } catch (e) {
+      setAviso(e.message || "Error de conexión con el servidor.");
     } finally {
       setProcesando(false);
     }
@@ -102,7 +144,7 @@ export default function PanelExportarConcar({ puedeEscribir }) {
             </div>
           ))}
           <button onClick={exportar} disabled={procesando} className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
-            Exportar a CONCAR
+            {procesando ? "Exportando…" : "Exportar a CONCAR"}
           </button>
         </div>
       )}
@@ -138,6 +180,7 @@ export default function PanelExportarConcar({ puedeEscribir }) {
           </table>
         </TablaScroll>
       </section>
+      {dialogo}
       {aviso && <AvisoAccion mensaje={aviso} onCerrar={() => setAviso("")} />}
     </div>
   );
