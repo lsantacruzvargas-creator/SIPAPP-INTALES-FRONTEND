@@ -11,6 +11,7 @@ import TablaScroll from "../components/TablaScroll";
 import * as XLSX from "xlsx";
 import { veFacturas, rolDeSesion } from "../utils/roles";
 import { r2 } from "../utils/redondeo";
+import { numerosFacturaPorCadena } from "../utils/facturacionOC";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -24,7 +25,7 @@ const VISTAS = [
   { valor: "sinOT",      label: "Cotizaciones sin OT" },
   { valor: "pendientes", label: "Cotizaciones pendientes de OC" },
   { valor: "conOC",      label: "Cotización con OC" },
-  { valor: "cerradas",   label: "Cotizaciones cerradas" },
+  { valor: "facturadas", label: "Cotizaciones facturadas" },
 ];
 
 const TH = "px-4 py-3 font-semibold text-gray-500 whitespace-nowrap";
@@ -268,12 +269,7 @@ export default function ListaCotizaciones() {
       setOcPorCot(buildOcMap(ocs));
       setOcPorNumDoc(buildOcPorNumDoc(ocs));
       setTipoCambio(tc?.valor ?? null);
-      // Una cotización está "facturada" si su cadena (mismo numeroDocumento)
-      // tiene una factura con número de factura.
-      setFacturaPorNumDoc(new Map(
-        facts.filter((f) => f.numeroFactura && f.numeroDocumento != null)
-             .map((f) => [f.numeroDocumento, f.numeroFactura])
-      ));
+      setFacturaPorNumDoc(numerosFacturaPorCadena(facts));
     });
 
   useEffect(() => { cargar(); }, []);
@@ -296,7 +292,7 @@ export default function ListaCotizaciones() {
     subtotal: ot.subtotal,
     total: ot.total,
     numeroDocumento: ot.numeroDocumento,
-    estadoCadena: ot.estadoCadena,
+    bloqueadoPorPago: ot.bloqueadoPorPago,
     anulado: ot.anulado,
     motivoAnulacion: ot.motivoAnulacion,
     createdAt: ot.createdAt,
@@ -356,17 +352,19 @@ export default function ListaCotizaciones() {
     return compararTexto(primerNumeroOT(a), primerNumeroOT(b));
   });
 
-  const esCerrada = (c) => c.estadoCadena === "cerrado";
-  const cerradas = filtradas.filter((c) => esCerrada(c));
+  // Una pseudo-fila de OT no trae `bloqueo`: solo cuenta su bloqueadoPorPago (cotización pagada o
+  // cadena cerrada en lo histórico).
+  const esFacturada = (c) => !!(c.bloqueo?.facturada || c.bloqueadoPorPago);
+  const facturadas = filtradas.filter((c) => esFacturada(c));
   // Pendientes de OC: solo cotizaciones reales — las filas pseudo de OT sin
   // cotización (_esOT) no tienen cotización que esperar OC, así que no
   // cuentan como "pendientes" acá aunque tampoco tengan OC.
-  const pendientes = filtradas.filter((c) => !c._esOT && !esCerrada(c) && !tieneOC(c));
-  const conOC = filtradas.filter((c) => !esCerrada(c) && tieneOC(c));
+  const pendientes = filtradas.filter((c) => !c._esOT && !esFacturada(c) && !tieneOC(c));
+  const conOC = filtradas.filter((c) => !esFacturada(c) && tieneOC(c));
   // Cotizaciones (no pseudo-filas de OT) sin ninguna OT relacionada —
-  // "Cerradas" tiene prioridad: una cotización cerrada y sin OT solo debe
+  // "Facturadas" tiene prioridad: una cotización facturada y sin OT solo debe
   // vivir en esa tabla, no duplicarse acá.
-  const sinOT = filtradas.filter((c) => !c._esOT && !esCerrada(c) && !otsPorCot.get(c._id)?.length);
+  const sinOT = filtradas.filter((c) => !c._esOT && !esFacturada(c) && !otsPorCot.get(c._id)?.length);
   const hayFiltro = Object.values(filtros).some(Boolean);
   const mensajeVacio = (sinFiltro) => {
     if (cargando) return "Cargando cotizaciones…";
@@ -405,7 +403,7 @@ export default function ListaCotizaciones() {
     [
       ["Pendientes", pendientes],
       ["Con OC", conOC],
-      ["Cerradas", cerradas],
+      ["Facturadas", facturadas],
       ["Sin OT", sinOT],
     ].forEach(([nombre, lista]) => {
       const ws = XLSX.utils.json_to_sheet(lista.map(filaCotizacion));
@@ -581,13 +579,13 @@ export default function ListaCotizaciones() {
         />
       )}
 
-      {vistaEfectiva === "cerradas" && (
+      {vistaEfectiva === "facturadas" && (
         <TablaCotizaciones
-          titulo="Cotizaciones cerradas"
+          titulo="Cotizaciones facturadas"
           acento="bg-gray-500"
-          cotizaciones={cerradas}
+          cotizaciones={facturadas}
           onSelect={seleccionarFila}
-          vacioMsg={mensajeVacio("Sin cotizaciones cerradas")}
+          vacioMsg={mensajeVacio("Sin cotizaciones facturadas")}
           tipoCambio={tipoCambio}
           puedeVerPrecios={puedeVerPrecios}
           mostrarTituloOT

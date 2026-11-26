@@ -265,12 +265,6 @@ export const dotGeneral = (e) => {
   return "bg-gray-300"; // no asignado
 };
 
-// Una vez que la cadena de un documento se cierra (factura pagada), el
-// documento entero queda de solo lectura para todos los roles salvo
-// Jefatura — mismo criterio que el backend (utils/bloqueadoPorCadena.js).
-export const bloqueadoPorCadenaCerrada = (estadoCadena, rolActual) =>
-  estadoCadena === "cerrado" && rolActual !== "jefatura";
-
 export const money = (v, moneda = "PEN") =>
   (moneda === "USD" ? "US$ " : "S/ ") + Number(v ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 });
 
@@ -362,40 +356,6 @@ export function BotonAnular({ onAnular }) {
           textoProcesando="Anulando…"
           peligro
           error={error}
-        />
-      )}
-    </>
-  );
-}
-
-// Cierra/abre a mano TODA la cadena (Cotización+OT+OC+Informes+Factura del
-// mismo numeroDocumento) — override manual exclusivo de admin, por fuera del
-// disparador normal (factura pagada). Reversible, sin motivo (a diferencia
-// de anular).
-export function BotonCerrarCadena({ cerrado, onToggle }) {
-  const [enviando, setEnviando] = useState(false);
-  const [confirmando, setConfirmando] = useState(false);
-  const confirmar = async () => {
-    setEnviando(true);
-    await onToggle(!cerrado);
-    setEnviando(false);
-    setConfirmando(false);
-  };
-  return (
-    <>
-      <button onClick={() => setConfirmando(true)} disabled={enviando}
-        className="text-xs text-white/70 hover:text-white underline transition disabled:opacity-50">
-        {enviando ? "…" : cerrado ? "Reabrir cadena" : "Cerrar cadena"}
-      </button>
-      {confirmando && (
-        <ConfirmacionAccion
-          mensaje={cerrado
-            ? "¿Reabrir a mano toda la cadena de este documento (Cotización, OT, OC, Informes y Factura relacionados)?"
-            : "¿Cerrar a mano toda la cadena de este documento (Cotización, OT, OC, Informes y Factura relacionados)?"}
-          onCancelar={() => setConfirmando(false)}
-          onConfirmar={confirmar}
-          procesando={enviando}
-          textoConfirmar={cerrado ? "Reabrir cadena" : "Cerrar cadena"}
         />
       )}
     </>

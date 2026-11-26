@@ -223,23 +223,24 @@ function porFecha(arr, campoFecha, ano, mes) {
 function DashboardPlanner({ ots, ocs }) {
   // `ots` es el listado plano de OrdenTrabajo (padres + sub-OTs). El KPI debe
   // contar lo mismo que la columna "Servicio" de la vista de OTs, que
-  // categoriza por OT PADRE (ver categoriaGlobal en ListaOrdenesTrabajo.jsx)
+  // categoriza por OT PADRE (ver ordenesFiltroEstado en ListaOrdenesTrabajo.jsx)
   // — las sub-OTs se muestran anidadas bajo su padre ahí, no como filas
   // independientes en el conteo. Contar el arreglo plano completo (como
   // antes) duplicaba: una OT con sub-OTs sumaba de más frente al total que
   // muestra esa vista.
   const otsPadres = ots.filter((o) => !o.ordenPadre);
-  const esCerrada = (o) => o.estadoCadena === "cerrado";
-  const abiertas = otsPadres.filter((o) => !esCerrada(o));
+  // `bloqueadoPorPago` (backend): cotización pagada, o cadena cerrada en lo histórico sin OC por partidas.
+  const esPagada = (o) => !!o.bloqueadoPorPago;
+  const abiertas = otsPadres.filter((o) => !esPagada(o));
   const totalOTs = otsPadres.length;
 
   // "Pendientes"/"En progreso" en el KPI mapean a las mismas 4 categorías
   // (No asignada/En progreso/Completada/Entregada) que usa el filtro de la
-  // vista simplificada (ver categoriaGlobal en ListaOrdenesTrabajo.jsx) — "en
+  // vista simplificada (ver ordenesFiltroEstado en ListaOrdenesTrabajo.jsx) — "en
   // progreso" agrupa tanto el estado interno "pendiente" (asignada, sin
-  // arrancar) como "en progreso" (arrancada), igual que allá. Las OTs con
-  // cadena cerrada quedan fuera de las 4 (ahí caen en su propia categoría
-  // "cerrada", no se cuentan en esta vista).
+  // arrancar) como "en progreso" (arrancada), igual que allá. Las OTs
+  // pagadas quedan fuera de las 4 (ahí caen en su propia categoría
+  // "pagada", no se cuentan en esta vista).
   const pendientes  = abiertas.filter((o) => o.estadoGeneral === "no asignado").length;
   const enProgreso  = abiertas.filter((o) => o.estadoGeneral === "pendiente" || o.estadoGeneral === "en progreso").length;
   const completadas = abiertas.filter((o) => o.estadoGeneral === "completada").length;
@@ -251,7 +252,9 @@ function DashboardPlanner({ ots, ocs }) {
   // "sin OC" sobre el total mezclaría OTs que ni siquiera empezaron).
   const completadasOEntregadas = abiertas.filter((o) => o.estadoGeneral === "completada" || o.estadoGeneral === "entregada");
 
-  const cotizacionesConOC = new Set(ocs.map((oc) => oc.cotizacion?._id).filter(Boolean));
+  // Una cotización anexada a una OC ajena solo figura en sus partidas, no en `oc.cotizacion`.
+  const cotizacionesConOC = new Set(ocs.flatMap((oc) => [oc.cotizacion, ...(oc.partidas || []).map((p) => p.cotizacion)])
+    .map((c) => c?._id || c).filter(Boolean));
   const tieneOC = (o) => !!o.cotizacion && cotizacionesConOC.has(o.cotizacion._id || o.cotizacion);
   const conOC = completadasOEntregadas.filter(tieneOC).length;
 

@@ -336,8 +336,8 @@ export default function ListaFacturas() {
     return new Date(b.fechaEmision) - new Date(a.fechaEmision);
   });
 
-  const cerradas = filtradas.filter(f => f.estadoCadena === "cerrado");
-  const abiertas = filtradas.filter(f => f.estadoCadena !== "cerrado");
+  const pagadas = filtradas.filter(f => f.estadoPago === "pagado");
+  const porCobrar = filtradas.filter(f => f.estadoPago !== "pagado");
   const hayFiltro = Object.values(filtros).some(Boolean);
   const mensajeVacio = (sinFiltro) => {
     if (cargando) return "Cargando facturas…";
@@ -372,8 +372,8 @@ export default function ListaFacturas() {
   const exportarExcel = () => {
     const wb = XLSX.utils.book_new();
     [
-      ["Facturas", abiertas],
-      ["Facturas cerradas", cerradas],
+      ["Por cobrar", porCobrar],
+      ["Pagadas", pagadas],
     ].forEach(([nombre, lista]) => {
       const ws = XLSX.utils.json_to_sheet(lista.map(filaFactura));
       XLSX.utils.book_append_sheet(wb, ws, nombre);
@@ -436,8 +436,8 @@ export default function ListaFacturas() {
         </select>
         <select value={vista} onChange={(e) => setVista(e.target.value)} className={SELECT}>
           <option value="todas">Todas las facturas</option>
-          <option value="abiertas">Facturas abiertas</option>
-          <option value="cerradas">Facturas cerradas</option>
+          <option value="porCobrar">Facturas por cobrar</option>
+          <option value="pagadas">Facturas pagadas</option>
         </select>
         <input name="busqueda" value={filtros.busqueda} onChange={handleFiltro}
           placeholder="Buscar por N° OT, cotización, OC, factura, título, empresa o RUC…"
@@ -470,23 +470,23 @@ export default function ListaFacturas() {
         />
       )}
 
-      {vista === "abiertas" && (
+      {vista === "porCobrar" && (
         <TablaFacturas
-          titulo="Facturas abiertas"
+          titulo="Facturas por cobrar"
           acento="bg-emerald-500"
-          facturas={abiertas}
+          facturas={porCobrar}
           onSelect={setSeleccionada}
-          vacioMsg={mensajeVacio("Sin facturas abiertas")}
+          vacioMsg={mensajeVacio("Sin facturas por cobrar")}
         />
       )}
 
-      {vista === "cerradas" && (
+      {vista === "pagadas" && (
         <TablaFacturas
-          titulo="Facturas cerradas"
+          titulo="Facturas pagadas"
           acento="bg-gray-500"
-          facturas={cerradas}
+          facturas={pagadas}
           onSelect={setSeleccionada}
-          vacioMsg={mensajeVacio("Sin facturas cerradas")}
+          vacioMsg={mensajeVacio("Sin facturas pagadas")}
         />
       )}
     </div>

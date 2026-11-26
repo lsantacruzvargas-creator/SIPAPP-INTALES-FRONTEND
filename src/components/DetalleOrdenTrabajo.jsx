@@ -21,10 +21,11 @@ import ConfirmacionAccion from "./ConfirmacionAccion";
 import AvisoAccion from "./AvisoAccion";
 import {
   FlujoNegocio, TarjetaRelacion, Chip, PartidaOC,
-  badgePago, badgeOT, estadoProgresoOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
+  badgePago, badgeOT, estadoProgresoOT, money, BotonAnular, BotonDesanular, BannerAnulado,
 } from "./detalleShared";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "./BarraEdicion";
+import { bloqueadoPorPago, fusionarBloqueo } from "../utils/bloqueoPago";
 import { veFacturas, rolDeSesion } from "../utils/roles";
 
 const leerError = async (r, fallback) => (await r.json().catch(() => null))?.mensaje || fallback;
@@ -109,7 +110,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const puedeAsignarAdjuntos = ["admin", "jefatura", "planner", "coordinadora"].includes(rolActual);
   const puedeEliminarAdjuntos = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
-  // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
+  // no puede. Desanular es exclusivo de admin.
   const puedeAnular = ["admin", "jefatura"].includes(rolActual);
   const esAdmin = rolActual === "admin";
   const esTecnico = ["tecnico", "tecnico_prueba", "tecnico_intervencion"].includes(rolActual);
@@ -121,8 +122,8 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   // Mismo criterio que DetalleCotizacion.jsx/ModalNuevaCotizacion.jsx —
   // Planner puede ver el card de Cotización (ver más abajo) pero nunca su monto.
   const puedeVerPrecios = ["admin", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
-  const cadenaCerrada = bloqueadoPorCadenaCerrada(ot.estadoCadena, rolActual);
-  const bloqueo = useBloqueoEdicion("ordenTrabajo", ot._id, ot.updatedAt, { autoEditar: puedeEditarCampos && !ot.anulado && !cadenaCerrada });
+  const bloqueada = bloqueadoPorPago(ot, rolActual);
+  const bloqueo = useBloqueoEdicion("ordenTrabajo", ot._id, ot.updatedAt, { autoEditar: puedeEditarCampos && !ot.anulado && !bloqueada });
   // Progreso (Encargado de Progreso) es una card independiente del fieldset
   // principal — un técnico no edita el resto de la OT, solo esta tarjeta si
   // su nombre de usuario coincide con `encargado` de esta OT.
@@ -336,7 +337,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
       });
       if (res.ok) {
         const actualizada = await res.json();
-        setOt(actualizada);
+        setOt((prev) => fusionarBloqueo(prev, actualizada));
         if (puedeEditarDetalleItem) setForm(prev => ({ ...prev, subItems: actualizada.subItems || [] }));
         await bloqueo.terminar(actualizada.updatedAt);
         onGuardada?.(actualizada);
@@ -374,7 +375,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const cambiarEstado = (nuevo) => cambiarProgreso(
     `/ordenes-trabajo/${ot._id}/estado`, { estado: nuevo }, "No se pudo cambiar el estado.",
     (actualizada) => {
-      setOt(actualizada);
+      setOt((prev) => fusionarBloqueo(prev, actualizada));
       setForm((f) => ({ ...f, estado: actualizada.estado }));
     },
   );
@@ -382,7 +383,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const cambiarEncargado = (campo, nombre) => cambiarProgreso(
     `/ordenes-trabajo/${ot._id}/encargados`, { [campo]: nombre }, "No se pudo cambiar el encargado.",
     (actualizada) => {
-      setOt(actualizada);
+      setOt((prev) => fusionarBloqueo(prev, actualizada));
       setForm((f) => ({ ...f, [campo]: actualizada[campo] }));
     },
   );
@@ -395,7 +396,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     });
     if (res.ok) {
       const actualizada = await res.json();
-      setOt(actualizada);
+      setOt((prev) => fusionarBloqueo(prev, actualizada));
       onGuardada?.(actualizada);
     } else {
       return leerError(res, "Error al anular el documento.");
@@ -406,25 +407,10 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
     const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/desanular`, { method: "PATCH" });
     if (res.ok) {
       const actualizada = await res.json();
-      setOt(actualizada);
+      setOt((prev) => fusionarBloqueo(prev, actualizada));
       onGuardada?.(actualizada);
     } else {
       setError(await leerError(res, "Error al desanular el documento."));
-    }
-  };
-
-  const toggleCerrarCadena = async (cerrado) => {
-    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/cerrar-cadena`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cerrado }),
-    });
-    if (res.ok) {
-      const actualizada = await res.json();
-      setOt(actualizada);
-      onGuardada?.(actualizada);
-    } else {
-      setError(await leerError(res, "Error al cerrar/abrir la cadena."));
     }
   };
 
@@ -558,11 +544,10 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
               className="bg-white/15 text-white text-sm px-4 py-2 rounded-lg hover:bg-white/25 transition font-medium shrink-0">
               Exportar PDF
             </button>
-            {!ot.anulado && !cadenaCerrada && puedeAnular && <BotonAnular onAnular={anular} />}
+            {!ot.anulado && !bloqueada && puedeAnular && <BotonAnular onAnular={anular} />}
             {esAdmin && ot.anulado && <BotonDesanular onDesanular={desanular} />}
-            {esAdmin && <BotonCerrarCadena cerrado={cadenaCerrada} onToggle={toggleCerrarCadena} />}
-            {!ot.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} />}
-            {!ot.anulado && !cadenaCerrada && puedeEditarCampos && (
+            {!ot.anulado && !bloqueada && <BarraEdicion bloqueo={bloqueo} />}
+            {!ot.anulado && !bloqueada && puedeEditarCampos && (
               <button onClick={guardar} disabled={guardando || !bloqueo.editando}
                 className="bg-white text-indigo-700 text-sm px-5 py-2 rounded-lg hover:bg-indigo-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">
                 {guardando ? "Guardando…" : "Guardar cambios"}
@@ -587,7 +572,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
               usuario coincide con `encargado` de esta OT. */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2 md:max-w-sm">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Progreso — Encargado de Progreso</p>
-            <select value={ot.encargado || ""} disabled={ot.anulado || cadenaCerrada || !puedeEditarEncargados || cambiandoProgreso}
+            <select value={ot.encargado || ""} disabled={ot.anulado || bloqueada || !puedeEditarEncargados || cambiandoProgreso}
               onChange={(e) => cambiarEncargado("encargado", e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500">
               <option value="">Sin asignar</option>
@@ -597,7 +582,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
             </select>
             <div className="flex gap-2">
               {ESTADOS.map(e => (
-                <button key={e} type="button" disabled={hayHijasSanas || !puedeEditarEstado || cambiandoProgreso}
+                <button key={e} type="button" disabled={hayHijasSanas || bloqueada || !puedeEditarEstado || cambiandoProgreso}
                   onClick={() => cambiarEstado(e)}
                   className={`flex-1 py-1.5 rounded-lg text-xs font-medium capitalize transition disabled:opacity-60 disabled:cursor-not-allowed ${colorEstado(e, ot.estado === e)}`}>
                   {e}
@@ -614,14 +599,14 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
           {/* Datos editables — separados en 2 cards (pedido del usuario,
               2026-09-11): "Datos de la empresa" agrupa cliente/planta/
               contacto/guías; "Datos de la orden de trabajo" agrupa el resto. */}
-          <fieldset disabled={ot.anulado || cadenaCerrada || !puedeEditarCampos || !bloqueo.editando} className="lg:col-span-2 space-y-6 self-start">
+          <fieldset disabled={ot.anulado || bloqueada || !puedeEditarCampos || !bloqueo.editando} className="lg:col-span-2 space-y-6 self-start">
             {ot.anulado && (
               <BannerAnulado motivo={ot.motivoAnulacion} por={ot.anuladoPor} fecha={ot.fechaAnulacion} />
             )}
 
-            {!ot.anulado && cadenaCerrada && (
+            {!ot.anulado && bloqueada && (
               <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                La cadena de este documento está cerrada (factura pagada) — de solo lectura. Solo Jefatura puede editarlo.
+                La cotización de esta orden está pagada (o su cadena está cerrada) — de solo lectura. Solo Jefatura puede editarla.
               </p>
             )}
 
@@ -844,7 +829,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Sub-Órdenes ({subOTs.length})
                 </p>
-                {!ot.anulado && !cadenaCerrada && !esTecnico && (
+                {!ot.anulado && !bloqueada && !esTecnico && (
                   <button type="button" onClick={() => setCrearSubOTOpen(true)}
                     className="text-xs text-blue-600 hover:text-blue-800 underline">
                     + Crear Sub-OT
@@ -986,8 +971,8 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                 ? { label: "Quitar de esta OT", onClick: (x) => asignarAdjunto(x, "quitar") }
                 : { label: "Pasar a esta OT", onClick: (x) => asignarAdjunto(x, "asignar") }
               : undefined}
-            soloLectura={ot.anulado || cadenaCerrada}
-            onCambio={(actualizada) => setOt(actualizada)}
+            soloLectura={ot.anulado || bloqueada}
+            onCambio={(actualizada) => setOt((prev) => fusionarBloqueo(prev, actualizada))}
           />
         </div>
         <div className="max-w-6xl mx-auto px-8 pb-8">

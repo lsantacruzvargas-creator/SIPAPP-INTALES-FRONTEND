@@ -6,9 +6,10 @@ import ModalNotificacionTrabajo from "./ModalNotificacionTrabajo";
 import ModalDetalleNotificacionTrabajo from "./ModalDetalleNotificacionTrabajo";
 import TablaServiciosExternos from "./TablaServiciosExternos";
 import TablaScroll from "./TablaScroll";
-import { Chip, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada } from "./detalleShared";
+import { Chip, BotonAnular, BotonDesanular, BannerAnulado } from "./detalleShared";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "./BarraEdicion";
+import { bloqueadoPorPago, fusionarBloqueo } from "../utils/bloqueoPago";
 
 const leerError = async (r, fallback) => (await r.json().catch(() => null))?.mensaje || fallback;
 
@@ -73,14 +74,14 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   const rolActual = getUsuario()?.rol;
   const puedeEditarCampos = ["admin", "jefatura", "supervisor", "planner", "coordinadora"].includes(rolActual);
   // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
-  // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
+  // no puede. Desanular es exclusivo de admin.
   const puedeAnular = ["admin", "jefatura"].includes(rolActual);
   const esAdmin = rolActual === "admin";
   const esTecnico = ["tecnico", "tecnico_prueba", "tecnico_intervencion"].includes(rolActual);
   // Tabla de Servicios Externos: la ven todos los roles menos técnico.
   const puedeVerServicios = !esTecnico;
-  const cadenaCerrada = bloqueadoPorCadenaCerrada(ot.estadoCadena, rolActual);
-  const bloqueo = useBloqueoEdicion("ordenTrabajo", ot._id, ot.updatedAt, { autoEditar: puedeEditarCampos && !ot.anulado && !cadenaCerrada });
+  const bloqueada = bloqueadoPorPago(ot, rolActual);
+  const bloqueo = useBloqueoEdicion("ordenTrabajo", ot._id, ot.updatedAt, { autoEditar: puedeEditarCampos && !ot.anulado && !bloqueada });
   // Progreso (Encargado de Progreso) — mismo criterio que
   // DetalleOrdenTrabajo.jsx: card independiente del fieldset, editable por
   // el técnico cuyo nombre coincide con `encargado`.
@@ -150,7 +151,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
       });
       if (res.ok) {
         const actualizada = await res.json();
-        setOt(actualizada);
+        setOt((prev) => fusionarBloqueo(prev, actualizada));
         await bloqueo.terminar(actualizada.updatedAt);
         onGuardada?.(actualizada);
       } else {
@@ -186,7 +187,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   const cambiarEstado = (nuevo) => cambiarProgreso(
     `/ordenes-trabajo/${ot._id}/estado`, { estado: nuevo }, "No se pudo cambiar el estado.",
     (actualizada) => {
-      setOt(actualizada);
+      setOt((prev) => fusionarBloqueo(prev, actualizada));
       setForm((f) => ({ ...f, estado: actualizada.estado }));
     },
   );
@@ -194,7 +195,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   const cambiarEncargado = (campo, nombre) => cambiarProgreso(
     `/ordenes-trabajo/${ot._id}/encargados`, { [campo]: nombre }, "No se pudo cambiar el encargado.",
     (actualizada) => {
-      setOt(actualizada);
+      setOt((prev) => fusionarBloqueo(prev, actualizada));
       setForm((f) => ({ ...f, [campo]: actualizada[campo] }));
     },
   );
@@ -207,7 +208,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
     });
     if (res.ok) {
       const actualizada = await res.json();
-      setOt(actualizada);
+      setOt((prev) => fusionarBloqueo(prev, actualizada));
       onGuardada?.(actualizada);
     } else {
       return leerError(res, "Error al anular el documento.");
@@ -218,25 +219,10 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
     const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/desanular`, { method: "PATCH" });
     if (res.ok) {
       const actualizada = await res.json();
-      setOt(actualizada);
+      setOt((prev) => fusionarBloqueo(prev, actualizada));
       onGuardada?.(actualizada);
     } else {
       setError(await leerError(res, "Error al desanular el documento."));
-    }
-  };
-
-  const toggleCerrarCadena = async (cerrado) => {
-    const res = await bloqueo.fetch(`/ordenes-trabajo/${ot._id}/cerrar-cadena`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cerrado }),
-    });
-    if (res.ok) {
-      const actualizada = await res.json();
-      setOt(actualizada);
-      onGuardada?.(actualizada);
-    } else {
-      setError(await leerError(res, "Error al cerrar/abrir la cadena."));
     }
   };
 
@@ -283,11 +269,10 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
               <Chip className="mt-0.5 bg-white/20 text-white">{ot.estado}</Chip>
               {ot.irreparable && <Chip className="mt-1 bg-red-500/40 text-white block">Irreparable</Chip>}
             </div>
-            {!ot.anulado && !cadenaCerrada && puedeAnular && <BotonAnular onAnular={anular} />}
+            {!ot.anulado && !bloqueada && puedeAnular && <BotonAnular onAnular={anular} />}
             {esAdmin && ot.anulado && <BotonDesanular onDesanular={desanular} />}
-            {esAdmin && <BotonCerrarCadena cerrado={cadenaCerrada} onToggle={toggleCerrarCadena} />}
-            {!ot.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} />}
-            {!ot.anulado && !cadenaCerrada && puedeEditarCampos && (
+            {!ot.anulado && !bloqueada && <BarraEdicion bloqueo={bloqueo} />}
+            {!ot.anulado && !bloqueada && puedeEditarCampos && (
               <button onClick={guardar} disabled={guardando || !bloqueo.editando}
                 className="bg-white text-violet-700 text-sm px-5 py-2 rounded-lg hover:bg-violet-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">
                 {guardando ? "Guardando…" : "Guardar cambios"}
@@ -314,7 +299,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
               fieldset principal. */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-2 md:max-w-sm">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Progreso — Encargado de Progreso</p>
-            <select value={ot.encargado || ""} disabled={!puedeEditarEncargados || cambiandoProgreso}
+            <select value={ot.encargado || ""} disabled={bloqueada || !puedeEditarEncargados || cambiandoProgreso}
               onChange={(e) => cambiarEncargado("encargado", e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500">
               <option value="">Sin asignar</option>
@@ -324,7 +309,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
             </select>
             <div className="flex gap-2">
               {ESTADOS.map(e => (
-                <button key={e} type="button" disabled={!puedeEditarEstado || cambiandoProgreso}
+                <button key={e} type="button" disabled={bloqueada || !puedeEditarEstado || cambiandoProgreso}
                   onClick={() => cambiarEstado(e)}
                   className={`flex-1 py-1.5 rounded-lg text-xs font-medium capitalize transition disabled:opacity-60 disabled:cursor-not-allowed ${colorEstado(e, ot.estado === e)}`}>
                   {e}
@@ -338,7 +323,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
         <div className="max-w-6xl mx-auto px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
 
           {/* Datos editables — solo lo propio de la sub-tarea */}
-          <fieldset disabled={ot.anulado || cadenaCerrada || !puedeEditarCampos || !bloqueo.editando} className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 self-start">
+          <fieldset disabled={ot.anulado || bloqueada || !puedeEditarCampos || !bloqueo.editando} className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5 self-start">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-5 rounded-full bg-violet-500" />
               <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Datos de la sub-orden</h2>
@@ -348,9 +333,9 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
               <BannerAnulado motivo={ot.motivoAnulacion} por={ot.anuladoPor} fecha={ot.fechaAnulacion} />
             )}
 
-            {!ot.anulado && cadenaCerrada && (
+            {!ot.anulado && bloqueada && (
               <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                La cadena de este documento está cerrada (factura pagada) — de solo lectura. Solo Jefatura puede editarlo.
+                La cotización de esta orden está pagada (o su cadena está cerrada) — de solo lectura. Solo Jefatura puede editarla.
               </p>
             )}
 

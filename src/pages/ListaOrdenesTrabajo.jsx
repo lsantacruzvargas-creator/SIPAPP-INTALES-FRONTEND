@@ -8,6 +8,7 @@ import TablaScroll from "../components/TablaScroll";
 import { ChipEstadoOT, estadoProgresoOT } from "../components/detalleShared";
 import * as XLSX from "xlsx";
 import { veFacturas, rolDeSesion } from "../utils/roles";
+import { numerosFacturaPorCadena } from "../utils/facturacionOC";
 
 const FILTROS_VACIO = { empresa: "", planta: "", busqueda: "", fechaDesde: "", fechaHasta: "" };
 
@@ -59,7 +60,7 @@ const FILTROS_ESTADO = [
   { valor: "en progreso", label: "En progreso",                  titulo: "Órdenes en progreso",           hoja: "En progreso", acento: "bg-blue-500",   vacio: "Sin órdenes en progreso" },
   { valor: "completado",  label: "Completado",                   titulo: "Órdenes completadas",           hoja: "Completadas", acento: "bg-green-500",  vacio: "Sin órdenes completadas" },
   { valor: "entregado",   label: "Entregado",                    titulo: "Órdenes entregadas",            hoja: "Entregadas",  acento: "bg-teal-500",   vacio: "Sin órdenes entregadas" },
-  { valor: "cerrada",     label: "Cerrada",                      titulo: "Órdenes cerradas",              hoja: "Cerradas",    acento: "bg-gray-500",   vacio: "Sin órdenes cerradas" },
+  { valor: "pagada",      label: "Pagada",                       titulo: "Órdenes pagadas",               hoja: "Pagadas",     acento: "bg-gray-500",   vacio: "Sin órdenes pagadas" },
   { valor: "anulada",     label: "Anulada",                      titulo: "Órdenes anuladas",              hoja: "Anuladas",    acento: "bg-red-300",    vacio: "Sin órdenes anuladas" },
 ];
 
@@ -92,11 +93,11 @@ const PLAZO = {
 
 // Margen restante = (días de fabricación − días desde recibida la OC) / días de
 // fabricación. ≤ 0 % atrasado, < 30 % cerca a plazo, desde 30 % en fecha. Una
-// OT ya completada, entregada o con la cadena cerrada no se evalúa.
+// OT ya completada, entregada o pagada no se evalúa.
 const estadoPlazo = (ot, diasRecibido) => {
   const df = Number(ot.tiempoFabricacion);
   if (diasRecibido == null || !(df > 0)) return null;
-  if (["completada", "entregada"].includes(ot.estadoGeneral) || ot.estadoCadena === "cerrado") return "terminada";
+  if (["completada", "entregada"].includes(ot.estadoGeneral) || ot.bloqueadoPorPago) return "terminada";
   const margen = ((df - diasRecibido) / df) * 100;
   if (margen <= 0) return "atrasado";
   if (margen < 30) return "cerca";
@@ -286,7 +287,7 @@ export default function ListaOrdenesTrabajo() {
   const [crearOTOpen, setCrearOTOpen] = useState(false);
   const [importarOpen, setImportarOpen] = useState(false);
   // Qué tabla de las 5 categorías se muestra (No asignada/En progreso/
-  // Completada/Entregada/Cerrada) — un solo filtro para todos los roles,
+  // Completada/Entregada/Pagada) — un solo filtro para todos los roles,
   // desde que se simplificó a un único track "Estado de servicio"
   // (decisión del usuario, 2026-09-11 — antes técnico tenía su propio
   // filtro separado, con las tablas divididas en Prueba/Intervención).
@@ -299,12 +300,7 @@ export default function ListaOrdenesTrabajo() {
       fetchAuth("/ordenes-compra").then((r) => r.ok ? r.json() : []),
     ]).then(([ots, facts, ocs]) => {
       setOrdenes(ots);
-      // Una OT está "facturada" si su cadena (mismo numeroDocumento) tiene una
-      // factura con número de factura.
-      setFacturaPorNumDoc(new Map(
-        facts.filter((f) => f.numeroFactura && f.numeroDocumento != null)
-             .map((f) => [f.numeroDocumento, f.numeroFactura])
-      ));
+      setFacturaPorNumDoc(numerosFacturaPorCadena(facts));
       setOcPorNumDoc(new Map(
         ocs.filter((oc) => oc.numeroDocumento != null && !oc.anulado)
            .map((oc) => [oc.numeroDocumento, { numeroOrden: oc.numeroOrden, fecha: oc.fecha || oc.createdAt }])
@@ -415,15 +411,15 @@ export default function ListaOrdenesTrabajo() {
     return new Date(b.createdAt) - new Date(a.createdAt);
   });
 
-  // "Cerrada" (cadena cerrada, ver cerrarCadena) manda por encima del `estado`
-  // propio de la OT — es la bandeja de archivado final, sin importar en qué
-  // estado de trabajo se haya quedado. Mientras la cadena sigue abierta, la
-  // OT vive en la tabla que corresponde a su `estado` actual (el mismo valor
-  // que arma el filtro "Todo estado" de arriba) — así una OT que pasa a
-  // "completado" se mueve sola a la tabla de Completadas sin quedarse
-  // mezclada con las pendientes.
-  const esCerrada = (o) => o.estadoCadena === "cerrado";
-  const abiertas = filtradas.filter((o) => !esCerrada(o));
+  // "Pagada" manda por encima del `estado` propio de la OT — es la bandeja de
+  // archivado final, sin importar en qué estado de trabajo se haya quedado.
+  // `bloqueadoPorPago` lo calcula el backend: cotización de la OT (o de su
+  // padre) pagada, o cadena cerrada en lo histórico sin OC por partidas
+  // (FP-19). Mientras no lo esté, la OT vive en la tabla que corresponde a su
+  // `estado` actual (el mismo valor que arma el filtro "Todo estado" de
+  // arriba).
+  const esPagada = (o) => !!o.bloqueadoPorPago;
+  const abiertas = filtradas.filter((o) => !esPagada(o));
 
   // Filtra por el mismo valor que pinta la columna "Estado de servicio"
   // (estadoProgresoOT), no por `estadoGeneral`: así lo que se elige en el
@@ -435,12 +431,12 @@ export default function ListaOrdenesTrabajo() {
     const subs = (o.subOTs || []).filter((s) => !s.anulado && progresoLabel(s) === estado);
     return progresoLabel(o) === estado || subs.length ? [{ ...o, subOTs: subs }] : [];
   });
-  const cerradas = filtradas.filter((o) => esCerrada(o) && !o.anulado);
+  const pagadas = filtradas.filter((o) => esPagada(o) && !o.anulado);
   const anuladas = filtradas.filter((o) => o.anulado);
 
   const ordenesFiltroEstado = (valor) =>
     valor === "todos" ? filtradas
-      : valor === "cerrada" ? cerradas
+      : valor === "pagada" ? pagadas
       : valor === "anulada" ? anuladas
       : porEstado(valor);
   const filtroActual = FILTROS_ESTADO.find((f) => f.valor === filtroEstadoPlanner) || FILTROS_ESTADO[0];
