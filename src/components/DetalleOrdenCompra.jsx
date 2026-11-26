@@ -121,8 +121,8 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   // Montos/cálculos exclusivos de admin/jefatura/facturación — mismo criterio
   // que ListaOrdenesCompra.jsx y que precios de Cotización (Fase 16). Antes
   // era una lista de bloqueo (solo excluía asistente/coordinadora) que
-  // dejaba pasar a planner y otros roles por error.
-  const puedeVerPrecios = ["admin", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
+  // dejaba pasar a planner y otros roles por error. Tesorero los ve para decidir si marca la OC pagada.
+  const puedeVerPrecios = ["admin", "facturacion", "jefatura", "coordinadora", "tesorero"].includes(rolActual);
   // Generar factura es libre (ya no exige confirmar HES/Acta antes) — Admin,
   // Facturación y Jefatura pueden (mismo gate en el backend, POST /facturas
   // puedeCrear en routes/facturas.js; Admin sumado a pedido explícito del
@@ -405,6 +405,13 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   const seleccionables = puedeFacturar ? partidas.filter(sinFacturar) : [];
   const hayCheck = seleccionables.length > 0;
   const elegidas = partidas.filter(p => seleccionadas.includes(p._id));
+  // Sin la cotización completa Emitir no puede armar los ítems de la partida: no se navega.
+  const sinCotizacion = elegidas.filter(p => !cotizaciones?.[idDe(p.cotizacion)]);
+  const motivoNoFacturar = !cotizaciones ? ""
+    : errorCotizaciones ? "No se pudieron cargar las cotizaciones de las partidas: cierra y vuelve a abrir la OC."
+    : sinCotizacion.length
+      ? `No se encontró la cotización de la partida ${sinCotizacion.map(p => `${partidas.indexOf(p) + 1}/${partidas.length}`).join(", ")}.`
+      : "";
   const toggleSeleccion = (id) => setSeleccionadas(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   const puedeFacturarLegado = puedeFacturar && !conPartidas && estadoFact?.estado === "sin facturar" && !estadoFact?.reservada
     && !!cotizaciones;
@@ -831,9 +838,12 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
                 <span className="w-1.5 h-5 rounded-full bg-sky-500" />
                 <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Partidas</h2>
                 <span className="text-xs text-gray-400">({partidas.length})</span>
+                {hayCheck && motivoNoFacturar && (
+                  <span className="ml-auto text-xs text-red-600">{motivoNoFacturar}</span>
+                )}
                 {hayCheck && (
-                  <button type="button" onClick={() => facturar(elegidas)} disabled={!elegidas.length || !cotizaciones}
-                    className="ml-auto bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium">
+                  <button type="button" onClick={() => facturar(elegidas)} disabled={!elegidas.length || !cotizaciones || !!motivoNoFacturar}
+                    className={`${motivoNoFacturar ? "" : "ml-auto "}bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium`}>
                     {cotizaciones ? `Facturar seleccionadas (${elegidas.length})` : "Cargando cotizaciones…"}
                   </button>
                 )}
