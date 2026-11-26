@@ -98,7 +98,7 @@ const TEXTO_GRUPO_LEXACAUCHO =
   "Fabricación, mantenimiento, desarrollo de proyectos y servicios complementarios; en metales y materiales especiales.";
 
 // Cuentas bancarias reales de Intales (mismo Excel).
-const BANCOS = {
+export const BANCOS = {
   bcpCuentaDolares: "191-9134985-1-83",
   bcpCciDolares: "002-191-009134985183-51",
   bcpCuentaSoles: "191-9291696-0-12",

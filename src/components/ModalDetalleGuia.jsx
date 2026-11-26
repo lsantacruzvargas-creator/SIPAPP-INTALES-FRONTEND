@@ -5,6 +5,7 @@ import {
   MOTIVO_TRASLADO,
   estadoComprobanteClase,
 } from "../utils/catalogosSunat";
+import { generarGuiaPdf, puedeGenerarPdfGuia } from "../utils/guiaPdf";
 
 const labelMotivo = (v) => MOTIVO_TRASLADO.find((m) => m.valor === v)?.label ?? v;
 const labelModalidad = (v) => MODALIDAD_TRASLADO.find((m) => m.valor === v)?.label ?? v;
@@ -23,10 +24,28 @@ export default function ModalDetalleGuia({ guia, onClose, onActualizada }) {
   const [actual, setActual] = useState(guia);
   const [errorDescarga, setErrorDescarga] = useState("");
   const [consultando, setConsultando] = useState(false);
+  const [generandoPdf, setGenerandoPdf] = useState(false);
 
   useEffect(() => { setActual(guia); setErrorDescarga(""); }, [guia]);
 
   if (!actual) return null;
+
+  const pdfHabilitado = puedeGenerarPdfGuia(actual);
+  const motivoPdfDeshabilitado = actual.estado !== "ACEPTADO"
+    ? "Disponible cuando SUNAT acepte la guía"
+    : "SUNAT no devolvió el link del QR — usa “Forzar actualización” o revisa la guía en SUNAT";
+
+  const descargarPdf = async () => {
+    setGenerandoPdf(true);
+    setErrorDescarga("");
+    try {
+      await generarGuiaPdf(actual);
+    } catch {
+      setErrorDescarga("No se pudo generar el PDF de la guía.");
+    } finally {
+      setGenerandoPdf(false);
+    }
+  };
 
   const descargar = async (tipo) => {
     setErrorDescarga("");
@@ -184,6 +203,11 @@ export default function ModalDetalleGuia({ guia, onClose, onActualizada }) {
           </button>
           <button onClick={() => descargar("cdr")} className="border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
             Descargar CDR
+          </button>
+          <button onClick={descargarPdf} disabled={!pdfHabilitado || generandoPdf}
+            title={pdfHabilitado ? undefined : motivoPdfDeshabilitado}
+            className="border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed">
+            {generandoPdf ? "Generando PDF…" : "Descargar PDF"}
           </button>
           {actual.sunat?.linkSunat && (
             <a href={actual.sunat.linkSunat} target="_blank" rel="noopener noreferrer"

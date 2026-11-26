@@ -9,6 +9,7 @@ import {
   estadoComprobanteClase,
 } from "../utils/catalogosSunat";
 import { generarComprobantePdf } from "../utils/comprobantePdf";
+import { generarFacturaPdf } from "../utils/facturaPdf";
 import { noEnviado } from "../utils/facturacionOC";
 
 const FILTROS_VACIO = { tipoDoc: "", estado: "", desde: "", hasta: "", receptorDoc: "" };
@@ -163,6 +164,20 @@ export default function ListaComprobantes() {
     setFiltros(FILTROS_VACIO);
     setFiltrosAplicados(FILTROS_VACIO);
     setPagina(1);
+  };
+
+  const descargarPdf = async () => {
+    if (seleccionado.tipoDoc !== "01") return generarComprobantePdf(seleccionado);
+    setErrorDescarga("");
+    try {
+      const empresas = await fetchAuth("/empresas").then((r) => (r.ok ? r.json() : []));
+      await generarFacturaPdf({
+        comprobante: seleccionado,
+        empresa: empresas.find((e) => e.ruc === seleccionado.receptor?.numDoc),
+      });
+    } catch {
+      setErrorDescarga("No se pudo generar el PDF.");
+    }
   };
 
   const descargar = async (tipo) => {
@@ -470,7 +485,7 @@ export default function ListaComprobantes() {
                 className="border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed">
                 Descargar XML
               </button>
-              <button onClick={() => generarComprobantePdf(seleccionado)} className="border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
+              <button onClick={descargarPdf} className="border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition">
                 Descargar PDF
               </button>
               <button onClick={() => { setSeleccionado(null); setErrorDescarga(""); }} className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-700 transition">
