@@ -2,10 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bloqueadoPorPago, fusionarBloqueo } from "./bloqueoPago.js";
 
-test("bloqueadoPorPago: el backend lo manda crudo y Jefatura conserva su excepción", () => {
+test("bloqueadoPorPago: el backend lo manda crudo y Jefatura y Coordinadora conservan su excepción", () => {
   assert.equal(bloqueadoPorPago({ bloqueadoPorPago: true }, "admin"), true);
   assert.equal(bloqueadoPorPago({ bloqueadoPorPago: true }, "facturacion"), true);
   assert.equal(bloqueadoPorPago({ bloqueadoPorPago: true }, "jefatura"), false);
+  assert.equal(bloqueadoPorPago({ bloqueadoPorPago: true }, "coordinadora"), false);
   assert.equal(bloqueadoPorPago({ bloqueadoPorPago: false }, "admin"), false);
   assert.equal(bloqueadoPorPago({}, "admin"), false);
   assert.equal(bloqueadoPorPago(null, "admin"), false);

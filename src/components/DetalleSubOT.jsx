@@ -75,7 +75,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
   const puedeEditarCampos = ["admin", "jefatura", "supervisor", "planner", "coordinadora"].includes(rolActual);
   // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
   // no puede. Desanular es exclusivo de admin.
-  const puedeAnular = ["admin", "jefatura"].includes(rolActual);
+  const puedeAnular = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   const esAdmin = rolActual === "admin";
   const esTecnico = ["tecnico", "tecnico_prueba", "tecnico_intervencion"].includes(rolActual);
   // Tabla de Servicios Externos: la ven todos los roles menos técnico.
@@ -335,7 +335,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
 
             {!ot.anulado && bloqueada && (
               <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                La cotización de esta orden está pagada (o su cadena está cerrada) — de solo lectura. Solo Jefatura puede editarla.
+                La cotización de esta orden está pagada (o su cadena está cerrada) — de solo lectura. Solo Jefatura o Coordinadora pueden editarla.
               </p>
             )}
 

@@ -9,7 +9,7 @@ import { conBloqueo } from "../utils/bloqueoApi";
 const ROLES_TECNICO = ["tecnico", "tecnico_prueba", "tecnico_intervencion", "supervisor"];
 
 export default function TarifasPersonal() {
-  const puedeGestionar = ["admin", "jefatura"].includes(getUsuario()?.rol);
+  const puedeGestionar = ["admin", "jefatura", "coordinadora"].includes(getUsuario()?.rol);
   const [usuarios, setUsuarios] = useState([]);
   const [editando, setEditando] = useState({});
   const [error, setError] = useState("");

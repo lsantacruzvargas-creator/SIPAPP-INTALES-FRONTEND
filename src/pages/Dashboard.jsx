@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchAuth } from "../utils/fetchAuth";
-import { veFacturas, rolDeSesion } from "../utils/roles";
+import { veFacturas, rolDeSesion } from "../utils/roles";
+
 import { anioLima, mesLima } from "../utils/fecha";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
@@ -391,7 +392,7 @@ export default function Dashboard() {
   // Planner, Coordinadora y Administración ("asistente" es el valor de rol
   // real, ver Sidebar.jsx) ven un panel completamente distinto (a pedido
   // explícito del usuario) — nunca el dashboard de admin/jefatura de abajo.
-  if (["planner", "coordinadora", "asistente"].includes(usuario?.rol)) {
+  if (["planner", "asistente"].includes(usuario?.rol)) {
     return <DashboardPlanner ots={ots} ocs={ocs} />;
   }
 
@@ -404,7 +405,7 @@ export default function Dashboard() {
           <h2 className="text-xl font-bold text-gray-800">
             Bienvenido, {usuario?.nombre}
           </h2>
-          <p className="text-sm text-gray-400 mt-0.5">Panel principal — SIP App Metalmecanica</p>
+          <p className="text-sm text-gray-400 mt-0.5">Panel principal — SIP App intales</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <select value={filtroAno} onChange={(e) => setFiltroAno(e.target.value)} className={SELECT}>

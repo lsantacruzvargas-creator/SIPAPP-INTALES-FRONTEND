@@ -59,7 +59,7 @@ function HomeRedirect() {
   const token = sessionStorage.getItem("token");
   const usuario = JSON.parse(sessionStorage.getItem("usuario") || "null");
   if (!token || !usuario) return <Navigate to="/login" replace />;
-  if (["tecnico", "tecnico_prueba", "tecnico_intervencion", "supervisor", "planner", "asistente", "coordinadora"].includes(usuario.rol)) return <Navigate to="/ordenes-trabajo" replace />;
+  if (["tecnico", "tecnico_prueba", "tecnico_intervencion", "supervisor", "planner", "asistente"].includes(usuario.rol)) return <Navigate to="/ordenes-trabajo" replace />;
   if (usuario.rol === "facturacion") return <Navigate to="/facturas" replace />;
   if (["tesorero", "contador"].includes(usuario.rol)) return <Navigate to="/tesoreria" replace />;
   if (usuario.rol === "almacenero") return <Navigate to="/almacen" replace />;
@@ -111,7 +111,7 @@ export default function App() {
       <Route
         path="/facturas"
         element={
-          <ProtectedRoute roles={["admin", "facturacion", "jefatura", "tesorero", "contador"]}>
+          <ProtectedRoute roles={["admin", "facturacion", "jefatura", "coordinadora", "tesorero", "contador"]}>
             <Layout><ListaFacturas /></Layout>
           </ProtectedRoute>
         }
@@ -120,7 +120,7 @@ export default function App() {
       <Route
         path="/reportes"
         element={
-          <ProtectedRoute roles={["admin", "facturacion", "jefatura"]}>
+          <ProtectedRoute roles={["admin", "facturacion", "jefatura", "coordinadora"]}>
             <Layout><Reportes /></Layout>
           </ProtectedRoute>
         }
@@ -138,7 +138,7 @@ export default function App() {
       <Route
         path="/ingresos-equipo"
         element={
-          <ProtectedRoute roles={["admin", "tecnico", "tecnico_prueba", "tecnico_intervencion", "asistente", "supervisor", "jefatura"]}>
+          <ProtectedRoute roles={["admin", "tecnico", "tecnico_prueba", "tecnico_intervencion", "asistente", "supervisor", "jefatura", "coordinadora"]}>
             <Layout><IngresoEquipos /></Layout>
           </ProtectedRoute>
         }
@@ -174,7 +174,7 @@ export default function App() {
       <Route
         path="/facturacion-electronica"
         element={
-          <ProtectedRoute roles={["admin", "facturacion", "jefatura", "tesorero", "contador"]}>
+          <ProtectedRoute roles={["admin", "facturacion", "jefatura", "coordinadora", "tesorero", "contador"]}>
             <Layout><ListaComprobantes /></Layout>
           </ProtectedRoute>
         }
@@ -182,7 +182,7 @@ export default function App() {
       <Route
         path="/facturacion-electronica/emitir"
         element={
-          <ProtectedRoute roles={["admin", "facturacion", "jefatura"]}>
+          <ProtectedRoute roles={["admin", "facturacion", "jefatura", "coordinadora"]}>
             <Layout><EmitirComprobante /></Layout>
           </ProtectedRoute>
         }
@@ -225,7 +225,7 @@ export default function App() {
       <Route
         path="/compras"
         element={
-          <ProtectedRoute roles={["admin", "jefatura", "vendedor"]}>
+          <ProtectedRoute roles={["admin", "jefatura", "coordinadora", "vendedor"]}>
             <Layout><Compras /></Layout>
           </ProtectedRoute>
         }
@@ -279,7 +279,7 @@ export default function App() {
       <Route
         path="/maquinas"
         element={
-          <ProtectedRoute roles={["admin", "jefatura"]}>
+          <ProtectedRoute roles={["admin", "jefatura", "coordinadora"]}>
             <Layout><Maquinas /></Layout>
           </ProtectedRoute>
         }
@@ -288,7 +288,7 @@ export default function App() {
       <Route
         path="/tarifas-personal"
         element={
-          <ProtectedRoute roles={["admin", "jefatura"]}>
+          <ProtectedRoute roles={["admin", "jefatura", "coordinadora"]}>
             <Layout><TarifasPersonal /></Layout>
           </ProtectedRoute>
         }

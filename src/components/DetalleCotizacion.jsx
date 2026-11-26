@@ -127,7 +127,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const puedeEditar = ["admin", "asistente", "facturacion", "jefatura", "coordinadora", "planner"].includes(rolActual);
   // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
   // no puede. Desanular es exclusivo de admin.
-  const puedeAnular = ["admin", "jefatura"].includes(rolActual);
+  const puedeAnular = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   const esAdmin = rolActual === "admin";
   // Precios: información sensible, solo Admin/Facturación/Jefatura los ven —
   // ni Asistente ni Planner, aunque puedan editar/ver el resto de la cotización.
@@ -609,7 +609,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               )}
               <Chip className="mt-0.5 bg-white/20 text-white">{cot.tipo}</Chip>
             </div>
-            {!["asistente", "coordinadora", "planner"].includes(rolActual) && (
+            {!["asistente", "planner"].includes(rolActual) && (
               <button onClick={() => exportarCotizacionPdf(datosParaPdf())}
                 className="bg-white/15 text-white text-sm px-4 py-2 rounded-lg hover:bg-white/25 transition font-medium shrink-0">
                 Exportar PDF
@@ -652,7 +652,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
 
             {!cot.anulado && bloqueada && (
               <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                Cotización pagada (o de una cadena cerrada) — de solo lectura. Solo Jefatura puede editarla.
+                Cotización pagada (o de una cadena cerrada) — de solo lectura. Solo Jefatura o Coordinadora pueden editarla.
               </p>
             )}
 
@@ -1020,7 +1020,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               )}
             </TarjetaRelacion>
 
-            {rolActual !== "coordinadora" && (ocs.length === 0 ? (
+            {(ocs.length === 0 ? (
               <TarjetaRelacion tipo="oc" vacio
                 onCrear={puedeGenerarOC && !preparandoOC ? () => abrirGenerarOC({ todos: true }) : undefined} crearLabel="OC" />
             ) : (
@@ -1034,7 +1034,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               ))
             ))}
 
-            {rolActual !== "coordinadora" && veFacturas(rolDeSesion()) && (facturas.length === 0 ? (
+            {veFacturas(rolDeSesion()) && (facturas.length === 0 ? (
               <TarjetaRelacion tipo="factura" vacio />
             ) : (
               facturas.map(f => {

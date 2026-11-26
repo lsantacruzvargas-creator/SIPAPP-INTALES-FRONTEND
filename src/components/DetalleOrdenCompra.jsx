@@ -83,17 +83,17 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   const [errorPagada, setErrorPagada] = useState("");
   const [guardandoConfirmacion, setGuardandoConfirmacion] = useState("");
   const rolActual = getUsuario()?.rol;
-  const puedeEditar = ["admin", "asistente", "facturacion", "jefatura"].includes(rolActual);
+  const puedeEditar = ["admin", "asistente", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
   // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
   // no puede. Desanular es exclusivo de admin.
-  const puedeAnular = ["admin", "jefatura"].includes(rolActual);
+  const puedeAnular = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   const esAdmin = rolActual === "admin";
   // Tesorero ve la OC en solo lectura: su única acción es esta (P1).
   const puedeMarcarPagada = ["admin", "tesorero"].includes(rolActual);
   const bloqueada = bloqueadoPorPago(ordenActual, rolActual);
   const estadoFact = ordenActual.estadoFacturacion;
   const bloqueo = useBloqueoEdicion("ordenCompra", orden._id, orden.updatedAt, { autoEditar: puedeEditar && !orden.anulado && !bloqueada });
-  const puedeConfirmarHesActa = ["admin", "asistente", "facturacion", "jefatura"].includes(rolActual);
+  const puedeConfirmarHesActa = ["admin", "asistente", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
   // Montos/cálculos exclusivos de admin/jefatura/facturación — mismo criterio
   // que ListaOrdenesCompra.jsx y que precios de Cotización (Fase 16). Antes
   // era una lista de bloqueo (solo excluía asistente/coordinadora) que
@@ -103,14 +103,14 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
   // Facturación y Jefatura pueden (mismo gate en el backend, POST /facturas
   // puedeCrear en routes/facturas.js; Admin sumado a pedido explícito del
   // usuario, 2026-09-04, revierte la exclusión de la Fase 15).
-  const puedeCrearFacturaRol = ["admin", "facturacion", "jefatura"].includes(rolActual);
+  const puedeCrearFacturaRol = ["admin", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
   // Mismo set de roles que ve el card de GRE en DetalleOrdenTrabajo.jsx.
   const puedeGenerarGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
   // Card "Costo de fabricación" (OC vs costo real de la OT) — jefatura y
   // vendedor, +admin como excepción (mismo criterio que el resto de acciones
   // restringidas de la app), incluso aunque vendedor no tenga
   // puedeVerPrecios general (acá compara, no edita el subtotal).
-  const puedeVerReporte = ["jefatura", "vendedor", "admin"].includes(rolActual);
+  const puedeVerReporte = ["jefatura", "coordinadora", "vendedor", "admin"].includes(rolActual);
   // Mismos roles que crean una OT standalone (POST /ordenes-trabajo).
   const puedeCrearOT = ["admin", "asistente", "supervisor", "planner", "jefatura", "coordinadora"].includes(rolActual);
   const puedeCrearOTAqui = puedeCrearOT && !orden.anulado && !bloqueada;
@@ -541,7 +541,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
               <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
                 {ordenActual.pagadaManual
                   ? `OC marcada como pagada${ordenActual.pagadaManualPor ? ` por ${ordenActual.pagadaManualPor}` : ""}${ordenActual.pagadaManualFecha ? ` el ${formatearFecha(ordenActual.pagadaManualFecha)}` : ""}`
-                  : estadoFact?.bloqueada ? "OC pagada" : "La cadena de esta OC está cerrada"} — de solo lectura. Solo Jefatura puede editarla.
+                  : estadoFact?.bloqueada ? "OC pagada" : "La cadena de esta OC está cerrada"} — de solo lectura. Solo Jefatura o Coordinadora pueden editarla.
               </p>
             )}
 
@@ -628,7 +628,7 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
               </div>
             </div>
 
-            {/* Cálculos — ocultos para Administración y Coordinadora, que no ven/editan montos */}
+            {/* Cálculos — ocultos para Administración, que no ve/edita montos */}
             {puedeVerPrecios && (
               <div className="rounded-xl bg-gradient-to-br from-gray-50 to-blue-50/40 border border-gray-100 p-4 space-y-4">
                 <div>

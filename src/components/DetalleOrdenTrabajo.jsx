@@ -112,7 +112,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const puedeEliminarAdjuntos = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
   // no puede. Desanular es exclusivo de admin.
-  const puedeAnular = ["admin", "jefatura"].includes(rolActual);
+  const puedeAnular = ["admin", "jefatura", "coordinadora"].includes(rolActual);
   const esAdmin = rolActual === "admin";
   const esTecnico = ["tecnico", "tecnico_prueba", "tecnico_intervencion"].includes(rolActual);
   const esVistaLimitada = esTecnico || ["supervisor", "planner"].includes(rolActual);
@@ -608,7 +608,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
 
             {!ot.anulado && bloqueada && (
               <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                La cotización de esta orden está pagada (o su cadena está cerrada) — de solo lectura. Solo Jefatura puede editarla.
+                La cotización de esta orden está pagada (o su cadena está cerrada) — de solo lectura. Solo Jefatura o Coordinadora pueden editarla.
               </p>
             )}
 
@@ -902,7 +902,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
               </TarjetaRelacion>
             ))}
 
-            {!esVistaLimitada && rolActual !== "coordinadora" && (
+            {!esVistaLimitada && (
               <>
                 <TarjetaRelacion tipo="oc" codigo={oc?.codigo} numero={oc?.numeroOrden} vacio={!oc}
                   onClick={oc ? () => onNavegar?.({ tipo: "oc", data: oc, extra: factura }) : undefined}

@@ -448,7 +448,7 @@ export default function ListaOrdenesCompra() {
   // el tesorero solo lee (P1).
   const puedeEditarOC = ["admin", "asistente", "facturacion", "jefatura", "coordinadora"].includes(rol);
   // Mismo gate que "Facturar seleccionadas" en DetalleOrdenCompra.jsx (POST /facturas puedeCrear).
-  const puedeFacturarRol = ["admin", "facturacion", "jefatura"].includes(rol);
+  const puedeFacturarRol = ["admin", "facturacion", "jefatura", "coordinadora"].includes(rol);
   const navigate = useNavigate();
   const [ordenes, setOrdenes]       = useState([]);
   const [otGroupMap, setOtGroupMap] = useState({});

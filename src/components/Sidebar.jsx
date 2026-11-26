@@ -170,11 +170,11 @@ export default function Sidebar() {
     { to: "/ordenes-trabajo", label: "Orden de Trabajo", Icon: IconClipboard, show: esComercial || esTecnico || esSupervisor || esPlanner || esJefatura || esCoordinadora },
     { to: "/cotizaciones", label: "Cotizaciones", Icon: IconDocument, show: esComercial || esPlanner || esJefatura || esCoordinadora },
     { to: "/ordenes-compra", label: "Órdenes de Compra", Icon: IconCart, show: esComercial || esFacturacion || esJefatura || esCoordinadora || usuario?.rol === "tesorero" },
-    { to: "/facturas", label: "Facturas", Icon: IconReceipt, show: esAdmin || esFacturacion || esJefatura || esFinanzas },
-    { to: "/reportes", label: "Reportes", Icon: IconChartBar, show: esAdmin || esFacturacion || esJefatura },
+    { to: "/facturas", label: "Facturas", Icon: IconReceipt, show: esAdmin || esFacturacion || esJefatura || esCoordinadora || esFinanzas },
+    { to: "/reportes", label: "Reportes", Icon: IconChartBar, show: esAdmin || esFacturacion || esJefatura || esCoordinadora },
     // Administración (asistente) no ve "Fact. Electrónica" — en su lugar
     // tiene "Guías" directamente (a pedido del usuario, reemplaza esa vista).
-    { to: "/facturacion-electronica", label: "Fact. Electrónica", Icon: IconBolt, show: esAdmin || esFacturacion || esJefatura || esFinanzas },
+    { to: "/facturacion-electronica", label: "Fact. Electrónica", Icon: IconBolt, show: esAdmin || esFacturacion || esJefatura || esCoordinadora || esFinanzas },
     { to: "/facturacion-electronica/guias", label: "Guías", Icon: IconTruck, show: esAdmin || esFacturacion || esAlmacenero || esJefatura || esPlanner || esCoordinadora || esAsistente },
     { to: "/tipo-cambio", label: "Tipo de Cambio", Icon: IconExchange, show: esAdmin || esFacturacion || esAlmacenero || esJefatura },
     { to: "/empresas", label: "Empresas", Icon: IconBuilding, show: esComercial || esJefatura || esAlmacenero || esPlanner || esCoordinadora },
@@ -182,13 +182,13 @@ export default function Sidebar() {
     { to: "/almacen", label: "Almacén", Icon: IconArchive, show: esAdmin || esAlmacenero || esJefatura || esCoordinadora },
     { to: "/inventario", label: "Inventario", Icon: IconBoxes, show: esAdmin || esAlmacenero || esTecnico || esPlanner || esJefatura || esCoordinadora },
     { to: "/requerimientos", label: "Requerimientos", Icon: IconClipboardList, show: esAdmin || esAlmacenero || esJefatura || esCoordinadora || esVendedor },
-    { to: "/compras", label: "Compras", Icon: IconBag, show: esAdmin || esJefatura || esVendedor },
+    { to: "/compras", label: "Compras", Icon: IconBag, show: esAdmin || esJefatura || esCoordinadora || esVendedor },
     { to: "/tesoreria", label: "Tesorería", Icon: IconReceipt, show: esAdmin || esFacturacion || esJefatura || esFinanzas },
     { to: "/contabilidad", label: "Contabilidad", Icon: IconDocument, show: esAdmin || esJefatura || esFinanzas },
     { to: "/planilla", label: "Planilla", Icon: IconUsers, show: esAdmin || esJefatura || usuario?.rol === "contador" },
     { to: "/centros-costo", label: "Centros de Costo", Icon: IconTag, show: esAdmin || esJefatura },
-    { to: "/maquinas", label: "Máquinas", Icon: IconServer, show: esAdmin || esJefatura },
-    { to: "/tarifas-personal", label: "Tarifas de Personal", Icon: IconUsers, show: esAdmin || esJefatura },
+    { to: "/maquinas", label: "Máquinas", Icon: IconServer, show: esAdmin || esJefatura || esCoordinadora },
+    { to: "/tarifas-personal", label: "Tarifas de Personal", Icon: IconUsers, show: esAdmin || esJefatura || esCoordinadora },
     { to: "/usuarios", label: "Usuarios", Icon: IconUsers, show: esAdmin },
     { to: "/sistema", label: "Sistema", Icon: IconServer, show: esAdmin || esJefatura },
   ];
@@ -206,7 +206,7 @@ export default function Sidebar() {
           onClick={() => ir(esTecnico || esPlanner ? "/ordenes-trabajo" : esAlmacenero ? "/almacen" : esFacturacion ? "/facturas" : esFinanzas ? "/tesoreria" : "/dashboard")}>
           <img src={`${import.meta.env.BASE_URL}assets/logos/intales_icon.png`} alt="Intales"
             className="w-8 h-8 rounded-lg object-contain shrink-0" />
-          <span className="font-bold text-gray-800 text-base tracking-tight">Metalmecanica</span>
+          <span className="font-bold text-gray-800 text-base tracking-tight">intales</span>
         </div>
         <button onClick={() => setAbierto(true)} className="p-2 text-gray-500 hover:text-gray-800">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -243,7 +243,7 @@ export default function Sidebar() {
         >
           <img src={`${import.meta.env.BASE_URL}assets/logos/intales_icon.png`} alt="Intales"
             className="w-9 h-9 rounded-xl object-contain shrink-0" />
-          <span className={`font-bold text-gray-800 text-base tracking-tight ${colapsado ? "md:hidden" : ""}`}>Metalmecanica</span>
+          <span className={`font-bold text-gray-800 text-base tracking-tight ${colapsado ? "md:hidden" : ""}`}>intales</span>
         </div>
 
         {/* Bloque 2: navegación */}

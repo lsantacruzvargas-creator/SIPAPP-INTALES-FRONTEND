@@ -122,7 +122,7 @@ function ModalAdjuntarSunat({ comprobante, onClose, onAdjuntado }) {
 
 export default function ListaComprobantes() {
   // Tesorero y contador solo ven y descargan: emitir es de admin, facturación y jefatura.
-  const puedeEmitir = ["admin", "facturacion", "jefatura"].includes(JSON.parse(sessionStorage.getItem("usuario") || "{}")?.rol);
+  const puedeEmitir = ["admin", "facturacion", "jefatura", "coordinadora"].includes(JSON.parse(sessionStorage.getItem("usuario") || "{}")?.rol);
   const navigate = useNavigate();
   const [comprobantes, setComprobantes] = useState([]);
   const [filtros, setFiltros] = useState(FILTROS_VACIO);
@@ -296,10 +296,10 @@ export default function ListaComprobantes() {
                   </td>
                   <td className="px-4 py-3 text-gray-800">{c.receptor?.nombre || "—"}</td>
                   <td className="px-4 py-3 text-right font-medium">
-                    {c.moneda !== "USD" ? (c.totales?.totalPagar?.toFixed(2) ?? "—") : <span className="text-gray-300">—</span>}
+                    {c.totales?.moneda !== "USD" ? (c.totales?.totalPagar?.toFixed(2) ?? "—") : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-3 text-right font-medium text-blue-700">
-                    {c.moneda === "USD" ? (c.totales?.totalPagar?.toFixed(2) ?? "—") : <span className="text-gray-300">—</span>}
+                    {c.totales?.moneda === "USD" ? (c.totales?.totalPagar?.toFixed(2) ?? "—") : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-3 text-center text-gray-500">{formatearFecha(c.fechaEmision)}</td>
                   <td className="px-4 py-3 text-center">
@@ -339,8 +339,8 @@ export default function ListaComprobantes() {
               <div>
                 <h3 className="font-semibold text-gray-800">
                   {tipoDocTexto(seleccionado.tipoDoc)} {seleccionado.serie}-{String(seleccionado.correlativo).padStart(4, "0")}
-                  <span className={`ml-2 align-middle px-2 py-0.5 rounded-full text-xs font-medium ${seleccionado.moneda === "USD" ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-gray-100 text-gray-700 border border-gray-200"}`}>
-                    {nombreMoneda(seleccionado.moneda)}
+                  <span className={`ml-2 align-middle px-2 py-0.5 rounded-full text-xs font-medium ${seleccionado.totales?.moneda === "USD" ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-gray-100 text-gray-700 border border-gray-200"}`}>
+                    {nombreMoneda(seleccionado.totales?.moneda)}
                   </span>
                 </h3>
                 <span className="font-mono text-xs text-gray-400">{seleccionado.nombreArchivo}</span>
@@ -407,8 +407,8 @@ export default function ListaComprobantes() {
                 <tr>
                   <th className="px-3 py-2 text-left">Descripción</th>
                   <th className="px-3 py-2 text-right">Cant.</th>
-                  <th className="px-3 py-2 text-right">P. Unit. ({simboloMoneda(seleccionado.moneda)})</th>
-                  <th className="px-3 py-2 text-right">Total ({simboloMoneda(seleccionado.moneda)})</th>
+                  <th className="px-3 py-2 text-right">P. Unit. ({simboloMoneda(seleccionado.totales?.moneda)})</th>
+                  <th className="px-3 py-2 text-right">Total ({simboloMoneda(seleccionado.totales?.moneda)})</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -424,15 +424,15 @@ export default function ListaComprobantes() {
               <tfoot className="border-t-2 border-gray-100 bg-gray-50">
                 <tr>
                   <td colSpan={3} className="px-3 py-2 text-right text-xs text-gray-500">Base imponible</td>
-                  <td className="px-3 py-2 text-right font-medium">{simboloMoneda(seleccionado.moneda)} {seleccionado.totales?.baseImponible?.toFixed(2)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{simboloMoneda(seleccionado.totales?.moneda)} {seleccionado.totales?.baseImponible?.toFixed(2)}</td>
                 </tr>
                 <tr>
                   <td colSpan={3} className="px-3 py-2 text-right text-xs text-gray-500">IGV</td>
-                  <td className="px-3 py-2 text-right font-medium">{simboloMoneda(seleccionado.moneda)} {seleccionado.totales?.totalIGV?.toFixed(2)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{simboloMoneda(seleccionado.totales?.moneda)} {seleccionado.totales?.totalIGV?.toFixed(2)}</td>
                 </tr>
                 <tr>
                   <td colSpan={3} className="px-3 py-2 text-right text-sm font-semibold text-gray-800">Total</td>
-                  <td className="px-3 py-2 text-right font-bold text-gray-800">{simboloMoneda(seleccionado.moneda)} {seleccionado.totales?.totalPagar?.toFixed(2)}</td>
+                  <td className="px-3 py-2 text-right font-bold text-gray-800">{simboloMoneda(seleccionado.totales?.moneda)} {seleccionado.totales?.totalPagar?.toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>

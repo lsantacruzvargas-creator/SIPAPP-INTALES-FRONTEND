@@ -114,11 +114,11 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
   // "jefatura" agregado acá para calzar con el gate real del backend
   // (routes/facturas.js `puedeEditar`) — se había quedado desactualizado.
   const rolActual = getUsuario()?.rol;
-  const puedeEditar = ["admin", "facturacion", "jefatura"].includes(rolActual);
+  const puedeEditar = ["admin", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
   // Montos de las cards de "Relaciones" (Cotización/OC) — mismo criterio que
   // el resto de vistas de detalle (ver DetalleOrdenTrabajo/DetalleCotizacion/
   // DetalleOrdenCompra.jsx).
-  const puedeVerPrecios = ["admin", "facturacion", "jefatura"].includes(rolActual);
+  const puedeVerPrecios = ["admin", "facturacion", "jefatura", "coordinadora"].includes(rolActual);
   const bloqueada = bloqueadoPorPago(inicial, rolActual);
   // La OC y sus partidas marcan qué está facturado: una vez guardada, o con CPE aceptado, no cambia (FP-21; el
   // PUT lo rechaza). Solo una OC elegida aquí y aún sin guardar se puede cambiar o quitar.
@@ -355,7 +355,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
 
             {!inicial.anulado && bloqueada && (
               <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                La factura está pagada (o su cadena está cerrada) — de solo lectura. Solo Jefatura puede editarla.
+                La factura está pagada (o su cadena está cerrada) — de solo lectura. Solo Jefatura o Coordinadora pueden editarla.
               </p>
             )}
 
