@@ -875,3 +875,10 @@ Revisión de las 10 heurísticas de Nielsen en todo el frontend; corregidos los 
   contaoficial `estadoPago`/`montoPagado` se derivan de los cobros de tesorería; escribirlos a mano rompe el cálculo.
   Propuesta: botón «Registrar cobro» en la factura que cree el cobro en tesorería. No urgente.
 
+## Facturación parcial por partidas (2026-11-26) — implementada en `feature/facturacion-parcial`, sin merge
+
+- Backend y Frontend en la rama `feature/facturacion-parcial` (Frontend `15d6b6d8`…`9b4bda98` + ola de correcciones
+  final). Spec: `Backend/docs/superpowers/specs/2026-11-26-facturacion-parcial-oc-design.md` §16 (pantallas).
+- **Runbook de despliegue, ventana de mantenimiento, un solo proceso Node, reversión, decisiones abiertas y deuda
+  diferida (también la del frontend):** `Backend/docs/ESTADO-PROYECTO.md`, sección «Facturación parcial por partidas —
+  runbook de despliegue». Backend y Frontend se despliegan juntos.

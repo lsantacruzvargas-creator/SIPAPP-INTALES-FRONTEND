@@ -1,9 +1,14 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
+import { conBloqueo } from "../utils/bloqueoApi";
+import { avisoDeRespuesta } from "../utils/bloqueo";
 import { r2, r0 } from "../utils/redondeo";
 import { indicesLibresOC, subtotalPartida } from "../utils/cotizacionItems";
 
-const leerError = async (r, fallback) => (await r.json().catch(() => null))?.mensaje || fallback;
+const leerError = async (r, fallback) => {
+  const data = await r.json().catch(() => null);
+  return avisoDeRespuesta(r.status, data)?.mensaje || data?.mensaje || fallback;
+};
 const todosLosIndices = (cot) => (cot.items || []).map((_, i) => i);
 
 const INP     = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
@@ -200,11 +205,13 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
     setError(""); setGuardando(true);
 
     try {
-      const res = await fetchAuth(pedido.url, {
+      const enviar = (h = {}) => fetchAuth(pedido.url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...h },
         body: JSON.stringify(pedido.body),
       });
+      // Marcar los ítems escribe la cotización: se toma su bloqueo para no pisar a quien la edita (423 "En edición por …"), como ModalGenerarOC.
+      const res = cotVinculada ? await conBloqueo("cotizacion", cotVinculada._id, enviar) : await enviar();
       if (res.ok) {
         const data = await res.json();
         setExito(data.codigo);

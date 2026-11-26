@@ -75,6 +75,12 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
 
   // Con comprobante aceptado por SUNAT, monto, número y cliente solo cambian con NC/ND (el servidor lo exige).
   const emitida = !!inicial.comprobanteEmitido;
+  // El monto y el cliente de una factura por partidas los fijó su OC al crearla (el PUT rechaza cambiarlos).
+  const dePartidas = (inicial.partidasOC || []).length > 0 || (inicial.ordenCompra?.partidas || []).length > 0;
+  const montoFijo = emitida || dePartidas;
+  const motivoMontoFijo = emitida
+    ? "Comprobante aceptado por SUNAT: se corrige con nota de crédito o débito"
+    : dePartidas ? "Factura por partidas de una orden de compra: el monto y el cliente los fija la OC" : undefined;
   const navigate = useNavigate();
   const [form, setForm] = useState({
     numeroFactura:      inicial.numeroFactura      || "",
@@ -386,7 +392,7 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
 
             <div>
               <label className="text-xs text-gray-500 block mb-1">Empresa</label>
-              <select name="empresa" value={form.empresa} onChange={handleChange} disabled={emitida} title={emitida ? "Comprobante aceptado por SUNAT: se corrige con nota de crédito o débito" : undefined} className={emitida ? INP_RO : INP}>
+              <select name="empresa" value={form.empresa} onChange={handleChange} disabled={montoFijo} title={motivoMontoFijo} className={montoFijo ? INP_RO : INP}>
                 <option value="">— Sin empresa —</option>
                 {empresas.map(e => (
                   <option key={e._id} value={e._id}>
@@ -464,8 +470,8 @@ export default function DetalleFactura({ factura: inicial, onClose, onGuardada, 
             <div className="rounded-xl bg-gradient-to-br from-gray-50 to-emerald-50/40 border border-gray-100 p-4 space-y-4">
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Subtotal sin IGV</label>
-                <input type="number" name="subtotal" value={form.subtotal} onChange={handleChange} disabled={emitida} title={emitida ? "Comprobante aceptado por SUNAT: se corrige con nota de crédito o débito" : undefined}
-                  step="0.01" min="0" placeholder="0.00" className={`${emitida ? INP_RO : INP} text-lg font-semibold`} />
+                <input type="number" name="subtotal" value={form.subtotal} onChange={handleChange} disabled={montoFijo} title={motivoMontoFijo}
+                  step="0.01" min="0" placeholder="0.00" className={`${montoFijo ? INP_RO : INP} text-lg font-semibold`} />
                 {emitida && <p className="text-[11px] text-amber-700 mt-1">Comprobante aceptado por SUNAT: el monto, el número y el cliente se corrigen con una nota de crédito o débito.</p>}
               </div>
               <div className="grid grid-cols-3 gap-3 text-sm">

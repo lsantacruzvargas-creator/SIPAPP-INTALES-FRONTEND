@@ -7,6 +7,7 @@ import {
   calcSubtotal, itemDesdeDb, itemInvalido, idDe, vinculosItem, indicesLibresOC, partidasTomadas, partidaRecibida, infoPartidaItem,
 } from "../utils/cotizacionItems";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
+import { ocsDeCotizacion, facturasDeCotizacion } from "../utils/facturacionOC";
 import ModalNuevaOT from "./ModalNuevaOT";
 import ModalGenerarOC from "./ModalOrdenCompra";
 import ModalDetalleGuia from "./ModalDetalleGuia";
@@ -171,23 +172,10 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       } else {
         setGres([]);
       }
-      // Las OC con una partida de esta cotización (la propia o una a la que se anexó), más una OC
-      // legado sin partidas que nació de ella — en orden de creación.
-      const ocsFound = ocs
-        .filter(o => idDe(o.cotizacion) === cot._id
-          || (o.partidas || []).some(p => idDe(p.cotizacion) === cot._id))
-        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      // En orden de creación; las anuladas se listan con su chip.
+      const ocsFound = ocsDeCotizacion(ocs, cot._id).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       setOcs(ocsFound);
-      // La factura de una OC le toca a esta cotización si cubre alguna de sus partidas (sin
-      // `partidasOC` cubre la OC entera); una factura sin OC, si comparte la cadena.
-      const idsOC = new Set(ocsFound.map(o => o._id));
-      const partidasPropias = new Set(ocsFound.flatMap(o =>
-        (o.partidas || []).filter(p => idDe(p.cotizacion) === cot._id).map(p => idDe(p._id))));
-      setFacturas(facts.filter(f => {
-        const ocId = idDe(f.ordenCompra);
-        if (ocId) return idsOC.has(ocId) && (!(f.partidasOC || []).length || f.partidasOC.some(p => partidasPropias.has(idDe(p))));
-        return cot.numeroDocumento != null && f.numeroDocumento === cot.numeroDocumento;
-      }));
+      setFacturas(facturasDeCotizacion(facts, ocsFound, cot));
       if (otsFound.length > 0) {
         Promise.all(
           otsFound.map(o => fetchAuth(`/informes?ordenTrabajo=${o._id}`).then(r => r.ok ? r.json() : []))

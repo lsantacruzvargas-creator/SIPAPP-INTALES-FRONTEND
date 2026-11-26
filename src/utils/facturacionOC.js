@@ -16,6 +16,26 @@ export const partidasFacturadas = (oc) =>
   (oc?.estadoFacturacion?.partidas || []).filter((e) => e.estado === "facturada" || e.estado === "pagada").length;
 export const numerosFacturaDe = (oc) => (oc?.estadoFacturacion?.numerosFactura || "").split(/\s*,\s*/).filter(Boolean);
 
+// OC de una cotización: las que tienen una partida suya (la propia o una a la que se anexó); una OC legado (sin
+// partidas), por su `cotizacion`. `vigentes`: sin las anuladas (una OC anulada ya no tiene las partidas).
+export const ocsDeCotizacion = (ocs, cotizacionId, { vigentes = false } = {}) => (ocs || []).filter((o) =>
+  (!vigentes || !o.anulado) && ((o.partidas || []).length
+    ? o.partidas.some((p) => idDe(p.cotizacion) === idDe(cotizacionId))
+    : idDe(o.cotizacion) === idDe(cotizacionId)));
+
+// Facturas de una cotización entre las de `ocsDeCot` (sus OC): las que no traen `partidasOC` (cubren la OC entera) o
+// cubren alguna partida suya. Una factura sin OC, si comparte la cadena (`numeroDocumento`).
+export function facturasDeCotizacion(facturas, ocsDeCot, { _id, numeroDocumento } = {}) {
+  const idsOC = new Set((ocsDeCot || []).map((o) => idDe(o._id)));
+  const propias = new Set((ocsDeCot || []).flatMap((o) =>
+    (o.partidas || []).filter((p) => idDe(p.cotizacion) === idDe(_id)).map((p) => idDe(p._id))));
+  return (facturas || []).filter((f) => {
+    const ocId = idDe(f.ordenCompra);
+    if (ocId) return idsOC.has(ocId) && (!(f.partidasOC || []).length || f.partidasOC.some((p) => propias.has(idDe(p))));
+    return numeroDocumento != null && f.numeroDocumento === numeroDocumento;
+  });
+}
+
 // Con facturación por partidas una cadena puede tener varias facturas: se guardan todas para que la
 // búsqueda encuentre cualquiera de sus números.
 export function numerosFacturaPorCadena(facturas) {
@@ -57,9 +77,10 @@ const lineasDeItems = (items, cotizacion, unidad) => items.map((i) => {
   };
 });
 
-// Medio céntimo de redondeo por línea, igual que la tolerancia del servidor al comparar con las partidas.
-const cuadran = (lineas, monto) =>
-  Math.abs(lineas.reduce((s, l) => s + calcularLineaComprobante(l).base, 0) - monto) <= 0.01 * lineas.length;
+// Un céntimo de redondeo por línea, igual que la tolerancia del servidor al comparar con las partidas. En una OC
+// legado el servidor no cuenta líneas (tolerancia fija de un céntimo): se pasa `tolerancia`.
+const cuadran = (lineas, monto, tolerancia = 0.01 * lineas.length) =>
+  Math.abs(lineas.reduce((s, l) => s + calcularLineaComprobante(l).base, 0) - monto) <= tolerancia;
 
 // Prellenado de Emitir CPE desde `location.state.prellenarDesdeOC` de DetalleOrdenCompra. `partidas` vacío =
 // OC legado, que se factura entera (contra su subtotal). Con partidas el monto de cada una es el de la OC:
@@ -89,7 +110,7 @@ export function prellenadoDesdeOC({ oc, partidas, cotizaciones }) {
     const deOC = (cotOrigen?.items || []).filter((i) => idDe(i.ocGenerada) === idDe(oc._id));
     const lineas = lineasDeItems(deOC.length ? deOC : cotOrigen?.items || [], cotOrigen, unidad);
     // OC legado con subtotal 0: el servidor no compara montos.
-    if (lineas.length && (!(montoOC > 0) || cuadran(lineas, montoOC))) items = lineas;
+    if (lineas.length && (!(montoOC > 0) || cuadran(lineas, montoOC, 0.01))) items = lineas;
     else if (montoOC > 0) items = [lineaUnica(oc.descripcion || oc.titulo || lineas[0]?.descripcion || "", montoOC, unidad)];
     else items = [{ ...itemVacioComprobante(), descripcion: oc.descripcion || oc.titulo || "", unidad }];
   }

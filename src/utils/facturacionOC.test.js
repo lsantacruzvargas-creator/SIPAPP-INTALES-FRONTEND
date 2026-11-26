@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   prellenadoDesdeOC, ocLegadoLibre, noEnviado, estadoDePartida, partidasFacturadas, numerosFacturaDe, numerosFacturaPorCadena,
+  ocsDeCotizacion, facturasDeCotizacion,
 } from "./facturacionOC.js";
 
 const cotA = {
@@ -82,6 +83,13 @@ test("OC legado cuyos ítems no cuadran: una línea por el subtotal de la OC", (
   assert.deepEqual(r.items.map((i) => [i.descripcion, i.valorUnitario]), [["Servicio OC", 250]]);
 });
 
+test("OC legado: tolerancia fija de un céntimo (la del servidor), no uno por línea", () => {
+  const cot = { _id: "cL", tipo: "venta", items: [1, 2, 3].map((n) => ({ descripcion: `Ítem ${n}`, cantidad: 1, precio: 100, ocGenerada: "ocL" })) };
+  const prellenar = (subtotal) => prellenadoDesdeOC({ oc: { _id: "ocL", cotizacion: "cL", subtotal, descripcion: "OC legado", partidas: [] }, partidas: [], cotizaciones: [cot] });
+  assert.deepEqual(prellenar(300.02).items.map((i) => [i.descripcion, i.valorUnitario]), [["OC legado", 300.02]]);
+  assert.deepEqual(prellenar(300.01).items.map((i) => i.descripcion), ["Ítem 1", "Ítem 2", "Ítem 3"]);
+});
+
 test("OC legado sin cotización: línea por el subtotal; moneda de la OC", () => {
   const oc = { _id: "oc9", numeroOrden: "", codigo: "OC-0009", subtotal: 80, moneda: "USD", titulo: "Suelta", partidas: [] };
   const r = prellenadoDesdeOC({ oc, partidas: [], cotizaciones: [] });
@@ -149,4 +157,36 @@ test("numerosFacturaPorCadena: todas las facturas con número de cada cadena", (
   assert.equal(m.has(8), false);
   assert.equal(m.get(0), "F001-4");
   assert.equal(m.size, 2);
+});
+
+test("ocsDeCotizacion: OC con una partida de la cotización; legado por su cotización; vigentes sin anuladas", () => {
+  const ocs = [
+    { _id: "o1", cotizacion: "cA", partidas: [{ _id: "p1", cotizacion: "cA" }] },
+    { _id: "o2", cotizacion: { _id: "cB" }, partidas: [{ _id: "p2", cotizacion: "cB" }, { _id: "p3", cotizacion: { _id: "cA" } }] },
+    { _id: "o3", cotizacion: "cA", partidas: [{ _id: "p4", cotizacion: "cC" }] },
+    { _id: "o4", cotizacion: { _id: "cA" }, partidas: [] },
+    { _id: "o5", cotizacion: "cA", anulado: true, partidas: [{ _id: "p5", cotizacion: "cA" }] },
+    { _id: "o6", cotizacion: "cB" },
+  ];
+  assert.deepEqual(ocsDeCotizacion(ocs, "cA").map((o) => o._id), ["o1", "o2", "o4", "o5"]);
+  assert.deepEqual(ocsDeCotizacion(ocs, { _id: "cA" }, { vigentes: true }).map((o) => o._id), ["o1", "o2", "o4"]);
+  assert.deepEqual(ocsDeCotizacion(null, "cA"), []);
+});
+
+test("facturasDeCotizacion: de sus OC sin partidasOC o con una partida suya; sin OC, por la cadena", () => {
+  const ocs = [
+    { _id: "o1", partidas: [{ _id: "p1", cotizacion: "cA" }, { _id: "p2", cotizacion: "cB" }] },
+    { _id: "o4", partidas: [] },
+  ];
+  const facturas = [
+    { _id: "f1", ordenCompra: { _id: "o1" }, partidasOC: ["p1"] },
+    { _id: "f2", ordenCompra: "o1", partidasOC: ["p2"] },
+    { _id: "f3", ordenCompra: "o1", partidasOC: [] },
+    { _id: "f4", ordenCompra: "o4" },
+    { _id: "f5", ordenCompra: "o9", partidasOC: [] },
+    { _id: "f6", ordenCompra: null, numeroDocumento: 7 },
+    { _id: "f7", numeroDocumento: 8 },
+  ];
+  assert.deepEqual(facturasDeCotizacion(facturas, ocs, { _id: "cA", numeroDocumento: 7 }).map((f) => f._id), ["f1", "f3", "f4", "f6"]);
+  assert.deepEqual(facturasDeCotizacion(facturas, [], { _id: "cA" }).map((f) => f._id), []);
 });

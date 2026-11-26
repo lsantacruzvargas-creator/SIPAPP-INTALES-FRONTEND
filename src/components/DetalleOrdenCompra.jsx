@@ -460,7 +460,8 @@ export default function DetalleOrdenCompra({ orden, onClose, onGuardada, factura
               </div>
               {!orden.anulado && !bloqueada && puedeAnular && <BotonAnular onAnular={anular} />}
               {esAdmin && orden.anulado && <BotonDesanular onDesanular={desanular} />}
-              {puedeMarcarPagada && !ordenActual.anulado && (
+              {/* Pagada por sus facturas (Tesorería) no hay nada que marcar; desmarcar solo deshace la marca manual. */}
+              {puedeMarcarPagada && !ordenActual.anulado && (ordenActual.pagadaManual || estadoFact?.estado !== "pagada") && (
                 <button onClick={() => { setErrorPagada(""); setConfirmandoPagada(true); }}
                   className="text-sm border border-white/40 text-white px-4 py-2 rounded-lg hover:bg-white/10 transition font-medium shrink-0">
                   {ordenActual.pagadaManual ? "Desmarcar pagada" : "Marcar pagada"}

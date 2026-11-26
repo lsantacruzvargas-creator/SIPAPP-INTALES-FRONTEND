@@ -6,7 +6,8 @@ import { formatearFecha, aInputFecha } from "../utils/fecha";
 import { exportarOrdenTrabajoPdf } from "../utils/ordenTrabajoPdf";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
 import ModalGenerarOC from "./ModalOrdenCompra";
-import { indicesLibresOC } from "../utils/cotizacionItems";
+import { indicesLibresOC, idDe } from "../utils/cotizacionItems";
+import { ocsDeCotizacion, facturasDeCotizacion } from "../utils/facturacionOC";
 import SelectorEmpresas from "./SelectorEmpresas";
 import ModalNuevaSubOT from "./ModalNuevaSubOT";
 import ModalRequerimiento from "./ModalRequerimiento";
@@ -142,6 +143,10 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
   const [empresas, setEmpresas] = useState([]);
   const [empresasOpen, setEmpresasOpen] = useState(false);
   const [cot, setCot] = useState(ot.cotizacion || null);
+  // `ot.cotizacion` viene recortada (sin ítems): la OC se genera con la cotización completa de /cotizaciones. Mismos
+  // roles que crean OC (puedeEditar de Backend/src/routes/ordenesCompra.js) y no desde una cotización pagada (FP-6).
+  const puedeGenerarOC = ["admin", "asistente", "facturacion", "jefatura", "coordinadora"].includes(rolActual)
+    && Array.isArray(cot?.items) && !cot.anulado && !bloqueadoPorPago(cot, rolActual) && !ot.anulado;
   const [oc, setOc] = useState(null);
   const [factura, setFactura] = useState(null);
   const [subOTs, setSubOTs] = useState([]);
@@ -195,22 +200,19 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
         null;
       setCot(cotResuelta);
 
-      // Con OCs parciales por ítems, la OC de esta OT es la que cubre su ítem.
-      const itemDeOT = cotResuelta?.items?.find(i => (i.otGenerada?._id || i.otGenerada) === ot._id);
-      const idOCDelItem = itemDeOT?.ocGenerada && !itemDeOT.ocGenerada.anulado
-        ? (itemDeOT.ocGenerada._id || itemDeOT.ocGenerada) : null;
+      // Mismo criterio que DetalleCotizacion: una OC vigente con una partida de la cotización de la OT (entre varias,
+      // la que cubre el ítem de esta OT). Sin cotización (OT generada desde una OC), la OC vigente de su cadena.
+      const ocsCot = cotResuelta ? ocsDeCotizacion(ocs, cotResuelta._id, { vigentes: true }) : [];
+      const itemDeOT = cotResuelta?.items?.find(i => idDe(i.otGenerada) === ot._id);
       const ocResuelta =
-        (idOCDelItem && ocs.find(o => o._id === idOCDelItem)) ||
-        (cotResuelta && ocs.find(o => (o.cotizacion?._id || o.cotizacion) === cotResuelta._id)) ||
-        (ot.numeroDocumento != null && ocs.find(o => o.numeroDocumento === ot.numeroDocumento)) ||
+        ocsCot.find(o => o._id === idDe(itemDeOT?.ocGenerada)) || ocsCot[0] ||
+        (!cotResuelta && ot.numeroDocumento != null && ocs.find(o => !o.anulado && o.numeroDocumento === ot.numeroDocumento)) ||
         null;
       setOc(ocResuelta);
 
-      const factResuelta =
-        (ocResuelta && facts.find(f => (f.ordenCompra?._id || f.ordenCompra) === ocResuelta._id)) ||
-        (ot.numeroDocumento != null && facts.find(f => f.numeroDocumento === ot.numeroDocumento && !f.ordenCompra)) ||
-        null;
-      setFactura(factResuelta);
+      // La factura de esa OC sin `partidasOC` o con una partida de la cotización; sin OC, una de la cadena.
+      const facturasOT = facturasDeCotizacion(facts, ocResuelta ? [ocResuelta] : [], { _id: cotResuelta?._id, numeroDocumento: ot.numeroDocumento });
+      setFactura(facturasOT.find(f => f.ordenCompra && !f.anulado) || facturasOT.find(f => f.ordenCompra) || facturasOT[0] || null);
     });
 
     // Este componente ahora solo se monta para la OT padre/normal (una
@@ -904,7 +906,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
               <>
                 <TarjetaRelacion tipo="oc" codigo={oc?.codigo} numero={oc?.numeroOrden} vacio={!oc}
                   onClick={oc ? () => onNavegar?.({ tipo: "oc", data: oc, extra: factura }) : undefined}
-                  onCrear={!oc && cot && !ot.anulado ? () => setCrearOCOpen(true) : undefined} crearLabel="OC">
+                  onCrear={!oc && puedeGenerarOC ? () => setCrearOCOpen(true) : undefined} crearLabel="OC">
                   {puedeVerPrecios && oc?.monto > 0 && <p className="text-xs text-gray-500">{money(oc.monto, cot?.moneda)}</p>}
                   <PartidaOC oc={oc} cotizacionId={cot?._id} moneda={cot?.moneda} verPrecios={puedeVerPrecios} />
                 </TarjetaRelacion>
