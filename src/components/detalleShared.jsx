@@ -2,6 +2,8 @@ import { Fragment, useState } from "react";
 import { formatearFechaHora } from "../utils/fecha";
 import ConfirmacionAccion from "./ConfirmacionAccion";
 import PromptAccion from "./PromptAccion";
+import { idDe, itemConOC } from "../utils/cotizacionItems";
+import { r2 } from "../utils/redondeo";
 
 /* ─── Iconos SVG (stroke, currentColor) ─────────────────────────── */
 const svg = "w-5 h-5";
@@ -272,17 +274,23 @@ export const bloqueadoPorCadenaCerrada = (estadoCadena, rolActual) =>
 export const money = (v, moneda = "PEN") =>
   (moneda === "USD" ? "US$ " : "S/ ") + Number(v ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 });
 
-// OC consolidada (varias cotizaciones enteras en una OC, ver OrdenCompra.lineas): etiqueta para las
-// tarjetas de OC y Factura vistas desde una de sus cotizaciones u OTs, con la parte que le toca.
-export function ParteConsolidada({ oc, cotizacionId, moneda, verPrecios }) {
-  const lineas = oc?.lineas || [];
-  if (!lineas.length) return null;
-  const linea = lineas.find((l) => (l.cotizacion?._id || l.cotizacion) === cotizacionId);
+// Una OC tiene una partida por cotización (o más, si la anterior ya está tomada). En las tarjetas de OC
+// y Factura vistas desde una cotización u OT: posición "n/N" de las partidas de esa cotización o, con
+// `partidasIds`, de las que cubre la factura.
+export function PartidaOC({ oc, cotizacionId, partidasIds, moneda, verPrecios }) {
+  const partidas = oc?.partidas || [];
+  if (partidas.length < 2) return null;
+  const ids = partidasIds?.length ? new Set(partidasIds.map(idDe)) : null;
+  const propias = partidas
+    .map((p, i) => ({ p, n: i + 1 }))
+    .filter(({ p }) => (ids ? ids.has(idDe(p._id)) : idDe(p.cotizacion) === String(cotizacionId)));
+  if (!propias.length) return null;
+  const subtotal = r2(propias.reduce((s, { p }) => s + (Number(p.subtotal) || 0), 0));
   return (
     <>
-      <Chip className="bg-indigo-100 text-indigo-700">Consolidada · {lineas.length} cotizaciones</Chip>
-      {verPrecios && linea && (
-        <p className="text-xs text-gray-500">Esta cotización: {money(linea.subtotal, moneda)} sin IGV</p>
+      <Chip className="bg-indigo-100 text-indigo-700">Partida {propias.map(({ n }) => n).join(", ")}/{partidas.length}</Chip>
+      {verPrecios && !ids && (
+        <p className="text-xs text-gray-500">Esta cotización: {money(subtotal, moneda)} sin IGV</p>
       )}
     </>
   );
@@ -415,19 +423,32 @@ export function BannerAnulado({ motivo, por, fecha }) {
   );
 }
 
-/* ─── Selección de ítems de cotización para generar OC (OCs parciales) ─── */
-// Un ítem está cubierto si su OC existe y no fue anulada.
-const itemConOC = (item) => !!item.ocGenerada && !item.ocGenerada.anulado;
+/* ─── Selección de ítems de cotización para generar OC (partidas) ─── */
+const ESTADO_PARTIDA = {
+  reservada: { texto: "En emisión", clase: "bg-amber-100 text-amber-700" },
+  facturada: { texto: "Facturada", clase: "bg-indigo-100 text-indigo-700" },
+  pagada:    { texto: "Pagada",     clase: "bg-green-100 text-green-700" },
+};
 
-export function CeldaOCItem({ item, idx, seleccionados, onToggle, onVerOC, deshabilitado, className = "px-3 py-3" }) {
+// `info`: posición y estado de la partida del ítem en su OC (infoPartidaItem).
+export function CeldaOCItem({ item, idx, seleccionados, onToggle, onVerOC, deshabilitado, info, className = "px-3 py-3" }) {
+  const estado = ESTADO_PARTIDA[info?.estado];
   return (
     <td className={`${className} text-center`}>
       {itemConOC(item) ? (
-        <button type="button" onClick={() => onVerOC?.(item.ocGenerada)}
-          title="Orden de compra que cubre este ítem"
-          className="text-[11px] font-mono font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 hover:bg-amber-100 transition whitespace-nowrap">
-          {item.ocGenerada.numeroOrden || item.ocGenerada.codigo}
-        </button>
+        <div className="flex flex-col items-center gap-1">
+          <button type="button" onClick={() => onVerOC?.(item.ocGenerada)}
+            title="Orden de compra que cubre este ítem"
+            className="text-[11px] font-mono font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 hover:bg-amber-100 transition whitespace-nowrap">
+            {item.ocGenerada.numeroOrden || item.ocGenerada.codigo}
+          </button>
+          {info?.total > 1 && info.posicion && (
+            <span className="text-[10px] text-gray-500 whitespace-nowrap">Partida {info.posicion}/{info.total}</span>
+          )}
+          {estado && (
+            <span className={`text-[10px] font-medium rounded-full px-1.5 py-0.5 whitespace-nowrap ${estado.clase}`}>{estado.texto}</span>
+          )}
+        </div>
       ) : (
         <input type="checkbox" checked={seleccionados.has(idx)}
           onChange={() => onToggle?.(idx)} disabled={deshabilitado}

@@ -5,7 +5,8 @@ import ImagenProtegida from "./ImagenProtegida";
 import { formatearFecha, aInputFecha } from "../utils/fecha";
 import { exportarOrdenTrabajoPdf } from "../utils/ordenTrabajoPdf";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
-import ModalOrdenCompra from "./ModalOrdenCompra";
+import ModalGenerarOC from "./ModalOrdenCompra";
+import { indicesLibresOC } from "../utils/cotizacionItems";
 import SelectorEmpresas from "./SelectorEmpresas";
 import ModalNuevaSubOT from "./ModalNuevaSubOT";
 import ModalRequerimiento from "./ModalRequerimiento";
@@ -19,7 +20,7 @@ import ModalDetalleGuia from "./ModalDetalleGuia";
 import ConfirmacionAccion from "./ConfirmacionAccion";
 import AvisoAccion from "./AvisoAccion";
 import {
-  FlujoNegocio, TarjetaRelacion, Chip, ParteConsolidada,
+  FlujoNegocio, TarjetaRelacion, Chip, PartidaOC,
   badgePago, badgeOT, estadoProgresoOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
 } from "./detalleShared";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
@@ -920,7 +921,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                   onClick={oc ? () => onNavegar?.({ tipo: "oc", data: oc, extra: factura }) : undefined}
                   onCrear={!oc && cot && !ot.anulado ? () => setCrearOCOpen(true) : undefined} crearLabel="OC">
                   {puedeVerPrecios && oc?.monto > 0 && <p className="text-xs text-gray-500">{money(oc.monto, cot?.moneda)}</p>}
-                  <ParteConsolidada oc={oc} cotizacionId={cot?._id} moneda={cot?.moneda} verPrecios={puedeVerPrecios} />
+                  <PartidaOC oc={oc} cotizacionId={cot?._id} moneda={cot?.moneda} verPrecios={puedeVerPrecios} />
                 </TarjetaRelacion>
 
                 {veFacturas(rolDeSesion()) && (
@@ -930,7 +931,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                     <p className="text-xs text-gray-500">{money(factura.totalAPagar ?? factura.total, cot?.moneda)}</p>
                   )}
                   {factura?.estadoPago && <Chip className={badgePago(factura.estadoPago)}>{factura.estadoPago}</Chip>}
-                  {factura && <ParteConsolidada oc={oc} cotizacionId={cot?._id} moneda={cot?.moneda} verPrecios={puedeVerPrecios} />}
+                  {factura && <PartidaOC oc={oc} cotizacionId={cot?._id} partidasIds={factura.partidasOC} moneda={cot?.moneda} verPrecios={puedeVerPrecios} />}
                 </TarjetaRelacion>
                 )}
               </>
@@ -1148,8 +1149,10 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
       )}
 
       {crearOCOpen && cot && (
-        <ModalOrdenCompra
+        <ModalGenerarOC
           cotizacion={cot}
+          indices={indicesLibresOC(cot)}
+          verPrecios={puedeVerPrecios}
           onClose={() => setCrearOCOpen(false)}
           onCreada={() => { setCrearOCOpen(false); cargarRelaciones(); }}
         />

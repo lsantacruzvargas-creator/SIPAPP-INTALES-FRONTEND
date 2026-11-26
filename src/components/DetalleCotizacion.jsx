@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
-import { formatearFecha, aInputFecha, fechaHoyLima } from "../utils/fecha";
+import { formatearFecha, aInputFecha } from "../utils/fecha";
 import { exportarCotizacionPdf } from "../utils/cotizacionPdf";
-import { calcSubtotal, itemDesdeDb, itemInvalido } from "../utils/cotizacionItems";
+import {
+  calcSubtotal, itemDesdeDb, itemInvalido, idDe, vinculosItem, indicesLibresOC, partidasTomadas, partidaRecibida, infoPartidaItem,
+} from "../utils/cotizacionItems";
 import { estadoComprobanteClase } from "../utils/catalogosSunat";
 import ModalNuevaOT from "./ModalNuevaOT";
-import ModalOrdenCompra, { ModalOrdenCompraItems } from "./ModalOrdenCompra";
+import ModalGenerarOC from "./ModalOrdenCompra";
 import ModalDetalleGuia from "./ModalDetalleGuia";
 import BuscadorOrdenTrabajo from "./BuscadorOrdenTrabajo";
 import SelectorEmpresas from "./SelectorEmpresas";
@@ -15,9 +17,10 @@ import ConfirmacionAccion from "./ConfirmacionAccion";
 import TablaItemsCotizacion from "./TablaItemsCotizacion";
 import TarjetaArchivosRelacionados from "./TarjetaArchivosRelacionados";
 import {
-  FlujoNegocio, TarjetaRelacion, Chip, ParteConsolidada,
-  badgePago, badgeOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
+  FlujoNegocio, TarjetaRelacion, Chip, PartidaOC,
+  badgePago, badgeOT, money, BotonAnular, BotonDesanular, BannerAnulado,
 } from "./detalleShared";
+import { bloqueadoPorPago, fusionarBloqueo } from "../utils/bloqueoPago";
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "./BarraEdicion";
 import { conBloqueo } from "../utils/bloqueoApi";
@@ -111,11 +114,6 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const [crearOTOpen, setCrearOTOpen] = useState(false);
-  const [crearOCOpen, setCrearOCOpen] = useState(false);
-  const [modalCerrarCadenaOpen, setModalCerrarCadenaOpen] = useState(false);
-  const [fechaPagoCierre, setFechaPagoCierre] = useState(() => fechaHoyLima());
-  const [numeroFacturaCierre, setNumeroFacturaCierre] = useState("");
-  const [cerrandoCadena, setCerrandoCadena] = useState(false);
   const [buscadorOTOpen, setBuscadorOTOpen] = useState(false);
   const [confirmandoReasignarOT, setConfirmandoReasignarOT] = useState(null);
   const [reasignandoOT, setReasignandoOT] = useState(false);
@@ -127,7 +125,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const rolActual = getUsuario()?.rol;
   const puedeEditar = ["admin", "asistente", "facturacion", "jefatura", "coordinadora", "planner"].includes(rolActual);
   // Anular un documento queda reservado a Admin y Jefatura — Facturación ya
-  // no puede. Desanular y cerrar/abrir la cadena a mano son exclusivos de admin.
+  // no puede. Desanular es exclusivo de admin.
   const puedeAnular = ["admin", "jefatura"].includes(rolActual);
   const esAdmin = rolActual === "admin";
   // Precios: información sensible, solo Admin/Facturación/Jefatura los ven —
@@ -141,17 +139,19 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const puedeGenerarOT = ["admin", "asistente", "facturacion", "jefatura", "planner", "coordinadora"].includes(rolActual);
   // Mismo set de roles que ve el card de GRE en DetalleOrdenTrabajo.jsx.
   const puedeGenerarGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
-  const cadenaCerrada = bloqueadoPorCadenaCerrada(cot.estadoCadena, rolActual);
+  const bloqueada = bloqueadoPorPago(cot, rolActual);
   // OC por ítems: mismos roles que crean OC (puedeEditar de Backend/src/routes/ordenesCompra.js).
   const puedeGenerarOC = ["admin", "asistente", "facturacion", "jefatura", "coordinadora"].includes(rolActual)
-    && !cot.anulado && !cadenaCerrada;
-  const bloqueo = useBloqueoEdicion("cotizacion", cot._id, cot.updatedAt, { autoEditar: puedeEditar && !cot.anulado && !cadenaCerrada });
-  // Desglose mostrado en el modal de "Cerrar cadena" — mismo criterio de
-  // detracción SUNAT que ya usa DetalleOrdenCompra.jsx (12% cuando el total
-  // supera S/700), calculado sobre el total ya persistido de la cotización.
-  const detraccionCierreAplica = cot.afectoIgv !== false && Number(cot.total) > 700;
-  const detraccionCierreMonto = detraccionCierreAplica ? r2(Number(cot.total) * 0.12) : 0;
-  const totalAPagarCierre = r2((Number(cot.total) - detraccionCierreMonto));
+    && !cot.anulado && !bloqueada;
+  const bloqueo = useBloqueoEdicion("cotizacion", cot._id, cot.updatedAt, { autoEditar: puedeEditar && !cot.anulado && !bloqueada });
+  // Lo facturado o en emisión no cambia para nadie, Jefatura incluida (backend: errorEdicionFacturada).
+  const tomadas = partidasTomadas(cot);
+  const esTomado = (item) => !!item.partidaOC && tomadas.has(idDe(item.partidaOC));
+  const cabeceraFija = tomadas.size > 0 || !!cot.bloqueo?.facturada || !!cot.bloqueo?.reservada;
+  // Con una partida en una OC vigente la empresa, la moneda y el IGV ya son los de esa OC (FP-22).
+  const empresaMonedaFijas = cabeceraFija || !!cot.bloqueo?.enOC;
+  // Sin ítems, la partida cubre la cotización entera: agregar uno cambiaría su monto.
+  const sinAgregarItems = cabeceraFija && (cot.items || []).length === 0;
 
   const cargarRelaciones = () => {
     Promise.all([
@@ -169,19 +169,23 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       } else {
         setGres([]);
       }
-      // Varias OCs por cotización (OCs parciales por ítems), más la OC consolidada a
-      // la que esta cotización está anexada (sus líneas) — en orden de creación.
+      // Las OC con una partida de esta cotización (la propia o una a la que se anexó), más una OC
+      // legado sin partidas que nació de ella — en orden de creación.
       const ocsFound = ocs
-        .filter(o => (o.cotizacion?._id || o.cotizacion) === cot._id
-          || (o.lineas || []).some(l => (l.cotizacion?._id || l.cotizacion) === cot._id))
+        .filter(o => idDe(o.cotizacion) === cot._id
+          || (o.partidas || []).some(p => idDe(p.cotizacion) === cot._id))
         .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       setOcs(ocsFound);
-      // La factura de cada OC va por su enlace; la de la cadena comparte numeroDocumento.
+      // La factura de una OC le toca a esta cotización si cubre alguna de sus partidas (sin
+      // `partidasOC` cubre la OC entera); una factura sin OC, si comparte la cadena.
       const idsOC = new Set(ocsFound.map(o => o._id));
-      setFacturas(facts.filter(f =>
-        idsOC.has(f.ordenCompra?._id || f.ordenCompra) ||
-        (cot.numeroDocumento != null && f.numeroDocumento === cot.numeroDocumento)
-      ));
+      const partidasPropias = new Set(ocsFound.flatMap(o =>
+        (o.partidas || []).filter(p => idDe(p.cotizacion) === cot._id).map(p => idDe(p._id))));
+      setFacturas(facts.filter(f => {
+        const ocId = idDe(f.ordenCompra);
+        if (ocId) return idsOC.has(ocId) && (!(f.partidasOC || []).length || f.partidasOC.some(p => partidasPropias.has(idDe(p))));
+        return cot.numeroDocumento != null && f.numeroDocumento === cot.numeroDocumento;
+      }));
       if (otsFound.length > 0) {
         Promise.all(
           otsFound.map(o => fetchAuth(`/informes?ordenTrabajo=${o._id}`).then(r => r.ok ? r.json() : []))
@@ -288,7 +292,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   // La factura de cada OC va por su enlace directo (`ordenCompra`); con una
   // sola OC se acepta además la de la cadena (facturas antiguas sin enlace).
   const facturaDeOC = (o) =>
-    facturas.find(f => (f.ordenCompra?._id || f.ordenCompra) === o?._id) ||
+    facturas.find(f => idDe(f.ordenCompra) === o?._id) ||
     (ocs.length === 1 ? facturas.find(f => !f.ordenCompra) : null) ||
     null;
 
@@ -303,21 +307,42 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     return next;
   });
 
-  // El backend identifica los ítems por índice: se guardan antes los cambios
-  // pendientes para que la selección coincida con lo persistido.
-  const abrirNuevaOCItems = async () => {
+  // El backend identifica los ítems por índice y fija el monto de la partida con la
+  // cotización guardada: se guardan antes los cambios pendientes. `todos`: la OC de la
+  // cotización entera (los ítems que aún no están en una OC vigente).
+  const abrirGenerarOC = async ({ todos = false } = {}) => {
     setPreparandoOC(true);
     const guardada = puedeEditar && bloqueo.editando ? await guardarCotizacion() : cot;
     setPreparandoOC(false);
-    if (guardada) setIndicesNuevaOC([...seleccionadosOC].sort((a, b) => a - b));
+    if (guardada) setIndicesNuevaOC(todos ? indicesLibresOC(guardada) : [...seleccionadosOC].sort((a, b) => a - b));
   };
 
-  // La OC nueva marca `ocGenerada` en sus ítems: se refleja sin recargar la cotización.
-  const marcarItemsConOC = (indices, nueva) => {
-    const ref = { _id: nueva._id, codigo: nueva.codigo, numeroOrden: nueva.numeroOrden, anulado: false };
-    const marcar = (lista) => (lista || []).map((it, i) => (indices.includes(i) ? { ...it, ocGenerada: ref } : it));
-    setCot(prev => ({ ...prev, items: marcar(prev.items) }));
+  // La OC marca `ocGenerada` y `partidaOC` en sus ítems y la cotización queda en una OC vigente.
+  const marcarItemsConOC = (indices, oc) => {
+    const ref = { _id: oc._id, codigo: oc.codigo, numeroOrden: oc.numeroOrden, anulado: false };
+    const partidaOC = idDe(partidaRecibida(oc, cot._id)?._id);
+    const marcar = (lista) => (lista || []).map((it, i) => (indices.includes(i) ? { ...it, ocGenerada: ref, partidaOC } : it));
+    setCot(prev => ({ ...prev, items: marcar(prev.items), bloqueo: { ...prev.bloqueo, enOC: true } }));
     setItems(marcar);
+  };
+
+  // Anexar puede mover la cadena (numeroDocumento) y eso cambia la versión de la cotización: se
+  // relee y, si se está editando (nadie más pudo guardarla), el formulario adopta la versión nueva.
+  const recargarTrasOC = async () => {
+    const res = await fetchAuth("/cotizaciones").catch(() => null);
+    const actualizada = res?.ok ? (await res.json()).find(c => c._id === cot._id) : null;
+    if (!actualizada) return;
+    setCot(prev => ({
+      ...prev,
+      items: actualizada.items,
+      numeroDocumento: actualizada.numeroDocumento,
+      numeroDocumentoOriginal: actualizada.numeroDocumentoOriginal,
+      updatedAt: actualizada.updatedAt,
+      bloqueadoPorPago: actualizada.bloqueadoPorPago,
+      bloqueo: actualizada.bloqueo,
+    }));
+    setItems((actualizada.items || []).map(itemDesdeDb));
+    if (bloqueo.editando) bloqueo.terminar(actualizada.updatedAt);
   };
 
   const toggleSeleccion = (idx) => setSeleccionados(prev => {
@@ -349,7 +374,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
         ultimaCot = data.cotizacion;
       }
     }
-    setCot(ultimaCot);
+    setCot(prev => fusionarBloqueo(prev, ultimaCot));
     setItems((ultimaCot.items || []).map(itemDesdeDb));
     setSeleccionados(new Set());
     setGenerandoOT(false);
@@ -362,7 +387,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     const res = await bloqueo.fetch(`/cotizaciones/${cot._id}/items/${idx}/quitar-ot`, { method: "PATCH" });
     if (res.ok) {
       const actualizada = await res.json();
-      setCot(actualizada);
+      setCot(prev => fusionarBloqueo(prev, actualizada));
       setItems((actualizada.items || []).map(itemDesdeDb));
       cargarRelaciones();
     }
@@ -375,7 +400,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     const data = await res.json().catch(() => ({}));
     cargarRelaciones();
     if (!res.ok) return data.mensaje || "No se pudo eliminar el archivo.";
-    setCot(data);
+    setCot(prev => fusionarBloqueo(prev, data));
     return null;
   };
 
@@ -470,6 +495,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
           precio: i.precio,
           moneda: i.moneda,
           subtotal: calcSubtotal(i, descuentoGlobalNum),
+          ...vinculosItem(i),
         };
         if (i.diasEntrega !== "" && i.diasEntrega != null) it.diasEntrega = i.diasEntrega;
         if (i.subItems?.length > 0) it.subItems = i.subItems.map(s => s.texto).filter(Boolean);
@@ -488,7 +514,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       body: JSON.stringify(payload),
     });
     if (res.ok) {
-      const actualizada = await res.json();
+      const actualizada = fusionarBloqueo(cot, await res.json());
       setCot(actualizada);
       setItems((actualizada.items || []).map(itemDesdeDb));
       setIntentoGuardar(false);
@@ -521,7 +547,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       body: JSON.stringify({ motivo }),
     });
     if (res.ok) {
-      const actualizada = await res.json();
+      const actualizada = fusionarBloqueo(cot, await res.json());
       setCot(actualizada);
       onGuardada?.(actualizada);
       return;
@@ -533,37 +559,12 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   const desanular = async () => {
     const res = await bloqueo.fetch(`/cotizaciones/${cot._id}/desanular`, { method: "PATCH" });
     if (res.ok) {
-      const actualizada = await res.json();
+      const actualizada = fusionarBloqueo(cot, await res.json());
       setCot(actualizada);
       onGuardada?.(actualizada);
     } else {
       setError(errorDelFormulario(res.status, await res.json().catch(() => ({})), "Error al desanular el documento.") || "");
     }
-  };
-
-  const toggleCerrarCadena = async (cerrado, fechaPago, numeroFactura) => {
-    const res = await bloqueo.fetch(`/cotizaciones/${cot._id}/cerrar-cadena`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cerrado, ...(fechaPago ? { fechaPago } : {}), ...(numeroFactura ? { numeroFactura } : {}) }),
-    });
-    if (res.ok) {
-      const actualizada = await res.json();
-      setCot(actualizada);
-      onGuardada?.(actualizada);
-    } else {
-      setError(errorDelFormulario(res.status, await res.json().catch(() => ({})), "Error al cerrar/abrir la cadena.") || "");
-    }
-  };
-
-  // Al CERRAR la cadena desde acá se pide antes la fecha de pago (ver modal
-  // más abajo) — al reabrir se sigue usando el confirm genérico de
-  // BotonCerrarCadena, sin fecha.
-  const confirmarCerrarCadena = async () => {
-    setCerrandoCadena(true);
-    await toggleCerrarCadena(true, fechaPagoCierre, numeroFacturaCierre);
-    setCerrandoCadena(false);
-    setModalCerrarCadenaOpen(false);
   };
 
   const ultimo = informes[informes.length - 1];
@@ -614,19 +615,10 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                 Exportar PDF
               </button>
             )}
-            {!cot.anulado && !cadenaCerrada && puedeAnular && <BotonAnular onAnular={anular} />}
+            {!cot.anulado && !bloqueada && puedeAnular && <BotonAnular onAnular={anular} />}
             {esAdmin && cot.anulado && <BotonDesanular onDesanular={desanular} />}
-            {esAdmin && (cadenaCerrada
-              ? <BotonCerrarCadena cerrado onToggle={toggleCerrarCadena} />
-              : (
-                <button onClick={() => setModalCerrarCadenaOpen(true)}
-                  className="text-xs text-white/70 hover:text-white underline transition">
-                  Cerrar cadena
-                </button>
-              )
-            )}
-            {!cot.anulado && !cadenaCerrada && <BarraEdicion bloqueo={bloqueo} />}
-            {!cot.anulado && !cadenaCerrada && puedeEditar && (
+            {!cot.anulado && !bloqueada && <BarraEdicion bloqueo={bloqueo} />}
+            {!cot.anulado && !bloqueada && puedeEditar && (
               <button onClick={guardar} disabled={guardando || !bloqueo.editando}
                 className="bg-white text-sky-700 text-sm px-5 py-2 rounded-lg hover:bg-sky-50 disabled:opacity-60 transition font-semibold shadow-sm shrink-0">
                 {guardando ? "Guardando…" : "Guardar cambios"}
@@ -658,16 +650,30 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               <BannerAnulado motivo={cot.motivoAnulacion} por={cot.anuladoPor} fecha={cot.fechaAnulacion} />
             )}
 
-            {!cot.anulado && cadenaCerrada && (
+            {!cot.anulado && bloqueada && (
               <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                La cadena de este documento está cerrada (factura pagada) — de solo lectura. Solo Jefatura puede editarlo.
+                Cotización pagada (o de una cadena cerrada) — de solo lectura. Solo Jefatura puede editarla.
+              </p>
+            )}
+
+            {!cot.anulado && !bloqueada && cabeceraFija && (
+              <p className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+                {(cot.items || []).length > 0
+                  ? "Tiene ítems facturados o en emisión: esos ítems (descripción, cantidad, precio y unidad), el descuento, la empresa, la moneda y la afectación al IGV no se pueden cambiar. Los ítems libres sí."
+                  : "Cotización facturada o en emisión: sus montos, el descuento, la empresa, la moneda y la afectación al IGV no se pueden cambiar."}
+              </p>
+            )}
+
+            {!cot.anulado && !bloqueada && !cabeceraFija && empresaMonedaFijas && (
+              <p className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+                Tiene partidas en una orden de compra vigente: la empresa, la moneda y la afectación al IGV no se pueden cambiar. Para cambiarlas, desvincula la partida o anula la OC.
               </p>
             )}
 
             {/* `contents` — el fieldset deshabilita todos los inputs de las 4
                 cards de abajo sin imponer su propio layout (cada card sigue
                 siendo un hijo directo de este space-y-6). */}
-            <fieldset disabled={cot.anulado || cadenaCerrada || !puedeEditar || !bloqueo.editando} className="contents">
+            <fieldset disabled={cot.anulado || bloqueada || !puedeEditar || !bloqueo.editando} className="contents">
 
               {/* Cards agrupadas igual que en SIPAPP-HUAQUIAN (revisión del
                   usuario, 2026-09-14) — mismos campos que ya tenía Intales,
@@ -734,6 +740,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                         type="text"
                         value={busquedaEmpresa}
                         onChange={cambiarBusquedaEmpresa}
+                        disabled={empresaMonedaFijas}
                         onFocus={() => setListaEmpresaAbierta(true)}
                         onBlur={() => setListaEmpresaAbierta(false)}
                         placeholder="Escribe el nombre de la empresa…"
@@ -752,8 +759,8 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                         </div>
                       )}
                     </div>
-                    <button type="button" onClick={() => setEmpresasOpen(true)}
-                      className="shrink-0 text-xs border border-gray-300 px-3 rounded-lg hover:bg-gray-50 transition">
+                    <button type="button" onClick={() => setEmpresasOpen(true)} disabled={empresaMonedaFijas}
+                      className="shrink-0 text-xs border border-gray-300 px-3 rounded-lg hover:bg-gray-50 transition disabled:opacity-50">
                       Empresas
                     </button>
                   </div>
@@ -833,7 +840,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Moneda</label>
-                    <select name="moneda" value={form.moneda} onChange={handleChange} className={INP}>
+                    <select name="moneda" value={form.moneda} onChange={handleChange} disabled={empresaMonedaFijas} className={INP}>
                       <option value="PEN">Soles (S/)</option>
                       <option value="USD">Dólares (US$)</option>
                     </select>
@@ -901,13 +908,13 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                         {totalesMostrados.subtotal.toFixed(2)}
                       </p>
                     ) : (
-                      <input type="number" name="subtotal" value={form.subtotal} onChange={handleChange}
+                      <input type="number" name="subtotal" value={form.subtotal} onChange={handleChange} disabled={cabeceraFija}
                         step="0.01" min="0" placeholder="0.00" className={`${INP} text-lg font-semibold`} />
                     )}
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Descuento global (%)</label>
-                    <input type="number" name="descuentoGlobal" value={form.descuentoGlobal} onChange={handleChange}
+                    <input type="number" name="descuentoGlobal" value={form.descuentoGlobal} onChange={handleChange} disabled={cabeceraFija}
                       onWheel={(e) => e.target.blur()}
                       step="0.1" min="0" max="100" placeholder="0" className={INP} />
                     {totalesMostrados.descuento > 0 && (
@@ -917,7 +924,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                     )}
                   </div>
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-                    <input type="checkbox" name="afectoIgv" checked={form.afectoIgv} onChange={handleChange}
+                    <input type="checkbox" name="afectoIgv" checked={form.afectoIgv} onChange={handleChange} disabled={empresaMonedaFijas}
                       className="h-4 w-4 accent-sky-600" />
                     Afecto a IGV (18%)
                     {!form.afectoIgv && <span className="text-xs text-amber-600">— trabajo en el extranjero, sin IGV</span>}
@@ -1015,14 +1022,14 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
 
             {rolActual !== "coordinadora" && (ocs.length === 0 ? (
               <TarjetaRelacion tipo="oc" vacio
-                onCrear={!cot.anulado ? () => setCrearOCOpen(true) : undefined} crearLabel="OC" />
+                onCrear={puedeGenerarOC && !preparandoOC ? () => abrirGenerarOC({ todos: true }) : undefined} crearLabel="OC" />
             ) : (
               ocs.map(o => (
                 <TarjetaRelacion key={o._id} tipo="oc" codigo={o.codigo} numero={o.numeroOrden} onClick={() => abrirOC(o)}>
                   {o.desdeItemsCotizacion && <p className="text-sm text-gray-600 line-clamp-2">{o.titulo}</p>}
                   {puedeVerPrecios && o.monto > 0 && <p className="text-xs text-gray-500">{money(o.monto, cot.moneda)}</p>}
                   {o.anulado && <Chip className="bg-red-100 text-red-600">Anulada</Chip>}
-                  <ParteConsolidada oc={o} cotizacionId={cot._id} moneda={cot.moneda} verPrecios={puedeVerPrecios} />
+                  <PartidaOC oc={o} cotizacionId={cot._id} moneda={cot.moneda} verPrecios={puedeVerPrecios} />
                 </TarjetaRelacion>
               ))
             ))}
@@ -1031,7 +1038,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               <TarjetaRelacion tipo="factura" vacio />
             ) : (
               facturas.map(f => {
-                const ocDeFactura = ocs.find(o => o._id === (f.ordenCompra?._id || f.ordenCompra)) || (ocs.length === 1 ? oc : null);
+                const ocDeFactura = ocs.find(o => o._id === idDe(f.ordenCompra)) || (ocs.length === 1 ? oc : null);
                 return (
                   <TarjetaRelacion key={f._id} tipo="factura" codigo={f.codigo} numero={f.numeroFactura}
                     onClick={() => onNavegar?.({ tipo: "factura", data: f })}>
@@ -1039,7 +1046,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                       <p className="text-xs text-gray-500">{money(f.totalAPagar ?? f.total, cot.moneda)}</p>
                     )}
                     {f.estadoPago && <Chip className={badgePago(f.estadoPago)}>{f.estadoPago}</Chip>}
-                    <ParteConsolidada oc={ocDeFactura} cotizacionId={cot._id} moneda={cot.moneda} verPrecios={puedeVerPrecios} />
+                    <PartidaOC oc={ocDeFactura} cotizacionId={cot._id} partidasIds={f.partidasOC} moneda={cot.moneda} verPrecios={puedeVerPrecios} />
                   </TarjetaRelacion>
                 );
               })
@@ -1108,10 +1115,13 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
             seleccionablesOC={puedeGenerarOC}
             seleccionadosOC={seleccionadosOC}
             onToggleSeleccionOC={toggleSeleccionOC}
-            onGenerarOC={abrirNuevaOCItems}
+            onGenerarOC={() => abrirGenerarOC()}
             generandoOC={preparandoOC}
             onVerOC={abrirOC}
             puedeVerPrecios={puedeVerPrecios}
+            esTomado={esTomado}
+            infoPartida={(item) => infoPartidaItem(item, ocs)}
+            sinAgregar={sinAgregarItems}
           />
         </div>
 
@@ -1136,7 +1146,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
             vinculadoLabel="la OT"
             onEliminarVinculado={["admin", "jefatura", "coordinadora"].includes(rolActual) ? eliminarAdjuntoDeOT : undefined}
             soloLectura={cot.anulado}
-            onCambio={(actualizada) => setCot(actualizada)}
+            onCambio={(actualizada) => setCot(prev => fusionarBloqueo(prev, actualizada))}
           />
         </div>
       </div>
@@ -1192,24 +1202,17 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
         />
       )}
 
-      {crearOCOpen && (
-        <ModalOrdenCompra
-          cotizacion={cot}
-          onClose={() => setCrearOCOpen(false)}
-          onCreada={() => { setCrearOCOpen(false); cargarRelaciones(); }}
-        />
-      )}
-
       {indicesNuevaOC && (
-        <ModalOrdenCompraItems
+        <ModalGenerarOC
           cotizacion={cot}
           indices={indicesNuevaOC}
-          enviar={bloqueo.editando ? bloqueo.fetch : undefined}
+          verPrecios={puedeVerPrecios}
           onClose={() => setIndicesNuevaOC(null)}
-          onCreada={(nueva) => {
-            marcarItemsConOC(indicesNuevaOC, nueva);
+          onCreada={(oc) => {
+            marcarItemsConOC(indicesNuevaOC, oc);
             setIndicesNuevaOC(null);
             setSeleccionadosOC(new Set());
+            recargarTrasOC();
             cargarRelaciones();
           }}
         />
@@ -1219,57 +1222,6 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
         <ModalDetalleGuia guia={guiaDetalle} onClose={() => setGuiaDetalle(null)} />
       )}
 
-      {modalCerrarCadenaOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
-            <h3 className="text-base font-semibold text-gray-800 mb-1">Cerrar cadena</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Se cerrará a mano toda la cadena de este documento (Cotización, OT, OC, Informes y Factura
-              relacionados) y quedará registrado el cobro con la fecha que elijas abajo.
-            </p>
-            <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 mb-4 text-sm space-y-1.5">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Monto de la cotización</span>
-                <span className="font-medium text-gray-800">{money(cot.subtotal, cot.moneda)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">I.G.V.</span>
-                <span className="font-medium text-gray-800">{money(cot.igv, cot.moneda)}</span>
-              </div>
-              <div className="flex justify-between border-t border-gray-200 pt-1.5">
-                <span className="text-gray-500">Total</span>
-                <span className="font-semibold text-gray-800">{money(cot.total, cot.moneda)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Detracción{detraccionCierreAplica ? " (12%)" : ""}</span>
-                <span className="font-medium text-gray-800">
-                  {detraccionCierreAplica ? `- ${money(detraccionCierreMonto, cot.moneda)}` : "No aplica"}
-                </span>
-              </div>
-              <div className="flex justify-between border-t border-gray-200 pt-1.5">
-                <span className="text-gray-700 font-semibold">Total a pagar</span>
-                <span className="font-bold text-gray-900">{money(totalAPagarCierre, cot.moneda)}</span>
-              </div>
-            </div>
-            <label className="text-xs text-gray-500 block mb-1">Fecha de pago</label>
-            <input type="date" value={fechaPagoCierre} onChange={(e) => setFechaPagoCierre(e.target.value)}
-              className={`${INP} mb-4`} />
-            <label className="text-xs text-gray-500 block mb-1">N° de factura (opcional)</label>
-            <input type="text" value={numeroFacturaCierre} onChange={(e) => setNumeroFacturaCierre(e.target.value)}
-              placeholder="F00X-XXXX" className={`${INP} mb-4`} />
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setModalCerrarCadenaOpen(false)} disabled={cerrandoCadena}
-                className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition disabled:opacity-50">
-                Cancelar
-              </button>
-              <button onClick={confirmarCerrarCadena} disabled={cerrandoCadena}
-                className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-700 transition disabled:opacity-50">
-                {cerrandoCadena ? "Cerrando…" : "Cerrar cadena"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
