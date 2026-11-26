@@ -1153,6 +1153,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
           cotizacion={cot}
           indices={indicesLibresOC(cot)}
           verPrecios={puedeVerPrecios}
+          tomarCotizacion
           onClose={() => setCrearOCOpen(false)}
           onCreada={() => { setCrearOCOpen(false); cargarRelaciones(); }}
         />

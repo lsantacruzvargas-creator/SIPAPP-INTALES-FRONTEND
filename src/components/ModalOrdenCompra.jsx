@@ -12,8 +12,10 @@ const mensajeDe = (status, data, porDefecto) => avisoDeRespuesta(status, data)?.
 
 // Genera una OC nueva con los ítems `indices` de la cotización guardada, o los anexa a una OC existente
 // como partida (una por cotización). `indices` vacío = cotización sin ítems. El monto lo fija el servidor
-// con la misma fórmula (subtotalPartida); aquí solo se muestra.
-export default function ModalGenerarOC({ cotizacion, indices, verPrecios = false, onClose, onCreada }) {
+// con la misma fórmula (subtotalPartida); aquí solo se muestra. `tomarCotizacion`: quien lo abre no tiene
+// la cotización tomada para edición (desde la OT): se toma solo durante el pedido, así no se marcan
+// vínculos en los ítems mientras otro la edita (423 "En edición por …").
+export default function ModalGenerarOC({ cotizacion, indices, verPrecios = false, tomarCotizacion = false, onClose, onCreada }) {
   const moneda = cotizacion.moneda;
   const items = cotizacion.items || [];
   const elegidos = indices.map((idx) => ({ idx, item: items[idx] })).filter((e) => e.item);
@@ -57,17 +59,18 @@ export default function ModalGenerarOC({ cotizacion, indices, verPrecios = false
     const cuerpo = { cotizacion: cotizacion._id, indices: elegidos.map((e) => e.idx) };
     try {
       // Anexar escribe una OC existente: exige su bloqueo de edición (423 "En edición por …" si otro la tiene abierta).
-      const res = anexar
-        ? await conBloqueo("ordenCompra", form.ordenCompra, (h) => fetchAuth(`/ordenes-compra/${form.ordenCompra}/partidas`, {
+      const enviar = () => (anexar
+        ? conBloqueo("ordenCompra", form.ordenCompra, (h) => fetchAuth(`/ordenes-compra/${form.ordenCompra}/partidas`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...h },
           body: JSON.stringify(cuerpo),
         }))
-        : await fetchAuth("/ordenes-compra/partidas", {
+        : fetchAuth("/ordenes-compra/partidas", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...cuerpo, numeroOrden: form.numeroOrden.trim(), titulo: form.titulo.trim() }),
-        });
+        }));
+      const res = tomarCotizacion ? await conBloqueo("cotizacion", cotizacion._id, enviar) : await enviar();
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(mensajeDe(res.status, data, "No se pudo generar la orden de compra."));

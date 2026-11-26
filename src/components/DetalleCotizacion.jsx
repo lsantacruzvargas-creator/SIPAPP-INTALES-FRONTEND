@@ -140,14 +140,16 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   // Mismo set de roles que ve el card de GRE en DetalleOrdenTrabajo.jsx.
   const puedeGenerarGRE = ["admin", "asistente", "facturacion", "almacenero", "jefatura", "planner", "coordinadora"].includes(rolActual);
   const bloqueada = bloqueadoPorPago(cot, rolActual);
-  // OC por ítems: mismos roles que crean OC (puedeEditar de Backend/src/routes/ordenesCompra.js).
-  const puedeGenerarOC = ["admin", "asistente", "facturacion", "jefatura", "coordinadora"].includes(rolActual)
-    && !cot.anulado && !bloqueada;
   const bloqueo = useBloqueoEdicion("cotizacion", cot._id, cot.updatedAt, { autoEditar: puedeEditar && !cot.anulado && !bloqueada });
+  // OC por ítems: mismos roles que crean OC (puedeEditar de Backend/src/routes/ordenesCompra.js). Solo
+  // con la cotización tomada para edición: generar marca vínculos en sus ítems y el formulario de otro
+  // que la tuviera abierta ya no podría guardarse (400 por vínculos).
+  const puedeGenerarOC = ["admin", "asistente", "facturacion", "jefatura", "coordinadora"].includes(rolActual)
+    && !cot.anulado && !bloqueada && bloqueo.editando;
   // Lo facturado o en emisión no cambia para nadie, Jefatura incluida (backend: errorEdicionFacturada).
   const tomadas = partidasTomadas(cot);
   const esTomado = (item) => !!item.partidaOC && tomadas.has(idDe(item.partidaOC));
-  const cabeceraFija = tomadas.size > 0 || !!cot.bloqueo?.facturada || !!cot.bloqueo?.reservada;
+  const cabeceraFija = (cot.bloqueo?.indicesFacturados || []).length > 0 || !!cot.bloqueo?.facturada || !!cot.bloqueo?.reservada;
   // Con una partida en una OC vigente la empresa, la moneda y el IGV ya son los de esa OC (FP-22).
   const empresaMonedaFijas = cabeceraFija || !!cot.bloqueo?.enOC;
   // Sin ítems, la partida cubre la cotización entera: agregar uno cambiaría su monto.
@@ -312,7 +314,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
   // cotización entera (los ítems que aún no están en una OC vigente).
   const abrirGenerarOC = async ({ todos = false } = {}) => {
     setPreparandoOC(true);
-    const guardada = puedeEditar && bloqueo.editando ? await guardarCotizacion() : cot;
+    const guardada = await guardarCotizacion();
     setPreparandoOC(false);
     if (guardada) setIndicesNuevaOC(todos ? indicesLibresOC(guardada) : [...seleccionadosOC].sort((a, b) => a - b));
   };
@@ -326,23 +328,33 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
     setItems(marcar);
   };
 
-  // Anexar puede mover la cadena (numeroDocumento) y eso cambia la versión de la cotización: se
-  // relee y, si se está editando (nadie más pudo guardarla), el formulario adopta la versión nueva.
+  // Anexar puede mover la cadena (numeroDocumento) y cambia el bloqueo: se releen esos datos. Sin
+  // tocar la versión del formulario (generar y anexar no cambian el updatedAt de la cotización).
   const recargarTrasOC = async () => {
-    const res = await fetchAuth("/cotizaciones").catch(() => null);
-    const actualizada = res?.ok ? (await res.json()).find(c => c._id === cot._id) : null;
+    const lista = await fetchAuth("/cotizaciones")
+      .then(r => (r.ok ? r.json() : []))
+      .catch(() => []);
+    const actualizada = lista.find(c => c._id === cot._id);
     if (!actualizada) return;
     setCot(prev => ({
       ...prev,
       items: actualizada.items,
       numeroDocumento: actualizada.numeroDocumento,
       numeroDocumentoOriginal: actualizada.numeroDocumentoOriginal,
-      updatedAt: actualizada.updatedAt,
       bloqueadoPorPago: actualizada.bloqueadoPorPago,
       bloqueo: actualizada.bloqueo,
     }));
     setItems((actualizada.items || []).map(itemDesdeDb));
-    if (bloqueo.editando) bloqueo.terminar(actualizada.updatedAt);
+  };
+
+  // Quitar un ítem corre las posiciones de los siguientes: las casillas marcadas (OT y OC, por
+  // índice) ya no apuntarían al mismo ítem.
+  const cambiarItems = (nuevos) => {
+    if (nuevos.length < items.length) {
+      setSeleccionados(new Set());
+      setSeleccionadosOC(new Set());
+    }
+    setItems(nuevos);
   };
 
   const toggleSeleccion = (idx) => setSeleccionados(prev => {
@@ -1098,7 +1110,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
         <div className="w-[90vw] max-w-none mx-auto px-8 pb-8">
           <TablaItemsCotizacion
             items={items}
-            onItemsChange={setItems}
+            onItemsChange={cambiarItems}
             tipo={form.tipo}
             puedeEditar={puedeEditar}
             disabled={cot.anulado || !bloqueo.editando}
