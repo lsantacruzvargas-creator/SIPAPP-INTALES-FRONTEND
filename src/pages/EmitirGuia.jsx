@@ -39,12 +39,11 @@ const UNIDADES_TRANSPORTE = [
   { dni: "80653251", nombres: "JOSE LUIS", apellidos: "ALVARADO CAYHUA", placa: "D6R937", licencia: "Q80653251" },
 ];
 
-// Empresa emisora fija — este ERP emite GRE únicamente a nombre de Huaquian.
+// Empresa emisora fija — este ERP emite GRE únicamente a nombre de Intales.
 // Las credenciales SUNAT (incluidas las de GRE) las resuelve el hub central por
 // RUC — no hay registro de credenciales en el ERP. Deben coincidir con
-// RUC_EMISOR/RAZON_SOCIAL_EMISOR de Backend/.env. Serie fija por tipo de guía,
-// terminada en "2" igual que las series de CPE (ver EmitirComprobante.jsx)
-// para evitar futuros conflictos de correlativo. Motivo de traslado por
+// RUC_EMISOR/RAZON_SOCIAL_EMISOR de Backend/.env. Serie fija por tipo de guía
+// (001, igual que las de CPE en EmitirComprobante.jsx). Motivo de traslado por
 // defecto: "01" (Venta) — catálogo 20 SUNAT.
 const RUC_EMISOR = "20607650811";
 const NOMBRE_EMISOR = "INTALES";
@@ -55,7 +54,7 @@ const INTALES_DOMICILIO = {
   direccion: "CAL. LAS FRAGUAS NRO. 190 URB. NARANJAL INDUSTRIAL, LIMA - LIMA - INDEPENDENCIA",
   ubigeo: "150112",
 };
-const SERIE_POR_TIPO_GUIA = { REMITENTE: "T002", TRANSPORTISTA: "V002" };
+const SERIE_POR_TIPO_GUIA = { REMITENTE: "T001", TRANSPORTISTA: "V001" };
 
 // Motivo de traslado (catálogo 20) para el que aplican Proveedor/Comprador — confirmado contra la
 // hoja oficial de reglas de validación SUNAT (info GRE sunat/Reglas de Validación...xlsx).

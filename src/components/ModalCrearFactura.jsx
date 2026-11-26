@@ -11,15 +11,14 @@ import { ocLegadoLibre } from "../utils/facturacionOC";
 const INP     = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 const INP_DIS = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full";
 
-// Empresa emisora y serie fijas — Huaquian solo factura a su propio nombre
+// Empresa emisora y serie fijas — Intales solo factura a su propio nombre
 // ante SUNAT (el hub central resuelve las credenciales por RUC, ver
 // Backend/src/services/hub.service.js). Deben coincidir con RUC_EMISOR /
-// RAZON_SOCIAL_EMISOR de Backend/.env. Serie terminada en "2", igual que
-// EmitirComprobante.jsx, para evitar conflictos de correlativo con series
-// de prueba/históricas.
+// RAZON_SOCIAL_EMISOR de Backend/.env. Misma serie de factura que
+// EmitirComprobante.jsx.
 const RUC_EMISOR = "20607650811";
 const NOMBRE_EMISOR = "INTALES";
-const SERIE_FACTURA = "F002";
+const SERIE_FACTURA = "F001";
 
 const SIMBOLO = { PEN: "S/", USD: "US$" };
 

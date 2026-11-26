@@ -30,16 +30,15 @@ import {
 const RECEPTOR_VACIO = { schemeID: "6", numDoc: "", nombre: "" };
 const REFERENCIA_VACIA = { id: "", serie: "", tipoDoc: "" };
 
-// Empresa emisora fija — este ERP factura únicamente a nombre de Huaquian.
+// Empresa emisora fija — este ERP factura únicamente a nombre de Intales.
 // Las credenciales SUNAT las resuelve el hub central por RUC (no hay registro
 // de credenciales en el ERP). Deben coincidir con RUC_EMISOR/RAZON_SOCIAL_EMISOR
 // de Backend/.env.
 const RUC_EMISOR = "20607650811";
 const NOMBRE_EMISOR = "INTALES";
 
-// Serie fija por tipo de comprobante — todas terminan en "2" para evitar
-// futuros conflictos de correlativo con series de prueba/históricas.
-const SERIE_POR_TIPO = { "01": "F002", "03": "B002", "07": "FC02", "08": "FD02" };
+// Serie fija por tipo de comprobante (series 001 de Intales, decisión del usuario 2026-11-26).
+const SERIE_POR_TIPO = { "01": "F001", "03": "B001", "07": "FC01", "08": "FD01" };
 const NOMBRE_TIPO_DOC = { "01": "la factura", "03": "la boleta", "07": "la nota de crédito", "08": "la nota de débito" };
 
 // Marca visual de campo obligatorio, junto al texto del label.
