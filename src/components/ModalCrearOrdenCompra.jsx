@@ -1,15 +1,10 @@
 import { useState, useEffect } from "react";
 import { fetchAuth, getUsuario } from "../utils/fetchAuth";
 import { r2, r0 } from "../utils/redondeo";
+import { indicesLibresOC, subtotalPartida } from "../utils/cotizacionItems";
 
 const leerError = async (r, fallback) => (await r.json().catch(() => null))?.mensaje || fallback;
-// Base sin IGV de la cotización (total − igv), no el total con IGV.
-const baseSinIgvCotizacion = (cot) => {
-  const total = Number(cot.total) || 0;
-  const igv = Number(cot.igv) || 0;
-  if (cot.afectoIgv === false && total > 0) return total;
-  return total > 0 && igv > 0 ? r2(total - igv) : Number(cot.subtotal) || 0;
-};
+const todosLosIndices = (cot) => (cot.items || []).map((_, i) => i);
 
 const INP     = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-full";
 const INP_DIS = "border border-gray-100 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 w-full";
@@ -70,7 +65,7 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
   // rol con acceso a precios (mismo criterio que cotizaciones, Fase 16).
   const esAsistente = getUsuario()?.rol === "asistente";
   const [form, setForm] = useState({
-    numeroOrden: "", numeroFactura: "",
+    numeroOrden: "",
     empresa: "", titulo: "",
     subtotal: "", descripcion: "",
     planta: "", personaContacto: "",
@@ -140,21 +135,20 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
     setCot(cot);
     setBCot(false);
     setAvisoDesvinculo(false);
-    if (!form.empresa && cot.empresa?._id) setBusquedaEmpresa(nombreEmpresa(cot.empresa));
-    setForm(prev => {
-      const base = baseSinIgvCotizacion(cot);
-      const nuevoSub = prev.subtotal || (base > 0 ? String(base) : prev.subtotal);
-      return {
-        ...prev,
-        titulo:   prev.titulo   || cot.titulo           || "",
-        empresa:  prev.empresa  || cot.empresa?._id     || "",
-        planta:   prev.planta   || cot.planta           || "",
-        personaContacto: prev.personaContacto || cot.personaContacto || "",
-        subtotal: nuevoSub,
-        // Se copia para que al desvincular la OC no vuelva a S/ con un monto que estaba en US$.
-        moneda:   cot.moneda || prev.moneda,
-      };
-    });
+    setBusquedaEmpresa(cot.empresa?._id ? nombreEmpresa(cot.empresa) : "");
+    // El monto lo fija el backend con la cotización guardada (POST /ordenes-compra/partidas): aquí es
+    // una vista previa de solo lectura con la misma fórmula.
+    const base = subtotalPartida(cot, todosLosIndices(cot));
+    setForm(prev => ({
+      ...prev,
+      titulo:   prev.titulo || cot.titulo || "",
+      empresa:  cot.empresa?._id || "",
+      planta:   cot.planta || "",
+      personaContacto: cot.personaContacto || "",
+      subtotal: base > 0 ? String(base) : "",
+      // Se copia para que al desvincular la OC no vuelva a S/ con un monto que estaba en US$.
+      moneda:   cot.moneda || prev.moneda,
+    }));
   };
 
   const desvincularCot = () => {
@@ -162,36 +156,54 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
     setAvisoDesvinculo(true);
   };
 
-  const guardar = async () => {
+  // P10: con cotización la OC nace por partidas con todos sus ítems (una cotización con ítems ya en
+  // otra OC se completa desde su propio detalle, eligiendo los ítems libres).
+  const pedidoConCotizacion = () => {
+    if (!form.numeroOrden.trim()) return { error: "El número de orden de compra es obligatorio." };
+    if (!form.titulo.trim()) return { error: "El título de la orden de compra es obligatorio." };
+    if (indicesLibresOC(cotVinculada).length < (cotVinculada.items || []).length) {
+      return { error: "La cotización ya tiene ítems en otra orden de compra: genera la OC del resto desde la cotización." };
+    }
+    return {
+      url: "/ordenes-compra/partidas",
+      body: {
+        cotizacion: cotVinculada._id,
+        indices: todosLosIndices(cotVinculada),
+        numeroOrden: form.numeroOrden.trim(),
+        titulo: form.titulo.trim(),
+      },
+    };
+  };
+
+  const pedidoSinCotizacion = () => {
     // Administración no ve/edita el monto — su OC se crea en 0 y un rol con
     // acceso a precios lo completa después (mismo criterio que cotizaciones).
     if (!esAsistente && (!form.subtotal || Number(form.subtotal) <= 0)) {
-      return setError("El subtotal debe ser mayor a 0.");
+      return { error: "El subtotal debe ser mayor a 0." };
     }
-    setError(""); setGuardando(true);
-
-    const payload = {
+    const body = {
       titulo:        form.titulo       || "por definir",
       numeroOrden:   form.numeroOrden,
-      numeroFactura: form.numeroFactura,
-      subtotal:      Number(form.subtotal),
-      igv:           calc.igv,
-      total:         calc.total,
-      monto:         Number(form.subtotal),
+      subtotal:      Number(form.subtotal) || 0,
       descripcion:   form.descripcion,
       planta:        form.planta,
       personaContacto: form.personaContacto,
       moneda,
-      cotizacion:    cotVinculada?._id,
     };
-    if (form.empresa)       payload.empresa    = form.empresa;
-    if (!payload.cotizacion) delete payload.cotizacion;
+    if (form.empresa) body.empresa = form.empresa;
+    return { url: "/ordenes-compra", body };
+  };
+
+  const guardar = async () => {
+    const pedido = cotVinculada ? pedidoConCotizacion() : pedidoSinCotizacion();
+    if (pedido.error) return setError(pedido.error);
+    setError(""); setGuardando(true);
 
     try {
-      const res = await fetchAuth("/ordenes-compra", {
+      const res = await fetchAuth(pedido.url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(pedido.body),
       });
       if (res.ok) {
         const data = await res.json();
@@ -242,20 +254,20 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
           </div>
 
           {/* Identificación */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">N° de orden</label>
-              <input name="numeroOrden" value={form.numeroOrden} onChange={handleChange}
-                placeholder="Ej. OC-2024-001" className={INP} />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">N° de factura</label>
-              <input name="numeroFactura" value={form.numeroFactura} onChange={handleChange}
-                placeholder="Ej. F001-00123" className={INP} />
-            </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">N° de orden{cotVinculada && " *"}</label>
+            <input name="numeroOrden" value={form.numeroOrden} onChange={handleChange}
+              placeholder="Ej. OC-2024-001" className={INP} />
           </div>
 
-          {/* Empresa */}
+          {cotVinculada && (
+            <p className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+              La OC se genera con todos los ítems de la cotización: empresa, planta, moneda y monto se toman de ella.
+            </p>
+          )}
+
+          {/* Empresa, planta y contacto: con cotización vienen de ella y no se cambian aquí. */}
+          <fieldset disabled={!!cotVinculada} className="space-y-4 disabled:opacity-70">
           <div>
             <label className="text-xs text-gray-500 block mb-1">Empresa</label>
             <div className="relative">
@@ -317,9 +329,10 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
               )}
             </div>
           </div>
+          </fieldset>
 
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Título de la orden</label>
+            <label className="text-xs text-gray-500 block mb-1">Título de la orden{cotVinculada && " *"}</label>
             <textarea name="titulo" value={form.titulo} onChange={handleChange} rows={2}
               placeholder="Descripción del servicio u obra" className={`${INP} resize-y`} />
           </div>
@@ -347,7 +360,8 @@ export default function ModalCrearOrdenCompra({ onClose, onCreada }) {
                   Subtotal sin IGV ({simbolo}) *
                 </label>
                 <input type="number" name="subtotal" value={form.subtotal} onChange={handleChange}
-                  disabled={esAsistente} step="0.01" min="0" placeholder="0.00" className={INP} />
+                  readOnly={!!cotVinculada} step="0.01" min="0" placeholder="0.00"
+                  className={cotVinculada ? INP_DIS : INP} />
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">{afectoIgv ? "IGV 18%" : "IGV (no afecto)"}</label>
