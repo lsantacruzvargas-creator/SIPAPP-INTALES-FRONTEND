@@ -546,6 +546,8 @@ export default function EmitirComprobante() {
         setError(res.status === 409 && data.estado === "ANULADO" && data.serie
           ? `${mensaje} El correlativo ${data.serie} quedó anulado sin enviarse a SUNAT.`
           : mensaje);
+      } else if (data.demo) {
+        setResultado({ ...data, aviso: "Comprobante de prueba (ambiente demo de SUNAT): no se creó factura interna." });
       } else if (tipoDoc === "01" && (!conOC(data) || data.estado === "ACEPTADO")) {
         await crearFacturaInterna(data);
       }

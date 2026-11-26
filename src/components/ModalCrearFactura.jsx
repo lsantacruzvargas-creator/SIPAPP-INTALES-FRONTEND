@@ -290,6 +290,12 @@ export default function ModalCrearFactura({ onClose, onCreada, ocInicial }) {
       return;
     }
 
+    if (dataCpe.demo) {
+      setError(`Factura de prueba ${dataCpe.serie} aceptada en el ambiente demo de SUNAT: no se crea el registro interno.`);
+      setGuardando(false);
+      return;
+    }
+
     // Paso 2: crear el registro interno Factura con el número real ya emitido.
     const factPayload = {
       numeroFactura:      dataCpe.serie,
