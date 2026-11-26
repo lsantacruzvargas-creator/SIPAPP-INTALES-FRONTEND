@@ -10,6 +10,7 @@ import { Chip, BotonAnular, BotonDesanular, BannerAnulado } from "./detalleShare
 import useBloqueoEdicion from "../hooks/useBloqueoEdicion";
 import BarraEdicion from "./BarraEdicion";
 import { bloqueadoPorPago, fusionarBloqueo } from "../utils/bloqueoPago";
+import { estadoItem } from "../utils/estadoItemRequerimiento";
 
 const leerError = async (r, fallback) => (await r.json().catch(() => null))?.mensaje || fallback;
 
@@ -33,24 +34,6 @@ const colorEstado = (e, activo) => {
 const descripcionItem = (it) => it.esSolicitudCompra
   ? (it.camposCompra?.descripcion || it.categoriaNombre)
   : (it.material?.nombre || "—");
-
-// Estado de un ítem de requerimiento — una solicitud de compra sigue el
-// pipeline de pago (por_procesar/pendiente_pago/pagado, ver
-// Requerimientos.jsx), independiente del pipeline de despacho de almacén
-// (pendiente/atendido/rechazado) que sí aplica a los ítems de stock.
-const ESTADO_ITEM_COMPRA = {
-  por_procesar:   { clase: "bg-gray-100 text-gray-600",   label: "Por procesar" },
-  pendiente_pago: { clase: "bg-amber-100 text-amber-700", label: "Pendiente de pago" },
-  pagado:         { clase: "bg-green-100 text-green-700", label: "Pagado" },
-};
-const ESTADO_ITEM_STOCK = {
-  pendiente: { clase: "bg-blue-100 text-blue-700",  label: "Pendiente" },
-  atendido:  { clase: "bg-green-100 text-green-700", label: "Atendido" },
-  rechazado: { clase: "bg-red-100 text-red-700",     label: "Rechazado" },
-};
-const estadoItem = (it) => it.esSolicitudCompra
-  ? (ESTADO_ITEM_COMPRA[it.estadoPago || "por_procesar"] || ESTADO_ITEM_COMPRA.por_procesar)
-  : (ESTADO_ITEM_STOCK[it.estado] || { clase: "bg-gray-100 text-gray-500", label: it.estado || "—" });
 
 // Vista de detalle dedicada a una sub-OT — a propósito NO reutiliza el
 // formulario completo de DetalleOrdenTrabajo.jsx: cliente/planta/N° OT/guía
@@ -436,9 +419,9 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
                           </td>
                           <td className="py-2 pr-3">
                             {req.items.map((it, i) => {
-                              const { clase, label } = estadoItem(it);
+                              const { clase, label, detalle } = estadoItem(it);
                               return (
-                                <span key={i} className="block mb-1 last:mb-0">
+                                <span key={i} className="block mb-1 last:mb-0" title={detalle || undefined}>
                                   <Chip className={clase}>{label}</Chip>
                                 </span>
                               );
