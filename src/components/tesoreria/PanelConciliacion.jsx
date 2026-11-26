@@ -15,7 +15,7 @@ const fecha = (d) => formatearFecha(d, { day: "2-digit", month: "2-digit", year:
 
 // Conciliación bancaria mensual por cuenta (spec 2026-10-02-bancos-b7).
 export default function PanelConciliacion() {
-  const puedeReabrir = ["jefatura", "admin"].includes(getUsuario()?.rol);
+  const puedeReabrir = ["jefatura", "admin", "contador"].includes(getUsuario()?.rol);
   const [cuentas, setCuentas] = useState([]);
   const [cuenta, setCuenta] = useState("");
   const [mes, setMes] = useState(mesAnteriorLima());

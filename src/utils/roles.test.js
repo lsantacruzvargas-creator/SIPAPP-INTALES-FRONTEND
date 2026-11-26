@@ -13,7 +13,7 @@ test("puedeEditarFacturas: tesorero y contador solo ven", () => {
   for (const rol of ["tesorero", "contador", "vendedor"]) assert.equal(puedeEditarFacturas(rol), false, rol);
 });
 
-test("puedeMovimientoManual: admin, jefatura y tesorero; el contador y facturación solo leen", () => {
-  for (const rol of ["admin", "jefatura", "tesorero"]) assert.equal(puedeMovimientoManual(rol), true, rol);
-  for (const rol of ["contador", "facturacion", "coordinadora", "vendedor", undefined]) assert.equal(puedeMovimientoManual(rol), false, String(rol));
+test("puedeMovimientoManual: admin, jefatura, tesorero y contador; facturación solo lee", () => {
+  for (const rol of ["admin", "jefatura", "tesorero", "contador"]) assert.equal(puedeMovimientoManual(rol), true, rol);
+  for (const rol of ["facturacion", "coordinadora", "vendedor", undefined]) assert.equal(puedeMovimientoManual(rol), false, String(rol));
 });

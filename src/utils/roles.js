@@ -5,7 +5,7 @@ export const veFacturas = (rol) => ROLES_FINANZAS.includes(rol);
 export const puedeEditarFacturas = (rol) => ["admin", "jefatura", "coordinadora", "facturacion"].includes(rol);
 // Espejo de ROLES_MOVIMIENTO_MANUAL (Backend/src/middleware/puedeTesoreria.js): ingresos/egresos
 // manuales y transferencias entre cuentas; el contador solo lee.
-export const puedeMovimientoManual = (rol) => ["admin", "jefatura", "tesorero"].includes(rol);
+export const puedeMovimientoManual = (rol) => ["admin", "jefatura", "tesorero", "contador"].includes(rol);
 export const rolDeSesion = () => {
   try { return JSON.parse(sessionStorage.getItem("usuario") || "{}")?.rol; } catch { return undefined; }
 };
