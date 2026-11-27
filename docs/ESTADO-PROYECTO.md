@@ -875,6 +875,32 @@ Revisión de las 10 heurísticas de Nielsen en todo el frontend; corregidos los 
   contaoficial `estadoPago`/`montoPagado` se derivan de los cobros de tesorería; escribirlos a mano rompe el cálculo.
   Propuesta: botón «Registrar cobro» en la factura que cree el cobro en tesorería. No urgente.
 
+## Hecho (2026-11-27, sin commit al anotar) — mejoras de Compras y Reportes
+
+- **Observaciones de la OCP editables** después de emitida (`PATCH /ordenes-compra-proveedor/:id/observaciones`, con bloqueo;
+  no si está anulada). Es el único dato editable: montos, plazos y forma de pago no cambian. El PDF sale con el texto nuevo.
+- **Pestaña «Recepcionado» en Compras** (a la derecha de «Compras»): en «Compras» se seleccionan OCs y «Marcar como
+  recepcionado» pide fecha (no futura), receptor, guía y factura, igual que comprabasico (`validarRecepcion`). Se guarda en la
+  OCP (`recepcionado`, `fechaRecepcion`, `receptor`, `guiaRecepcion`, `facturaRecepcion`, `recepcionadoPor`), no en el
+  origen: no toca el costo por OT. **Decisión tomada sin confirmar con el usuario:** no exige que la OC esté pagada (con
+  crédito la mercadería llega antes de pagar; en comprabasico sí se exigía). Una OCP recepcionada ya no se puede anular. Al recepcionar sale la card flotante (`alertarCompra`).
+- **Estado de pago en la tabla de Compras**: `GET /ordenes-compra-proveedor` devuelve `estadoPago` derivado
+  (`estadosPagoOCP` de `alertasCompra.js`, en columna propia): pendiente sin comprobantes; pagado solo si ya se facturó todo y cada comprobante está pagado; parcial si
+  algún comprobante tiene pagos. Filtro por estado de pago y columna en el Excel.
+- **«En licitación» muestra las columnas de «Por procesar»**: una fila por ítem (SC, fecha SC, origen, tipo, tipo de artículo,
+  descripción, cantidad, unidad, centro de costo, solicitante); la lista pobla `items.solicitudCompra`.
+- **Reportes con pestañas**: General (con fila de total en cada tabla y en el Excel; mora ahora respeta la moneda de la
+  factura), **Proyección de pagos** y **Gastos por OT**.
+  - `GET /reportes/proyeccion-pagos?desde&hasta`: saldo de cada comprobante de proveedor a su vencimiento (neto en su moneda;
+    detracción/retención en S/) + lo no facturado de cada OCP estimado con `plazoFormaPago(formaPago)` sobre la fecha de
+    entrega (o de la OC), con IGV. «30% de adelanto»: el % a la fecha de la OC y el resto contra entrega. Consignación o
+    texto sin días → «Sin fecha». Además, los pagos a proveedores del rango con días de anticipo/atraso frente al vencimiento.
+    Una factura pagada antes de vencer sale de la proyección y aparece en «Pagos realizados». Agrupa por día, semana, forma
+    de pago o proveedor, con subtotales en S/ y US$ por separado.
+  - Gastos por OT: misma fuente que la hoja «Detalle de compras» (`/reportes/detalle-compras`, ahora con `tituloOT`),
+    agrupado por OT con el nombre del material y subtotales por moneda.
+- Tests: `test/comprasReportes.test.js`.
+
 ## Facturación parcial por partidas (2026-11-26) — implementada en `feature/facturacion-parcial`, sin merge
 
 - Backend y Frontend en la rama `feature/facturacion-parcial` (Frontend `15d6b6d8`…`9b4bda98` + ola de correcciones

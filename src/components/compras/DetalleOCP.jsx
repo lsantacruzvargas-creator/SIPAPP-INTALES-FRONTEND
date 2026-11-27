@@ -4,9 +4,14 @@ import { formatearFecha } from "../../utils/fecha";
 import { money, idDe } from "../../utils/compras";
 import { exportarOrdenCompraProveedorPdf } from "../../utils/compraPdf";
 import ArchivosProveedor from "./ArchivosProveedor";
+import { conBloqueo } from "../../utils/bloqueoApi";
 
-export default function DetalleOCP({ ocpId, onClose }) {
+export default function DetalleOCP({ ocpId, onClose, onCambio }) {
   const [ocp, setOcp] = useState(null);
+  // null = sin editar; string = texto en edición.
+  const [obs, setObs] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     fetchAuth(`/ordenes-compra-proveedor/${ocpId}`).then(async (r) => { if (r.ok) setOcp(await r.json()); });
@@ -19,6 +24,23 @@ export default function DetalleOCP({ ocpId, onClose }) {
       </div>
     );
   }
+
+  const guardarObservaciones = async () => {
+    setGuardando(true);
+    setError("");
+    try {
+      const r = await conBloqueo("ordenCompraProveedor", ocp._id, (h) => fetchAuth(`/ordenes-compra-proveedor/${ocp._id}/observaciones`, {
+        headers: h, method: "PATCH", body: JSON.stringify({ observaciones: obs }),
+      }));
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setError(d.mensaje || "No se pudieron guardar las observaciones."); return; }
+      setOcp(d);
+      setObs(null);
+      onCambio?.();
+    } finally {
+      setGuardando(false);
+    }
+  };
 
   const m = (v) => money(v, ocp.moneda);
   const esGanador = (p) => idDe(p.empresa) === idDe(ocp.proveedor);
@@ -90,7 +112,38 @@ export default function DetalleOCP({ ocpId, onClose }) {
               <dt className="font-semibold">Total</dt><dd className="text-right font-semibold">{m(ocp.total)}</dd>
             </dl>
           </div>
-          {ocp.observaciones && <p className="text-sm text-gray-600"><span className="font-semibold">Observaciones:</span> {ocp.observaciones}</p>}
+          {obs === null ? (
+            <div className="flex items-start gap-3 text-sm text-gray-600">
+              <p className="flex-1 whitespace-pre-line"><span className="font-semibold">Observaciones:</span> {ocp.observaciones || <span className="text-gray-400">—</span>}</p>
+              {!ocp.anulada && (
+                <button type="button" onClick={() => { setObs(ocp.observaciones || ""); setError(""); }} className="text-xs text-purple-600 hover:underline shrink-0">Editar</button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-gray-600 block">Observaciones (salen en el PDF)
+                <textarea rows={3} maxLength={2000} value={obs} onChange={(e) => setObs(e.target.value)} autoFocus
+                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-purple-300" />
+              </label>
+              {error && <p className="text-xs text-red-500">{error}</p>}
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => { setObs(null); setError(""); }} disabled={guardando}
+                  className="text-sm border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+                <button type="button" onClick={guardarObservaciones} disabled={guardando}
+                  className="text-sm bg-purple-600 text-white px-4 py-1.5 rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium">
+                  {guardando ? "Guardando…" : "Guardar"}
+                </button>
+              </div>
+            </div>
+          )}
+          {ocp.recepcionado && (
+            <p className="text-sm text-sky-700 bg-sky-50 rounded-lg px-3 py-2">
+              Recepcionado el {formatearFecha(ocp.fechaRecepcion)} por {ocp.receptor}
+              {ocp.guiaRecepcion ? ` · Guía ${ocp.guiaRecepcion}` : ""}
+              {ocp.facturaRecepcion ? ` · Factura ${ocp.facturaRecepcion}` : ""}
+              {ocp.recepcionadoPor ? ` (registró ${ocp.recepcionadoPor})` : ""}
+            </p>
+          )}
 
           <div className="border border-gray-100 rounded-xl p-4 space-y-3">
             <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Cotizaciones recibidas</h4>

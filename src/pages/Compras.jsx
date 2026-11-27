@@ -8,6 +8,7 @@ const TABS = [
   { id: "por-procesar", label: "Por procesar" },
   { id: "licitacion", label: "En licitación" },
   { id: "compras", label: "Compras" },
+  { id: "recepcionado", label: "Recepcionado" },
 ];
 
 const porNombre = (a, b) => a.nombre.localeCompare(b.nombre, "es");
@@ -38,7 +39,7 @@ export default function Compras() {
     setCatalogos((c) => ({ ...c, tiposArticulo: [...c.tiposArticulo, tipo].sort(porNombre) }));
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+    <div className="w-full px-6 py-8 space-y-6">
       <div>
         <h1 className="text-xl font-bold text-gray-800">Compras</h1>
         <p className="text-sm text-gray-400 mt-0.5">Solicitudes de compra de materiales y servicios → licitación con proveedores → orden de compra</p>
@@ -60,6 +61,7 @@ export default function Compras() {
       )}
       {tab === "licitacion" && <TablaLicitaciones catalogos={catalogos} onAdjudicado={() => setTab("compras")} />}
       {tab === "compras" && <TablaCompras catalogos={catalogos} />}
+      {tab === "recepcionado" && <TablaCompras catalogos={catalogos} modo="recepcionado" />}
     </div>
   );
 }
