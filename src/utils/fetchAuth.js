@@ -65,13 +65,25 @@ export const descargarArchivoProtegido = async (ruta, nombre) => {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
 
+// Un fetch que falla por red (servidor caído, sin internet) rechaza la promesa,
+// y casi ningún guardar() la captura: el botón quedaba en "Guardando…" para
+// siempre. Se convierte en una respuesta de error normal para que cada
+// pantalla muestre su `mensaje` como cualquier otro rechazo del servidor.
+export const MENSAJE_SIN_CONEXION =
+  "Sin conexión con el servidor. Si estabas guardando, revisa la lista antes de reintentar: pudo haberse registrado.";
+const respuestaSinConexion = () =>
+  new Response(JSON.stringify({ mensaje: MENSAJE_SIN_CONEXION }), {
+    status: 503,
+    headers: { "Content-Type": "application/json", "X-Sin-Conexion": "1" },
+  });
+
 export const uploadAuth = (endpoint, formData) => {
   const token = sessionStorage.getItem("token");
   return fetch(`${API}${endpoint}`, {
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
-  });
+  }).catch(respuestaSinConexion);
 };
 
 const METODOS_ESCRITURA = ["POST", "PUT", "PATCH", "DELETE"];
@@ -85,10 +97,11 @@ export const fetchAuth = async (endpoint, options = {}) => {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
-  });
+  }).catch(respuestaSinConexion);
   if (res.status === 401) {
     sessionStorage.clear();
-    window.location.hash = "/login";
+    // Login lee el motivo para avisar que la sesión venció.
+    window.location.hash = "/login?motivo=expirada";
   }
   // Avisa al Navbar que hubo un guardado exitoso para que refresque la
   // campana de notificaciones al instante, sin esperar el polling de 60s.

@@ -6,7 +6,7 @@ import DetalleDocumento from "../components/DetalleDocumento";
 import ModalImportarExcel, { COLS_COT_OT, COLS_COTIZACIONES } from "../components/ModalImportarExcel";
 import ModalNuevaOT from "../components/ModalNuevaOT";
 import ModalNuevaCotizacion from "../components/ModalNuevaCotizacion";
-import { ChipEstadoOT } from "../components/detalleShared";
+import { ChipEstadoOT, estadoProgresoOT } from "../components/detalleShared";
 import TablaScroll from "../components/TablaScroll";
 import * as XLSX from "xlsx";
 import { r2 } from "../utils/redondeo";
@@ -375,6 +375,7 @@ export default function ListaCotizaciones() {
       "Título orden de trabajo": (c._esOT ? c.titulo : titulosOT(otsPorCot.get(c._id))) || "—",
       "Planta":                 c.planta || "—",
       "Encargado":              c.encargado || "—",
+      "Estado de servicio":     (() => { const o = otsPorCot.get(c._id)?.[0] || c._ot; return o ? estadoProgresoOT(o) : "—"; })(),
       ...(puedeVerPrecios ? {
         "Total sin IGV (S/)":   pen != null ? pen.toFixed(2) : "—",
         "Total sin IGV (US$)":  usd != null ? usd.toFixed(2) : "—",

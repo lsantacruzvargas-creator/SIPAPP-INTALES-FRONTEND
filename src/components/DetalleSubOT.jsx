@@ -7,7 +7,7 @@ import ModalNotificacionTrabajo from "./ModalNotificacionTrabajo";
 import ModalDetalleNotificacionTrabajo from "./ModalDetalleNotificacionTrabajo";
 import TablaServiciosExternos from "./TablaServiciosExternos";
 import TablaScroll from "./TablaScroll";
-import { Chip, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada } from "./detalleShared";
+import { Chip, estadoProgresoOT, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada } from "./detalleShared";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 w-full transition";
 
@@ -255,7 +255,7 @@ export default function DetalleSubOT({ orden: inicial, onClose, onGuardada, onNa
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-[10px] text-white/60 uppercase tracking-widest leading-none">Estado</p>
-              <Chip className="mt-0.5 bg-white/20 text-white">{ot.estado}</Chip>
+              <Chip className="mt-0.5 bg-white/20 text-white">{estadoProgresoOT(ot)}</Chip>
               {ot.irreparable && <Chip className="mt-1 bg-red-500/40 text-white block">Irreparable</Chip>}
             </div>
             {!ot.anulado && !cadenaCerrada && puedeAnular && <BotonAnular onAnular={anular} />}

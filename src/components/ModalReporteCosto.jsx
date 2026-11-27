@@ -1,4 +1,4 @@
-const money = (v, moneda) => `${moneda === "USD" ? "US$" : "S/"} ${Number(v ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}`;
+import { money } from "./detalleShared";
 
 // Componente a nivel de módulo (no dentro del render de ModalReporteCosto) —
 // crear un componente por render reinicia su estado y dispara
@@ -15,11 +15,15 @@ function Fila({ label, valor, moneda, resaltado }) {
 // Desglose de solo lectura del card "Costo de fabricación" en
 // DetalleOrdenCompra.jsx — recibe los números ya calculados ahí (ver spec
 // 2026-09-22, sección "Reporte por OT — cálculo"; movido de OT a OC a
-// pedido del usuario, 2026-09-22).
+// pedido del usuario, 2026-09-22). Los costos siempre están en soles (las
+// compras en US$ ya vienen convertidas con su T.C. guardado); solo la
+// comparación contra la OC va en la moneda de la OC, igual que el reporte
+// "Costos de Fabricación" (Backend/src/routes/reportes.js).
 export default function ModalReporteCosto({
-  moneda, ocSubtotal, costoHH, costoHM, costoMateriales, costoServicios,
-  costoFabricacion, margen, margenPct, onClose,
+  monedaOC, ocSubtotal, costoHH, costoHM, costoMateriales, costoServicios,
+  costoFabricacionPEN, costoFabricacionOC, tipoCambio, sinTC, margen, margenPct, onClose,
 }) {
+  const ocEnUSD = monedaOC === "USD";
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
@@ -29,37 +33,52 @@ export default function ModalReporteCosto({
         </div>
 
         <div className="p-6">
-          {/* Comparación principal: Subtotal sin IGV de la OC vs el costo de
-              fabricación — lo que pide el título del modal. */}
+          {sinTC && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              No hay un tipo de cambio registrado: la OC está en US$ y los costos en S/, así que no se calcula el margen.
+              Registra el tipo de cambio para comparar.
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3 mb-5">
             <div className="rounded-xl bg-gray-50 border border-gray-100 p-3 text-center">
               <p className="text-[10px] text-gray-400 uppercase tracking-wide">Subtotal sin IGV (OC)</p>
-              <p className="text-lg font-bold text-gray-800">{money(ocSubtotal, moneda)}</p>
+              <p className="text-lg font-bold text-gray-800">{money(ocSubtotal, monedaOC)}</p>
             </div>
             <div className="rounded-xl bg-gray-50 border border-gray-100 p-3 text-center">
               <p className="text-[10px] text-gray-400 uppercase tracking-wide">Costo de fabricación</p>
-              <p className="text-lg font-bold text-gray-800">{money(costoFabricacion, moneda)}</p>
+              <p className="text-lg font-bold text-gray-800">
+                {costoFabricacionOC != null ? money(costoFabricacionOC, monedaOC) : money(costoFabricacionPEN, "PEN")}
+              </p>
+              {ocEnUSD && tipoCambio && costoFabricacionOC != null && (
+                <p className="text-[11px] text-gray-400">{money(costoFabricacionPEN, "PEN")} · T.C. {tipoCambio}</p>
+              )}
             </div>
           </div>
 
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Costo de fabricación:</p>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Costo de fabricación (S/):</p>
           <div className="divide-y divide-gray-50 mb-3">
-            <Fila label="Compras de materiales (pagadas)" valor={costoMateriales} moneda={moneda} />
-            <Fila label="Servicios externos (pagados)" valor={costoServicios} moneda={moneda} />
-            <Fila label="Horas hombre (HH)" valor={costoHH} moneda={moneda} />
-            <Fila label="Horas máquina (HM)" valor={costoHM} moneda={moneda} />
+            <Fila label="Compras de materiales (pagadas)" valor={costoMateriales} moneda="PEN" />
+            <Fila label="Servicios externos (pagados)" valor={costoServicios} moneda="PEN" />
+            <Fila label="Horas hombre (HH)" valor={costoHH} moneda="PEN" />
+            <Fila label="Horas máquina (HM)" valor={costoHM} moneda="PEN" />
           </div>
           <div className="border-t border-gray-200 pt-2">
-            <Fila label="Total costo de fabricación" valor={costoFabricacion} moneda={moneda} resaltado />
+            <Fila label="Total costo de fabricación" valor={costoFabricacionPEN} moneda="PEN" resaltado />
+            {ocEnUSD && tipoCambio && costoFabricacionOC != null && (
+              <Fila label={`Equivalente en US$ (T.C. ${tipoCambio})`} valor={costoFabricacionOC} moneda="USD" />
+            )}
           </div>
 
-          <div className={`mt-4 rounded-xl p-4 text-center ${margen >= 0 ? "bg-green-50" : "bg-red-50"}`}>
+          <div className={`mt-4 rounded-xl p-4 text-center ${margen == null ? "bg-gray-50" : margen >= 0 ? "bg-green-50" : "bg-red-50"}`}>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Margen</p>
-            <p className={`text-2xl font-extrabold ${margen >= 0 ? "text-green-700" : "text-red-700"}`}>
-              {money(margen, moneda)}
+            <p className={`text-2xl font-extrabold ${margen == null ? "text-gray-400" : margen >= 0 ? "text-green-700" : "text-red-700"}`}>
+              {margen != null ? money(margen, monedaOC) : "—"}
             </p>
             <p className="text-xs text-gray-400 mt-0.5">
-              {margenPct != null ? `${margenPct.toFixed(1)}%` : "Sin OC para comparar"}
+              {margen == null
+                ? (sinTC ? "Sin tipo de cambio para comparar" : "Cargando tipo de cambio…")
+                : margenPct != null ? `${margenPct.toFixed(1)}%` : "Sin OC para comparar"}
             </p>
           </div>
         </div>

@@ -16,9 +16,14 @@ import TablaItemsCotizacion from "./TablaItemsCotizacion";
 import TarjetaArchivosRelacionados from "./TarjetaArchivosRelacionados";
 import { r2 } from "../utils/redondeo";
 import {
-  FlujoNegocio, TarjetaRelacion, Chip,
-  badgePago, badgeOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
+  FlujoNegocio, TarjetaRelacion, Chip, ParteConsolidada,
+  badgePago, ChipEstadoOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
 } from "./detalleShared";
+
+const totalServicio = (s) => (Number(s.costo) || 0) * (Number(s.cantidad) || 0) + (Number(s.costoTransporte) || 0);
+const servicioEnSoles = (s) => costoCompraSoles({
+  unitario: s.costo, cantidad: s.cantidad, flete: s.costoTransporte, moneda: s.moneda, tipoCambio: s.tipoCambio,
+});
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 w-full transition";
 const codigoDeGuia = (g) => `${g.serie}-${String(g.correlativo).padStart(4, "0")}`;
@@ -160,7 +165,8 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       }
       // Varias OCs por cotización (OCs parciales por ítems) — en orden de creación.
       const ocsFound = ocs
-        .filter(o => (o.cotizacion?._id || o.cotizacion) === cot._id)
+        .filter(o => (o.cotizacion?._id || o.cotizacion) === cot._id
+          || (o.lineas || []).some(l => (l.cotizacion?._id || l.cotizacion) === cot._id))
         .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       setOcs(ocsFound);
       const idsOC = new Set(ocsFound.map(o => o._id));
@@ -445,6 +451,9 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
           precio: i.precio,
           moneda: i.moneda,
           subtotal: calcSubtotal(i, descuentoGlobalNum),
+          // El backend los usa para que el vínculo siga a su ítem (no a su posición).
+          otGenerada: i.otGenerada?._id ?? i.otGenerada ?? null,
+          ocGenerada: i.ocGenerada?._id ?? i.ocGenerada ?? null,
         };
         if (i.diasEntrega !== "" && i.diasEntrega != null) it.diasEntrega = i.diasEntrega;
         if (i.subItems?.length > 0) it.subItems = i.subItems.map(s => s.texto).filter(Boolean);
@@ -469,7 +478,8 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
       setIntentoGuardar(false);
       return actualizada;
     }
-    setError("Error al guardar los cambios.");
+    const data = await res.json().catch(() => ({}));
+    setError(data.mensaje || "Error al guardar los cambios.");
     return null;
   };
 
@@ -925,7 +935,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
               ots.map(o => (
                 <TarjetaRelacion key={o._id} tipo="ot" codigo={o.codigo} numero={o.numeroOT}
                   onClick={() => onNavegar?.({ tipo: "ot", data: o })}>
-                  {o.estado && <Chip className={badgeOT(o.estado)}>{o.estado}</Chip>}
+                  <ChipEstadoOT ot={o} />
                 </TarjetaRelacion>
               ))
             )}
@@ -986,6 +996,7 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                   {o.desdeItemsCotizacion && <p className="text-sm text-gray-600 line-clamp-2">{o.titulo}</p>}
                   {puedeVerPrecios && o.monto > 0 && <p className="text-xs text-gray-500">{money(o.monto, cot.moneda)}</p>}
                   {o.anulado && <Chip className="bg-red-100 text-red-600">Anulada</Chip>}
+                  <ParteConsolidada oc={o} cotizacionId={cot._id} moneda={cot.moneda} verPrecios={puedeVerPrecios} />
                 </TarjetaRelacion>
               ))
             )}
@@ -1000,6 +1011,8 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                     <p className="text-xs text-gray-500">{money(f.totalAPagar ?? f.total, cot.moneda)}</p>
                   )}
                   {f.estadoPago && <Chip className={badgePago(f.estadoPago)}>{f.estadoPago}</Chip>}
+                  <ParteConsolidada oc={ocs.find(o => o._id === (f.ordenCompra?._id || f.ordenCompra))}
+                    cotizacionId={cot._id} moneda={cot.moneda} verPrecios={puedeVerPrecios} />
                 </TarjetaRelacion>
               ))
             ))}
@@ -1019,21 +1032,21 @@ export default function DetalleCotizacion({ cotizacion: inicial, onClose, onGuar
                     </thead>
                     <tbody>
                       {servicios.map(s => (
-                        <tr key={s._id} className="border-t border-white/60">
+                        <tr key={s._id} className={`border-t border-white/60 ${s.anulado ? "opacity-50 line-through" : ""}`}>
                           <td className="py-1 pr-2 text-gray-600">
                             {s.rucProveedor ? `${s.rucProveedor} — ` : ""}{s.nombreProveedor} · {s.tipoTrabajo} ({s.cantidad})
                           </td>
-                          <td className="py-1 text-right text-gray-700 tabular-nums whitespace-nowrap">{money(s.costo, s.moneda)}</td>
+                          <td className="py-1 text-right text-gray-700 tabular-nums whitespace-nowrap">{money(totalServicio(s), s.moneda)}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr className="border-t border-white/60 font-semibold">
-                        <td className="py-1 pr-2 text-gray-700">Total</td>
+                        <td className="py-1 pr-2 text-gray-700">
+                          Total{servicios.some(s => !s.anulado && s.moneda === "USD") ? " en soles (US$ al TC de cada servicio)" : ""}
+                        </td>
                         <td className="py-1 text-right text-gray-800 tabular-nums whitespace-nowrap">
-                          {money(servicios.reduce((s, v) => s + costoCompraSoles({
-                            unitario: v.costo, cantidad: 1, moneda: v.moneda, tipoCambio: v.tipoCambio,
-                          }), 0))}
+                          {money(servicios.filter(s => !s.anulado).reduce((t, s) => t + servicioEnSoles(s), 0))}
                         </td>
                       </tr>
                     </tfoot>

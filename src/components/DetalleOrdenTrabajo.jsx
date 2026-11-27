@@ -18,8 +18,8 @@ import ModalGenerarGRE from "./ModalGenerarGRE";
 import ModalDetalleGuia from "./ModalDetalleGuia";
 import ConfirmacionAccion from "./ConfirmacionAccion";
 import {
-  FlujoNegocio, TarjetaRelacion, Chip,
-  badgePago, badgeOT, estadoProgresoOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
+  FlujoNegocio, TarjetaRelacion, Chip, ParteConsolidada,
+  badgePago, ChipEstadoOT, estadoProgresoOT, money, BotonAnular, BotonCerrarCadena, BotonDesanular, BannerAnulado, bloqueadoPorCadenaCerrada,
 } from "./detalleShared";
 
 const INP = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 w-full transition";
@@ -410,6 +410,10 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
 
     const body = {
       numeroDocumento: ot.numeroDocumento,
+
+      // Si la OT es de una cotización anexada a una OC consolidada, la nueva queda en su misma sub-cadena.
+
+      numeroDocumentoOriginal: ot.numeroDocumentoOriginal ?? null,
       titulo: ot.titulo,
       tipo: "venta",
       moneda: "PEN",
@@ -788,7 +792,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
             )}
 
             <TarjetaRelacion tipo="ot" codigo={ot.codigo} numero={ot.numeroOT} actual>
-              {ot.estado && <Chip className={badgeOT(ot.estado)}>{ot.estado}</Chip>}
+              <ChipEstadoOT ot={ot} />
               {!!greMap[ot._id]?.length && (
                 <Chip className="bg-purple-100 text-purple-700">GRE {greMap[ot._id].map(codigoDeGuia).join(", ")}</Chip>
               )}
@@ -806,7 +810,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                     <TarjetaRelacion key={s._id} tipo="ot" codigo={s.codigo} numero={s.numeroOT}
                       onClick={() => onNavegar?.({ tipo: "ot", data: s })}>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {s.estado && <Chip className={badgeOT(s.estado)}>{s.estado}</Chip>}
+                        <ChipEstadoOT ot={s} />
                         {s.irreparable && <Chip className="bg-red-100 text-red-700">Irreparable</Chip>}
                         {!!greMap[s._id]?.length && (
                           <Chip className="bg-purple-100 text-purple-700">GRE {greMap[s._id].map(codigoDeGuia).join(", ")}</Chip>
@@ -868,6 +872,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                   onClick={oc ? () => onNavegar?.({ tipo: "oc", data: oc, extra: factura }) : undefined}
                   onCrear={!oc && cot && !ot.anulado ? () => setCrearOCOpen(true) : undefined} crearLabel="OC">
                   {puedeVerPrecios && oc?.monto > 0 && <p className="text-xs text-gray-500">{money(oc.monto, cot?.moneda)}</p>}
+                  <ParteConsolidada oc={oc} cotizacionId={cot?._id} moneda={cot?.moneda} verPrecios={puedeVerPrecios} />
                 </TarjetaRelacion>
 
                 {rolActual !== "coordinadora" && (
@@ -877,6 +882,7 @@ export default function DetalleOrdenTrabajo({ orden: inicial, onClose, onGuardad
                       <p className="text-xs text-gray-500">{money(factura.totalAPagar ?? factura.total, cot?.moneda)}</p>
                     )}
                     {factura?.estadoPago && <Chip className={badgePago(factura.estadoPago)}>{factura.estadoPago}</Chip>}
+                    {factura && <ParteConsolidada oc={oc} cotizacionId={cot?._id} moneda={cot?.moneda} verPrecios={puedeVerPrecios} />}
                   </TarjetaRelacion>
                 )}
               </>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { fetchAuth } from "../utils/fetchAuth";
-import { formatearFecha } from "../utils/fecha";
+import { formatearFecha, fechaHoyLima } from "../utils/fecha";
 import { precioConDescuento } from "../utils/cotizacionItems";
 import TablaScroll from "../components/TablaScroll";
 import {
@@ -40,6 +40,9 @@ const NOMBRE_EMISOR = "INTALES";
 // Serie fija por tipo de comprobante — todas terminan en "2" para evitar
 // futuros conflictos de correlativo con series de prueba/históricas.
 const SERIE_POR_TIPO = { "01": "F002", "03": "B002", "07": "FC02", "08": "FD02" };
+
+const NOMBRE_TIPO_DOC = { "01": "Factura", "03": "Boleta", "07": "Nota de Crédito", "08": "Nota de Débito" };
+const DOC_RECEPTOR = { "6": "RUC", "1": "DNI" };
 
 // Marca visual de campo obligatorio, junto al texto del label.
 function Oblig() {
@@ -135,6 +138,25 @@ export default function EmitirComprobante() {
     const unidad = esServicio ? "ZZ" : "NIU";
     setTipoBienServicio(esServicio ? "servicio" : "bien");
     if (cotizacion?.moneda) setMoneda(cotizacion.moneda);
+    setNumeroOrdenCompra(oc.numeroOrden || oc.codigo || "");
+    setOrdenCompraId(oc._id || "");
+    // OC consolidada: una línea por cotización anexada, por el monto de esa cotización en la OC.
+    if (oc.lineas?.length) {
+      setItems(oc.lineas.map((l) => {
+        const valor = r2(Number(l.subtotal) || 0);
+        return {
+          ...itemVacioComprobante(),
+          descripcion: l.titulo || l.cotizacion?.titulo || "",
+          cantidad: 1,
+          unidad,
+          valorUnitario: valor,
+          precioUnitario: precioUnitarioDesdeValor(valor, "10"),
+          afectacion: "10",
+          descuentoPorcentaje: 0,
+        };
+      }));
+      return;
+    }
     // El monto a facturar es el de la OC (puede diferir del de la cotización);
     // las líneas de la cotización solo se usan si su suma cuadra con ese monto.
     const montoOC = r2(Number(oc.subtotal) || 0);
@@ -175,15 +197,24 @@ export default function EmitirComprobante() {
     } else {
       setItems([{ ...itemVacioComprobante(), descripcion: oc.descripcion || oc.titulo || "", unidad }]);
     }
-    setNumeroOrdenCompra(oc.numeroOrden || oc.codigo || "");
-    setOrdenCompraId(oc._id || "");
   };
 
   useEffect(() => {
     const c = location.state?.comprobante;
-    if (c) {
-      setTipoDoc(location.state.tipoDocDestino || "07");
-      aplicarComprobanteReferencia(c);
+    // Desde el detalle de una Factura interna aceptada por SUNAT solo se tiene el id del comprobante: se trae completo.
+    const comprobanteId = location.state?.comprobanteId;
+    if (c || comprobanteId) {
+      const tipoDestino = location.state.tipoDocDestino || "07";
+      setTipoDoc(tipoDestino);
+      setSerie(SERIE_POR_TIPO[tipoDestino]);
+    }
+    if (c) aplicarComprobanteReferencia(c);
+    else if (comprobanteId) {
+      fetchAuth(`/cpe/${comprobanteId}`).then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (data.ok) aplicarComprobanteReferencia(data.data);
+        else setError(data.mensaje || data.error || "No se pudo cargar el comprobante a modificar; selecciónalo en la lista.");
+      });
     }
     const pre = location.state?.prellenarDesdeOC;
     if (pre?.oc) {
@@ -350,8 +381,12 @@ export default function EmitirComprobante() {
   const montoNetoPendiente = r2(totalGeneral - detraccionMontoMoneda - retencionMonto);
   // SUNAT exige igualdad exacta al céntimo (3319) — sin tolerancia de ±0.01.
   const cuotasCuadran = Math.abs(sumaCuotas - montoNetoPendiente) < 0.005;
+  const simbolo = enSoles ? "S/" : "US$";
+  const tcResumen = enSoles ? null : (tcDetraccion?.valor || tcRetencion?.valor || null);
 
-  const ro = !!resultado?.ok;
+  // ERROR también bloquea: el correlativo ya se consumió y el documento pudo llegar a SUNAT; se resuelve con
+  // «Consultar estado» en la lista, no emitiendo otro.
+  const ro = !!resultado?.ok || resultado?.estado === "ERROR";
 
   const ordenesCompraFiltradas = ordenesCompra.filter((o) => {
     if (!filtroOC.trim()) return true;
@@ -563,15 +598,15 @@ export default function EmitirComprobante() {
       const res  = await fetchAuth(endpoint, { method: "POST", body: JSON.stringify(body) });
       const data = await res.json();
       setResultado(data);
-      if (!data.ok && /^\[HTTP\]/i.test(data.mensaje || "")) {
-        setError(`SUNAT no respondió (${data.mensaje}). El comprobante ${data.serie || ""} quedó en ERROR, no rechazado: no lo vuelvas a emitir — revísalo en Facturación Electrónica (Consultar estado / Adjuntar XML/CDR).`);
+      if (data.estado === "ERROR") {
+        setError(`No se obtuvo respuesta de SUNAT${data.mensaje ? ` (${data.mensaje})` : ""}. El comprobante ${data.serie || ""} quedó en ERROR, no rechazado: no lo vuelvas a emitir — revísalo en Facturación Electrónica (Consultar estado / Adjuntar XML/CDR).`);
       } else if (!data.ok) {
         setError(data.mensaje || data.error || "El comprobante fue rechazado por SUNAT.");
       } else if (ocOrigen || tipoDoc === "01") {
         await crearFacturaInterna(data);
       }
     } catch {
-      setError("Error de conexión");
+      setError("No se pudo confirmar la respuesta del servidor. Antes de volver a emitir, revisa en Facturación Electrónica si el comprobante quedó registrado: emitirlo otra vez podría duplicarlo.");
     } finally {
       setCargando(false);
     }
@@ -583,7 +618,7 @@ export default function EmitirComprobante() {
   const crearFacturaInterna = async (dataCpe) => {
     const factPayload = {
       numeroFactura:      dataCpe.serie,
-      fechaEmision:       new Date().toISOString().split("T")[0],
+      fechaEmision:       fechaHoyLima(),
       subtotal:           totales.base,
       ...(ocOrigen ? {
         descripcion:        ocOrigen.descripcion || ocOrigen.titulo || "",
@@ -621,7 +656,7 @@ export default function EmitirComprobante() {
   };
 
   const nuevo = () => {
-    setSerie("");
+    setSerie(SERIE_POR_TIPO[tipoDoc]);
     setFormaPago("Contado");
     setCuotas([]);
     setReceptor(RECEPTOR_VACIO);
@@ -655,7 +690,7 @@ export default function EmitirComprobante() {
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold text-gray-800">Emitir Comprobante</h2>
-        {resultado?.ok && <span className="font-mono text-sm text-gray-400">{resultado.serie}</span>}
+        {ro && <span className="font-mono text-sm text-gray-400">{resultado.serie}</span>}
       </div>
 
       {resultado?.estado === "ACEPTADO" && (
@@ -834,6 +869,9 @@ export default function EmitirComprobante() {
                     disabled={ro || !rucEmisor} required
                     className="w-full input-field w-auto disabled:bg-gray-50 disabled:text-gray-500">
                     <option value="">— Seleccionar —</option>
+                    {referencia.id && !comprobantesRef.some((c) => c._id === referencia.id) && (
+                      <option value={referencia.id}>{referencia.serie}</option>
+                    )}
                     {comprobantesRef.map((c) => (
                       <option key={c._id} value={c._id}>
                         {c.serie}-{c.correlativo} — {c.receptor?.nombre} ({c.tipoDoc === "01" ? "Factura" : "Boleta"})
@@ -1232,9 +1270,25 @@ export default function EmitirComprobante() {
       {confirmando && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
-            <h3 className="font-semibold text-gray-800 mb-2">¿Emitir comprobante?</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Se enviará a SUNAT a través del hub. Esta acción genera un correlativo nuevo aunque el comprobante sea rechazado.
+            <h3 className="font-semibold text-gray-800 mb-3">¿Emitir {NOMBRE_TIPO_DOC[tipoDoc]}?</h3>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm mb-3">
+              <dt className="text-gray-400">Serie</dt><dd>{serie} (el correlativo se asigna al emitir)</dd>
+              <dt className="text-gray-400">Receptor</dt><dd>{receptor.nombre}</dd>
+              <dt className="text-gray-400">{DOC_RECEPTOR[receptor.schemeID] || "Documento"}</dt><dd className="font-mono">{receptor.numDoc}</dd>
+              {esNota && <><dt className="text-gray-400">Referencia</dt><dd>{referencia.serie}</dd></>}
+              <dt className="text-gray-400">Moneda</dt>
+              <dd>{enSoles ? "Soles (PEN)" : `Dólares (${moneda})`}{tcResumen ? ` · TC ${tcResumen.toFixed(3)}` : ""}</dd>
+              <dt className="text-gray-400">Total</dt><dd className="font-semibold">{simbolo} {totalGeneral.toFixed(2)}</dd>
+              {!esNota && <><dt className="text-gray-400">Pago</dt><dd>{formaPago === "Credito" ? `Crédito en ${cuotas.length} cuota(s)` : "Contado"}</dd></>}
+              {!esNota && detraccionAplica && (
+                <><dt className="text-gray-400">Detracción</dt><dd>{detraccionPorcentaje}% · S/ {detraccionMontoNeto}</dd></>
+              )}
+              {!esNota && retencionAplica && (
+                <><dt className="text-gray-400">Retención</dt><dd>{retencionPorcentaje}% · {simbolo} {retencionMonto.toFixed(2)}</dd></>
+              )}
+            </dl>
+            <p className="text-xs text-gray-500 mb-4">
+              Se enviará a SUNAT a través del hub. El correlativo se consume aunque SUNAT rechace el comprobante.
             </p>
             {tipoDoc === "07" && (
               <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">

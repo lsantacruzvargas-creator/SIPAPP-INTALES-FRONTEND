@@ -715,6 +715,11 @@ export default function Compras() {
           </button>
         </div>
       )}
+      {tab === "recepcionado" && (
+        <p className="text-xs text-gray-500">
+          Las compras de material recepcionadas se ingresan al almacén y se entregan a la OT desde Requerimientos.
+        </p>
+      )}
       {(tab === "pagados" || tab === "recepcionado") && (
         <div className="flex justify-end gap-2">
           {tab === "pagados" && puedeRecepcionar && nRecepcionSel > 0 && (
@@ -860,7 +865,7 @@ export default function Compras() {
       {modalDatos === "recepcion" && (
         <ModalDatosCompra
           titulo="Marcar como recepcionado"
-          descripcion={`${nRecepcionSel} solicitud(es) seleccionada(s).`}
+          descripcion={`${nRecepcionSel} solicitud(es) seleccionada(s). Las compras de material recepcionadas se ingresan al almacén desde Requerimientos («Ingresar al almacén»).`}
           campos={CAMPOS_RECEPCION}
           inicial={{ fechaRecepcion: fechaHoyLima(), receptor: "", guiaRecepcion: "", facturaRecepcion: "" }}
           textoConfirmar="Marcar como recepcionado"

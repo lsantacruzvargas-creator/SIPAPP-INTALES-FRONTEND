@@ -283,7 +283,8 @@ export default function EmitirGuia() {
   const agregarDocRelacionado = () => setDocumentosRelacionados([...documentosRelacionados, docRelacionadoVacio()]);
   const eliminarDocRelacionado = (key) => setDocumentosRelacionados(documentosRelacionados.filter((d) => d._key !== key));
 
-  const ro = !!resultado?.ok;
+  // ERROR también bloquea: el correlativo ya se consumió; se resuelve desde la lista de guías, no emitiendo otra.
+  const ro = !!resultado?.ok || resultado?.estado === "ERROR";
 
   const validar = () => {
     if (!rucEmisor) return "Selecciona la empresa emisora.";
@@ -450,16 +451,20 @@ export default function EmitirGuia() {
       const res  = await fetchAuth("/guias", { method: "POST", body: JSON.stringify(body) });
       const data = await res.json();
       setResultado(data);
-      if (!data.ok) setError(data.mensaje || data.error || "La guía fue rechazada por SUNAT.");
+      if (data.estado === "ERROR") {
+        setError(`No se obtuvo respuesta de SUNAT${data.mensaje ? ` (${data.mensaje})` : ""}. La guía ${data.nombre || ""} quedó en ERROR, no rechazada: no la vuelvas a emitir — revísala en Guías de Remisión (Consultar estado) antes de hacer cualquier otra cosa.`);
+      } else if (!data.ok) {
+        setError(data.mensaje || data.error || "La guía fue rechazada por SUNAT.");
+      }
     } catch {
-      setError("Error de conexión");
+      setError("No se pudo confirmar la respuesta del servidor. Antes de volver a emitir, revisa en Guías de Remisión si la guía quedó registrada: emitirla otra vez podría duplicarla.");
     } finally {
       setCargando(false);
     }
   };
 
   const nuevo = () => {
-    setSerie("");
+    setSerie(SERIE_POR_TIPO_GUIA[tipoGuia]);
     setModalidadTraslado("02");
     setMotivoTraslado("01");
     setDescripcionMotivo("");
@@ -499,7 +504,7 @@ export default function EmitirGuia() {
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold text-gray-800">Emitir Guía de Remisión</h2>
-        {resultado?.ok && <span className="font-mono text-sm text-gray-400">{resultado.nombre}</span>}
+        {ro && <span className="font-mono text-sm text-gray-400">{resultado.nombre}</span>}
       </div>
 
       {prellenado && !resultado && (
@@ -507,9 +512,15 @@ export default function EmitirGuia() {
           Ítems y destinatario prellenados desde la Orden de Trabajo — revisa antes de emitir.
         </div>
       )}
-      {resultado?.ok && (
+      {resultado?.ok && resultado.estado !== "EN_PROCESO" && (
         <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-5">
           Guía <strong>{resultado.nombre}</strong> ACEPTADA por SUNAT.
+        </div>
+      )}
+      {resultado?.estado === "EN_PROCESO" && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-3 mb-5">
+          Guía <strong>{resultado.nombre}</strong> EN PROCESO — SUNAT aún no confirma el resultado.
+          {resultado.mensaje ? ` ${resultado.mensaje}` : " Consulta su estado en la lista de guías antes de volver a emitirla."}
         </div>
       )}
       {error && (
@@ -1298,9 +1309,19 @@ export default function EmitirGuia() {
       {confirmando && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
-            <h3 className="font-semibold text-gray-800 mb-2">¿Emitir guía de remisión?</h3>
-            <p className="text-sm text-gray-500 mb-6">
-              Se enviará a SUNAT a través del hub. Esta acción genera un correlativo nuevo aunque la guía sea rechazada.
+            <h3 className="font-semibold text-gray-800 mb-3">¿Emitir guía de remisión?</h3>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm mb-3">
+              <dt className="text-gray-400">Tipo</dt><dd>{TIPO_GUIA.find((t) => t.valor === tipoGuia)?.label || tipoGuia}</dd>
+              <dt className="text-gray-400">Serie</dt><dd>{serie} (el correlativo se asigna al emitir)</dd>
+              <dt className="text-gray-400">Motivo</dt><dd>{MOTIVO_TRASLADO.find((m) => m.valor === motivoTraslado)?.label}</dd>
+              <dt className="text-gray-400">Destinatario</dt><dd>{destinatario.nombre} · <span className="font-mono">{destinatario.numDoc}</span></dd>
+              <dt className="text-gray-400">Modalidad</dt><dd>{MODALIDAD_TRASLADO.find((m) => m.valor === modalidadTraslado)?.label || modalidadTraslado}</dd>
+              <dt className="text-gray-400">Llegada</dt><dd>{puntoLlegada.direccion}</dd>
+              <dt className="text-gray-400">Traslado</dt><dd>{fechaTraslado.split("-").reverse().join("/")}</dd>
+              <dt className="text-gray-400">Ítems</dt><dd>{items.length} · {pesoBrutoTotal} {unidadPeso}</dd>
+            </dl>
+            <p className="text-xs text-gray-500 mb-6">
+              Se enviará a SUNAT a través del hub. El correlativo se consume aunque SUNAT rechace la guía.
             </p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setConfirmando(false)}

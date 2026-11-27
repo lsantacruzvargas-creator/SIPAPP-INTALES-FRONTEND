@@ -63,7 +63,7 @@ function PillSiNo({ si }) {
 }
 
 function TablaOC({
-  titulo, acento, ordenes, otGroupMap, factMap, factByOCMap, greMap, tipoCambio, onSelect, subirDocumento,
+  titulo, acento, ordenes, otGroupMap, greMap, tipoCambio, onSelect, subirDocumento,
   mostrarFactura = true, mostrarTitulo = true, mostrarDocumento = true, mostrarHesActa = false,
   puedeVerPrecios = true, vacioMsg,
 }) {
@@ -105,11 +105,9 @@ function TablaOC({
             {ordenes.length === 0 ? (
               <tr><td colSpan={totalColumnas} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td></tr>
             ) : ordenes.flatMap((o) => {
-              const cotId = o.cotizacion?._id || o.cotizacion;
               const grupoOT = otGroupMap[o.numeroDocumento];
               const otPadre = grupoOT?.parent || null;
               const subs = grupoOT?.subs || [];
-              const factura = factByOCMap[o._id] || factMap[cotId];
               const { pen, usd } = totalesDuales(o.monto, o.moneda, tipoCambio);
 
               const filaPrincipal = (
@@ -132,7 +130,7 @@ function TablaOC({
                     {o.createdAt ? formatearFecha(o.createdAt) : <span className="text-gray-300">—</span>}
                   </td>
                   {mostrarFactura && (
-                    <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{o.numeroFactura || factura?.numeroFactura || <span className="text-gray-300">—</span>}</td>
+                    <td className="px-4 py-3.5 text-gray-600 whitespace-nowrap">{o.numeroFactura || <span className="text-gray-300">—</span>}</td>
                   )}
                   <td className="px-4 py-3.5 text-gray-700">{o.empresa?.razonSocial || "—"}</td>
                   {/* max-width en un <td> se ignora con table-layout auto: el
@@ -383,7 +381,8 @@ export default function ListaOrdenesCompra() {
   const hayFiltro = busqueda || estadoOT || empresa || planta || anio || mes;
   const vistaEfectiva = vista;
 
-  const tieneFactura = (o) => !!(factByOCMap[o._id] || factMap[o.cotizacion?._id || o.cotizacion]);
+  // Solo el campo «N° de factura» de la OC (emitir el CPE desde la OC lo llena al ser aceptado).
+  const tieneFactura = (o) => !!o.numeroFactura?.trim();
   const cerradas   = filtradas.filter((o) => o.estadoCadena === "cerrado");
   const abiertas   = filtradas.filter((o) => o.estadoCadena !== "cerrado");
   const sinFactura = abiertas.filter((o) => !tieneFactura(o));
@@ -391,9 +390,7 @@ export default function ListaOrdenesCompra() {
 
   // Mismas columnas que TablaOC (sin "Documento", no aplica a una hoja de cálculo).
   const filaOC = (o) => {
-    const cotId = o.cotizacion?._id || o.cotizacion;
     const grupoOT = otGroupMap[o.numeroDocumento];
-    const factura = factByOCMap[o._id] || factMap[cotId];
     const { pen, usd } = totalesDuales(o.monto, o.moneda, tipoCambio);
     return {
       "Cotización":         o.cotizacion?.numeroCotizacion || o.cotizacion?.codigo || "—",
@@ -401,7 +398,7 @@ export default function ListaOrdenesCompra() {
       "Fecha de creación":  o.createdAt ? formatearFecha(o.createdAt) : "—",
       "N° OT":              grupoOT?.parents.map((ot) => ot.numeroOT || ot.codigo).join(", ") || "—",
       "Sub-OTs":            grupoOT?.subs?.map((s) => s.numeroOT).join(", ") || "—",
-      "N° Factura":         o.numeroFactura || factura?.numeroFactura || "—",
+      "N° Factura":         o.numeroFactura || "—",
       "Empresa":            o.empresa?.razonSocial || "—",
       "Título":             o.titulo || "—",
       ...(puedeVerPrecios ? {
@@ -551,7 +548,7 @@ export default function ListaOrdenesCompra() {
           titulo="Todas las Órdenes de Compra"
           acento="bg-blue-500"
           ordenes={filtradas}
-          otGroupMap={otGroupMap} factMap={factMap} factByOCMap={factByOCMap} greMap={greMap} tipoCambio={tipoCambio} puedeVerPrecios={puedeVerPrecios}
+          otGroupMap={otGroupMap} greMap={greMap} tipoCambio={tipoCambio} puedeVerPrecios={puedeVerPrecios}
           onSelect={setOrdenSeleccionada}
           subirDocumento={subirDocumento}
           vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de compra registradas"}
@@ -563,7 +560,7 @@ export default function ListaOrdenesCompra() {
           titulo="Órdenes de Compra sin factura"
           acento="bg-amber-500"
           ordenes={sinFactura}
-          otGroupMap={otGroupMap} factMap={factMap} factByOCMap={factByOCMap} greMap={greMap} tipoCambio={tipoCambio} puedeVerPrecios={puedeVerPrecios}
+          otGroupMap={otGroupMap} greMap={greMap} tipoCambio={tipoCambio} puedeVerPrecios={puedeVerPrecios}
           onSelect={setOrdenSeleccionada}
           subirDocumento={subirDocumento}
           mostrarFactura={false}
@@ -579,7 +576,7 @@ export default function ListaOrdenesCompra() {
           titulo="Órdenes de Compra con factura"
           acento="bg-emerald-500"
           ordenes={conFactura}
-          otGroupMap={otGroupMap} factMap={factMap} factByOCMap={factByOCMap} greMap={greMap} tipoCambio={tipoCambio} puedeVerPrecios={puedeVerPrecios}
+          otGroupMap={otGroupMap} greMap={greMap} tipoCambio={tipoCambio} puedeVerPrecios={puedeVerPrecios}
           onSelect={setOrdenSeleccionada}
           subirDocumento={subirDocumento}
           vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de compra con factura"}
@@ -591,7 +588,7 @@ export default function ListaOrdenesCompra() {
           titulo="Órdenes de Compra cerradas"
           acento="bg-gray-500"
           ordenes={cerradas}
-          otGroupMap={otGroupMap} factMap={factMap} factByOCMap={factByOCMap} greMap={greMap} tipoCambio={tipoCambio} puedeVerPrecios={puedeVerPrecios}
+          otGroupMap={otGroupMap} greMap={greMap} tipoCambio={tipoCambio} puedeVerPrecios={puedeVerPrecios}
           onSelect={setOrdenSeleccionada}
           subirDocumento={subirDocumento}
           vacioMsg={hayFiltro ? "Sin resultados para los filtros aplicados" : "Sin órdenes de compra cerradas"}

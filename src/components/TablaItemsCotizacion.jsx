@@ -356,10 +356,13 @@ export default function TablaItemsCotizacion({
                   )}
                   {puedeEditar && (
                     <td className="px-3 py-3 text-center">
-                      {editable && (
-                        <button type="button" onClick={() => eliminarItem(item._key)}
+                      {editable && (item.otGenerada || (item.ocGenerada && !item.ocGenerada.anulado) ? (
+                        <span title="Tiene OT u OC generada: desvincula la OT (o anula la OC) antes de quitar el ítem"
+                          className="text-gray-300 cursor-not-allowed">🔒</span>
+                      ) : (
+                        <button type="button" onClick={() => eliminarItem(item._key)} aria-label="Quitar ítem"
                           className="text-red-400 hover:text-red-600">✕</button>
-                      )}
+                      ))}
                     </td>
                   )}
                 </tr>

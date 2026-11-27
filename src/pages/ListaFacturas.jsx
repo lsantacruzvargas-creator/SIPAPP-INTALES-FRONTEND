@@ -4,7 +4,7 @@ import { formatearFecha } from "../utils/fecha";
 import DetalleDocumento from "../components/DetalleDocumento";
 import ModalCrearFactura  from "../components/ModalCrearFactura";
 import ModalImportarExcel, { COLS_FACTURAS } from "../components/ModalImportarExcel";
-import { DotChip, badgePago, dotPago } from "../components/detalleShared";
+import { DotChip, badgePago, dotPago, ChipEstadoOT, estadoProgresoOT, ESTADOS_PROGRESO_OT } from "../components/detalleShared";
 import TablaScroll from "../components/TablaScroll";
 import ConfirmacionAccion from "../components/ConfirmacionAccion";
 import AvisoAccion from "../components/AvisoAccion";
@@ -15,7 +15,7 @@ const MESES = [
   "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
 ];
 
-const FILTROS_VACIO = { empresa: "", planta: "", ano: "", mes: "", estadoPago: "", busqueda: "" };
+const FILTROS_VACIO = { empresa: "", planta: "", ano: "", mes: "", estadoPago: "", estadoServicio: "", busqueda: "" };
 
 const ESTADOS_PAGO = [
   { valor: "sin pago",     label: "Sin pago",     cls: "bg-red-50 text-red-700" },
@@ -174,12 +174,13 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, handlePagoMonto, ha
                 <th className={`${TH} text-right`}>Detracción 12% (S/)</th>
                 <th className={`${TH} text-right`}>Total a pagar (S/)</th>
                 <th className={`${TH} text-center`}>Estado pago</th>
+                <th className={`${TH} text-center`}>Estado de servicio</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {facturas.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
+                  <td colSpan={13} className="px-4 py-8 text-center text-gray-400">{vacioMsg}</td>
                 </tr>
               ) : (
                 <>
@@ -262,6 +263,9 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, handlePagoMonto, ha
                           )}
                         </div>
                       </td>
+                      <td className="px-3 py-3.5 text-center whitespace-nowrap">
+                        {f._ot ? <ChipEstadoOT ot={f._ot} /> : <span className="text-gray-300 text-xs">Sin OT</span>}
+                      </td>
                     </tr>
                   );
 
@@ -288,6 +292,7 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, handlePagoMonto, ha
                         <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
                           <CeldaMontoPagadoCuota factura={f} cuota={c} rolActual={rolActual} handleCuotaPagoMonto={handleCuotaPagoMonto} />
                         </td>
+                        <td className="px-3 py-2"></td>
                       </tr>
                     );
                   });
@@ -310,6 +315,7 @@ function TablaFacturas({ titulo, acento, facturas, onSelect, handlePagoMonto, ha
                       <span className="tabular-nums text-emerald-700 font-bold">{totales.pagado.toLocaleString("es-PE", { minimumFractionDigits: 2 })}</span>
                     </div>
                   </td>
+                  <td className="px-3 py-3.5"></td>
                 </tr>
                 </>
               )}
@@ -343,12 +349,24 @@ export default function ListaFacturas() {
       // creada por la cadena vía OC) — se resuelven por numeroDocumento
       // compartido, igual que en DetalleFactura.jsx.
       const cotPorNumDoc = new Map(cots.filter(c => c.numeroDocumento != null).map(c => [c.numeroDocumento, c.numeroCotizacion || c.codigo]));
-      const otPorNumDoc  = new Map(ots.filter(o => o.numeroDocumento != null).map(o => [o.numeroDocumento, o.numeroOT]));
-      const enriquecidas = facts.map(f => ({
-        ...f,
-        _numeroCotizacion: cotPorNumDoc.get(f.numeroDocumento) || "",
-        _numeroOT: otPorNumDoc.get(f.numeroDocumento) || "",
-      }));
+      // Solo OTs padre (las sub-OTs comparten numeroDocumento) y la primera no anulada:
+      // un Map armado con todas se quedaba con la última.
+      const otPorNumDoc = new Map();
+      for (const o of ots) {
+        if (o.numeroDocumento == null || o.ordenPadre) continue;
+        const previa = otPorNumDoc.get(o.numeroDocumento);
+        if (!previa || (previa.anulado && !o.anulado)) otPorNumDoc.set(o.numeroDocumento, o);
+      }
+      const enriquecidas = facts.map(f => {
+        const ot = otPorNumDoc.get(f.numeroDocumento);
+        return {
+          ...f,
+          _numeroCotizacion: cotPorNumDoc.get(f.numeroDocumento) || "",
+          _numeroOT: ot?.numeroOT || "",
+          _ot: ot || null,
+          _estadoServicio: ot ? estadoProgresoOT(ot) : "",
+        };
+      });
       setFacturas(enriquecidas);
     });
 
@@ -382,6 +400,7 @@ export default function ListaFacturas() {
       (!filtros.ano        || fecha.getFullYear() === parseInt(filtros.ano)) &&
       (!filtros.mes        || fecha.getMonth() + 1 === parseInt(filtros.mes)) &&
       (!filtros.estadoPago || f.estadoPago === filtros.estadoPago) &&
+      (!filtros.estadoServicio || f._estadoServicio === filtros.estadoServicio) &&
       (!q ||
         f.numeroFactura?.toLowerCase().includes(q) ||
         (f.ordenCompra?.numeroOrden || f.numeroOrdenCompra || "").toLowerCase().includes(q) ||
@@ -583,6 +602,7 @@ export default function ListaFacturas() {
     "Total a pagar":     Number(f.totalAPagar ?? 0).toFixed(2),
     "Estado pago":       f.estadoPago,
     "Monto pagado":      Number(f.montoPagado ?? 0).toFixed(2),
+    "Estado de servicio": f._estadoServicio || "Sin OT",
   });
 
   const exportarExcel = () => {
@@ -646,6 +666,10 @@ export default function ListaFacturas() {
           {ESTADOS_PAGO.map(({ valor, label }) => (
             <option key={valor} value={valor}>{label}</option>
           ))}
+        </select>
+        <select name="estadoServicio" value={filtros.estadoServicio} onChange={handleFiltro} className={SELECT}>
+          <option value="">Todo estado de servicio</option>
+          {ESTADOS_PROGRESO_OT.map(e => <option key={e} value={e}>{e}</option>)}
         </select>
         <select value={vista} onChange={(e) => setVista(e.target.value)} className={SELECT}>
           <option value="todas">Todas las facturas</option>

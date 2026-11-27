@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { version as APP_VERSION } from "../../package.json";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function Login() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const sesionExpirada = params.get("motivo") === "expirada";
   const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -49,6 +51,11 @@ export default function Login() {
           </div>
         </div>
 
+        {sesionExpirada && !error && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2 mb-4">
+            Tu sesión venció, vuelve a ingresar.
+          </div>
+        )}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">
             {error}
